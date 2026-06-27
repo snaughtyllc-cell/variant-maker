@@ -83,15 +83,17 @@ Status legend: ✅ done & verified · 🔨 to build
   → 5 passing variants (vmaf 100) + valid `manifest.json`, `platform_result: null` each. ✅
 - **🚢 Tier 1 shipped.** 64 passed, ruff clean. Everything below is upside.
 
-## Phase 8 — Neural upscale (hero op)  ✅ (Tier-1 machine; flicker TODO)
+## Phase 8 — Neural upscale (hero op)  ✅ (local M1 verified)
 - `neural/upscale.py`: `upscale_clip` = downscaled Tier-1 render → Real-ESRGAN frame upscale →
   reassemble at target, re-muxing the already-correct audio. Gated behind `--quality hq`,
   lazy-imported, graceful fallback; records `tier:2` + `neural_ops`.
 - **Real-ESRGAN desaturates (~9%, isolated by stage).** Fixed with a MEASURED saturation match
-  in reassembly (eq=saturation by source/output ratio) → hq sat 14%→1.7% off, guard passes with
-  0 regens. Verified: edge energy +25% vs plain scale; hq pipeline test green.
-- **Still TODO:** temporal flicker mitigation (per-frame upscaling can shimmer); not yet observed-
-  vs-mitigated on a long clip. Also: the linux/GPU-container build for the cloud worker (see spec).
+  in reassembly → hq sat 14%→1.7% off, guard passes with 0 regens. Edge energy +25% vs plain scale.
+- **Tile-seam corruption fixed:** must upscale at the model's NATIVE scale (4 for x4plus); `-s 2`
+  on a 4x model produced misaligned tiles that passed dims+histogram but were visually broken
+  (only caught by eye). `upscale_clip` now derives scale from `NATIVE_SCALE`.
+- **Flicker checked OK:** on a high-motion clip, neural YDIF (10.1) ≤ fast (10.6) — no added shimmer.
+- **Still TODO:** the linux/GPU-container build for the cloud worker (see farm spec).
 - **Acceptance:** hq is sharper + more distinct than fast while staying in the quality floor. ✅
 
 ## Phase 9 — Neural interpolation  🔨
