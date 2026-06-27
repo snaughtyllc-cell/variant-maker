@@ -96,13 +96,29 @@ def upscale_clip(
         cmds.append(shlex.join(build_upscale_cmd(in_dir, up_dir, scale=scale, model=model,
                                                  model_dir=model_dir)))
 
-        # Stage C — reassemble at target geometry; copy the already-correct audio; tag color.
+        # Real-ESRGAN mutes saturation (~9%, isolated by stage). Measure the upscaled result
+        # and apply a single eq correction so the FINAL output's saturation matches source —
+        # measured (not a fixed constant), since several stages each shave a bit.
+        from .. import quality
+        frames = os.path.join(up_dir, "f%06d.png")
+        scale_fmt = f"scale={tw}:{th}:flags=lanczos,format=yuv420p"
+        probe_mp4 = os.path.join(work, "probe.mp4")
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-framerate", f"{fps:g}", "-i", frames,
+             "-vf", scale_fmt, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", probe_mp4],
+            check=True, capture_output=True,
+        )
+        target_sat = quality._signalstats(src.path)[1]
+        cur_sat = quality._signalstats(probe_mp4)[1]
+        ratio = max(0.5, min(2.0, target_sat / cur_sat)) if cur_sat else 1.0
+        sat_fix = f"eq=saturation={ratio:.4f}," if abs(ratio - 1.0) > 1e-3 else ""
+
+        # Stage C — reassemble at target geometry; restore saturation; copy audio; tag color.
         oc = resolve_output_color(src.color)
-        reassemble = ["ffmpeg", "-y", "-v", "error", "-framerate", f"{fps:g}",
-                      "-i", os.path.join(up_dir, "f%06d.png")]
+        reassemble = ["ffmpeg", "-y", "-v", "error", "-framerate", f"{fps:g}", "-i", frames]
         if src.has_audio:
             reassemble += ["-i", small, "-map", "0:v:0", "-map", "1:a:0"]
-        reassemble += ["-vf", f"scale={tw}:{th}:flags=lanczos,format=yuv420p",
+        reassemble += ["-vf", f"{sat_fix}{scale_fmt}",
                        "-c:v", "libx264", "-preset", "medium", "-crf", str(params["video"]["crf"]),
                        "-pix_fmt", "yuv420p", *output_color_args(oc)]
         if src.has_audio:
@@ -114,5 +130,5 @@ def upscale_clip(
         shutil.rmtree(work, ignore_errors=True)
 
     neural_ops = [{"op": "upscale", "model": model, "scale": scale,
-                   "from": f"{dw}x{dh}", "to": f"{tw}x{th}"}]
+                   "from": f"{dw}x{dh}", "to": f"{tw}x{th}", "sat_match": round(ratio, 4)}]
     return out_path, " && ".join(cmds), neural_ops

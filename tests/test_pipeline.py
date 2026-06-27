@@ -12,9 +12,11 @@ from conftest import HAS_FFMPEG
 HAS_RESR = upscale.available("models/realesrgan")
 
 
-def _tiny_clip(real_clip, tmp_path):
-    out = str(tmp_path / "tiny.mp4")
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", real_clip, "-t", "0.3", out],
+def _short_clip(real_clip, tmp_path):
+    # 1s — long enough that the sampled trim leaves a representative chunk for the
+    # source-vs-variant histogram comparison (a 0.3s clip gets gutted by a ~0.23s trim).
+    out = str(tmp_path / "short.mp4")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", real_clip, "-t", "1.0", out],
                    check=True, capture_output=True)
     return out
 
@@ -79,16 +81,22 @@ def test_pipeline_dry_run_renders_nothing(real_clip, tmp_path):
 @pytest.mark.integration
 @pytest.mark.skipif(not (HAS_FFMPEG and HAS_RESR), reason="needs ffmpeg + realesrgan")
 def test_pipeline_hq_uses_neural_upscale(real_clip, tmp_path):
-    tiny = _tiny_clip(real_clip, tmp_path)
+    clip = _short_clip(real_clip, tmp_path)
     out = str(tmp_path / "out")
-    m = pipeline.run(_config(tiny, out, count=1, quality_mode="hq", platform="none"))
+    m = pipeline.run(_config(clip, out, count=1, quality_mode="hq", platform="reels", seed=7))
 
     v = m.variants[0]
     assert v.tier == 2
     assert v.neural_ops and v.neural_ops[0]["op"] == "upscale"
+    assert "sat_match" in v.neural_ops[0]           # measured saturation correction recorded
     info = probe(os.path.join(out, v.filename))
-    assert info.has_audio                          # audio survived the frame round-trip
-    assert info.width == 288 and info.height == 512  # reconstructed back to source geometry
+    assert info.has_audio                           # audio survived the frame round-trip
+    assert info.width == 1080 and info.height == 1920
+
+    # the measured saturation match keeps neural color in band -> guard passes without regens
+    assert v.quality["histogram_ok"] is True
+    assert v.quality["regen_count"] == 0
+    assert v.quality["passed"] is True
 
 
 @pytest.mark.integration
