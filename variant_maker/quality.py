@@ -7,8 +7,11 @@ vmaf(src, variant, params) -> float      # stronger; compute on the QUALITY REND
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import subprocess
+import tempfile
 
 from . import ffmpeg
 from .platforms import get_platform
@@ -20,15 +23,36 @@ from .probe import SourceInfo
 _QUALITY_NEUTRAL = {"crop_keep": 1.0, "rotate_deg": 0.0, "trim_s": 0.0, "speed": 1.0}
 
 
+@contextlib.contextmanager
+def _lavfi_safe(path: str):
+    """Yield a path safe to interpolate into a lavfi `movie=` arg.
+
+    Real filenames carry commas/colons/quotes that break the lavfi lexer (multi-level,
+    `'` is unreliable to escape). Rather than fight it, symlink to a clean temp name.
+    """
+    if not any(c in path for c in ":,'[];\\"):
+        yield path
+        return
+    d = tempfile.mkdtemp()
+    link = os.path.join(d, "src" + os.path.splitext(path)[1])
+    os.symlink(os.path.abspath(path), link)
+    try:
+        yield link
+    finally:
+        os.remove(link)
+        os.rmdir(d)
+
+
 def _signalstats(path: str) -> tuple[float, float]:
     """Mean (YAVG luma, SATAVG saturation) across frames via the signalstats lavfi graph."""
-    cmd = [
-        "ffprobe", "-v", "error", "-f", "lavfi",
-        "-i", f"movie={path},signalstats",
-        "-show_entries", "frame_tags=lavfi.signalstats.YAVG,lavfi.signalstats.SATAVG",
-        "-print_format", "json",
-    ]
-    out = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    with _lavfi_safe(path) as safe:
+        cmd = [
+            "ffprobe", "-v", "error", "-f", "lavfi",
+            "-i", f"movie={safe},signalstats",
+            "-show_entries", "frame_tags=lavfi.signalstats.YAVG,lavfi.signalstats.SATAVG",
+            "-print_format", "json",
+        ]
+        out = subprocess.run(cmd, check=True, capture_output=True, text=True)
     frames = json.loads(out.stdout).get("frames", [])
     ys, ss = [], []
     for f in frames:
@@ -53,7 +77,9 @@ def histogram_sanity(src_path: str, variant_path: str, tol: float = 0.06) -> boo
     var_y, var_s = _signalstats(variant_path)
 
     def rel(a: float, b: float) -> float:
-        return abs(b - a) / a if a else 0.0
+        if a == 0:
+            return 0.0 if b == 0 else 1.0  # zero source + nonzero variant is a real shift, not a pass
+        return abs(b - a) / a
 
     return rel(src_y, var_y) <= tol and rel(src_s, var_s) <= tol
 
@@ -96,16 +122,22 @@ def regen_until_pass(attempt, *, max_regen: int = 3, strength: float = 1.0, fall
 def vmaf(src_path: str, quality_render_path: str) -> float:
     """libvmaf score (0..100) of the quality render vs source. Both MUST be frame-aligned
     and the same resolution — that's what `quality_render` guarantees."""
-    log_path = quality_render_path + ".vmaf.json"
+    # mkstemp gives a special-char-free path, so log_path needs no lavfi escaping.
+    fd, log_path = tempfile.mkstemp(suffix=".vmaf.json")
+    os.close(fd)
     cmd = [
         "ffmpeg", "-hide_banner", "-v", "error",
         "-i", quality_render_path, "-i", src_path,
         "-lavfi", f"[0:v][1:v]libvmaf=log_fmt=json:log_path={log_path}",
         "-f", "null", "-",
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
-    with open(log_path) as f:
-        data = json.load(f)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        with open(log_path) as f:
+            data = json.load(f)
+    finally:
+        if os.path.exists(log_path):
+            os.remove(log_path)
     pooled = data.get("pooled_metrics", {}).get("vmaf")
     if pooled:
         return float(pooled["mean"])

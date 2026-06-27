@@ -42,6 +42,12 @@ def run(config: dict) -> Manifest:
     if master_seed is None:
         master_seed = random.randrange(2 ** 32)
 
+    # Tier 2 is lazy-imported and gated: hq requested AND the upscaler is actually usable.
+    neural = None
+    if config.get("quality_mode") == "hq":
+        from .neural import upscale as neural
+    hq = neural is not None and neural.available()
+
     src = probe(input_path)
     stem = os.path.splitext(os.path.basename(input_path))[0]
 
@@ -85,19 +91,24 @@ def run(config: dict) -> Manifest:
             params = sample(preset, vseed, strength=strength)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
-            _, cmd = render_variant(src, params, platform, path)
+            if hq:
+                _, cmd, nops = neural.upscale_clip(src, params, path, platform=platform)
+            else:
+                _, cmd = render_variant(src, params, platform, path)
+                nops = []
             qr = path + ".qr.mp4"
             quality.quality_render(src, params, qr)
             g = quality.passes_guard(src.path, path, qr, floor=floor)
             for tmp in (qr, qr + ".vmaf.json"):
                 if os.path.exists(tmp):
                     os.remove(tmp)
-            return {**g, "params": params, "cmd": cmd}
+            return {**g, "params": params, "cmd": cmd, "neural_ops": nops}
 
         r = quality.regen_until_pass(attempt, max_regen=max_regen, strength=1.0)
         info = probe(path)
         return VariantRecord(
             index=i, filename=fname, seed=vseed, params=r["params"], ffmpeg_cmd=r["cmd"],
+            tier=2 if r["neural_ops"] else 1, neural_ops=r["neural_ops"],
             quality={
                 "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
                 "regen_count": r["regen_count"], "passed": r["passed"],

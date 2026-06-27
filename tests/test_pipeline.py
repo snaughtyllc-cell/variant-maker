@@ -1,11 +1,22 @@
 import json
 import os
+import subprocess
 
 import pytest
 
 from variant_maker import pipeline
 from variant_maker.probe import probe
+from variant_maker.neural import upscale
 from conftest import HAS_FFMPEG
+
+HAS_RESR = upscale.available("models/realesrgan")
+
+
+def _tiny_clip(real_clip, tmp_path):
+    out = str(tmp_path / "tiny.mp4")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", real_clip, "-t", "0.3", out],
+                   check=True, capture_output=True)
+    return out
 
 
 def _config(real_clip, out, **ov):
@@ -63,6 +74,32 @@ def test_pipeline_dry_run_renders_nothing(real_clip, tmp_path):
         assert [f for f in os.listdir(out) if f.endswith(".mp4")] == []
     assert len(m.variants) == 2
     assert all(v.ffmpeg_cmd.startswith("ffmpeg") for v in m.variants)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not (HAS_FFMPEG and HAS_RESR), reason="needs ffmpeg + realesrgan")
+def test_pipeline_hq_uses_neural_upscale(real_clip, tmp_path):
+    tiny = _tiny_clip(real_clip, tmp_path)
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(tiny, out, count=1, quality_mode="hq", platform="none"))
+
+    v = m.variants[0]
+    assert v.tier == 2
+    assert v.neural_ops and v.neural_ops[0]["op"] == "upscale"
+    info = probe(os.path.join(out, v.filename))
+    assert info.has_audio                          # audio survived the frame round-trip
+    assert info.width == 288 and info.height == 512  # reconstructed back to source geometry
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_pipeline_hq_falls_back_when_upscaler_absent(real_clip, tmp_path, monkeypatch):
+    import variant_maker.neural.upscale as up
+    monkeypatch.setattr(up, "available", lambda *a, **k: False)
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(real_clip, out, count=1, quality_mode="hq", platform="none"))
+    assert m.variants[0].tier == 1
+    assert m.variants[0].neural_ops == []
 
 
 @pytest.mark.integration

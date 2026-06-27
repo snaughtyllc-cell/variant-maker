@@ -35,6 +35,16 @@ def test_histogram_sanity_passes_clean_reencode(real_clip, tmp_path):
 
 @pytest.mark.integration
 @pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_signalstats_handles_special_char_paths(real_clip, tmp_path):
+    """Real filenames have commas/quotes/spaces; lavfi movie= must not break on them."""
+    import shutil
+    weird = str(tmp_path / "a,b'c d.mp4")
+    shutil.copy(real_clip, weird)
+    assert quality.histogram_sanity(weird, weird) is True  # identical file -> identical stats
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
 def test_histogram_sanity_fails_washed_out(real_clip, tmp_path):
     """The wash-out symptom: saturation collapses -> guard rejects it."""
     out = str(tmp_path / "washed.mp4")

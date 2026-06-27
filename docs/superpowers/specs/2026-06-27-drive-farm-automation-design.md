@@ -81,6 +81,19 @@ GPU later, minutes per job) **cannot be the same process.** Split:
 - **Worker** — the Python engine + ffmpeg, runs where it has muscle (container/VM; GPU box for Tier 2).
   Picks up **pending jobs from the DB** (same poll philosophy — no Redis) and reports status back.
 
+### Deployment decision (2026-06-27): serverless GPU for the neural worker
+- **Chosen:** serverless GPU (Modal / RunPod serverless / fal.ai / Replicate) over an always-on
+  rented GPU VM. A variant farm is bursty — pay per GPU-second, scale to zero, no idle cost.
+- **The worker is a Linux x86 GPU CONTAINER build, NOT the local macOS binary.** The mac
+  `realesrgan-ncnn-vulkan` will not run on a Linux NVIDIA VM. Production image needs: a Linux
+  upscaler build (Linux `realesrgan-ncnn-vulkan` with NVIDIA/Vulkan drivers, OR PyTorch
+  Real-ESRGAN on CUDA — likely the more robust NVIDIA path), ffmpeg installed, model weights
+  baked/cached into the image, and the Drive pull/push + job handoff wired in.
+- **What ports as-is:** the Python orchestration (probe/sampler/filtergraph/render/guard/
+  `upscale_clip` logic) is platform-agnostic. Only the GPU runtime is a container/ops build.
+- Production picture: **Vercel control plane → Linux GPU container on serverless GPU → results to Drive.**
+- Cloud NVIDIA (T4/L4/A10) is far faster than the local M1 (~60–90s upscale → seconds).
+
 UI specifics (screens, roles/permissions, Drive OAuth onboarding flow) are deliberately **deferred**
 until the worker exists — they are the most likely to churn and the least useful now.
 
