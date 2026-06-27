@@ -83,10 +83,16 @@ Status legend: ✅ done & verified · 🔨 to build
   → 5 passing variants (vmaf 100) + valid `manifest.json`, `platform_result: null` each. ✅
 - **🚢 Tier 1 shipped.** 64 passed, ruff clean. Everything below is upside.
 
-## Phase 8 — Neural upscale (hero op)  🔨
-- `neural/upscale.py`: downscale → Real-ESRGAN upscale over a lossless frame round-trip.
-- Gate behind `--quality hq`; lazy-import. Mitigate temporal flicker.
-- **Acceptance:** hq variant beats fast variant on VMAF/sharpness while staying distinct.
+## Phase 8 — Neural upscale (hero op)  ✅ (Tier-1 machine; flicker TODO)
+- `neural/upscale.py`: `upscale_clip` = downscaled Tier-1 render → Real-ESRGAN frame upscale →
+  reassemble at target, re-muxing the already-correct audio. Gated behind `--quality hq`,
+  lazy-imported, graceful fallback; records `tier:2` + `neural_ops`.
+- **Real-ESRGAN desaturates (~9%, isolated by stage).** Fixed with a MEASURED saturation match
+  in reassembly (eq=saturation by source/output ratio) → hq sat 14%→1.7% off, guard passes with
+  0 regens. Verified: edge energy +25% vs plain scale; hq pipeline test green.
+- **Still TODO:** temporal flicker mitigation (per-frame upscaling can shimmer); not yet observed-
+  vs-mitigated on a long clip. Also: the linux/GPU-container build for the cloud worker (see spec).
+- **Acceptance:** hq is sharper + more distinct than fast while staying in the quality floor. ✅
 
 ## Phase 9 — Neural interpolation  🔨
 - `neural/interpolate.py`: RIFE retime for speed/fps changes (replaces drop/dupe).
