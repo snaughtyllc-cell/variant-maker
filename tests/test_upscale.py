@@ -20,6 +20,12 @@ def test_build_upscale_cmd_flags():
     assert cmd[cmd.index("-m") + 1].endswith("models")
 
 
+def test_default_model_upscales_at_its_native_scale():
+    """A non-native -s (e.g. 2 with the 4x model) corrupts output into tile seams.
+    Guard that the default model's native scale is known so upscale_clip picks it."""
+    assert upscale.NATIVE_SCALE[upscale.DEFAULT_MODEL] == 4
+
+
 def test_available_is_false_for_bogus_dir():
     assert upscale.available("/nonexistent/realesrgan") is False
 

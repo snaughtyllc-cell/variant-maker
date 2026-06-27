@@ -16,6 +16,9 @@ import tempfile
 
 DEFAULT_DIR = os.environ.get("VARIANT_MAKER_REALESRGAN_DIR", "models/realesrgan")
 DEFAULT_MODEL = "realesrgan-x4plus"  # photo model (NOT the anime default) — right for real footage
+# Each model has a NATIVE scale; using a non-native -s (e.g. 2 with the 4x model) corrupts
+# output into misaligned tile seams. Always upscale at the model's native ratio.
+NATIVE_SCALE = {"realesrgan-x4plus": 4, "realesrgan-x4plus-anime": 4, "realesrnet-x4plus": 4}
 
 
 def _binary(model_dir: str = DEFAULT_DIR) -> str | None:
@@ -59,7 +62,7 @@ def _even(n: float) -> int:
 
 
 def upscale_clip(
-    src, params: dict, out_path: str, *, platform, scale: int = 2,
+    src, params: dict, out_path: str, *, platform, scale: int | None = None,
     model: str = DEFAULT_MODEL, model_dir: str = DEFAULT_DIR,
 ) -> tuple[str, str, list]:
     """Hero op: full Tier-1 render at a downscaled target -> AI-upscale its frames ->
@@ -71,6 +74,9 @@ def upscale_clip(
     from .. import ffmpeg
     from ..color import output_color_args, resolve_output_color
     from ..platforms import Platform
+
+    if scale is None:
+        scale = NATIVE_SCALE.get(model, 4)  # native ratio — non-native -s corrupts into tiles
 
     tw = _even(platform.width or src.width)
     th = _even(platform.height or src.height)
