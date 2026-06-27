@@ -1,0 +1,33 @@
+[project]
+name = "variant-maker"
+version = "0.2.0"
+description = "Local-first AI video variant generator (FFmpeg core + optional neural quality layer)"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+# Tier 2 neural ops use EXTERNAL binaries, not pip packages:
+#   realesrgan-ncnn-vulkan, rife-ncnn-vulkan  (download separately, see README)
+
+[project.scripts]
+variant-maker = "variant_maker.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["variant_maker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires ffmpeg + a real clip (slower)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

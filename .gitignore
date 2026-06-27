@@ -1,0 +1,22 @@
+# outputs & scratch
+output/
+scratch/
+*.mp4
+*.mov
+*.mkv
+!tests/fixtures/*.mp4
+
+# models (downloaded separately for Tier 2)
+models/
+*.bin
+*.param
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
