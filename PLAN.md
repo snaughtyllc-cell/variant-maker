@@ -21,20 +21,31 @@ Status legend: ✅ done & verified · 🔨 to build
   (`test_saturation_roundtrip_preserved`) — output saturation within 8% of source. ✅ verified.
 - Everything below must keep this test green.
 
-## Phase 3 — Sampler  🔨  ← START HERE
-- Implement `sampler.sample(preset, seed, *, rubberband=False) -> {"video":..,"audio":..}`.
+## Phase 3 — Sampler  ✅
+- `sampler.sample(preset, seed, *, rubberband=False, strength=1.0) -> {"video":..,"audio":..}`.
 - Rules: draw each axis from preset ranges via seeded RNG; color axes zero-mean; scale axes
-  to fit `preset.budget`; `audio.speed == video.speed`; pitch only if `rubberband`.
-- **Tests:** flip the two xfails in `test_sampler.py` to real asserts; add budget + zero-mean
-  (mean over many seeds ≈ neutral) + range-bounds tests.
-- **Checkpoint:** review sampling distribution before wiring filters.
+  to fit `strength * preset.budget`; `audio.speed == video.speed`; pitch only if `rubberband`.
+- **CRF counts toward the budget** (sampled continuous, floored to int toward its calm `lo`
+  end so the rounded value never exceeds its budgeted share). GOP is an unbudgeted pick.
+- **`strength` is the auto-tune lever** (not pinned to the ceiling): the controller / quality
+  guard drives it per variant. Seed fixes WHICH axes move; strength fixes HOW far.
+- `total_distortion(preset, params)` is the public budget metric.
+- **Tests:** xfails flipped + reproducibility, budget, zero-mean, range-bounds, audio-bounds,
+  pitch/rubberband, strength-scaling, crf-in-budget. ✅ 34 passed, ruff clean.
 
-## Phase 4 — Filtergraph  🔨
-- Implement `filtergraph.build_video_filters` / `build_audio_filters` (PURE).
-- Enforce documented order; use `color.even_scale_filter` / `zscale_convert_filter` for scale.
-- **Tests:** golden-string tests for representative params; assert no naive `scale` reinterprets
-  range; assert audio `atempo` matches video speed.
-- **Checkpoint:** review a few generated filtergraphs by eye.
+> **North star (the "B" goal):** the auto-tune controller (Phase 11) drives `strength` so each
+> variant hits a measurable **similarity target** vs source (the ~35% anchor) while staying above
+> the VMAF/watchability floor. Similarity is computed in `quality.py` (Phase 6). Predicting a
+> platform's actual verdict stays out of scope — recorded via the manifest `platform_result` slot.
+
+## Phase 4 — Filtergraph  ✅
+- `filtergraph.build_video_filters` / `build_audio_filters` — PURE, documented order.
+- Trim from START (mirrors to audio without needing duration); resize via `even_scale_filter`
+  (`zscale_convert_filter` only if output target differs from carried source); rotation skipped
+  below 0.05° (no-op sliver guard); eq/atempo/loudnorm always, other axes omitted when no-op.
+- **Tests:** golden -vf/-af, load-bearing order, even/safe scale (no naive range reinterpret),
+  atempo==video speed, no-audio→"", none-platform geometry, no-op omission, pitch-only-rubberband.
+  ✅ 45 passed, ruff clean.
 
 ## Phase 5 — Render one variant  🔨
 - Implement `ffmpeg.render_variant`: full cmd with `output_color_args`, `-map_metadata -1`,
@@ -43,19 +54,34 @@ Status legend: ✅ done & verified · 🔨 to build
   color preserved (reuse the saturation check), dimensions even.
 - **Checkpoint:** eyeball one output. Does it look like a real video?
 
-## Phase 6 — Quality guard  🔨
-- `quality.histogram_sanity` (always on) + `quality.vmaf` (on the geometry/time-matched
-  QUALITY RENDER — cannot vmaf across trim/tempo/fps).
-- Wire reject→reduce-strength→regen, bounded by `--max-regen`.
-- **Tests:** a deliberately ugly variant fails the guard; a clean one passes.
-- **Checkpoint:** confirm guard catches a forced wash-out.
+## Phase 6 — Quality guard  ✅
+- `histogram_sanity` (always-on YAVG/SATAVG check) + `vmaf` (libvmaf on `quality_render` —
+  quality ops at source geometry/timing so frames align) + `passes_guard` (combined decision,
+  floor 90) + `regen_until_pass` (reject→reduce strength→regen, bounded by max_regen; PURE/injected).
+- **Verified:** washed-out (`saturation=0.3`) fails histogram; degraded (crf51/grain40) VMAF 9.4
+  vs clean 99.9; regen loop reduces strength until pass and is bounded. ✅ 60 passed, ruff clean.
 
-## Phase 7 — Pipeline + CLI → SHIP TIER 1  🔨
-- `pipeline.run`: probe → per-variant (sample→filtergraph→render→guard→record) → manifest.
-- Wire naming, `--out`, `--dry-run`, `--jobs`.
-- **Acceptance:** `variant-maker clip.mp4 -n 5 --preset medium --platform reels` produces 5
-  good variants + a valid `manifest.json` with `platform_result: null` per variant.
-- **🚢 Tier 1 ships here.** Tag it. Everything below is upside.
+> **Cross-model review constraints (Codex, 2026-06-27) — design Phase 6 around these:**
+> - **Quality floor ≠ difference target.** VMAF/histogram measure *quality* (did the encode/
+>   color/grain degrade it). They run on the QUALITY RENDER (quality ops only, source geometry/
+>   timing) so they do NOT punish intended trim/crop/rotate/tempo difference. The *similarity/
+>   difference* target (~35% anchor) is a SEPARATE measured metric that drives auto-tune (Phase 11).
+> - **Pick the difference metric explicitly** (Phase 11): SSIM/LPIPS/pHash/CLIP/embedding all
+>   disagree — choose one, calibrate our own threshold (not TikFusion's 35% verbatim).
+> - **VMAF is one signal, not truth** (weak on short/social/high-motion); pair with histogram.
+> - **Budget weights are heuristic guardrails, not calibrated similarity** — recalibrate against
+>   the measured metric once the loop exists.
+> - Pin ffmpeg version in the manifest (Phase 7). Seeded head/tail trim split (vs always-from-start)
+>   is a later diversity enhancement.
+
+## Phase 7 — Pipeline + CLI → SHIP TIER 1  ✅  🚢
+- `pipeline.run(config) -> Manifest`: probe → per-variant (sample→render→quality-render→guard
+  with regen loop→record) → manifest. Returns the Manifest (the clean callable the farm wraps).
+- Naming `<stem>_vNN_<seed8>.mp4` (seed-derived, reproducible); `--out`, `--dry-run`, `--jobs`
+  (ThreadPool); `--rotate never` zeroes rotation; ffmpeg version pinned in the manifest.
+- **Acceptance MET:** `variant-maker real_src.mp4 -n 5 --preset medium --platform reels --seed 7`
+  → 5 passing variants (vmaf 100) + valid `manifest.json`, `platform_result: null` each. ✅
+- **🚢 Tier 1 shipped.** 64 passed, ruff clean. Everything below is upside.
 
 ## Phase 8 — Neural upscale (hero op)  🔨
 - `neural/upscale.py`: downscale → Real-ESRGAN upscale over a lossless frame round-trip.
@@ -68,9 +94,11 @@ Status legend: ✅ done & verified · 🔨 to build
 ## Phase 10 — Content protection  🔨
 - `neural/protect.py`: segment subject/face/text; mask gates destructive transforms.
 
-## Phase 11 — Auto-tune controller  🔨
-- Bisection on transform strength → minimum that hits the difference target above the
-  quality floor.
+## Phase 11 — Auto-tune controller  🔨  ← the "B" payoff
+- Bisection on `sample(..., strength=…)` → the strength that hits the **similarity target**
+  (difference target, ~35% anchor — our own metric, calibrated; not TikFusion's number) while
+  staying above the quality floor. This is where the AI owns per-variant intensity, not the user.
+- Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
 ---
 

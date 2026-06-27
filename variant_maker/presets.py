@@ -6,7 +6,7 @@ The sampler draws each axis from these ranges, then scales them down to fit `bud
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

@@ -1,8 +1,119 @@
-"""STUB — Phase 7. Orchestrator: probe -> per-variant (sample -> filtergraph -> render ->
+"""Phase 7. Orchestrator: probe -> per-variant (sample -> filtergraph -> render ->
 quality guard -> record) -> write manifest. Tier-2 neural stages inserted when quality='hq'.
+
+`run(config)` returns the Manifest object (the clean callable the Drive farm layer wraps).
 """
 from __future__ import annotations
 
+import os
+import random
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
-def run(config: dict):
-    raise NotImplementedError("Phase 7: wire the per-variant loop and manifest")
+from . import quality
+from .ffmpeg import render_variant
+from .manifest import Manifest, VariantRecord
+from .platforms import get_platform
+from .presets import get_preset
+from .probe import probe
+from .sampler import derive_seed, sample
+
+
+def _ffmpeg_version() -> str:
+    out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+    line = out.stdout.splitlines()[0] if out.stdout else ""
+    parts = line.split()
+    return parts[2] if len(parts) >= 3 else "unknown"
+
+
+def run(config: dict) -> Manifest:
+    input_path = config["input"]
+    count = config["count"]
+    preset = get_preset(config["preset"])
+    platform = get_platform(config["platform"])
+    out_dir = config["out"]
+    floor = config.get("quality_floor", 90.0)
+    max_regen = config.get("max_regen", 3)
+    rotate_off = config.get("rotate", "never") == "never"
+    dry_run = config.get("dry_run", False)
+    jobs = max(1, config.get("jobs", 1))
+
+    master_seed = config.get("seed")
+    if master_seed is None:
+        master_seed = random.randrange(2 ** 32)
+
+    src = probe(input_path)
+    stem = os.path.splitext(os.path.basename(input_path))[0]
+
+    def _name(i: int, vseed: int) -> str:
+        return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
+
+    run_meta = {
+        "master_seed": master_seed,
+        "preset": preset.name,
+        "platform": platform.name,
+        "quality_mode": config.get("quality_mode", "fast"),
+        "count": count,
+        "quality_floor": {"metric": "vmaf", "value": floor},
+        "ffmpeg_version": _ffmpeg_version(),
+    }
+
+    def _prep(i: int):
+        vseed = derive_seed(master_seed, i)
+        return vseed, _name(i, vseed), os.path.join(out_dir, _name(i, vseed))
+
+    # --dry-run: print the plan + commands, render nothing, write nothing.
+    if dry_run:
+        records = []
+        for i in range(1, count + 1):
+            vseed, fname, path = _prep(i)
+            params = sample(preset, vseed)
+            if rotate_off:
+                params["video"]["rotate_deg"] = 0.0
+            _, cmd = render_variant(src, params, platform, path, dry_run=True)
+            print(f"[{i}/{count}] {fname}\n  {cmd}")
+            records.append(VariantRecord(index=i, filename=fname, seed=vseed,
+                                         params=params, ffmpeg_cmd=cmd, status="dry-run"))
+        return Manifest(source=src.to_dict(), run=run_meta, variants=records)
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    def _render_one(i: int) -> VariantRecord:
+        vseed, fname, path = _prep(i)
+
+        def attempt(strength: float) -> dict:
+            params = sample(preset, vseed, strength=strength)
+            if rotate_off:
+                params["video"]["rotate_deg"] = 0.0
+            _, cmd = render_variant(src, params, platform, path)
+            qr = path + ".qr.mp4"
+            quality.quality_render(src, params, qr)
+            g = quality.passes_guard(src.path, path, qr, floor=floor)
+            for tmp in (qr, qr + ".vmaf.json"):
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            return {**g, "params": params, "cmd": cmd}
+
+        r = quality.regen_until_pass(attempt, max_regen=max_regen, strength=1.0)
+        info = probe(path)
+        return VariantRecord(
+            index=i, filename=fname, seed=vseed, params=r["params"], ffmpeg_cmd=r["cmd"],
+            quality={
+                "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
+                "regen_count": r["regen_count"], "passed": r["passed"],
+            },
+            output_sha256=info.sha256, duration_s=info.duration_s,
+            status="ok" if r["passed"] else "best_effort",
+        )
+
+    indices = range(1, count + 1)
+    if jobs > 1:
+        with ThreadPoolExecutor(max_workers=jobs) as ex:
+            records = list(ex.map(_render_one, indices))
+    else:
+        records = [_render_one(i) for i in indices]
+    records.sort(key=lambda r: r.index)
+
+    manifest = Manifest(source=src.to_dict(), run=run_meta, variants=records)
+    manifest.write(os.path.join(out_dir, "manifest.json"))
+    return manifest
