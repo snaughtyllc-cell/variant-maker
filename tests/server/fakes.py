@@ -42,6 +42,16 @@ class FakeRunner:
         return SourceResult(variants=variants, manifest_path=mpath)
 
 
+class FakeRunPodClient:
+    """Yields a scripted list of output chunks; ignores the payload. No network."""
+
+    def __init__(self, chunks: list[dict]) -> None:
+        self._chunks = chunks
+
+    def stream_run(self, payload: dict):
+        yield from self._chunks
+
+
 class FakeObjectStore:
     """In-memory object store for tests — no network, no boto3."""
 
