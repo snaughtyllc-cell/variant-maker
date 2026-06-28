@@ -13,10 +13,18 @@ dev = ["pytest>=8", "ruff>=0.5"]
 #   realesrgan-ncnn-vulkan, rife-ncnn-vulkan  (download separately, see README)
 # Tier 3 Drive farm — lazy-imported so the engine stays light + offline-capable:
 farm = ["pyyaml>=6", "google-api-python-client>=2", "google-auth>=2", "google-auth-oauthlib>=1"]
+server = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "sse-starlette>=2.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
 
 [project.scripts]
 variant-maker = "variant_maker.cli:main"
 variant-farm = "variant_maker.farm.cli:main"
+variant-server = "variant_maker.server.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
