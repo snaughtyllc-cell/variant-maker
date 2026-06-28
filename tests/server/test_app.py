@@ -126,3 +126,32 @@ def test_cli_build_app_serves_health(tmp_path):
     from variant_maker.server.cli import build_app
     client = TestClient(build_app(str(tmp_path)))
     assert client.get("/api/health").json() == {"status": "ok"}
+
+
+def test_make_runner_local():
+    from variant_maker.server.cli import make_runner
+    from variant_maker.server.runner import LocalRunner
+    assert isinstance(make_runner("local"), LocalRunner)
+
+
+def test_make_runner_runpod_from_env(monkeypatch):
+    from variant_maker.server import cli
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+    # avoid real boto3/httpx construction
+    monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
+    monkeypatch.setattr(cli, "HttpRunPodClient", lambda **kw: object())
+    for k, v in {"RUNPOD_ENDPOINT_ID": "ep", "RUNPOD_API_KEY": "k",
+                 "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
+                 "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}.items():
+        monkeypatch.setenv(k, v)
+    assert isinstance(cli.make_runner("runpod"), RunPodServerlessRunner)
+
+
+def test_make_runner_runpod_missing_env_exits(monkeypatch):
+    from variant_maker.server import cli
+    for k in ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
+              "R2_ACCESS_KEY", "R2_SECRET_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    import pytest
+    with pytest.raises(SystemExit):
+        cli.make_runner("runpod")
