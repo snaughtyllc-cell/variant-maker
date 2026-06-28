@@ -69,3 +69,27 @@ def test_sse_events_stream_until_job_done(tmp_path):
     states = [p.get("state") for p in payloads]
     assert states.count("done") == 2
     assert states[-1] == "job-done"
+
+
+def test_gallery_groups_sources_ok_only(tmp_path):
+    client, store = _client(tmp_path, plan={2: "best_effort"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "3"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    gallery = client.get("/api/gallery").json()
+    assert len(gallery) == 1
+    assert gallery[0]["delivered"] == 2
+    assert gallery[0]["shortfall"] == 1
+    assert all(v["status"] == "ok" for v in gallery[0]["variants"])
+
+
+def test_diagnostics_lists_non_ok(tmp_path):
+    client, store = _client(tmp_path, plan={2: "best_effort", 3: "best_effort"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "3"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    diag = client.get("/api/diagnostics").json()
+    assert len(diag) == 2
+    assert all(d["status"] == "best_effort" for d in diag)

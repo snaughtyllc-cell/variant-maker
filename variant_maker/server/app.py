@@ -9,7 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from .events import event_to_dict
 from .jobs import JobSource, JobStore
-from .models import CreateJobResponse, JobDetail, JobSummary, SourceOut, VariantOut
+from .models import CreateJobResponse, DiagnosticsItem, JobDetail, JobSummary, SourceOut, VariantOut
 from .runner import LocalRunner
 from .workspace import Workspace
 
@@ -77,5 +77,15 @@ def create_app(store: JobStore | None = None) -> FastAPI:
                 await asyncio.sleep(0.1)
 
         return EventSourceResponse(gen())
+
+    @app.get("/api/gallery", response_model=list[SourceOut])
+    def gallery() -> list[SourceOut]:
+        return [_source_out(s, ok_only=True) for s in store.gallery()]
+
+    @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
+    def diagnostics() -> list[DiagnosticsItem]:
+        return [DiagnosticsItem(source_id=v.source_id, index=v.index, filename=v.filename,
+                                status=v.status, quality=v.quality)
+                for v in store.diagnostics()]
 
     return app
