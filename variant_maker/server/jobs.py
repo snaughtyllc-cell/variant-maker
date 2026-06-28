@@ -128,6 +128,10 @@ class JobStore:
         loc = self._locate(source_id)
         if loc is None:
             return None
+        # filename is user-controlled (URL path segment); reject anything that is
+        # not a bare basename to prevent path traversal outside the workspace.
+        if filename != os.path.basename(filename) or filename in ("", ".", ".."):
+            return None
         job_id, _ = loc
         path = self._ws.variant_path(job_id, source_id, filename)
         return path if os.path.exists(path) else None
@@ -136,6 +140,7 @@ class JobStore:
         loc = self._locate(source_id)
         if loc is None:
             return None
+        # Uses the stored source.filename (not user input) -> no traversal risk.
         job_id, source = loc
         path = self._ws.source_in_path(job_id, source_id, source.filename)
         return path if os.path.exists(path) else None

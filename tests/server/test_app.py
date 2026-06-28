@@ -118,5 +118,5 @@ def test_regenerate_endpoint(tmp_path):
     sid = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["source_id"]
     resp = client.post(f"/api/sources/{sid}/regenerate", data={"n": "2"})
     assert resp.status_code == 200
-    assert resp.json()["delivered"] >= 2
+    assert resp.json()["delivered"] == 4  # 2 initial + 2 regenerated, all ok under FakeRunner
     assert client.post("/api/sources/nope/regenerate", data={"n": "1"}).status_code == 404

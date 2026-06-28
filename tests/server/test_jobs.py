@@ -67,6 +67,17 @@ def test_find_variant_and_source_file(tmp_path):
         assert f.read() == b"orig-bytes"
 
 
+def test_find_variant_rejects_path_traversal(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    sid = store.get(job.job_id).sources[0].source_id
+    assert store.find_variant(sid, "../../etc/passwd") is None
+    assert store.find_variant(sid, "sub/v01.mp4") is None
+    assert store.find_variant(sid, "..") is None
+    assert store.find_variant(sid, "") is None
+
+
 def test_regenerate_appends_variants(tmp_path):
     store = _store(tmp_path)
     job = store.create_job([("a.mp4", b"x")], count=2)
