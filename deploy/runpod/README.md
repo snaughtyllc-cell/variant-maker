@@ -80,11 +80,15 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
    ```
    Build context is the repo root.
 
-3. **Create the RunPod serverless endpoint** from that image. Set the container start command /
-   entrypoint to run the control-plane handler:
-   ```
-   python -u deploy/runpod/cp_handler.py
-   ```
+3. **Create the RunPod serverless endpoint** from that image.
+   > **IMPORTANT — override the default CMD.** The image's baked `CMD` defaults to the Drive-farm
+   > handler (`python /app/deploy/runpod/handler.py`). The control-plane endpoint MUST override the
+   > container start command; do NOT rely on the default. Set it to:
+   > ```
+   > python -u deploy/runpod/cp_handler.py
+   > ```
+   > (The image already includes `boto3` via the `[serverless]` extra — no extra install needed.)
+
    Set these endpoint environment variables: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY`,
    `R2_SECRET_KEY`. Note the endpoint id.
 

@@ -5,6 +5,7 @@ import os
 from typing import Callable
 
 from variant_maker.server.events import VariantEvent
+from variant_maker.server.gpu_worker import process_job
 from variant_maker.server.runner import SourceResult, VariantResult
 
 
@@ -61,7 +62,6 @@ class LoopbackRunPodClient:
         self._work_dir = work_dir
 
     def stream_run(self, payload: dict):
-        from variant_maker.server.gpu_worker import process_job
         yield from process_job(payload["input"], self._store, work_dir=self._work_dir)
 
 
@@ -76,7 +76,6 @@ class FakeObjectStore:
             self._data[key] = f.read()
 
     def get(self, key: str, local_path: str) -> None:
-        import os
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(self._data[key])

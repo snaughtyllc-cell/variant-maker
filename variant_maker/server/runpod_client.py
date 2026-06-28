@@ -22,20 +22,20 @@ class HttpRunPodClient:
         self._poll = poll_interval
 
     def stream_run(self, payload: dict) -> Iterator[dict]:
-        http = _http()
-        resp = http.post(f"{self._base}/run", json=payload, headers=self._headers)
-        resp.raise_for_status()
-        job_id = resp.json()["id"]
-        while True:
-            r = http.get(f"{self._base}/stream/{job_id}", headers=self._headers)
-            r.raise_for_status()
-            body = r.json()
-            for item in body.get("stream", []):
-                yield item["output"]
-            status = body.get("status")
-            if status in ("COMPLETED", "FAILED", "CANCELLED"):
-                if status != "COMPLETED":
-                    raise RuntimeError(f"RunPod job {job_id} ended: {status}")
-                return
-            if self._poll:
-                time.sleep(self._poll)
+        with _http() as http:
+            resp = http.post(f"{self._base}/run", json=payload, headers=self._headers)
+            resp.raise_for_status()
+            job_id = resp.json()["id"]
+            while True:
+                r = http.get(f"{self._base}/stream/{job_id}", headers=self._headers)
+                r.raise_for_status()
+                body = r.json()
+                for item in body.get("stream", []):
+                    yield item["output"]
+                status = body.get("status")
+                if status in ("COMPLETED", "FAILED", "CANCELLED"):
+                    if status != "COMPLETED":
+                        raise RuntimeError(f"RunPod job {job_id} ended: {status}")
+                    return
+                if self._poll:
+                    time.sleep(self._poll)

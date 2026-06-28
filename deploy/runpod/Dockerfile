@@ -1,4 +1,5 @@
-# Linux x86 + NVIDIA worker image for the variant farm (RunPod serverless).
+# Linux x86 + NVIDIA worker image — serves BOTH the Drive farm (handler.py) and the
+# control plane (cp_handler.py) on RunPod serverless.
 #
 # The install RECIPE below was validated on a RunPod RTX 4090
 # (runpod/pytorch:2.1.1-cuda12.1.1, 2026-06-28): the CUDA upscale runs and the
@@ -45,8 +46,10 @@ RUN mkdir -p /app/weights && \
 
 # The farm package + its [farm] deps. NON-editable install so `import variant_maker` resolves
 # from site-packages anywhere (the editable install did not register on the GPU box).
+# The [serverless] extra adds boto3 for the control-plane worker's (cp_handler.py) object
+# storage (S3ObjectStore). Both extras are installed so one image serves both handlers.
 COPY . /app
-RUN pip install --no-cache-dir "/app[farm]"
+RUN pip install --no-cache-dir "/app[farm,serverless]"
 
 # cuda backend + our name-preserving infer script + persistent ledger on the mounted volume.
 ENV VARIANT_MAKER_UPSCALE_BACKEND=cuda \

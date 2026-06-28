@@ -19,6 +19,8 @@ def test_http_client_posts_run_then_streams(monkeypatch):
         def json(self): return self._p
 
     class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
         def post(self, url, json, headers):
             posted["run"] = (url, json, headers)
             return FakeResp({"id": "job123"})
