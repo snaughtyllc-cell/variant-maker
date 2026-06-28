@@ -1,0 +1,24 @@
+"""The progress contract: one event per variant state transition."""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+
+# Valid VariantEvent.state values, in lifecycle order.
+STATES = ("rendering", "checking", "rerolling", "done")
+
+
+@dataclass
+class VariantEvent:
+    source_id: str
+    index: int
+    state: str
+    attempt: int = 0          # rerolling: which retry (1..max_attempts)
+    max_attempts: int = 0
+    status: str | None = None     # done: "ok" | "best_effort" | "corrupt"
+    quality: dict | None = None   # done: vmaf/histogram_ok/spatial_ok/regen_count
+    filename: str | None = None   # done: rendered file name
+
+
+def event_to_dict(e: VariantEvent) -> dict:
+    """JSON-safe dict for SSE/data payloads."""
+    return asdict(e)
