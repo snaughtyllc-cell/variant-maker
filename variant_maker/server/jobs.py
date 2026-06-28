@@ -69,23 +69,23 @@ class JobStore:
             self._ws.save_upload(job_id, source_id, filename, data)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-            self._source_index[source_id] = (job_id, source)
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources)
         with self._lock:
             self._jobs[job_id] = job
             self._done[job_id] = threading.Event()
+            for source in sources:
+                self._source_index[source.source_id] = (job_id, source)
         threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
         return job
 
     def _run_job(self, job: Job) -> None:
         try:
+            def on_event(e: VariantEvent) -> None:
+                job.events.append(e)
+
             for source in job.sources:
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
-
-                def on_event(e: VariantEvent) -> None:
-                    job.events.append(e)
-
                 result = self._runner.run(
                     in_path, count=job.count, out_dir=out_dir,
                     source_id=source.source_id, on_event=on_event,
@@ -151,6 +151,11 @@ class JobStore:
             return None
         job_id, source = loc
         out_dir = self._ws.source_out_dir(job_id, source_id)
+        # NOTE — manifest gap (latent, no fix needed yet):
+        # runner.run writes a new manifest.json into out_dir containing ONLY the newly-rendered
+        # batch, clobbering the original source manifest. source.variants (in-memory) is the
+        # authoritative variant record for the API and is unaffected. Any future route that
+        # serves manifest.json from disk must merge/preserve the original manifest first.
         start = max((v.index for v in source.variants), default=0)
         result = self._runner.run(
             self._ws.source_in_path(job_id, source_id, source.filename),

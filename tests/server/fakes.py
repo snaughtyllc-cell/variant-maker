@@ -12,7 +12,8 @@ class FakeRunner:
     """plan: {variant_index: status}. Emits the full lifecycle and writes placeholder files."""
 
     def __init__(self, plan: dict[int, str] | None = None) -> None:
-        # default: variant 1 ok, variant 2 best_effort, rest ok
+        # default (empty plan): every variant is "ok".
+        # Pass a {variant_index: status} dict to override specific indices.
         self.plan = plan or {}
 
     def _status(self, i: int) -> str:

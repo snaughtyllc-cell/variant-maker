@@ -94,7 +94,7 @@ def create_app(store: JobStore | None = None) -> FastAPI:
         path = store.find_variant(source_id, filename)
         if path is None:
             raise HTTPException(status_code=404, detail="variant not found")
-        return FileResponse(path, media_type="video/mp4", filename=filename)
+        return FileResponse(path, media_type="video/mp4")
 
     @app.get("/api/sources/{source_id}/source")
     def source_file(source_id: str):
