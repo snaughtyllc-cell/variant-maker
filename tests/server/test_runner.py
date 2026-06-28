@@ -1,4 +1,5 @@
 from variant_maker.server.events import VariantEvent, event_to_dict
+from variant_maker.server.runner import LocalRunner, SourceResult, VariantResult
 
 
 def test_variant_event_to_dict_roundtrips_fields():
@@ -19,9 +20,6 @@ def test_variant_event_defaults():
     e = VariantEvent(source_id="s1", index=1, state="rendering")
     d = event_to_dict(e)
     assert d["attempt"] == 0 and d["status"] is None and d["quality"] is None
-
-
-from variant_maker.server.runner import LocalRunner, SourceResult, VariantResult
 
 
 def test_localrunner_translates_engine_events_and_maps_results(monkeypatch, tmp_path):
@@ -77,7 +75,10 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
     def fake_run(config, *, on_event=None):
         captured.update(config)
         open(f"{config['out']}/manifest.json", "w").close()
-        class M: variants = []
+
+        class M:
+            variants = []
+
         return M()
 
     monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
