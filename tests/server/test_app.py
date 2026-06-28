@@ -120,3 +120,9 @@ def test_regenerate_endpoint(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["delivered"] == 4  # 2 initial + 2 regenerated, all ok under FakeRunner
     assert client.post("/api/sources/nope/regenerate", data={"n": "1"}).status_code == 404
+
+
+def test_cli_build_app_serves_health(tmp_path):
+    from variant_maker.server.cli import build_app
+    client = TestClient(build_app(str(tmp_path)))
+    assert client.get("/api/health").json() == {"status": "ok"}
