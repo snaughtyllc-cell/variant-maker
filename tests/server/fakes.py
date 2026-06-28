@@ -40,3 +40,23 @@ class FakeRunner:
         mpath = os.path.join(out_dir, "manifest.json")
         open(mpath, "w").close()
         return SourceResult(variants=variants, manifest_path=mpath)
+
+
+class FakeObjectStore:
+    """In-memory object store for tests — no network, no boto3."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, bytes] = {}
+
+    def put(self, key: str, local_path: str) -> None:
+        with open(local_path, "rb") as f:
+            self._data[key] = f.read()
+
+    def get(self, key: str, local_path: str) -> None:
+        import os
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(self._data[key])
+
+    def list_prefix(self, prefix: str) -> list[str]:
+        return [k for k in self._data if k.startswith(prefix)]

@@ -20,6 +20,7 @@ server = [
     "python-multipart>=0.0.9",
     "httpx>=0.27",
 ]
+serverless = ["boto3>=1.34"]
 
 [project.scripts]
 variant-maker = "variant_maker.cli:main"
