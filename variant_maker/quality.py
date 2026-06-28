@@ -103,6 +103,17 @@ def passes_guard(
     return {"vmaf": score, "histogram_ok": hist_ok, "passed": bool(hist_ok and score >= floor)}
 
 
+def _dimensions(path: str) -> tuple[int, int]:
+    """(width, height) of the first video stream via ffprobe."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", path],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    w, h = out.split("x")
+    return int(w), int(h)
+
+
 def spatial_coherence(output_path: str, reference_path: str) -> float:
     """VMAF of the hq output (downscaled to the pre-upscale geometry) vs the clean
     PRE-upscale render. The spatial-corruption guard.
@@ -110,18 +121,21 @@ def spatial_coherence(output_path: str, reference_path: str) -> float:
     The histogram + VMAF guard checks color and a geometry-neutral quality proxy that never
     runs through the upscaler — so a tile-seam / garbled-tile upscale passes it (this actually
     happened; only the eye caught it). Here we feed the ACTUAL upscaled frames back through:
-    `scale2ref` resizes the output to the reference's resolution so libvmaf can frame-align
-    them. Coherent invented detail round-trips high; shuffled/misaligned tiles collapse.
-    VMAF is luma-only, so the saturation correction baked into the output doesn't move it.
+    the output is scaled to the reference's exact resolution (probed via ffprobe) so libvmaf
+    can frame-align them. Coherent invented detail round-trips high; shuffled/misaligned tiles
+    collapse. VMAF is luma-only, so the saturation correction baked into the output doesn't
+    move it. (Explicit `scale` — not `scale2ref`, which is deprecated and miscounts frames /
+    aborts on ffmpeg 7; this keeps the guard robust across the dev and GPU-worker ffmpeg builds.)
     """
+    w, h = _dimensions(reference_path)
     fd, log_path = tempfile.mkstemp(suffix=".vmaf.json")
     os.close(fd)
     cmd = [
         "ffmpeg", "-hide_banner", "-v", "error",
         "-i", output_path, "-i", reference_path,
         "-lavfi",
-        ("[0:v][1:v]scale2ref=flags=lanczos[dist][ref];"
-         f"[dist][ref]libvmaf=log_fmt=json:log_path={log_path}"),
+        (f"[0:v]scale={w}:{h}:flags=lanczos[dist];"
+         f"[dist][1:v]libvmaf=log_fmt=json:log_path={log_path}"),
         "-f", "null", "-",
     ]
     try:

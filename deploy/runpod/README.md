@@ -5,10 +5,18 @@ ledger, the sweep) is unchanged; only the upscale step runs on CUDA, behind the
 `UpscaleBackend` seam. The image runs **one farm sweep per invocation** and exits — a
 schedule (RunPod cron, or your control plane) triggers it; scale-to-zero between bursts.
 
-> **Status: NOT yet GPU-verified.** Everything here is authored on an M1 Mac with no CUDA.
-> The Python orchestration and the name-preserving infer script are correct by construction,
-> but **CUDA inference, the image build, and the spatial-corruption guard passing on NVIDIA
-> output have not been run.** Treat the first deploy as a smoke test (see the gate below).
+> **Status: GPU core VALIDATED on an RTX 4090 (2026-06-28); container build + endpoint wiring
+> remain.** The Python upscale path was run on a real RunPod 4090
+> (runpod/pytorch:2.1.1-cuda12.1.1): the CUDA Real-ESRGAN upscale produces clean 1080×1920
+> output (eyeballed — no tile seams) and **the spatial-corruption guard passes on it**
+> (`spatial_ok=true`), while a scrambled-tile control is correctly caught (3.5 vs 32–94 clean).
+> Two real bugs were fixed in the process (ffmpeg-7 `scale2ref`; the corruption floor, recut
+> 60→20). Still NOT run: the actual `docker build`, and the serverless endpoint + Drive wiring.
+>
+> Findings baked into the Dockerfile from that run: pin **numpy<2** (realesrgan pulls numpy 2,
+> incompatible with torch 2.1), use a **static ffmpeg with libvmaf** (distro build lacks it),
+> **non-editable** package install (editable didn't register), and **verify the weights
+> download size** (a silent partial download failed once).
 
 ## Pieces
 - `Dockerfile` — CUDA + PyTorch + ffmpeg + Real-ESRGAN, weights baked in.

@@ -33,7 +33,13 @@ def run(config: dict) -> Manifest:
     platform = get_platform(config["platform"])
     out_dir = config["out"]
     floor = config.get("quality_floor", 90.0)
-    corruption_floor = config.get("corruption_floor", 60.0)
+    # Spatial-corruption floor. Calibrated on a real clip across BOTH upscale backends (GPU
+    # smoke test, 2026-06-28): catastrophic garble (scrambled tiles) scores ~3-4, while clean
+    # output scores ~33 (CUDA/PyTorch on a grainy variant) up to ~94 (clean roundtrip); ncnn
+    # clean is 60+. 20 sits in that gap — catches the catastrophic tile-seam failure the eye
+    # caught, without falsely rejecting clean CUDA output. (Single-clip calibration; a
+    # backend-specific floor could restore sensitivity to subtler corruption later.)
+    corruption_floor = config.get("corruption_floor", 20.0)
     max_regen = config.get("max_regen", 3)
     rotate_off = config.get("rotate", "never") == "never"
     dry_run = config.get("dry_run", False)
