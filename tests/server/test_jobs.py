@@ -1,0 +1,55 @@
+# tests/server/test_jobs.py
+from variant_maker.server.jobs import JobStore
+from variant_maker.server.workspace import Workspace
+from tests.server.fakes import FakeRunner
+
+
+def _store(tmp_path, plan=None):
+    return JobStore(Workspace(str(tmp_path)), FakeRunner(plan or {}))
+
+
+def test_create_job_runs_in_background_and_completes(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x"), ("b.mp4", b"y")], count=3)
+    assert job.state in ("running", "done")
+    store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    assert done.state == "done"
+    assert len(done.sources) == 2
+    for s in done.sources:
+        assert len(s.variants) == 3
+        assert s.requested == 3
+
+
+def test_delivered_and_shortfall_count_only_ok(tmp_path):
+    # variant 2 is best_effort -> delivered 2 of 3, shortfall 1
+    store = _store(tmp_path, plan={2: "best_effort"})
+    job = store.create_job([("a.mp4", b"x")], count=3)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    assert src.delivered == 2
+    assert src.shortfall == 1
+
+
+def test_events_recorded_per_job(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    states = [e.state for e in store.get(job.job_id).events]
+    assert states.count("done") == 2
+    assert "rendering" in states
+
+
+def test_gallery_and_diagnostics_split_by_status(tmp_path):
+    store = _store(tmp_path, plan={2: "best_effort"})
+    job = store.create_job([("a.mp4", b"x")], count=3)
+    store.wait(job.job_id, timeout=5)
+
+    gallery = store.gallery()
+    assert len(gallery) == 1
+    ok_in_gallery = [v for v in gallery[0].variants if v.status == "ok"]
+    assert len(ok_in_gallery) == 2
+
+    diag = store.diagnostics()
+    assert len(diag) == 1
+    assert diag[0].status == "best_effort"
