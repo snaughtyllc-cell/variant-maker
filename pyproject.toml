@@ -11,9 +11,12 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.5"]
 # Tier 2 neural ops use EXTERNAL binaries, not pip packages:
 #   realesrgan-ncnn-vulkan, rife-ncnn-vulkan  (download separately, see README)
+# Tier 3 Drive farm — lazy-imported so the engine stays light + offline-capable:
+farm = ["pyyaml>=6", "google-api-python-client>=2", "google-auth>=2"]
 
 [project.scripts]
 variant-maker = "variant_maker.cli:main"
+variant-farm = "variant_maker.farm.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
