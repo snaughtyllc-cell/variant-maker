@@ -153,17 +153,21 @@ def spatial_coherence(output_path: str, reference_path: str) -> float:
     return sum(vals) / len(vals) if vals else 0.0
 
 
-def regen_until_pass(attempt, *, max_regen: int = 3, strength: float = 1.0, falloff: float = 0.6) -> dict:
+def regen_until_pass(attempt, *, max_regen: int = 3, strength: float = 1.0,
+                     falloff: float = 0.6, on_regen=None) -> dict:
     """Reject -> reduce strength -> regenerate, bounded by max_regen.
 
     `attempt(strength) -> dict` samples + renders + guards one variant and returns its guard
     result (must include 'passed'). On failure, strength is scaled by `falloff` and retried.
-    Returns the first passing result, else the best-effort last attempt; tags 'regen_count'.
+    `on_regen(regen, max_regen)` (optional) fires once before each retry. Returns the first
+    passing result, else the best-effort last attempt; tags 'regen_count'.
     """
     result = attempt(strength)
     regen = 0
     while not result["passed"] and regen < max_regen:
         regen += 1
+        if on_regen is not None:
+            on_regen(regen, max_regen)
         strength *= falloff
         result = attempt(strength)
     return {**result, "regen_count": regen}

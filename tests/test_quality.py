@@ -183,3 +183,29 @@ def test_passes_guard_rejects_degraded_variant(real_clip, tmp_path):
     variant, _ = ffmpeg.render_variant(src, bad, REELS, str(tmp_path / "v.mp4"))
     qr = quality.quality_render(src, bad, str(tmp_path / "qr.mp4"))
     assert quality.passes_guard(real_clip, variant, qr)["passed"] is False
+
+
+def test_regen_until_pass_calls_on_regen_each_retry():
+    from variant_maker import quality
+
+    calls = []
+    results = [
+        {"passed": False}, {"passed": False}, {"passed": True},
+    ]
+
+    def attempt(strength):
+        return results[len(calls)] if False else results.pop(0)
+
+    out = quality.regen_until_pass(
+        attempt, max_regen=3, strength=1.0,
+        on_regen=lambda regen, mx: calls.append((regen, mx)),
+    )
+    assert out["passed"] is True
+    assert out["regen_count"] == 2
+    assert calls == [(1, 3), (2, 3)]
+
+
+def test_regen_until_pass_on_regen_optional():
+    from variant_maker import quality
+    out = quality.regen_until_pass(lambda s: {"passed": True}, max_regen=3)
+    assert out["regen_count"] == 0  # no on_regen, no error

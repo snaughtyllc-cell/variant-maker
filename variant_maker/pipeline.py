@@ -26,7 +26,8 @@ def _ffmpeg_version() -> str:
     return parts[2] if len(parts) >= 3 else "unknown"
 
 
-def run(config: dict) -> Manifest:
+def run(config: dict, *, on_event=None) -> Manifest:
+    emit = on_event if on_event is not None else (lambda *a, **k: None)
     input_path = config["input"]
     count = config["count"]
     preset = get_preset(config["preset"])
@@ -95,6 +96,7 @@ def run(config: dict) -> Manifest:
         vseed, fname, path = _prep(i)
 
         def attempt(strength: float) -> dict:
+            emit("rendering", index=i)
             params = sample(preset, vseed, strength=strength)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
@@ -105,13 +107,17 @@ def run(config: dict) -> Manifest:
                 nops = []
             qr = path + ".qr.mp4"
             quality.quality_render(src, params, qr)
+            emit("checking", index=i)
             g = quality.passes_guard(src.path, path, qr, floor=floor)
             for tmp in (qr, qr + ".vmaf.json"):
                 if os.path.exists(tmp):
                     os.remove(tmp)
             return {**g, "params": params, "cmd": cmd, "neural_ops": nops}
 
-        r = quality.regen_until_pass(attempt, max_regen=max_regen, strength=1.0)
+        r = quality.regen_until_pass(
+            attempt, max_regen=max_regen, strength=1.0,
+            on_regen=lambda regen, mx: emit("rerolling", index=i, attempt=regen, max_attempts=mx),
+        )
         info = probe(path)
 
         # Spatial-corruption guard: only tier-2 (upscaled) output can tile-seam; tier-1 is
@@ -130,14 +136,17 @@ def run(config: dict) -> Manifest:
         else:
             status = "best_effort"
 
+        quality_info = {
+            "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
+            "regen_count": r["regen_count"], "passed": r["passed"],
+            "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
+        }
+        emit("done", index=i, status=status, quality=quality_info, filename=fname)
+
         return VariantRecord(
             index=i, filename=fname, seed=vseed, params=r["params"], ffmpeg_cmd=r["cmd"],
             tier=2 if r["neural_ops"] else 1, neural_ops=r["neural_ops"],
-            quality={
-                "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
-                "regen_count": r["regen_count"], "passed": r["passed"],
-                "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
-            },
+            quality=quality_info,
             output_sha256=info.sha256, duration_s=info.duration_s,
             status=status,
         )
