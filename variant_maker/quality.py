@@ -103,6 +103,42 @@ def passes_guard(
     return {"vmaf": score, "histogram_ok": hist_ok, "passed": bool(hist_ok and score >= floor)}
 
 
+def spatial_coherence(output_path: str, reference_path: str) -> float:
+    """VMAF of the hq output (downscaled to the pre-upscale geometry) vs the clean
+    PRE-upscale render. The spatial-corruption guard.
+
+    The histogram + VMAF guard checks color and a geometry-neutral quality proxy that never
+    runs through the upscaler — so a tile-seam / garbled-tile upscale passes it (this actually
+    happened; only the eye caught it). Here we feed the ACTUAL upscaled frames back through:
+    `scale2ref` resizes the output to the reference's resolution so libvmaf can frame-align
+    them. Coherent invented detail round-trips high; shuffled/misaligned tiles collapse.
+    VMAF is luma-only, so the saturation correction baked into the output doesn't move it.
+    """
+    fd, log_path = tempfile.mkstemp(suffix=".vmaf.json")
+    os.close(fd)
+    cmd = [
+        "ffmpeg", "-hide_banner", "-v", "error",
+        "-i", output_path, "-i", reference_path,
+        "-lavfi",
+        ("[0:v][1:v]scale2ref=flags=lanczos[dist][ref];"
+         f"[dist][ref]libvmaf=log_fmt=json:log_path={log_path}"),
+        "-f", "null", "-",
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        with open(log_path) as f:
+            data = json.load(f)
+    finally:
+        if os.path.exists(log_path):
+            os.remove(log_path)
+    pooled = data.get("pooled_metrics", {}).get("vmaf")
+    if pooled:
+        return float(pooled["mean"])
+    frames = data.get("frames", [])
+    vals = [fr["metrics"]["vmaf"] for fr in frames if "vmaf" in fr.get("metrics", {})]
+    return sum(vals) / len(vals) if vals else 0.0
+
+
 def regen_until_pass(attempt, *, max_regen: int = 3, strength: float = 1.0, falloff: float = 0.6) -> dict:
     """Reject -> reduce strength -> regenerate, bounded by max_regen.
 

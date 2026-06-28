@@ -90,6 +90,50 @@ def test_vmaf_drops_for_degraded_render(real_clip, tmp_path):
     assert quality.vmaf(real_clip, bad) < quality.vmaf(real_clip, clean) - 10
 
 
+# ---- spatial-corruption guard (VMAF hq-vs-pre-upscale) ----------------------
+# The histogram+VMAF guard misses spatial garble (the Real-ESRGAN tile-seam bug passed
+# everything; only the eye caught it). This guard downscales the hq output back to the
+# clean PRE-upscale geometry and VMAFs it against that pre-upscale render: coherent detail
+# round-trips high, shuffled/rotated tiles collapse.
+
+def _square_clip(path, size=128, rate=10, dur=0.4):
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+         "-i", f"testsrc2=size={size}x{size}:rate={rate}:duration={dur}",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path)],
+        check=True, capture_output=True,
+    )
+    return str(path)
+
+
+def _vfilter(src, dst, vf):
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", src, "-vf", vf,
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(dst)],
+        check=True, capture_output=True,
+    )
+    return str(dst)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_spatial_coherence_high_for_clean_upscale(tmp_path):
+    ref = _square_clip(tmp_path / "pre.mp4")                       # the pre-upscale render
+    good = _vfilter(ref, tmp_path / "hq.mp4", "scale=256:256:flags=lanczos")
+    assert quality.spatial_coherence(good, ref) > 80
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_spatial_coherence_collapses_for_garbled_upscale(tmp_path):
+    ref = _square_clip(tmp_path / "pre.mp4")
+    # 90° rotate = a structural garble analogous to misaligned tile seams, dims preserved
+    garbled = _vfilter(ref, tmp_path / "hq.mp4", "scale=256:256:flags=lanczos,transpose=1")
+    clean = _vfilter(ref, tmp_path / "ok.mp4", "scale=256:256:flags=lanczos")
+    assert quality.spatial_coherence(garbled, ref) < quality.spatial_coherence(clean, ref) - 20
+    assert quality.spatial_coherence(garbled, ref) < 60
+
+
 # ---- regen loop (pure: reject -> reduce strength -> regenerate) -------------
 
 def test_regen_loop_reduces_strength_until_pass():

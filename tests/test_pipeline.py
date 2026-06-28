@@ -99,6 +99,76 @@ def test_pipeline_hq_uses_neural_upscale(real_clip, tmp_path):
     assert v.quality["passed"] is True
 
 
+def _fake_upscale(spatial_vmaf):
+    """Stand in for upscale_clip: produce a real (cheap) file so probe/histogram work,
+    but report a chosen spatial-coherence score — lets us exercise the corruption guard
+    without the slow neural binary."""
+    from variant_maker import ffmpeg
+
+    def _impl(src, params, out_path, *, platform, **kw):
+        ffmpeg.render_variant(src, params, platform, out_path)
+        ops = [{"op": "upscale", "model": "fake", "scale": 4, "spatial_vmaf": spatial_vmaf}]
+        return out_path, "fake-cmd", ops
+
+    return _impl
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_pipeline_marks_corrupt_when_spatial_guard_fails(real_clip, tmp_path, monkeypatch):
+    """A garbled upscale (low hq-vs-pre-upscale VMAF) is flagged corrupt, NOT silently shipped."""
+    import variant_maker.neural.upscale as up
+    monkeypatch.setattr(up, "available", lambda *a, **k: True)
+    monkeypatch.setattr(up, "upscale_clip", _fake_upscale(spatial_vmaf=12.0))
+
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(real_clip, out, count=1, quality_mode="hq",
+                             platform="reels", corruption_floor=60.0))
+    v = m.variants[0]
+    assert v.tier == 2
+    assert v.quality["spatial_vmaf"] == 12.0
+    assert v.quality["spatial_ok"] is False
+    assert v.status == "corrupt"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_pipeline_spatial_guard_passes_clean_upscale(real_clip, tmp_path, monkeypatch):
+    import variant_maker.neural.upscale as up
+    monkeypatch.setattr(up, "available", lambda *a, **k: True)
+    monkeypatch.setattr(up, "upscale_clip", _fake_upscale(spatial_vmaf=96.0))
+
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(real_clip, out, count=1, quality_mode="hq",
+                             platform="reels", corruption_floor=60.0))
+    v = m.variants[0]
+    assert v.quality["spatial_ok"] is True
+    assert v.status != "corrupt"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_pipeline_tier1_has_no_spatial_metric(real_clip, tmp_path):
+    """Fast tier never runs the upscaler -> no tile-seam risk -> spatial fields are N/A."""
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(real_clip, out, count=1, quality_mode="fast"))
+    v = m.variants[0]
+    assert v.quality["spatial_vmaf"] is None
+    assert v.quality["spatial_ok"] is None
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not (HAS_FFMPEG and HAS_RESR), reason="needs ffmpeg + realesrgan")
+def test_pipeline_hq_records_real_spatial_vmaf(real_clip, tmp_path):
+    clip = _short_clip(real_clip, tmp_path)
+    out = str(tmp_path / "out")
+    m = pipeline.run(_config(clip, out, count=1, quality_mode="hq", platform="reels", seed=7))
+    v = m.variants[0]
+    assert v.neural_ops[0]["spatial_vmaf"] > 60          # the native-scale fix is coherent
+    assert v.quality["spatial_ok"] is True
+    assert v.status != "corrupt"
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
 def test_pipeline_hq_falls_back_when_upscaler_absent(real_clip, tmp_path, monkeypatch):

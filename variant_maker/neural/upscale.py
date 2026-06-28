@@ -14,47 +14,38 @@ import shutil
 import subprocess
 import tempfile
 
-DEFAULT_DIR = os.environ.get("VARIANT_MAKER_REALESRGAN_DIR", "models/realesrgan")
-DEFAULT_MODEL = "realesrgan-x4plus"  # photo model (NOT the anime default) — right for real footage
-# Each model has a NATIVE scale; using a non-native -s (e.g. 2 with the 4x model) corrupts
-# output into misaligned tile seams. Always upscale at the model's native ratio.
-NATIVE_SCALE = {"realesrgan-x4plus": 4, "realesrgan-x4plus-anime": 4, "realesrnet-x4plus": 4}
-
-
-def _binary(model_dir: str = DEFAULT_DIR) -> str | None:
-    local = os.path.join(model_dir, "realesrgan-ncnn-vulkan")
-    if os.path.exists(local):
-        return local
-    return shutil.which("realesrgan-ncnn-vulkan")
+from .backends import (  # noqa: F401 — DEFAULT_*/NATIVE_SCALE re-exported for back-compat
+    DEFAULT_DIR,
+    DEFAULT_MODEL,
+    NATIVE_SCALE,
+    NcnnVulkanBackend,
+    get_backend,
+    native_scale,
+)
 
 
 def available(model_dir: str = DEFAULT_DIR) -> bool:
-    """True only if BOTH the binary and the models dir are present (gate Tier-2 on this).
+    """True only if the resolved upscale backend can actually run here (gate Tier-2 on this).
 
-    A binary-on-PATH with no models would pass a naive check and then fail at runtime.
+    Honors $VARIANT_MAKER_UPSCALE_BACKEND, so on a Linux GPU box this reflects CUDA
+    availability; on the Mac (default) it's the ncnn binary + models check.
     """
-    return _binary(model_dir) is not None and os.path.isdir(os.path.join(model_dir, "models"))
+    return get_backend(model_dir=model_dir).available()
 
 
 def build_upscale_cmd(
     in_dir: str, out_dir: str, *, scale: int = 4, model: str = DEFAULT_MODEL,
     model_dir: str = DEFAULT_DIR, fmt: str = "png",
 ) -> list[str]:
-    """PURE: argv to upscale an image-sequence directory (unit-tested without the binary)."""
-    return [
-        _binary(model_dir) or "realesrgan-ncnn-vulkan",
-        "-i", in_dir, "-o", out_dir,
-        "-s", str(scale), "-n", model,
-        "-m", os.path.join(model_dir, "models"),
-        "-f", fmt,
-    ]
+    """PURE ncnn argv (back-compat shim; new code uses a backend's .argv/.command_str)."""
+    return NcnnVulkanBackend(model_dir).argv(in_dir, out_dir, scale=scale, model=model, fmt=fmt)
 
 
-def upscale_dir(in_dir: str, out_dir: str, **kw) -> str:
-    """Upscale every frame in in_dir -> out_dir via Real-ESRGAN. Returns out_dir."""
-    os.makedirs(out_dir, exist_ok=True)
-    subprocess.run(build_upscale_cmd(in_dir, out_dir, **kw), check=True, capture_output=True)
-    return out_dir
+def upscale_dir(in_dir: str, out_dir: str, *, scale: int = 4, model: str = DEFAULT_MODEL,
+                model_dir: str = DEFAULT_DIR, fmt: str = "png") -> str:
+    """Upscale every frame in in_dir -> out_dir via the ncnn backend. Returns out_dir."""
+    return NcnnVulkanBackend(model_dir).upscale_dir(in_dir, out_dir, scale=scale, model=model,
+                                                    fmt=fmt)
 
 
 def _even(n: float) -> int:
@@ -63,20 +54,24 @@ def _even(n: float) -> int:
 
 def upscale_clip(
     src, params: dict, out_path: str, *, platform, scale: int | None = None,
-    model: str = DEFAULT_MODEL, model_dir: str = DEFAULT_DIR,
+    model: str = DEFAULT_MODEL, model_dir: str = DEFAULT_DIR, backend=None,
 ) -> tuple[str, str, list]:
     """Hero op: full Tier-1 render at a downscaled target -> AI-upscale its frames ->
     reassemble at the target geometry, re-muxing the (already correct) audio.
 
     All color/sync/trim/speed correctness comes from the tested `render_variant`; the audio
-    is COPIED from that render so it can't desync. Returns (out_path, cmd_str, neural_ops).
+    is COPIED from that render so it can't desync. The upscale step is the only OS/GPU-specific
+    part — it goes through `backend` (ncnn on mac, CUDA on a Linux GPU box). Returns
+    (out_path, cmd_str, neural_ops).
     """
     from .. import ffmpeg
     from ..color import output_color_args, resolve_output_color
     from ..platforms import Platform
 
+    if backend is None:
+        backend = get_backend(model_dir=model_dir)
     if scale is None:
-        scale = NATIVE_SCALE.get(model, 4)  # native ratio — non-native -s corrupts into tiles
+        scale = native_scale(model)  # native ratio — non-native -s corrupts into tiles
 
     tw = _even(platform.width or src.width)
     th = _even(platform.height or src.height)
@@ -98,9 +93,8 @@ def upscale_clip(
         extract = ["ffmpeg", "-y", "-v", "error", "-i", small, os.path.join(in_dir, "f%06d.png")]
         subprocess.run(extract, check=True, capture_output=True)
         cmds.append(shlex.join(extract))
-        upscale_dir(in_dir, up_dir, scale=scale, model=model, model_dir=model_dir)
-        cmds.append(shlex.join(build_upscale_cmd(in_dir, up_dir, scale=scale, model=model,
-                                                 model_dir=model_dir)))
+        backend.upscale_dir(in_dir, up_dir, scale=scale, model=model)
+        cmds.append(backend.command_str(in_dir, up_dir, scale=scale, model=model))
 
         # Real-ESRGAN mutes saturation (~9%, isolated by stage). Measure the upscaled result
         # and apply a single eq correction so the FINAL output's saturation matches source —
@@ -132,9 +126,16 @@ def upscale_clip(
         reassemble += [out_path]
         subprocess.run(reassemble, check=True, capture_output=True)
         cmds.append(shlex.join(reassemble))
+
+        # Spatial-corruption guard: VMAF of this hq output (downscaled) vs the clean
+        # PRE-upscale render `small`. Computed HERE because `small` is ephemeral. The
+        # histogram+VMAF guard never runs through the upscaler, so it can't see tile-seam
+        # garble; this can. Measured before cleanup wipes the pre-upscale reference.
+        spatial_vmaf = round(quality.spatial_coherence(out_path, small), 2)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
     neural_ops = [{"op": "upscale", "model": model, "scale": scale,
-                   "from": f"{dw}x{dh}", "to": f"{tw}x{th}", "sat_match": round(ratio, 4)}]
+                   "from": f"{dw}x{dh}", "to": f"{tw}x{th}", "sat_match": round(ratio, 4),
+                   "spatial_vmaf": spatial_vmaf}]
     return out_path, " && ".join(cmds), neural_ops

@@ -33,6 +33,7 @@ def run(config: dict) -> Manifest:
     platform = get_platform(config["platform"])
     out_dir = config["out"]
     floor = config.get("quality_floor", 90.0)
+    corruption_floor = config.get("corruption_floor", 60.0)
     max_regen = config.get("max_regen", 3)
     rotate_off = config.get("rotate", "never") == "never"
     dry_run = config.get("dry_run", False)
@@ -106,15 +107,33 @@ def run(config: dict) -> Manifest:
 
         r = quality.regen_until_pass(attempt, max_regen=max_regen, strength=1.0)
         info = probe(path)
+
+        # Spatial-corruption guard: only tier-2 (upscaled) output can tile-seam; tier-1 is
+        # N/A (None). A corrupt upscale is flagged here so the farm refuses to upload it —
+        # the histogram+VMAF guard above cannot see this failure mode.
+        spatial_vmaf = None
+        spatial_ok = None
+        if r["neural_ops"] and "spatial_vmaf" in r["neural_ops"][0]:
+            spatial_vmaf = r["neural_ops"][0]["spatial_vmaf"]
+            spatial_ok = spatial_vmaf >= corruption_floor
+
+        if spatial_ok is False:
+            status = "corrupt"
+        elif r["passed"]:
+            status = "ok"
+        else:
+            status = "best_effort"
+
         return VariantRecord(
             index=i, filename=fname, seed=vseed, params=r["params"], ffmpeg_cmd=r["cmd"],
             tier=2 if r["neural_ops"] else 1, neural_ops=r["neural_ops"],
             quality={
                 "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
                 "regen_count": r["regen_count"], "passed": r["passed"],
+                "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
             },
             output_sha256=info.sha256, duration_s=info.duration_s,
-            status="ok" if r["passed"] else "best_effort",
+            status=status,
         )
 
     indices = range(1, count + 1)
