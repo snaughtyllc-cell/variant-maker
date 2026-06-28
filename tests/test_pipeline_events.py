@@ -37,19 +37,42 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline.quality, "passes_guard", fake_guard)
 
     events = []
+
+    def record(state, **kw):
+        # capture (state, index, attempt, max_attempts) so ordering AND the per-event
+        # kwargs (esp. the rendering `attempt` counter) are locked, not just membership.
+        events.append((state, kw.get("index"), kw.get("attempt"), kw.get("max_attempts")))
+
     cfg = {
         "input": "src.mp4", "count": 2, "preset": "medium", "platform": "none",
         "out": str(tmp_path), "quality_mode": "fast", "jobs": 1, "max_regen": 3,
     }
-    pipeline.run(cfg, on_event=lambda state, **kw: events.append((state, kw.get("index"))))
+    pipeline.run(cfg, on_event=record)
 
     states = [e[0] for e in events]
-    # variant 1: rendering, checking, done
-    assert states[:3] == ["rendering", "checking", "done"]
-    # somewhere a rerolling event for variant 2
-    assert "rerolling" in states
     # exactly two 'done' events, one per variant
     assert states.count("done") == 2
-    # done events carry status + filename
+
+    by_index = {1: [e for e in events if e[1] == 1], 2: [e for e in events if e[1] == 2]}
+
+    # variant 1 passes first try: rendering(attempt=0) -> checking -> done
+    assert by_index[1] == [
+        ("rendering", 1, 0, None),
+        ("checking", 1, None, None),
+        ("done", 1, None, None),
+    ]
+
+    # variant 2 fails once then passes. The re-roll render carries attempt=1; the
+    # rerolling event carries (attempt=1, max_attempts=3). Full interleaved sequence:
+    assert by_index[2] == [
+        ("rendering", 2, 0, None),
+        ("checking", 2, None, None),
+        ("rerolling", 2, 1, 3),
+        ("rendering", 2, 1, None),
+        ("checking", 2, None, None),
+        ("done", 2, None, None),
+    ]
+
+    # done events carry status + filename (kwargs not captured in the tuple above)
     done = [e for e in events if e[0] == "done"]
     assert len(done) == 2

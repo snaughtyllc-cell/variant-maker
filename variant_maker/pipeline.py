@@ -94,9 +94,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
     def _render_one(i: int) -> VariantRecord:
         vseed, fname, path = _prep(i)
+        attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
 
         def attempt(strength: float) -> dict:
-            emit("rendering", index=i)
+            nonlocal attempt_no
+            attempt_no += 1
+            emit("rendering", index=i, attempt=attempt_no)
             params = sample(preset, vseed, strength=strength)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
