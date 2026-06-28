@@ -67,7 +67,32 @@ def test_missing_output_folder_id_raises():
 def test_missing_auth_raises():
     raw = _raw()
     del raw["auth"]
-    with pytest.raises(cfg.ConfigError, match="service_account_json"):
+    with pytest.raises(cfg.ConfigError, match="auth"):
+        cfg.from_dict(raw)
+
+
+def test_oauth_token_auth_accepted():
+    raw = _raw(auth={"oauth_token": "./token.json"})
+    c = cfg.from_dict(raw)
+    assert c.auth.oauth_token == "./token.json"
+    assert c.auth.service_account_json is None
+
+
+def test_service_account_auth_still_accepted():
+    c = cfg.from_dict(_raw())
+    assert c.auth.service_account_json == "./secrets/variant-bot.json"
+    assert c.auth.oauth_token is None
+
+
+def test_both_auth_methods_is_an_error():
+    raw = _raw(auth={"service_account_json": "a.json", "oauth_token": "b.json"})
+    with pytest.raises(cfg.ConfigError, match="exactly one|both"):
+        cfg.from_dict(raw)
+
+
+def test_no_auth_method_is_an_error():
+    raw = _raw(auth={})
+    with pytest.raises(cfg.ConfigError, match="service_account_json|oauth_token"):
         cfg.from_dict(raw)
 
 

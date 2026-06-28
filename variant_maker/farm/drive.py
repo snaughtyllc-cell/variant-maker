@@ -73,28 +73,64 @@ def _list_query(folder_id: str) -> str:
 _FIELDS = "nextPageToken, files(id, name, mimeType, md5Checksum)"
 
 
-class GoogleDrive(DriveClient):
-    """Real Drive via a service account. `service` is injectable for testing; if omitted it
-    is built lazily from the service-account JSON (requires the [farm] extra)."""
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-    def __init__(self, service_account_json: str | None = None, *, service=None):
+
+class GoogleDrive(DriveClient):
+    """Real Drive. Two auth methods: a service-account JSON key, or an OAuth user token
+    (`token.json` from a one-time sign-in — the no-downloadable-key path for orgs that block
+    service-account keys). `service` is injectable for testing; real creds need the [farm]
+    extra and are built lazily."""
+
+    def __init__(self, service_account_json: str | None = None, *,
+                 oauth_token: str | None = None, service=None):
         self._service = service
         self._sa_json = service_account_json
+        self._oauth_token = oauth_token
+
+    @classmethod
+    def from_auth(cls, auth, *, service=None) -> "GoogleDrive":
+        return cls(service_account_json=auth.service_account_json,
+                   oauth_token=auth.oauth_token, service=service)
+
+    @property
+    def auth_method(self) -> str | None:
+        if self._oauth_token:
+            return "oauth"
+        if self._sa_json:
+            return "service_account"
+        return None
 
     @property
     def service(self):
         if self._service is None:
-            self._service = self._build_service(self._sa_json)
+            self._service = self._build_service()
         return self._service
 
+    def _build_service(self):
+        if self._oauth_token:
+            return self._build_oauth(self._oauth_token)
+        if self._sa_json:
+            return self._build_service_account(self._sa_json)
+        raise ValueError("GoogleDrive needs a service_account_json or oauth_token")
+
     @staticmethod
-    def _build_service(sa_json: str):  # pragma: no cover - needs google libs + creds
+    def _build_service_account(sa_json: str):  # pragma: no cover - needs google libs + creds
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
 
-        creds = service_account.Credentials.from_service_account_file(
-            sa_json, scopes=["https://www.googleapis.com/auth/drive"]
-        )
+        creds = service_account.Credentials.from_service_account_file(sa_json, scopes=SCOPES)
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+    @staticmethod
+    def _build_oauth(token_path: str):  # pragma: no cover - needs google libs + a token
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        if not creds.valid and creds.refresh_token:
+            creds.refresh(Request())  # long-lived refresh token keeps the worker headless
         return build("drive", "v3", credentials=creds, cache_discovery=False)
 
     def list_files(self, folder_id: str) -> list[DriveFile]:

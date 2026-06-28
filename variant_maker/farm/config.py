@@ -21,7 +21,10 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class AuthConfig:
-    service_account_json: str
+    """Exactly one auth method: a service-account JSON key, or an OAuth user token (the
+    no-downloadable-key path for orgs that block service-account keys)."""
+    service_account_json: str | None = None
+    oauth_token: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,8 +65,11 @@ def _validate_recipe(r: Recipe, where: str) -> None:
 def from_dict(raw: dict) -> FarmConfig:
     auth_raw = raw.get("auth") or {}
     sa = auth_raw.get("service_account_json")
-    if not sa:
-        raise ConfigError("auth.service_account_json is required")
+    oauth = auth_raw.get("oauth_token")
+    if sa and oauth:
+        raise ConfigError("auth: set exactly one of service_account_json / oauth_token, not both")
+    if not sa and not oauth:
+        raise ConfigError("auth requires service_account_json or oauth_token")
 
     defaults_raw = {**_DEFAULT_DEFAULTS, **(raw.get("defaults") or {})}
     defaults = Recipe(
@@ -96,7 +102,7 @@ def from_dict(raw: dict) -> FarmConfig:
                                      output_folder_id=out_id, recipe=recipe)
 
     return FarmConfig(
-        auth=AuthConfig(service_account_json=sa),
+        auth=AuthConfig(service_account_json=sa, oauth_token=oauth),
         defaults=defaults,
         poll_minutes=int(raw.get("poll_minutes", 15)),
         clients=clients,

@@ -5,7 +5,10 @@ process downloads and we can verify uploaded bytes round-trip.
 """
 import hashlib
 
+import pytest
+
 from variant_maker.farm import drive as d
+from variant_maker.farm.config import AuthConfig
 from farm_fakes import FakeDrive
 
 
@@ -113,3 +116,21 @@ def test_google_list_query_scopes_to_parent_and_untrashed():
     q = d._list_query("1ParentXyz")
     assert "'1ParentXyz' in parents" in q
     assert "trashed = false" in q
+
+
+# ---- auth method selection (service account vs OAuth) -----------------------
+
+def test_from_auth_selects_oauth():
+    g = d.GoogleDrive.from_auth(AuthConfig(oauth_token="tok.json"))
+    assert g.auth_method == "oauth"
+
+
+def test_from_auth_selects_service_account():
+    g = d.GoogleDrive.from_auth(AuthConfig(service_account_json="sa.json"))
+    assert g.auth_method == "service_account"
+
+
+def test_build_service_requires_some_credential():
+    g = d.GoogleDrive()  # no creds, no injected service
+    with pytest.raises(ValueError, match="oauth_token|service_account"):
+        _ = g.service

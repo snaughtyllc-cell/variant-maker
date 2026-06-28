@@ -39,7 +39,7 @@ def run_job(inp: dict, *, drive=None) -> dict:
     work_dir = inp.get("work_dir") or os.environ.get("VARIANT_FARM_WORK", _DEFAULT_WORK)
     if drive is None:
         from .drive import GoogleDrive
-        drive = GoogleDrive(cfg.auth.service_account_json)
+        drive = GoogleDrive.from_auth(cfg.auth)
 
     s = run_sweep(cfg, drive, ledger=Ledger(ledger_path), work_dir=work_dir)
     return {"new": s.new, "done": s.done, "failed": s.failed,

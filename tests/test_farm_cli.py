@@ -62,3 +62,10 @@ def test_cli_run_invokes_sweep_and_prints_summary(monkeypatch, tmp_path):
 def test_cli_run_requires_config():
     res = CliRunner().invoke(cli.main, ["run"])
     assert res.exit_code != 0
+
+
+def test_cli_auth_command_is_wired():
+    # --help must work without the google OAuth libs (import is lazy inside the command)
+    res = CliRunner().invoke(cli.main, ["auth", "--help"])
+    assert res.exit_code == 0
+    assert "client-secrets" in res.output and "token" in res.output
