@@ -98,12 +98,13 @@ class CudaRealEsrganBackend(UpscaleBackend):
     """PyTorch Real-ESRGAN on CUDA — the Linux x86 + NVIDIA production path (serverless GPU).
 
     WARNING: NOT runnable on this Mac (no NVIDIA/CUDA). What's tested here is command
-    construction, model-name mapping, and that availability gates to False without CUDA.
-    The actual inference AND the reconciliation of output frame names to `upscale_dir`'s
-    same-names contract are a DEPLOY-TIME smoke test on real NVIDIA hardware — the official
-    inference_realesrgan.py applies a `--suffix`, so output filenames must be normalized to
-    match the input sequence before ffmpeg reassembly. Do not assume this path works until
-    it has passed the spatial-corruption guard on a GPU.
+    construction, model-name mapping, and that availability gates to False without CUDA. The
+    same-names contract for `upscale_dir` is met by pointing `script` at the shipped
+    name-preserving CLI (deploy/runpod/realesrgan_infer.py, set via $VARIANT_MAKER_REALESRGAN_PY
+    in the worker image) instead of the official inference_realesrgan.py (whose `--suffix`
+    renaming would break ffmpeg reassembly). The actual CUDA inference is still a DEPLOY-TIME
+    smoke test — do not assume this path works until it has passed the spatial-corruption
+    guard on real NVIDIA output.
     """
 
     name = "cuda"
