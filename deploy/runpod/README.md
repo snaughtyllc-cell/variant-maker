@@ -63,3 +63,37 @@ optional `ledger_path`, `work_dir`. Returns `{new, done, failed, skipped, corrup
 - GPU-time is billed for the whole invocation, including Drive I/O. If that I/O time becomes a
   cost concern, split the orchestrator onto a CPU endpoint that calls this per-video — an
   optimization, not needed for first deploy.
+
+## Control-plane serverless endpoint (GPU runner)
+
+The control plane runs GPU jobs on a RunPod serverless endpoint using
+`deploy/runpod/cp_handler.py` (streams per-variant progress). Steps:
+
+1. **Object storage (Cloudflare R2 recommended — zero egress).**
+   Create a bucket and an API token. Note: account endpoint URL, bucket name, access key, secret.
+   (AWS S3 or RunPod S3 also work — they are the same S3 API; only the endpoint/creds differ.)
+
+2. **Build + push the worker image** (amd64/NVIDIA — not buildable on macOS):
+   ```
+   docker build -f deploy/runpod/Dockerfile -t <registry>/variant-cp:latest .
+   docker push <registry>/variant-cp:latest
+   ```
+   Build context is the repo root.
+
+3. **Create the RunPod serverless endpoint** from that image. Set the container start command /
+   entrypoint to run the control-plane handler:
+   ```
+   python -u deploy/runpod/cp_handler.py
+   ```
+   Set these endpoint environment variables: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY`,
+   `R2_SECRET_KEY`. Note the endpoint id.
+
+4. **Point the local backend at it:**
+   ```
+   export RUNPOD_ENDPOINT_ID=<id> RUNPOD_API_KEY=<key>
+   export R2_ENDPOINT=<url> R2_BUCKET=<bucket> R2_ACCESS_KEY=<ak> R2_SECRET_KEY=<sk>
+   variant-server --runner runpod
+   ```
+   Submit a job; confirm SSE streams progress and variants are served from the gallery.
+
+5. **Rotate the RunPod API key** (it was pasted in chat early in the project).

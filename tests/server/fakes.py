@@ -52,6 +52,19 @@ class FakeRunPodClient:
         yield from self._chunks
 
 
+class LoopbackRunPodClient:
+    """Drives the REAL gpu_worker.process_job against a shared store — no network, no cloud.
+    Used to verify the runner<->worker chunk contract end to end."""
+
+    def __init__(self, store, work_dir: str) -> None:
+        self._store = store
+        self._work_dir = work_dir
+
+    def stream_run(self, payload: dict):
+        from variant_maker.server.gpu_worker import process_job
+        yield from process_job(payload["input"], self._store, work_dir=self._work_dir)
+
+
 class FakeObjectStore:
     """In-memory object store for tests — no network, no boto3."""
 
