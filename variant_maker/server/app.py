@@ -5,6 +5,7 @@ import asyncio
 import json
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
 from .events import event_to_dict
@@ -87,5 +88,26 @@ def create_app(store: JobStore | None = None) -> FastAPI:
         return [DiagnosticsItem(source_id=v.source_id, index=v.index, filename=v.filename,
                                 status=v.status, quality=v.quality)
                 for v in store.diagnostics()]
+
+    @app.get("/api/variants/{source_id}/{filename}")
+    def variant_file(source_id: str, filename: str):
+        path = store.find_variant(source_id, filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="variant not found")
+        return FileResponse(path, media_type="video/mp4", filename=filename)
+
+    @app.get("/api/sources/{source_id}/source")
+    def source_file(source_id: str):
+        path = store.source_file(source_id)
+        if path is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        return FileResponse(path, media_type="video/mp4")
+
+    @app.post("/api/sources/{source_id}/regenerate", response_model=SourceOut)
+    def regenerate(source_id: str, n: int = Form(...)) -> SourceOut:
+        source = store.regenerate(source_id, n)
+        if source is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        return _source_out(source, ok_only=True)
 
     return app

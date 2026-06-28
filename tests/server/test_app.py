@@ -93,3 +93,30 @@ def test_diagnostics_lists_non_ok(tmp_path):
     diag = client.get("/api/diagnostics").json()
     assert len(diag) == 2
     assert all(d["status"] == "best_effort" for d in diag)
+
+
+def test_serve_variant_and_source_files(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"orig", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    fname = src["variants"][0]["filename"]
+    sid = src["source_id"]
+    assert client.get(f"/api/variants/{sid}/{fname}").status_code == 200
+    assert client.get(f"/api/sources/{sid}/source").content == b"orig"
+    assert client.get("/api/variants/nope/x.mp4").status_code == 404
+
+
+def test_regenerate_endpoint(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "2"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    sid = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["source_id"]
+    resp = client.post(f"/api/sources/{sid}/regenerate", data={"n": "2"})
+    assert resp.status_code == 200
+    assert resp.json()["delivered"] >= 2
+    assert client.post("/api/sources/nope/regenerate", data={"n": "1"}).status_code == 404

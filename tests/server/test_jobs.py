@@ -53,3 +53,27 @@ def test_gallery_and_diagnostics_split_by_status(tmp_path):
     diag = store.diagnostics()
     assert len(diag) == 1
     assert diag[0].status == "best_effort"
+
+
+def test_find_variant_and_source_file(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"orig-bytes")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    vpath = store.find_variant(src.source_id, src.variants[0].filename)
+    assert vpath and vpath.endswith(".mp4")
+    spath = store.source_file(src.source_id)
+    with open(spath, "rb") as f:
+        assert f.read() == b"orig-bytes"
+
+
+def test_regenerate_appends_variants(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    result = store.regenerate(src.source_id, 2)
+    assert result is not None
+    assert result is src
+    assert len(src.variants) == 4
+    assert [v.index for v in src.variants] == [1, 2, 3, 4]
