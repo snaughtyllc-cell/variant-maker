@@ -25,7 +25,7 @@ Four screens: **Studio · Gallery · Diagnostics**, plus a **variant-detail side
 --bg:#0a0a0e   --panel:#101018   --panel2:#15151f
 --line:#23232f --line2:#2c2c3a
 --text:#ececf4 --muted:#8a8aa0   --muted2:#62627a
---violet:#7c5cff (primary)       --violetL:#a78bfa
+--violet:#7c5cff (primary)       --violet-l:#a78bfa (Tailwind v4 util: bg-violet-l)
 --cyan:#22d3ee   (live / active accent)
 --pink:#ff4d8d   (CTA energy, used sparingly)
 --green:#22c55e (pass)  --amber:#f59e0b (re-roll / below-floor)  --red:#f87171 (corrupt)

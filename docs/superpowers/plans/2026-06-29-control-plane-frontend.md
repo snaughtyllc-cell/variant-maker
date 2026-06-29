@@ -14,7 +14,7 @@
 - **Locked API — do NOT change the backend, ever.** Build only against the endpoints/models in spec §8. If SSE buffers through the Next dev rewrite, the fallback is a **frontend-only** Next.js Route Handler that streams the proxied SSE (Tasks 1/6) — there is **no** sanctioned backend change under any branch.
 - **App location:** everything lives under `variant-maker/web/`. Run commands from there unless stated. Node ≥ 18.18 (Next requirement).
 - **Same-origin proxy:** all API calls use **relative** `/api/...` paths (never `http://localhost:8000` in component code). The proxy target is `API_PROXY_TARGET` (default `http://localhost:8000`).
-- **Design tokens (verbatim, spec §2):** `--bg:#0a0a0e --panel:#101018 --panel2:#15151f --line:#23232f --line2:#2c2c3a --text:#ececf4 --muted:#8a8aa0 --muted2:#62627a --violet:#7c5cff --violetL:#a78bfa --cyan:#22d3ee --pink:#ff4d8d --green:#22c55e --amber:#f59e0b --red:#f87171`. Primary CTA gradient `135deg violet→pink`; progress gradient `90deg violet→cyan`; live = cyan; pass=green, reroll/below-floor=amber, corrupt=red. Variant media is **9:16**; Gallery grid **8 across** on wide screens.
+- **Design tokens (verbatim, spec §2):** `--bg:#0a0a0e --panel:#101018 --panel2:#15151f --line:#23232f --line2:#2c2c3a --text:#ececf4 --muted:#8a8aa0 --muted2:#62627a --violet:#7c5cff --violet-l:#a78bfa --cyan:#22d3ee --pink:#ff4d8d --green:#22c55e --amber:#f59e0b --red:#f87171`. Primary CTA gradient `135deg violet→pink`; progress gradient `90deg violet→cyan`; live = cyan; pass=green, reroll/below-floor=amber, corrupt=red. Variant media is **9:16**; Gallery grid **8 across** on wide screens.
 - **Status mapping (verbatim):** `ok` → delivered/Gallery; `best_effort` (VMAF below floor) + `corrupt` (spatial-guard reject) → Diagnostics + shortfall. `delivered=count(ok)`, `shortfall=requested−delivered` (already on `SourceOut`). VMAF floor = **90**; corruption is reported via `spatial_ok===false`.
 - **TDD where unit-testable; screenshot-compare where visual.** Logic tasks: red→green→commit with Vitest. Visual tasks: invoke `frontend-design`, then the `anthropic-skills:fwr` screenshot-compare loop against the named committed mockup until it matches; commit. Both are real gates.
 - **Commit after every task** (and at the green points within a task). Work on branch `tier1`. **Do not push** (the user pushes).
@@ -114,7 +114,7 @@ const config: Config = {
         bg: "#0a0a0e", panel: "#101018", panel2: "#15151f",
         line: "#23232f", line2: "#2c2c3a",
         text: "#ececf4", muted: "#8a8aa0", muted2: "#62627a",
-        violet: "#7c5cff", violetL: "#a78bfa", cyan: "#22d3ee", pink: "#ff4d8d",
+        violet: "#7c5cff", "violet-l": "#a78bfa", cyan: "#22d3ee", pink: "#ff4d8d",
         green: "#22c55e", amber: "#f59e0b", red: "#f87171",
       },
       backgroundImage: {
