@@ -5,6 +5,7 @@ import { FileList } from "@/components/studio/FileList";
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
+import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations } from "@/lib/files";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
@@ -119,19 +120,17 @@ export default function StudioPage() {
         <AdvancedPanel />
       </div>
 
-      {/* RIGHT — live progress (Task 6 placeholder) */}
+      {/* RIGHT — live progress (Task 6) */}
       <div
         style={{
           padding: "18px 20px",
           background: "#0c0c11",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          flexDirection: "column",
+          minHeight: 0,
         }}
       >
-        <p style={{ color: "var(--color-muted2)", fontSize: 13 }}>
-          {runActive ? `Job ${jobId} running…` : "Progress panel — Task 6"}
-        </p>
+        <ProgressPanel />
       </div>
     </main>
   );
