@@ -1,0 +1,220 @@
+"use client";
+import { Quality } from "@/lib/types";
+import { vmafPass } from "@/lib/format";
+
+interface QualityPanelProps {
+  quality: Quality;
+}
+
+function QRow({
+  label,
+  children,
+  locked,
+}: {
+  label: string;
+  children: React.ReactNode;
+  locked?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "11px 12px",
+        background: "var(--color-panel2)",
+        border: "1px solid var(--color-line)",
+        borderRadius: 10,
+        marginBottom: 8,
+        opacity: locked ? 0.5 : 1,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 13,
+          flexShrink: 0,
+          width: 108,
+          color: "var(--color-text)",
+        }}
+      >
+        {label}
+        {locked && (
+          <span style={{ fontSize: 10, marginLeft: 4 }}>🔒</span>
+        )}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Meter({ pct, green, amber }: { pct: number; green?: boolean; amber?: boolean }) {
+  const bg = green
+    ? "linear-gradient(90deg, #22c55e, #7bf2a8)"
+    : amber
+    ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+    : "#3a3a4a";
+  return (
+    <div
+      style={{
+        flex: 1,
+        height: 6,
+        borderRadius: 99,
+        background: "#20202c",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "block",
+          height: "100%",
+          width: `${Math.min(100, Math.max(0, pct))}%`,
+          borderRadius: 99,
+          backgroundImage: bg,
+        }}
+      />
+    </div>
+  );
+}
+
+function OkBadge({ ok }: { ok: boolean }) {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: ok ? "#7bf2a8" : "#f87171",
+        background: ok ? "#0c2c1a" : "#2c1010",
+        border: `1px solid ${ok ? "#16502f" : "#5a2020"}`,
+        padding: "2px 7px",
+        borderRadius: 6,
+        flexShrink: 0,
+      }}
+    >
+      {ok ? "✓ OK" : "✗ fail"}
+    </span>
+  );
+}
+
+export function QualityPanel({ quality }: QualityPanelProps) {
+  const pass = vmafPass(quality.vmaf);
+  const rerollPct = (quality.regen_count / 3) * 100;
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: "0.7px",
+          color: "var(--color-muted2)",
+          fontWeight: 700,
+          margin: "20px 0 10px",
+        }}
+      >
+        Quality
+      </div>
+
+      {/* VMAF */}
+      <QRow label="VMAF">
+        <Meter pct={quality.vmaf} green={pass} />
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 800,
+            flexShrink: 0,
+            color: pass ? "#7bf2a8" : "#f87171",
+          }}
+        >
+          {quality.vmaf.toFixed(1)}
+        </span>
+      </QRow>
+
+      {/* Spatial guard */}
+      <QRow label="Spatial guard">
+        {quality.spatial_ok === null ? (
+          <>
+            <Meter pct={0} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: "var(--color-muted)",
+              }}
+            >
+              — / n/a
+            </span>
+          </>
+        ) : (
+          <>
+            <Meter pct={quality.spatial_vmaf ?? 0} green={quality.spatial_ok} />
+            {quality.spatial_ok ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  color: "#7bf2a8",
+                  background: "#0c2c1a",
+                  border: "1px solid #16502f",
+                  padding: "2px 7px",
+                  borderRadius: 6,
+                  flexShrink: 0,
+                }}
+              >
+                ✓ no corruption
+              </span>
+            ) : (
+              <OkBadge ok={false} />
+            )}
+          </>
+        )}
+      </QRow>
+
+      {/* Histogram */}
+      <QRow label="Histogram">
+        <Meter pct={quality.histogram_ok ? 100 : 0} green={quality.histogram_ok} />
+        <OkBadge ok={quality.histogram_ok} />
+      </QRow>
+
+      {/* Re-rolls */}
+      <QRow label="Re-rolls">
+        <Meter pct={rerollPct} amber />
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 800,
+            flexShrink: 0,
+            color: "#fbbf24",
+          }}
+        >
+          {quality.regen_count} / 3
+        </span>
+      </QRow>
+
+      {/* Similarity — locked/greyed */}
+      <QRow label="Similarity" locked>
+        <Meter pct={35} />
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 800,
+            flexShrink: 0,
+            color: "var(--color-muted)",
+          }}
+        >
+          — %
+        </span>
+      </QRow>
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--color-muted2)",
+          margin: "-2px 2px 0",
+          lineHeight: 1.5,
+        }}
+      >
+        Similarity readout arrives with the auto-tune brain (target ≤35%). Parked for now.
+      </div>
+    </div>
+  );
+}

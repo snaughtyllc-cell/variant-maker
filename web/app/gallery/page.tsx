@@ -6,6 +6,7 @@ import { useRun } from "@/lib/runStore";
 import { filterSources, sortSources } from "@/lib/gallery";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { VariantSheet } from "@/components/variant/VariantSheet";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -26,17 +27,50 @@ function GalleryContent() {
     }
   }, [complete, mutate]);
 
-  // Read ?v= param (side-panel will be Task 9 — no-op handler here)
+  // Parse ?v=<source_id>:<index>
   const vParam = searchParams.get("v");
-  // TODO(Task 9): open variant side-panel when vParam is set
-  void vParam;
+  let sheetSourceId: string | null = null;
+  let sheetIndex: number | null = null;
+
+  if (vParam) {
+    const colonIdx = vParam.lastIndexOf(":");
+    if (colonIdx > 0) {
+      sheetSourceId = vParam.slice(0, colonIdx);
+      const idxStr = vParam.slice(colonIdx + 1);
+      const parsed = parseInt(idxStr, 10);
+      if (!isNaN(parsed)) sheetIndex = parsed;
+    }
+  }
+
+  // Resolve source for the sheet
+  const allSources = sources ?? [];
+  const sheetSource = sheetSourceId
+    ? allSources.find((s) => s.source_id === sheetSourceId)
+    : undefined;
+
+  // Clamp sheet index to valid range
+  const clampedIndex =
+    sheetSource && sheetIndex !== null
+      ? Math.min(Math.max(0, sheetIndex), sheetSource.variants.length - 1)
+      : null;
 
   function handleOpenVariant(sourceId: string, index: number) {
-    // Set URL param — the actual sheet is Task 9
     router.push(`/gallery?v=${sourceId}:${index}`, { scroll: false });
   }
 
-  const allSources = sources ?? [];
+  function handleSheetClose() {
+    router.push("/gallery", { scroll: false });
+  }
+
+  function handleSheetNav(delta: number) {
+    if (!sheetSource || clampedIndex === null) return;
+    const next = Math.min(
+      Math.max(0, clampedIndex + delta),
+      sheetSource.variants.length - 1,
+    );
+    router.push(`/gallery?v=${sheetSource.source_id}:${next}`, { scroll: false });
+  }
+
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
@@ -53,6 +87,7 @@ function GalleryContent() {
         onSort={setSort}
       />
 
+      {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
       <div style={{ padding: "8px 20px 22px" }}>
         {isLoading && (
           <div
@@ -103,6 +138,19 @@ function GalleryContent() {
           />
         ))}
       </div>
+
+      {/* Variant side-panel — mounts over the still-visible grid */}
+      {sheetSource && clampedIndex !== null && sheetSource.variants[clampedIndex] && (
+        <VariantSheet
+          sourceId={sheetSource.source_id}
+          sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
+          variants={sheetSource.variants}
+          index={clampedIndex}
+          onClose={handleSheetClose}
+          onNav={handleSheetNav}
+          onRegenerate={() => mutate()}
+        />
+      )}
     </>
   );
 }
