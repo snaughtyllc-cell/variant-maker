@@ -15,7 +15,6 @@ export async function GET(
   });
 
   const upstreamReader = upstream.body!.getReader();
-  const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async pull(controller) {
