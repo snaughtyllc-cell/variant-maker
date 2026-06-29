@@ -20,7 +20,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const scrubbing = useRef(false);
 
-  const primaryVideo = (): HTMLVideoElement | null => videos[0]?.current ?? null;
+  const primaryVideo = useCallback((): HTMLVideoElement | null => videos[0]?.current ?? null, [videos]);
 
   // Read duration from the first video whenever it loads metadata
   useEffect(() => {
@@ -30,8 +30,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
     v.addEventListener("loadedmetadata", onMeta);
     if (v.duration) setDuration(v.duration);
     return () => v.removeEventListener("loadedmetadata", onMeta);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos]);
+  }, [videos, primaryVideo]);
 
   // RAF loop for time updates while playing
   const startRaf = useCallback(() => {
@@ -41,7 +40,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [primaryVideo]);
 
   const stopRaf = useCallback(() => {
     if (rafRef.current !== null) {
@@ -78,7 +77,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
       v.currentTime = clampTime(targetTime, v.duration);
     });
     setCurrentTime(clampTime(targetTime, pv.duration));
-  }, [videos]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [videos, primaryVideo]);
 
   const fractionFromEvent = (clientX: number): number => {
     const rect = trackRef.current?.getBoundingClientRect();

@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { clipInset } from "@/lib/media";
 
 export interface CompareSliderVideoRefs {
@@ -26,14 +26,6 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
   // The actual DOM refs are whichever were provided externally, else internal
   const beforeRef = videoRefs?.beforeRef ?? internalBeforeRef;
   const afterRef = videoRefs?.afterRef ?? internalAfterRef;
-
-  // On mount: start both videos
-  useEffect(() => {
-    const b = beforeRef.current;
-    const a = afterRef.current;
-    if (b) { b.loop = true; b.play().catch(() => {}); }
-    if (a) { a.loop = true; a.play().catch(() => {}); }
-  }, [beforeRef, afterRef]);
 
   const updatePct = useCallback((clientX: number) => {
     const rect = containerRef.current?.getBoundingClientRect();

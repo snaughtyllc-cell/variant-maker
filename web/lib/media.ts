@@ -13,6 +13,6 @@ export function clipInset(pct: number): string {
  * Returns 0 when duration is falsy or ≤ 0 (protects against un-loaded video).
  */
 export function clampTime(t: number, duration: number): number {
-  if (!duration || duration <= 0) return 0;
+  if (!duration || duration < 0) return 0;
   return Math.min(Math.max(t, 0), duration);
 }
