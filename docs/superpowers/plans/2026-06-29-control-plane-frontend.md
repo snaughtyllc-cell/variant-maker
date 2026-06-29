@@ -59,7 +59,7 @@ web/
   components/variant/{VariantSheet,CompareSlider,ScrubBar,QualityPanel,VariantActions}.tsx
   components/diagnostics/{DiagnosticsList,DiagnosticsRow}.tsx
   components/common/{VideoThumb,Badge,ProgressBar}.tsx
-  lib/{types.ts,api.ts,format.ts,progress.ts,useJobProgress.ts,useGallery.ts,useDiagnostics.ts,useJobDetail.ts,runStore.tsx}
+  lib/{types.ts,api.ts,format.ts,progress.ts,useJobProgress.ts,useGallery.ts,useDiagnostics.ts,runStore.tsx}
   next.config.js  tailwind.config.ts  postcss.config.js  vitest.config.ts  vitest.setup.ts
   package.json  tsconfig.json
 ```

@@ -97,7 +97,7 @@ web/
     api.ts        # typed fetchers for every endpoint
     types.ts      # TS mirrors of the API models (§8)
     useJobProgress.ts  # EventSource hook → reduced per-source progress
-    useGallery.ts  useDiagnostics.ts  useJobDetail.ts  # SWR hooks
+    useGallery.ts  useDiagnostics.ts  # SWR hooks (RunProvider seeds reattach via getJob directly)
     format.ts     # duration, reason strings, score formatting
   next.config.js  # rewrites() proxy
   tailwind.config.ts  postcss.config.js
