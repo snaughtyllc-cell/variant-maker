@@ -58,7 +58,7 @@ Two processes, one contract. The frontend is a pure client of the locked HTTP AP
 - **No client-side filesystem or engine access.** The frontend knows only the API.
 
 ### Known risk to validate early (Task 1 of the plan)
-**SSE through the Next dev rewrite must stream un-buffered.** Next's dev proxy generally streams `text/event-stream`, but if buffering is observed, the fallback is a 3-line permissive CORS middleware on FastAPI + pointing `EventSource` at `NEXT_PUBLIC_API_BASE` directly. Proxy is plan A (no backend change); CORS-direct is plan B. **Decision: validate the proxy path first with a real `variant-server` before building the progress UI.**
+**SSE through the Next dev rewrite must stream un-buffered.** Next's dev proxy generally streams `text/event-stream`, but if buffering is observed, the fallback is a **frontend-only Next.js Route Handler** (`app/api/jobs/[job_id]/events/route.ts`) that `fetch`es the upstream SSE and returns its `ReadableStream` — route handlers stream, so no rewrite buffering and **no backend change**. Plan A = the rewrite; plan B = the route handler; **both are frontend-only**. **Decision: validate the proxy path first with a real `variant-server` before building the progress UI.**
 
 ---
 
@@ -136,7 +136,7 @@ type SourceProgress = {
 **Behaviors locked by the UI spec:**
 - **Two inputs only.** Generate → `POST /api/jobs` (multipart `files[]` + `count`) → `{job_id, sources[]}`; seed `requested` per source from the response, then attach `useJobProgress(job_id)`.
 - **Re-rolls are visible** via the `rerolling` events (cap 3).
-- **Finished variants stream to Gallery live** — each `done(ok)` tile is immediately viewable (its `file_url` is already serveable).
+- **Finished variants appear live in the Studio progress panel** as each `done(ok)` arrives (its `file_url` is already serveable). The **Gallery** page reflects a source once its run completes — the locked API populates `/api/gallery` per-source on completion, not per-variant — so Gallery is revalidated when the run finishes.
 - **The run survives leaving the page.** Run identity (`job_id`) is held in a small app-level store (React context / module singleton) + reflected in the URL/session so navigating to Gallery and back re-attaches; a hard reload re-attaches via SSE replay. Optionally seed initial state from `GET /api/jobs/{job_id}` then tail SSE.
 - **`jobs=1` server-side** ⇒ events arrive cleanly ordered.
 
@@ -196,7 +196,7 @@ Quality      = { vmaf:number; histogram_ok:boolean; regen_count:number; passed:b
 ## 9. Screens
 
 ### 9.1 Studio (`/`)
-Two-column cockpit. **Left:** DropZone (multi-file, browse fallback) → FileList (name + duration), VariantStepper ("Variants each", per-video, shows `N clips → total`), gradient GenerateButton, AdvancedPanel collapsed (Output: **Vertical 1080×1920** default; keep-source available but unsurfaced). **Right:** ProgressPanel — one `SourceProgressCard` per source (thumb, name, `delivered/requested`, progress bar, live status line with visible re-rolls, streamed-variant thumb strip, "streamed to Gallery" toast). Empty state before a run. Run survives navigation (§6).
+Two-column cockpit. **Left:** DropZone (multi-file, browse fallback) → FileList (name + duration), VariantStepper ("Variants each", per-video, shows `N clips → total`), gradient GenerateButton, AdvancedPanel collapsed (Output: **Vertical 1080×1920** default; keep-source available but unsurfaced). **Right:** ProgressPanel — one `SourceProgressCard` per source (thumb, name, `delivered/requested`, progress bar, live status line with visible re-rolls, streamed-variant thumb strip, "N ready" cue). Empty state before a run. Run survives navigation (§6). (Per-variant live view lives here in Studio; the Gallery reflects a source once its run completes — see §6.)
 
 ### 9.2 Gallery (`/gallery`)
 GalleryToolbar (summary count; **filter: All sources / Has shortfall**; **sort: Newest**). One collapsible `SourceGroup` per source from `GET /api/gallery`: header (thumb, filename, `delivered/requested`, pass summary), then an 8-across grid of `VariantCard`s (9:16, VMAF badge + spatial-pass tick, hover-play, click → side-panel). **Shortfall bar + Regenerate** appears **only** when `shortfall > 0`; hidden on full delivery. Successful variants only.
@@ -230,7 +230,7 @@ From `GET /api/diagnostics`. Header + summary chips (counts of below-floor vs co
 - Path-B similarity measurement / auto-tune (Similarity stays a locked, greyed seam).
 - Any detector / platform-spoofing logic (forbidden by engine scope guards).
 - Full on-disk manifest exposure / a manifest route (deferred backend nicety).
-- Any backend change. If the SSE-through-proxy risk (§3) forces plan B, that CORS middleware addition is the **only** sanctioned backend touch, and is flagged for explicit approval first.
+- Any backend change. The SSE-through-proxy risk (§3) is handled **frontend-only** (the rewrite, or a Next.js Route Handler if it buffers) — no backend change under any branch.
 
 ---
 

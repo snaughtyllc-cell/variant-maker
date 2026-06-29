@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Spec of record:** `docs/superpowers/specs/2026-06-29-control-plane-frontend-design.md`. Every task implicitly inherits it.
-- **Locked API — do NOT change the backend.** Build only against the endpoints/models in spec §8. The single sanctioned backend touch is the SSE-CORS fallback (Task 2), and only with explicit user approval if the proxy path fails.
+- **Locked API — do NOT change the backend, ever.** Build only against the endpoints/models in spec §8. If SSE buffers through the Next dev rewrite, the fallback is a **frontend-only** Next.js Route Handler that streams the proxied SSE (Tasks 1/6) — there is **no** sanctioned backend change under any branch.
 - **App location:** everything lives under `variant-maker/web/`. Run commands from there unless stated. Node ≥ 18.18 (Next requirement).
 - **Same-origin proxy:** all API calls use **relative** `/api/...` paths (never `http://localhost:8000` in component code). The proxy target is `API_PROXY_TARGET` (default `http://localhost:8000`).
 - **Design tokens (verbatim, spec §2):** `--bg:#0a0a0e --panel:#101018 --panel2:#15151f --line:#23232f --line2:#2c2c3a --text:#ececf4 --muted:#8a8aa0 --muted2:#62627a --violet:#7c5cff --violetL:#a78bfa --cyan:#22d3ee --pink:#ff4d8d --green:#22c55e --amber:#f59e0b --red:#f87171`. Primary CTA gradient `135deg violet→pink`; progress gradient `90deg violet→cyan`; live = cyan; pass=green, reroll/below-floor=amber, corrupt=red. Variant media is **9:16**; Gallery grid **8 across** on wide screens.
@@ -192,7 +192,7 @@ for (;;) {
 }
 ```
 Run: `node web/scripts/sse-smoke.mjs tests/fixtures/<fixture>.mp4`
-Expected: several `data:` lines with **spread-out** `+Nms` deltas (rendering→checking→done→job-done), not all at `+~Xms` at once. If they all arrive bunched at the very end, the proxy is buffering → note plan B (CORS-direct EventSource via `NEXT_PUBLIC_API_BASE` + a permissive CORS middleware on FastAPI) and **flag for user approval** before Task 6.
+Expected: several `data:` lines with **spread-out** `+Nms` deltas (rendering→checking→done→job-done), not all at `+~Xms` at once. If they all arrive bunched at the very end, the dev rewrite is buffering → switch to **plan B (frontend-only): a Next.js Route Handler** at `web/app/api/jobs/[job_id]/events/route.ts` that `fetch`es the upstream SSE and returns its `ReadableStream` with `Content-Type: text/event-stream` (route handlers stream; no rewrite buffering; **no backend change**). Note the switch for the user — it needs no backend edit.
 
 - [ ] **Step 7: Commit**
 ```bash
@@ -435,7 +435,7 @@ git add web && git commit -m "feat(web): typed API client, models, formatters (T
 **Interfaces:**
 - Consumes: `VariantEvent`, `Quality`, `variantUrl` (Task 2).
 - Produces:
-  - `progress.ts`: `SourceProgress`, `RunProgress`, `initRun(sources: {source_id:string; filename:string; requested:number}[]): RunProgress`, `reduceEvent(run: RunProgress, ev: VariantEvent | {state:"job-done"}): RunProgress` (immutable).
+  - `progress.ts`: `SourceProgress`, `RunProgress`, `initRun(sources: {source_id:string; filename:string; requested:number}[]): RunProgress`, `reduceEvent(run: RunProgress, ev: VariantEvent | {state:"job-done"}): RunProgress` (immutable; **idempotent on replayed `done` events** — the backend replays the full log on every (re)connect and `EventSource` auto-reconnects, so a `done` for an `index` already present is a no-op).
   - `useJobProgress.ts`: `useJobProgress(jobId: string | null, sources: {source_id;filename;requested}[]): RunProgress` — opens `EventSource(eventsUrl(jobId))`, reduces, closes on `job-done`.
 
 - [ ] **Step 1: Write failing `progress.test.ts`**
@@ -490,6 +490,16 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.delivered).toBe(0);
   });
 
+  it("is idempotent on replayed done events (reconnect replays the full log)", () => {
+    let r = base();
+    const d = ev({ state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4" });
+    r = reduceEvent(r, d);
+    r = reduceEvent(r, d); // replayed after an EventSource reconnect
+    expect(r.bySource.s1.done).toBe(1);
+    expect(r.bySource.s1.delivered).toBe(1);
+    expect(r.bySource.s1.variants).toHaveLength(1);
+  });
+
   it("job-done marks complete", () => {
     let r = base();
     r = reduceEvent(r, { state: "job-done" });
@@ -535,13 +545,20 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
   if (e.state === "rendering" || e.state === "checking" || e.state === "rerolling") {
     next.inFlight = { index: e.index, state: e.state, attempt: e.attempt, max_attempts: e.max_attempts };
   } else if (e.state === "done") {
-    next.variants = [...prev.variants, {
-      index: e.index, filename: e.filename!, status: e.status!, quality: e.quality!,
-      file_url: variantUrl(e.source_id, e.filename!),
-    }];
-    next.done = prev.done + 1;
-    if (e.status === "ok") next.delivered = prev.delivered + 1;
-    if (prev.inFlight?.index === e.index) next.inFlight = undefined;
+    if (prev.variants.some((v) => v.index === e.index)) {
+      // Idempotent: the backend replays the full event log on every (re)connect and
+      // EventSource auto-reconnects on network loss. A replayed `done` must not
+      // double-append or double-count — only ensure inFlight is cleared.
+      if (prev.inFlight?.index === e.index) next.inFlight = undefined;
+    } else {
+      next.variants = [...prev.variants, {
+        index: e.index, filename: e.filename!, status: e.status!, quality: e.quality!,
+        file_url: variantUrl(e.source_id, e.filename!),
+      }];
+      next.done = prev.done + 1;
+      if (e.status === "ok") next.delivered = prev.delivered + 1;
+      if (prev.inFlight?.index === e.index) next.inFlight = undefined;
+    }
   }
   return { ...run, bySource: { ...run.bySource, [e.source_id]: next } };
 }
@@ -637,12 +654,12 @@ git add web && git commit -m "feat(web): SSE progress reducer + useJobProgress h
 **Interfaces:**
 - Consumes: `getHealth` (Task 2).
 - Produces:
-  - `<TopNav active="studio"|"gallery"|"diagnostics">` — logo + nav links (`/`, `/gallery`, `/diagnostics`) + `<StatusStrip/>` right-aligned.
+  - `<TopNav/>` — **client component** (`"use client"`); logo + nav links (`/`, `/gallery`, `/diagnostics`) with the active link derived from `usePathname()`; `<StatusStrip/>` right-aligned. Rendered **once** in `app/layout.tsx`; pages never render their own TopNav (avoids duplicate bars / an unimplementable per-page `active` prop).
   - `<StatusStrip/>` — polls `getHealth` (SWR, 10s), shows "Engine ready" green pill (or "Engine offline" red) + "Local · CPU fast" pill.
   - `runStore.tsx`: `RunProvider`, `useRun()` → `{ jobId, sources, start(resp: CreateJobResponse), clear() }`. Context store so a run survives route changes; **also persists `jobId` to `sessionStorage("vm.job")`** and hydrates it on mount, so a hard reload can re-attach (spec §6). After a reload `sources` is empty until re-seeded from job detail (Task 6).
 
-- [ ] **Step 1: Build to interface** — invoke `frontend-design` for `TopNav` + `StatusStrip` against the interfaces above and the top bar in `studio-full.html`. Wrap `app/layout.tsx` with `RunProvider` + `<TopNav active>`. Create `app/gallery/page.tsx` and `app/diagnostics/page.tsx` each rendering `<TopNav active="…"/>` over an empty `<main className="p-6">` containing only the page `<h1>` (real content lands in Tasks 7/10).
-- [ ] **Step 2: Behavior** — StatusStrip green "Engine ready" pill when `/api/health` ok (red "Engine offline" otherwise); nav highlights `active`; `useRun()` holds `{jobId, sources}` across client navigation and persists `jobId` to `sessionStorage`.
+- [ ] **Step 1: Build to interface** — invoke `frontend-design` for `TopNav` (client, `usePathname`) + `StatusStrip` against the interfaces above and the top bar in `studio-full.html`. In `app/layout.tsx` wrap `{children}` with `RunProvider` and render a single `<TopNav/>` above them. Create `app/gallery/page.tsx` and `app/diagnostics/page.tsx` as just an empty `<main className="p-6">` with the page `<h1>` — TopNav is inherited from the layout (real content lands in Tasks 7/10).
+- [ ] **Step 2: Behavior** — StatusStrip green "Engine ready" pill when `/api/health` ok (red "Engine offline" otherwise); the nav link matching the current `usePathname()` is highlighted; `useRun()` holds `{jobId, sources}` across client navigation and persists `jobId` to `sessionStorage`.
 - [ ] **Step 3: Visual gate** — run the **Reusable fwr gate** against `/` with mockup `studio-full.html` (top bar region). (`variant-server` running so the health pill is green.)
 - [ ] **Step 4: Commit** — `git add web && git commit -m "feat(web): app shell — TopNav, StatusStrip, run store, routes"`
 
@@ -714,13 +731,15 @@ export function readDurations(files: File[]): Promise<number[]> {
 - Produces:
   - `useJobDetail.ts`: `useJobDetail(jobId: string | null)` — SWR over `getJob`; used to **re-seed `sources` after a hard reload** (when `useRun().sources` is empty but `jobId` was hydrated from sessionStorage).
   - `<ProgressPanel/>` — reads `useRun()`; chooses `sources = run.sources.length ? run.sources : (useJobDetail(jobId).data?.sources ?? [])`; if `jobId && sources.length`, renders `useJobProgress(jobId, sources)` as one `<SourceProgressCard>` per source. (SSE replay rebuilds variants/delivered; job detail only re-seeds filename/requested.)
-  - `<SourceProgressCard source: SourceProgress>` — thumb, name, `delivered/requested`, `<ProgressBar value={done/requested}/>`, live status line (cyan `● vNN rendering…`, amber `↻ vNN re-rolling a/max`), streamed `<VideoThumb>` strip (9:16, VMAF badge), "streamed to Gallery" toast.
+  - `<SourceProgressCard source: SourceProgress>` — thumb, name, `delivered/requested`, `<ProgressBar value={done/requested}/>`, live status line (cyan `● vNN rendering…`, amber `↻ vNN re-rolling a/max`), streamed `<VideoThumb>` strip (9:16, VMAF badge), and a "<N> ready" cue.
   - `<VideoThumb src poster? badge?>` — `<video preload="metadata" muted playsInline>`, hover plays/loops, mouse-out pauses+resets.
+
+**Live data-flow reality (locked API):** per-variant tiles appear **here in Studio** as `done` events arrive over SSE — this is the live per-variant view. The **Gallery** page reads `/api/gallery`, which the backend populates from `JobSource.variants` **only after a source's whole run completes** (see `jobs.py`), so Gallery shows a source once it finishes, not per-variant mid-run. Do **not** claim per-variant Gallery streaming. (Task 7 revalidates Gallery when a run completes so finished sources appear without a manual refresh.)
 
 - [ ] **Step 1: Build to interface** — `frontend-design` for ProgressPanel/SourceProgressCard/ProgressBar/Badge/VideoThumb; assemble Studio right column.
 - [ ] **Step 2: Behavior** — status line shows live rendering + visible re-rolls; bar = `done/requested`; tiles appear as `done` events arrive; empty state before a run.
 - [ ] **Step 3: Visual gate** — fwr screenshot `/` (full, mid-run) vs `studio-full.html`; iterate.
-- [ ] **Step 4: LIVE integration gate** — start `variant-server` with a real tiny clip; in the browser drop it, count=2, Generate; confirm: live status updates, re-roll line appears if any, `done` tiles stream in, completes. **Hard-reload mid-run → progress re-attaches** (jobId from sessionStorage, sources re-seeded via `useJobDetail`, SSE replays the log). This is the spec §3 SSE-through-proxy confirmation (resolve the Task 1 deferral here; if buffering is seen, escalate plan B for approval).
+- [ ] **Step 4: LIVE integration gate** — start `variant-server` with a real tiny clip; in the browser drop it, count=2, Generate; confirm: live status updates, re-roll line appears if any, `done` tiles stream in, completes. **Hard-reload mid-run → progress re-attaches** (jobId from sessionStorage, sources re-seeded via `useJobDetail`, SSE replays the log). This is the spec §3 SSE-through-proxy confirmation (resolve the Task 1 deferral here; if buffering is seen, switch to the **frontend-only Next.js Route Handler** — plan B, no backend change).
 - [ ] **Step 5: Commit** — `git add web && git commit -m "feat(web): Studio live progress panel + video thumbnail primitive"`
 
 ---
@@ -736,7 +755,7 @@ export function readDurations(files: File[]): Promise<number[]> {
 - Consumes: `getGallery`, `regenerate` (Task 2), `VideoThumb`/`Badge` (Task 6).
 - Produces:
   - `lib/gallery.ts`: `filterSources(sources, mode: "all" | "shortfall")`, `sortSources(sources, by: "newest")` (pure).
-  - `useGallery()` — SWR over `getGallery`, exposes `mutate`.
+  - `useGallery()` — SWR over `getGallery` (`revalidateOnFocus`), exposes `mutate`. The Gallery page also watches `useRun()`; when the active run flips to `complete`, it calls `mutate()` so newly-finished sources appear without a manual refresh (the API only exposes a source after its run completes — see Task 6 data-flow note).
   - `<GalleryToolbar count filterMode onFilter sort onSort/>`, `<SourceGroup source onOpenVariant onRegenerate/>` (collapsible; header with `delivered/requested` colored green/amber; **shortfall bar + Regenerate only when `shortfall>0`**; 8-across grid of `<VariantCard>`), `<VariantCard variant onOpen/>` (9:16 VideoThumb + VMAF badge; **spatial tick shown only when `quality.spatial_ok === true`** — the default Tier-1 fast tier has no neural pass so `spatial_ok`/`spatial_vmaf` are `null` → VMAF badge only).
   - Click a card → navigate `/gallery?v=<source_id>:<index>` (opens sheet in Task 9).
 
@@ -769,7 +788,7 @@ export function sortSources(sources: SourceOut[], by: "newest"): SourceOut[] {
 }
 ```
 - [ ] **Step 4: Run green** — `npm test -- gallery` → PASS.
-- [ ] **Step 5: Build Gallery UI** — `useGallery` (SWR) + `frontend-design` for GalleryToolbar/SourceGroup/VariantCard; assemble `/gallery`. Regenerate → `regenerate(sid, shortfall)` then `mutate()`.
+- [ ] **Step 5: Build Gallery UI** — `useGallery` (SWR) + `frontend-design` for GalleryToolbar/SourceGroup/VariantCard; assemble `/gallery`. The group's shortfall Regenerate calls `regenerate(source.source_id, source.shortfall)` then `mutate()`.
 - [ ] **Step 6: Visual gate** — fwr screenshot `/gallery` vs `gallery-full.html` (one full group + one shortfall group). Iterate. Verify shortfall bar/Regenerate hidden on full delivery, shown on shortfall.
 - [ ] **Step 7: Commit** — `git add web && git commit -m "feat(web): Gallery — toolbar, source groups, variant cards, regenerate"`
 
@@ -831,11 +850,11 @@ export function clampTime(t: number, duration: number): number {
 - Produces:
   - `<VariantSheet sourceId: string, variants: VariantOut[], index: number, onClose, onNav(delta)>` — Radix Dialog/Sheet from the right; header `source · vNN`, "variant k of `variants.length`", filename, prev/next (`onNav(±1)` clamped within `variants`), close; body = CompareSlider(beforeSrc=`sourceUrl(sourceId)`, afterSrc=`variants[index].file_url`) + ScrubBar + `<QualityPanel>` + `<VariantActions>`. Keyboard `←/→`/`Esc`. (Taking `variants[]` rather than a `SourceOut` lets Diagnostics open a **single-variant** sheet in Task 10.)
   - `<QualityPanel quality: Quality>` — VMAF (green if `vmafPass`), Spatial guard (when `spatial_ok===null` show "—/n-a"; else ✓/✗ from `spatial_ok` with `spatial_vmaf`), Histogram (`histogram_ok`), Re-rolls (`regen_count`/3), and a **locked/greyed Similarity** row (`— %`) + park note (spec §9.3).
-  - `<VariantActions variant: VariantOut, onRegenerate>` — Download (`<a href={file_url} download>`), Regenerate this one, View manifest entry (renders `VariantOut` JSON in a small disclosure). (No Reveal in Finder — deferred, spec §9.2.)
+  - `<VariantActions variant: VariantOut, onRegenerate>` — Download (`<a href={file_url} download>`), **Regenerate this one** (the sheet wires `onRegenerate` to `regenerate(sourceId, 1)` then revalidates the gallery), View manifest entry (renders `VariantOut` JSON in a small disclosure). (No Reveal in Finder — deferred, spec §9.2.)
   - `/gallery?v=<sid>:<idx>` opens the sheet over the (still-mounted) grid; closing clears the param.
 
 - [ ] **Step 1: Build to interface** — `frontend-design` for VariantSheet/QualityPanel/VariantActions; wire `?v=` parsing in the gallery page; reuse Task 8 primitives.
-- [ ] **Step 2: Behavior** — prev/next steps within the group without closing; greyed Similarity present; Download saves the file; Regenerate calls `regenerate` + `mutate`; manifest disclosure shows the JSON.
+- [ ] **Step 2: Behavior** — prev/next steps within the group without closing; greyed Similarity present; Download saves the file; **Regenerate calls `regenerate(sourceId, 1)`** + `mutate`; manifest disclosure shows the JSON.
 - [ ] **Step 3: Visual gate** — fwr screenshot `/gallery?v=<sid>:<idx>` vs `side-panel.html` (dimmed grid behind, panel docked right). Iterate.
 - [ ] **Step 4: Commit** — `git add web && git commit -m "feat(web): variant detail side-panel — compare, quality, actions"`
 
@@ -852,7 +871,7 @@ export function clampTime(t: number, duration: number): number {
 - Produces:
   - `useDiagnostics()` — SWR over `getDiagnostics`.
   - `<DiagnosticsList items: DiagnosticsItem[]>` — summary chips (counts of below-floor vs corrupt), grouped by `source_id`; empty state "Nothing failed — all variants delivered."
-  - `<DiagnosticsRow item>` — index, status badge (amber BELOW FLOOR / red CORRUPT), `diagnosticsReason(item)` title + metric, `↻ 3/3` (from `regen_count`), actions: **Inspect** (enabled only for `best_effort`; builds a one-element `VariantOut[]` — `{ index, filename, status, quality, file_url: variantUrl(item.source_id, item.filename) }` — and opens `<VariantSheet sourceId={item.source_id} variants={[v]} index={0}/>` from Task 9), Manifest, Regenerate.
+  - `<DiagnosticsRow item>` — index, status badge (amber BELOW FLOOR / red CORRUPT), `diagnosticsReason(item)` title + metric, `↻ 3/3` (from `regen_count`), actions: **Inspect** (enabled only for `best_effort`; builds a one-element `VariantOut[]` — `{ index, filename, status, quality, file_url: variantUrl(item.source_id, item.filename) }` — and opens `<VariantSheet sourceId={item.source_id} variants={[v]} index={0}/>` from Task 9), Manifest, Regenerate (`regenerate(item.source_id, 1)` then revalidate diagnostics + gallery).
 
 - [ ] **Step 1: Build to interface** — `useDiagnostics` + `frontend-design` for DiagnosticsList/DiagnosticsRow; assemble `/diagnostics`.
 - [ ] **Step 2: Behavior** — reasons + metrics from `diagnosticsReason`; Inspect disabled for `corrupt`; chips count correctly; empty state when none.
