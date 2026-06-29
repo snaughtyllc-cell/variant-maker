@@ -35,8 +35,8 @@ export function VariantSheet({
   const isFirst = index <= 0;
   const isLast = index >= variants.length - 1;
 
-  // Pad index for display (v01, v02 …)
-  const padded = String(index + 1).padStart(2, "0");
+  // Pad variant.index for display (v01, v02 …) — use the real 1-based variant.index
+  const padded = String(variant.index).padStart(2, "0");
 
   // Keyboard: ← → for nav, Esc is handled by Radix Dialog
   useEffect(() => {

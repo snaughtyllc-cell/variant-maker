@@ -193,7 +193,7 @@ export function QualityPanel({ quality }: QualityPanelProps) {
 
       {/* Similarity — locked/greyed */}
       <QRow label="Similarity" locked>
-        <Meter pct={35} />
+        <Meter pct={0} />
         <span
           style={{
             fontSize: 12.5,

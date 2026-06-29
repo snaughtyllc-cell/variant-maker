@@ -30,6 +30,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
     {
       index: variant.index,
       filename: variant.filename,
+      file_url: variant.file_url,
       status: variant.status,
       quality: variant.quality,
     },

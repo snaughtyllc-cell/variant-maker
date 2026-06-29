@@ -48,11 +48,11 @@ function GalleryContent() {
     ? allSources.find((s) => s.source_id === sheetSourceId)
     : undefined;
 
-  // Clamp sheet index to valid range
-  const clampedIndex =
+  // Resolve variant.index (1-based) to array position via findIndex
+  const pos =
     sheetSource && sheetIndex !== null
-      ? Math.min(Math.max(0, sheetIndex), sheetSource.variants.length - 1)
-      : null;
+      ? sheetSource.variants.findIndex((v) => v.index === sheetIndex)
+      : -1;
 
   function handleOpenVariant(sourceId: string, index: number) {
     router.push(`/gallery?v=${sourceId}:${index}`, { scroll: false });
@@ -63,12 +63,12 @@ function GalleryContent() {
   }
 
   function handleSheetNav(delta: number) {
-    if (!sheetSource || clampedIndex === null) return;
+    if (!sheetSource || pos < 0) return;
     const next = Math.min(
-      Math.max(0, clampedIndex + delta),
+      Math.max(0, pos + delta),
       sheetSource.variants.length - 1,
     );
-    router.push(`/gallery?v=${sheetSource.source_id}:${next}`, { scroll: false });
+    router.push(`/gallery?v=${sheetSource.source_id}:${sheetSource.variants[next].index}`, { scroll: false });
   }
 
   const filtered = filterSources(allSources, filterMode);
@@ -140,12 +140,12 @@ function GalleryContent() {
       </div>
 
       {/* Variant side-panel — mounts over the still-visible grid */}
-      {sheetSource && clampedIndex !== null && sheetSource.variants[clampedIndex] && (
+      {sheetSource && pos >= 0 && (
         <VariantSheet
           sourceId={sheetSource.source_id}
           sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
           variants={sheetSource.variants}
-          index={clampedIndex}
+          index={pos}
           onClose={handleSheetClose}
           onNav={handleSheetNav}
           onRegenerate={() => mutate()}
