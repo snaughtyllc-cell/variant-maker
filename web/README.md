@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# variant-maker control plane — web frontend
 
-## Getting Started
+Next.js 16 App Router UI for the variant-maker engine.
+Pure client of the FastAPI backend via a same-origin dev proxy.
 
-First, run the development server:
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| **Node >= 18.18** | Check with `node -v` |
+| **ffmpeg with libvmaf** | Required by the engine; verify with `ffmpeg -filters \| grep vmaf` |
+| **Python venv at `./.venv`** | Created from the repo root with `pip install -e ".[server]"` (or the `[dev]` extra). Must expose the `variant-server` entry point. |
+
+---
+
+## Install
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd web
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Running locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+You need both the API (port 8000) and the Next.js dev server (port 3000) running.
 
-## Learn More
+### Option A — run both with one command (from the repo root)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+./dev.sh [data-dir]
+# data-dir defaults to ./.vmdata
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The script starts the API in the background and the web dev server in the foreground.
+Ctrl-C kills both.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Option B — run them separately
 
-## Deploy on Vercel
+**Terminal 1 — API:**
+```bash
+./.venv/bin/variant-server --data-dir <data-dir>
+# Listens on http://localhost:8000
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Terminal 2 — web:**
+```bash
+cd web
+npm run dev
+# Listens on http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Proxy configuration
+
+The environment variable `API_PROXY_TARGET` controls where the frontend routes API
+traffic (default: `http://localhost:8000`).
+
+```bash
+# web/.env.local
+API_PROXY_TARGET=http://localhost:8000
+```
+
+It is read in two places:
+
+1. **`next.config.ts` rewrites** — `/api/*` requests made by the browser are forwarded to
+   the backend during `npm run dev`.
+
+2. **SSE Route Handler** (`app/api/jobs/[job_id]/events/route.ts`) — the dev-proxy rewrite
+   buffers `text/event-stream` before forwarding it, which breaks SSE. This frontend-only
+   Route Handler proxies the SSE stream itself so the browser receives events incrementally.
+   It reads `API_PROXY_TARGET` at request time, so changing the env var and restarting the
+   dev server is all that is needed.
+
+No backend changes are required by the frontend.
+
+---
+
+## Tests
+
+```bash
+cd web
+npm test
+```
+
+Expected output (all 7 suites, 24 tests):
+
+```
+Test Files  7 passed (7)
+      Tests  24 passed (24)
+```
+
+Suites covered: `format`, `api`, `progress`, `useJobProgress`, `files`, `gallery`, `media`.
+
+---
+
+## Production build
+
+```bash
+cd web
+npm run build
+```
+
+Compiles TypeScript, runs Turbopack, and generates the optimised output in `.next/`.
+The build must succeed with no type errors before merging.
+
+---
+
+## Screens
+
+| Screen | How to reach it | What it does |
+|---|---|---|
+| **Studio** | `/` (root) | Drop one or more source videos, set variant count, click Generate. A live progress panel streams rendering events — tiles appear as each variant completes. Reload mid-run to re-attach to the running job. |
+| **Gallery** | `/gallery` | Groups completed variants by source video. Cards autoplay on hover. Groups showing fewer variants than requested display a "Regenerate" button to fill the shortfall. |
+| **Variant side-panel** | Click any Gallery card | Slide-in panel with a before/after compare slider, a scrub bar that plays both streams in sync, quality metrics from the manifest, a greyed-out Similarity placeholder (Stage 2), and a Download button. |
+| **Diagnostics** | `/diagnostics` | Lists failed variants grouped by reason (`below_floor`, `corrupt`, `best_effort`). `best_effort` variants include an Inspect link to the side-panel. |
+
+---
+
+## Stage 2 note (Vercel deployment)
+
+Set `API_PROXY_TARGET` to the deployed FastAPI URL and redeploy the Next.js app to Vercel.
+No component or route changes are required — the SSE Route Handler and rewrites both read
+the same env var at runtime.
+
+```bash
+# In the Vercel project environment variables:
+API_PROXY_TARGET=https://api.example.com
+```
