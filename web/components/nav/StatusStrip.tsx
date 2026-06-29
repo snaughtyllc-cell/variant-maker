@@ -9,8 +9,8 @@ export function StatusStrip() {
   });
 
   const online = !error && data?.status === "ok";
-  // While loading (data + error both undefined), treat as offline
   const ready = data !== undefined && !error;
+  const loading = data === undefined && !error;
 
   return (
     <div className="flex items-center gap-2.5 text-[11.5px] text-muted">
@@ -24,10 +24,12 @@ export function StatusStrip() {
           style={
             ready && online
               ? { background: "#22c55e", boxShadow: "0 0 8px #22c55e88" }
+              : loading
+              ? { background: "#8a8aa0" }
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {ready && online ? "Engine ready" : "Engine offline"}
+        {loading ? "Connecting…" : ready && online ? "Engine ready" : "Engine offline"}
       </span>
 
       {/* Local mode pill */}

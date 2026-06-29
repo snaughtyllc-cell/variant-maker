@@ -42,9 +42,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         );
       })
       .catch(() => {
-        // 404 or old/cleared job — wipe state
-        setJobId(null);
+        // 404 or old/cleared job — full reset via clear()
         sessionStorage.removeItem("vm.job");
+        setJobId(null);
+        setSources([]);
       });
   }, []);
 
