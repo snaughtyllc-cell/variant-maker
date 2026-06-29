@@ -18,7 +18,12 @@ export function useJobProgress(
     setRun(fresh);
     const es = new EventSource(eventsUrl(jobId));
     es.onmessage = (e) => {
-      const ev = JSON.parse(e.data);
+      let ev: ReturnType<typeof JSON.parse>;
+      try {
+        ev = JSON.parse(e.data);
+      } catch {
+        return;
+      }
       const next = reduceEvent(runRef.current, ev);
       runRef.current = next;
       setRun(next);

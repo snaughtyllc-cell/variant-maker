@@ -10,7 +10,7 @@ interface VariantCardProps {
 
 export function VariantCard({ variant, onOpen }: VariantCardProps) {
   const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
-  const spatialOk = variant.quality.spatial_ok === true;
+  const spatialOk = variant.quality?.spatial_ok === true;
 
   const badge = (
     <div

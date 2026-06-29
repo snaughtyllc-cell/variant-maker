@@ -10,11 +10,20 @@ export async function GET(
   { params }: { params: Promise<{ job_id: string }> }
 ) {
   const { job_id } = await params;
-  const upstream = await fetch(`${UPSTREAM}/api/jobs/${job_id}/events`, {
-    headers: { Accept: "text/event-stream" },
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${UPSTREAM}/api/jobs/${job_id}/events`, {
+      headers: { Accept: "text/event-stream" },
+    });
+  } catch {
+    return new Response("upstream unavailable", { status: 502 });
+  }
 
-  const upstreamReader = upstream.body!.getReader();
+  if (!upstream.ok || !upstream.body) {
+    return new Response("upstream error", { status: upstream.status || 502 });
+  }
+
+  const upstreamReader = upstream.body.getReader();
 
   const stream = new ReadableStream({
     async pull(controller) {
