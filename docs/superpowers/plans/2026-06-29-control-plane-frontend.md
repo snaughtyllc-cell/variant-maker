@@ -436,7 +436,7 @@ git add web && git commit -m "feat(web): typed API client, models, formatters (T
 - Consumes: `VariantEvent`, `Quality`, `variantUrl` (Task 2).
 - Produces:
   - `progress.ts`: `SourceProgress`, `RunProgress`, `initRun(sources: {source_id:string; filename:string; requested:number}[]): RunProgress`, `reduceEvent(run: RunProgress, ev: VariantEvent | {state:"job-done"}): RunProgress` (immutable; **idempotent on replayed `done` events** — the backend replays the full log on every (re)connect and `EventSource` auto-reconnects, so a `done` for an `index` already present is a no-op).
-  - `useJobProgress.ts`: `useJobProgress(jobId: string | null, sources: {source_id;filename;requested}[]): RunProgress` — opens `EventSource(eventsUrl(jobId))`, reduces, closes on `job-done`.
+  - `useJobProgress.ts`: `useJobProgress(jobId: string | null, sources: {source_id;filename;requested}[]): RunProgress` — opens `EventSource(eventsUrl(jobId))` **only once both `jobId` and `sources` are known** (re-inits when either changes), reduces, closes on `job-done`. (Mounted by `RunProvider` in Task 4 — the app-level SSE owner — not by a page, so the run survives navigation.)
 
 - [ ] **Step 1: Write failing `progress.test.ts`**
 ```ts
@@ -599,6 +599,10 @@ describe("useJobProgress", () => {
     renderHook(() => useJobProgress(null, sources));
     expect(MockES.last).toBeNull();
   });
+  it("waits until sources are known before opening", () => {
+    renderHook(() => useJobProgress("j1", []));
+    expect(MockES.last).toBeNull();
+  });
 });
 ```
 
@@ -618,9 +622,12 @@ export function useJobProgress(
   const [run, setRun] = useState<RunProgress>(() => initRun(sources));
   const runRef = useRef(run);
   runRef.current = run;
+  const sourcesKey = sources.map((s) => s.source_id).join(",");
   useEffect(() => {
-    if (!jobId) return;
-    setRun(initRun(sources));
+    if (!jobId || sources.length === 0) return; // wait for sources (fresh start: immediate; reload: after job detail seeds them)
+    const fresh = initRun(sources);
+    runRef.current = fresh;
+    setRun(fresh);
     const es = new EventSource(eventsUrl(jobId));
     es.onmessage = (e) => {
       const ev = JSON.parse(e.data);
@@ -631,7 +638,7 @@ export function useJobProgress(
     };
     return () => es.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+  }, [jobId, sourcesKey]);
   return run;
 }
 ```
@@ -652,14 +659,14 @@ git add web && git commit -m "feat(web): SSE progress reducer + useJobProgress h
 - Modify: `web/app/layout.tsx`; Create stubs `web/app/gallery/page.tsx`, `web/app/diagnostics/page.tsx`
 
 **Interfaces:**
-- Consumes: `getHealth` (Task 2).
+- Consumes: `getHealth`, `getJob` (Task 2), `useJobProgress` (Task 3).
 - Produces:
   - `<TopNav/>` — **client component** (`"use client"`); logo + nav links (`/`, `/gallery`, `/diagnostics`) with the active link derived from `usePathname()`; `<StatusStrip/>` right-aligned. Rendered **once** in `app/layout.tsx`; pages never render their own TopNav (avoids duplicate bars / an unimplementable per-page `active` prop).
   - `<StatusStrip/>` — polls `getHealth` (SWR, 10s), shows "Engine ready" green pill (or "Engine offline" red) + "Local · CPU fast" pill.
-  - `runStore.tsx`: `RunProvider`, `useRun()` → `{ jobId, sources, start(resp: CreateJobResponse), clear() }`. Context store so a run survives route changes; **also persists `jobId` to `sessionStorage("vm.job")`** and hydrates it on mount, so a hard reload can re-attach (spec §6). After a reload `sources` is empty until re-seeded from job detail (Task 6).
+  - `runStore.tsx`: `RunProvider` is the **app-level SSE owner** — mounted in `app/layout.tsx` above all pages, so the run keeps streaming across navigation (spec §6). It holds `jobId` + `sources`, runs `progress = useJobProgress(jobId, sources)` (Task 3) **at the provider level**, and exposes `useRun()` → `{ jobId, sources, progress: RunProgress, complete: boolean, start(resp: CreateJobResponse), clear() }` where `complete = progress.complete`. Behavior: `start(resp)` sets `jobId` (+`sessionStorage("vm.job")`) and `sources` from `resp.sources`; on mount it **hydrates `jobId` from sessionStorage** and, if `sources` is empty, fetches `getJob(jobId)` **once** to seed `sources` (filename + requested) before the stream opens (reattach after a hard reload); `clear()` drops state + sessionStorage. Because the stream lives here, **both Studio's ProgressPanel and Gallery just read `useRun()`** — neither owns the EventSource, so Gallery sees `complete` even when Studio is unmounted.
 
 - [ ] **Step 1: Build to interface** — invoke `frontend-design` for `TopNav` (client, `usePathname`) + `StatusStrip` against the interfaces above and the top bar in `studio-full.html`. In `app/layout.tsx` wrap `{children}` with `RunProvider` and render a single `<TopNav/>` above them. Create `app/gallery/page.tsx` and `app/diagnostics/page.tsx` as just an empty `<main className="p-6">` with the page `<h1>` — TopNav is inherited from the layout (real content lands in Tasks 7/10).
-- [ ] **Step 2: Behavior** — StatusStrip green "Engine ready" pill when `/api/health` ok (red "Engine offline" otherwise); the nav link matching the current `usePathname()` is highlighted; `useRun()` holds `{jobId, sources}` across client navigation and persists `jobId` to `sessionStorage`.
+- [ ] **Step 2: Behavior** — StatusStrip green "Engine ready" pill when `/api/health` ok (red "Engine offline" otherwise); the nav link matching the current `usePathname()` is highlighted; `useRun()` exposes `{jobId, sources, progress, complete}` from the app-level stream, survives client navigation, and persists `jobId` to `sessionStorage` for hard-reload reattach.
 - [ ] **Step 3: Visual gate** — run the **Reusable fwr gate** against `/` with mockup `studio-full.html` (top bar region). (`variant-server` running so the health pill is green.)
 - [ ] **Step 4: Commit** — `git add web && git commit -m "feat(web): app shell — TopNav, StatusStrip, run store, routes"`
 
@@ -723,14 +730,13 @@ export function readDurations(files: File[]): Promise<number[]> {
 ## Task 6: Studio live progress panel (visual + live integration)
 
 **Files:**
-- Create: `web/components/studio/{ProgressPanel,SourceProgressCard}.tsx`, `web/components/common/{ProgressBar,Badge,VideoThumb}.tsx`, `web/lib/useJobDetail.ts`
+- Create: `web/components/studio/{ProgressPanel,SourceProgressCard}.tsx`, `web/components/common/{ProgressBar,Badge,VideoThumb}.tsx`
 - Modify: `web/app/page.tsx` (right column)
 
 **Interfaces:**
-- Consumes: `useRun` (Task 4), `useJobProgress` (Task 3), `SourceProgress` (Task 3), `getJob` (Task 2).
+- Consumes: `useRun` (Task 4) → its `{ jobId, progress, complete }`, `SourceProgress` (Task 3).
 - Produces:
-  - `useJobDetail.ts`: `useJobDetail(jobId: string | null)` — SWR over `getJob`; used to **re-seed `sources` after a hard reload** (when `useRun().sources` is empty but `jobId` was hydrated from sessionStorage).
-  - `<ProgressPanel/>` — reads `useRun()`; chooses `sources = run.sources.length ? run.sources : (useJobDetail(jobId).data?.sources ?? [])`; if `jobId && sources.length`, renders `useJobProgress(jobId, sources)` as one `<SourceProgressCard>` per source. (SSE replay rebuilds variants/delivered; job detail only re-seeds filename/requested.)
+  - `<ProgressPanel/>` — reads `useRun()`; if `jobId`, renders one `<SourceProgressCard source={progress.bySource[id]}/>` for each source in `progress.bySource`; empty state before a run. **It owns no EventSource** — the stream and the reattach-after-reload logic live in `RunProvider` (Task 4); this panel only renders `progress`.
   - `<SourceProgressCard source: SourceProgress>` — thumb, name, `delivered/requested`, `<ProgressBar value={done/requested}/>`, live status line (cyan `● vNN rendering…`, amber `↻ vNN re-rolling a/max`), streamed `<VideoThumb>` strip (9:16, VMAF badge), and a "<N> ready" cue.
   - `<VideoThumb src poster? badge?>` — `<video preload="metadata" muted playsInline>`, hover plays/loops, mouse-out pauses+resets.
 
@@ -739,7 +745,7 @@ export function readDurations(files: File[]): Promise<number[]> {
 - [ ] **Step 1: Build to interface** — `frontend-design` for ProgressPanel/SourceProgressCard/ProgressBar/Badge/VideoThumb; assemble Studio right column.
 - [ ] **Step 2: Behavior** — status line shows live rendering + visible re-rolls; bar = `done/requested`; tiles appear as `done` events arrive; empty state before a run.
 - [ ] **Step 3: Visual gate** — fwr screenshot `/` (full, mid-run) vs `studio-full.html`; iterate.
-- [ ] **Step 4: LIVE integration gate** — start `variant-server` with a real tiny clip; in the browser drop it, count=2, Generate; confirm: live status updates, re-roll line appears if any, `done` tiles stream in, completes. **Hard-reload mid-run → progress re-attaches** (jobId from sessionStorage, sources re-seeded via `useJobDetail`, SSE replays the log). This is the spec §3 SSE-through-proxy confirmation (resolve the Task 1 deferral here; if buffering is seen, switch to the **frontend-only Next.js Route Handler** — plan B, no backend change).
+- [ ] **Step 4: LIVE integration gate** — start `variant-server` with a real tiny clip; in the browser drop it, count=2, Generate; confirm: live status updates, re-roll line appears if any, `done` tiles stream in, completes. **Hard-reload mid-run → progress re-attaches** (RunProvider hydrates jobId from sessionStorage, re-seeds sources via `getJob`, the SSE replays the log). This is the spec §3 SSE-through-proxy confirmation (resolve the Task 1 deferral here; if buffering is seen, switch to the **frontend-only Next.js Route Handler** — plan B, no backend change).
 - [ ] **Step 5: Commit** — `git add web && git commit -m "feat(web): Studio live progress panel + video thumbnail primitive"`
 
 ---
@@ -934,7 +940,7 @@ git add web/README.md dev.sh && git commit -m "test(web): end-to-end verificatio
 - Visual system/tokens → Task 1 (tokens), enforced in every visual task's fwr gate.
 - No-rewrite same-origin proxy → Task 1; SSE-through-proxy risk validated Task 1 (smoke) + Task 6 (live).
 - API client/types for every endpoint (§8) → Task 2.
-- SSE reduction, re-rolls visible, run survives navigation (§6) → Task 3 (reducer+hook), Task 4 (run store), Task 6 (panel + reattach).
+- SSE reduction, re-rolls visible, run survives navigation (§6) → Task 3 (reducer+hook, replay-idempotent), Task 4 (RunProvider = app-level SSE owner, exposes `progress`/`complete`, reattach), Task 6 (panel renders `useRun().progress`), Task 7 (Gallery revalidates on `complete`).
 - Inline video + posters + compare slider (§7) → Task 6 (VideoThumb), Task 8 (CompareSlider/ScrubBar).
 - Studio (§9.1) → Tasks 5, 6. Gallery (§9.2) → Task 7. Side-panel (§9.3) → Tasks 8, 9. Diagnostics (§9.4) → Task 10.
 - Reveal-deferred / manifest-scoped / Similarity-greyed (§9.2/§9.3) → Tasks 9, 10 (explicit in interfaces).
@@ -942,7 +948,7 @@ git add web/README.md dev.sh && git commit -m "test(web): end-to-end verificatio
 
 **2. Placeholder scan:** Logic tasks contain full test + impl code. Visual tasks carry typed interfaces + behavior bullets + a named mockup oracle + the fwr loop — these are concrete acceptance criteria, not "TBD". No "add error handling"/"similar to" placeholders.
 
-**3. Type consistency:** `Quality`/`VariantEvent`/`SourceOut` shapes match the backend (`events.py`, `models.py`) and are reused verbatim across `progress.ts`, `api.ts`, components. `initRun`/`reduceEvent`/`useJobProgress` signatures consistent Task 3 → 6. `variantUrl`/`sourceUrl`/`eventsUrl` defined Task 2, used in Tasks 3/6/9/10. `filterSources`/`sortSources` defined+used Task 7. `clipInset`/`clampTime` defined Task 8, used Tasks 8/9.
+**3. Type consistency:** `Quality`/`VariantEvent`/`SourceOut` shapes match the backend (`events.py`, `models.py`) and are reused verbatim across `progress.ts`, `api.ts`, components. `initRun`/`reduceEvent`/`useJobProgress` signatures consistent Task 3 → 4 (RunProvider owns the stream; ProgressPanel and Gallery read `useRun()`). `variantUrl`/`sourceUrl`/`eventsUrl` defined Task 2, used in Tasks 3/6/9/10. `filterSources`/`sortSources` defined+used Task 7. `clipInset`/`clampTime` defined Task 8, used Tasks 8/9.
 
 **Open note (not a blocker):** Tasks 4–10 mix true unit gates (where logic exists) with the fwr visual gate. If the executing agent lacks a working Puppeteer/fwr setup, the fallback gate is a manual screenshot diff against the named mockup — the interface contracts still fully specify behavior.
 

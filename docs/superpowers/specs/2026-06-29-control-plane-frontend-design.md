@@ -137,7 +137,7 @@ type SourceProgress = {
 - **Two inputs only.** Generate → `POST /api/jobs` (multipart `files[]` + `count`) → `{job_id, sources[]}`; seed `requested` per source from the response, then attach `useJobProgress(job_id)`.
 - **Re-rolls are visible** via the `rerolling` events (cap 3).
 - **Finished variants appear live in the Studio progress panel** as each `done(ok)` arrives (its `file_url` is already serveable). The **Gallery** page reflects a source once its run completes — the locked API populates `/api/gallery` per-source on completion, not per-variant — so Gallery is revalidated when the run finishes.
-- **The run survives leaving the page.** Run identity (`job_id`) is held in a small app-level store (React context / module singleton) + reflected in the URL/session so navigating to Gallery and back re-attaches; a hard reload re-attaches via SSE replay. Optionally seed initial state from `GET /api/jobs/{job_id}` then tail SSE.
+- **The run survives leaving the page.** The SSE stream is owned by an **app-level `RunProvider`** mounted above all pages (not by a page component), holding `job_id` + `sources` + reduced `progress` + `complete`. Pages read it via `useRun()`, so navigating to Gallery and back keeps the stream alive and lets Gallery react to `complete`. `job_id` is persisted to `sessionStorage`; a hard reload re-hydrates it, re-seeds `sources` via `GET /api/jobs/{job_id}`, and the SSE replays the full log (the reducer is idempotent, so replay is safe).
 - **`jobs=1` server-side** ⇒ events arrive cleanly ordered.
 
 ---
@@ -216,7 +216,7 @@ From `GET /api/diagnostics`. Header + summary chips (counts of below-floor vs co
 ## 10. State & data fetching
 
 - **GET data** (gallery, diagnostics, job detail, job list) via **SWR**; `mutate` the gallery/source after a Regenerate resolves.
-- **Live run state** via `useJobProgress` (SSE), held in an app-level store keyed by `job_id` so it persists across route changes within the session.
+- **Live run state** via `useJobProgress` (SSE) **owned by the app-level `RunProvider`** (not a page), exposing `{ jobId, sources, progress, complete }` through `useRun()` so it persists across route changes and Studio/Gallery both read the same stream.
 - **Regenerate** (`POST …/regenerate`) returns the updated `SourceOut`; optimistic-update the group/panel then revalidate.
 - **Errors:** API failures surface as inline toasts/banners (upload rejected, job 404, file 404). Network loss on SSE → auto-reconnect (EventSource default) which re-replays cleanly.
 - **Loading:** skeletons for grids, a spinner row for in-flight progress cards.
