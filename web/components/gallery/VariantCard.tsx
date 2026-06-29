@@ -9,7 +9,7 @@ interface VariantCardProps {
 }
 
 export function VariantCard({ variant, onOpen }: VariantCardProps) {
-  const vmaf = Math.round(variant.quality.vmaf);
+  const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
   const spatialOk = variant.quality.spatial_ok === true;
 
   const badge = (
@@ -31,13 +31,13 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
           fontWeight: 800,
           padding: "1px 5px",
           borderRadius: 5,
-          background: "#0b3d1f",
-          color: "#7bf2a8",
-          border: "1px solid #134d28",
+          background: vmaf != null ? "#0b3d1f" : "#1e1e2a",
+          color: vmaf != null ? "#7bf2a8" : "#888",
+          border: vmaf != null ? "1px solid #134d28" : "1px solid #333",
           lineHeight: 1.4,
         }}
       >
-        {vmaf}
+        {vmaf ?? "–"}
       </span>
       {/* Spatial tick — ONLY when spatial_ok === true */}
       {spatialOk && (
@@ -93,7 +93,7 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
           pointerEvents: "none",
         }}
       >
-        v{String(variant.index + 1).padStart(2, "0")}
+        v{String(variant.index).padStart(2, "0")}
       </span>
       <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
       {/* Overlay with badges */}

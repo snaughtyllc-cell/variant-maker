@@ -190,31 +190,8 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate }: SourceGroup
 
       {/* Variant grid — 8-across responsive */}
       {open && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(8, 1fr)",
-            gap: 10,
-            padding: 16,
-          }}
-        >
-          <style>{`
-            @media (max-width: 1100px) {
-              .gallery-grid { grid-template-columns: repeat(5, 1fr) !important; }
-            }
-            @media (max-width: 700px) {
-              .gallery-grid { grid-template-columns: repeat(3, 1fr) !important; }
-            }
-          `}</style>
-          <div
-            className="gallery-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(8, 1fr)",
-              gap: 10,
-              gridColumn: "1 / -1",
-            }}
-          >
+        <div style={{ padding: 16 }}>
+          <div className="grid grid-cols-3 min-[700px]:grid-cols-5 min-[1100px]:grid-cols-8 gap-2.5">
             {source.variants.map((variant) => (
               <VariantCard
                 key={variant.index}
