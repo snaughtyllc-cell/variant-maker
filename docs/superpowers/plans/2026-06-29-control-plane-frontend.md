@@ -34,6 +34,18 @@ Two kinds of task, two gates:
   4. Commit.
   The interface contracts + behavior bullets are the acceptance criteria — they are not placeholders.
 
+**Reusable fwr gate (visual tasks reference this):**
+```
+1. Ensure `npm run dev` (web) is up; for live data also run `variant-server --data-dir <dir>`.
+2. Invoke anthropic-skills:fwr → screenshot the route under test at 1440×900.
+3. Open the named committed mockup (docs/superpowers/specs/mockups/2026-06-29-frontend/<file>.html) in the same viewport.
+4. Compare layout, design tokens (§2), spacing, density. List diffs; fix via frontend-design; re-screenshot until it matches.
+```
+
+## Plan convention — why Tasks 4–10 delegate visual build to frontend-design
+
+This plan is executed **subagent-driven with the `frontend-design` skill**, per the project owner's explicit directive ("subagent-driven build using frontend-design and fwr for the screenshot-compare loop"). For the visual tasks the plan therefore specifies, for each component: its **file**, its **typed props/interface**, the **exact data wiring** (which API call / hook / store it consumes — the non-visual logic), its **behaviors**, and the **named mockup** that is the pixel oracle, verified by the fwr loop. It intentionally does **not** transcribe pixel-exact JSX, because (a) the owner directed `frontend-design` to own UI implementation, and (b) the committed mockup is a more precise oracle than prose-described markup, and dictating both would conflict. This is the accepted convention that overrides the skill's default "complete code in every step" for visual components only. **Logic** (API client, formatters, SSE reducer, pure UI helpers) is still built with full test+impl code under strict TDD — see Tasks 2, 3, and the helper steps in 5/7/8.
+
 ---
 
 ## File Structure (spec §5)
@@ -629,9 +641,9 @@ git add web && git commit -m "feat(web): SSE progress reducer + useJobProgress h
   - `<StatusStrip/>` — polls `getHealth` (SWR, 10s), shows "Engine ready" green pill (or "Engine offline" red) + "Local · CPU fast" pill.
   - `runStore.tsx`: `RunProvider`, `useRun()` → `{ jobId, sources, start(resp: CreateJobResponse), clear() }`. Context store so a run survives route changes; **also persists `jobId` to `sessionStorage("vm.job")`** and hydrates it on mount, so a hard reload can re-attach (spec §6). After a reload `sources` is empty until re-seeded from job detail (Task 6).
 
-- [ ] **Step 1: Build to interface** — invoke `frontend-design` for `TopNav` + `StatusStrip`; wrap `app/layout.tsx` with `RunProvider` + `<TopNav>`; add gallery/diagnostics page stubs (`<TopNav active=…/>` + placeholder).
-- [ ] **Step 2: Behavior** — StatusStrip green pill when `/api/health` ok; nav highlights `active`; `useRun()` holds `{jobId, sources}` across navigation.
-- [ ] **Step 3: Visual gate** — `npm run dev` (+ `variant-server` for the health pill); `anthropic-skills:fwr` screenshot the top bar on `/` and compare to the top bar in `studio-full.html`. Iterate to match.
+- [ ] **Step 1: Build to interface** — invoke `frontend-design` for `TopNav` + `StatusStrip` against the interfaces above and the top bar in `studio-full.html`. Wrap `app/layout.tsx` with `RunProvider` + `<TopNav active>`. Create `app/gallery/page.tsx` and `app/diagnostics/page.tsx` each rendering `<TopNav active="…"/>` over an empty `<main className="p-6">` containing only the page `<h1>` (real content lands in Tasks 7/10).
+- [ ] **Step 2: Behavior** — StatusStrip green "Engine ready" pill when `/api/health` ok (red "Engine offline" otherwise); nav highlights `active`; `useRun()` holds `{jobId, sources}` across client navigation and persists `jobId` to `sessionStorage`.
+- [ ] **Step 3: Visual gate** — run the **Reusable fwr gate** against `/` with mockup `studio-full.html` (top bar region). (`variant-server` running so the health pill is green.)
 - [ ] **Step 4: Commit** — `git add web && git commit -m "feat(web): app shell — TopNav, StatusStrip, run store, routes"`
 
 ---
