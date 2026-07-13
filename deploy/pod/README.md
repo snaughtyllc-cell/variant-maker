@@ -8,23 +8,17 @@ This uses **Tier-1 (FFmpeg/CPU)**. An RTX 4000 works fine; GPU neural upscale is
 
 ## Option A — existing Pod (fastest, recommended)
 
-1. Start / connect to your Pod (Jupyter or SSH terminal).
-2. Paste:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/snaughtyllc-cell/variant-maker/tier1/deploy/pod/bootstrap-on-pod.sh | bash
-```
-
-Or if `curl | bash` is blocked:
+Repo is private, so clone with a GitHub token (or upload the folder). In the Pod terminal:
 
 ```bash
 cd /workspace
+# If prompted for a password, paste a GitHub Personal Access Token (not your account password)
 git clone --branch tier1 --depth 1 https://github.com/snaughtyllc-cell/variant-maker.git
 bash variant-maker/deploy/pod/bootstrap-on-pod.sh
 ```
 
-3. In the RunPod UI: **Connect → HTTP service → port `3000`**.
-4. Share that URL with VAs (treat it like a password — no login yet).
+Then in the RunPod UI: **Connect → HTTP service → port `3000`**.
+Share that URL with VAs (treat it like a password — no login yet).
 
 Expected URL shape:
 

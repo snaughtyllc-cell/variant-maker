@@ -33,14 +33,24 @@ if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | sed 's/v//' | cut -d. -f
 fi
 
 # --- App source ---
+# Prefer GH_TOKEN for private repos: export GH_TOKEN=ghp_...
+CLONE_URL="$REPO_URL"
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  CLONE_URL="https://${GH_TOKEN}@github.com/snaughtyllc-cell/variant-maker.git"
+fi
+
 if [[ ! -d "$APP_DIR/.git" ]]; then
-  echo "==> Cloning $REPO_URL ($REPO_BRANCH)"
-  git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" "$APP_DIR"
+  if [[ -d "$APP_DIR" && -f "$APP_DIR/deploy/pod/start.sh" ]]; then
+    echo "==> Using existing app directory (no .git): $APP_DIR"
+  else
+    echo "==> Cloning $REPO_URL ($REPO_BRANCH)"
+    git clone --branch "$REPO_BRANCH" --depth 1 "$CLONE_URL" "$APP_DIR"
+  fi
 else
   echo "==> Updating existing clone"
-  git -C "$APP_DIR" fetch --depth 1 origin "$REPO_BRANCH"
-  git -C "$APP_DIR" checkout "$REPO_BRANCH"
-  git -C "$APP_DIR" reset --hard "origin/$REPO_BRANCH"
+  git -C "$APP_DIR" fetch --depth 1 origin "$REPO_BRANCH" || true
+  git -C "$APP_DIR" checkout "$REPO_BRANCH" || true
+  git -C "$APP_DIR" reset --hard "origin/$REPO_BRANCH" || true
 fi
 
 cd "$APP_DIR"
