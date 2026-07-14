@@ -56,6 +56,18 @@ docker run --rm -p 3000:3000 -v /workspace/vmdata:/workspace/vmdata variant-make
 
 ---
 
+## Uniqueness smoke (after pull)
+
+1. Start pod services (`WEB_PORT=7860`)
+2. Generate 3 variants **Light**
+3. Confirm uniqueness scores in Gallery
+4. Mark one **Passed** / one **Duplicate rejected**
+5. Download ZIP
+
+RunPod HTTP proxy may still buffer SSE; job-detail polling shows progress reliably. Stop the Pod when idle.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
