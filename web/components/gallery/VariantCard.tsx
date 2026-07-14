@@ -11,6 +11,8 @@ interface VariantCardProps {
 export function VariantCard({ variant, onOpen }: VariantCardProps) {
   const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
   const spatialOk = variant.quality?.spatial_ok === true;
+  const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
+  const uniquenessOk = variant.uniqueness_status === "ok";
 
   const badge = (
     <div
@@ -39,6 +41,23 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
       >
         {vmaf ?? "–"}
       </span>
+      {/* Uniqueness badge */}
+      {uniquenessPct != null && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: uniquenessOk ? "#072830" : "#3d2200",
+            color: uniquenessOk ? "#22d3ee" : "#f59e0b",
+            border: `1px solid ${uniquenessOk ? "#0c3d47" : "#4d2e00"}`,
+            lineHeight: 1.4,
+          }}
+        >
+          {uniquenessPct}%
+        </span>
+      )}
       {/* Spatial tick — ONLY when spatial_ok === true */}
       {spatialOk && (
         <span
@@ -50,6 +69,66 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
           }}
         >
           ✓ spatial
+        </span>
+      )}
+    </div>
+  );
+
+  const topBadges = (
+    <div
+      style={{
+        position: "absolute",
+        top: 5,
+        right: 6,
+        display: "flex",
+        gap: 3,
+        zIndex: 2,
+      }}
+    >
+      {variant.escalated && (
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#1e1740",
+            color: "#c7b8ff",
+            border: "1px solid #362a68",
+            textShadow: "0 1px 2px #000",
+          }}
+        >
+          ⚡
+        </span>
+      )}
+      {variant.platform_result === "passed" && (
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#0b3d1f",
+            color: "#7bf2a8",
+            border: "1px solid #134d28",
+          }}
+        >
+          ✓
+        </span>
+      )}
+      {variant.platform_result === "duplicate_reject" && (
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#2c2210",
+            color: "#ffd08a",
+            border: "1px solid #5a4416",
+          }}
+        >
+          ⚠
         </span>
       )}
     </div>
@@ -98,6 +177,7 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
       <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
       {/* Overlay with badges */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {topBadges}
         {badge}
       </div>
     </div>

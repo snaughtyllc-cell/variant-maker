@@ -57,6 +57,7 @@ class Job:
     sources: list[JobSource] = field(default_factory=list)
     state: str = "running"
     events: list[VariantEvent] = field(default_factory=list)
+    allow_creative_escalate: bool = True
 
 
 def _now() -> str:
@@ -73,7 +74,8 @@ class JobStore:
         self._done: dict[str, threading.Event] = {}
         self._source_index: dict[str, tuple[str, JobSource]] = {}
 
-    def create_job(self, uploads: list[tuple[str, bytes]], count: int) -> Job:
+    def create_job(self, uploads: list[tuple[str, bytes]], count: int,
+                    allow_creative_escalate: bool = True) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -81,7 +83,8 @@ class JobStore:
             self._ws.save_upload(job_id, source_id, filename, data)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-        job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources)
+        job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
+                   allow_creative_escalate=allow_creative_escalate)
         with self._lock:
             self._jobs[job_id] = job
             self._done[job_id] = threading.Event()
@@ -114,6 +117,7 @@ class JobStore:
                 result = self._runner.run(
                     in_path, count=job.count, out_dir=out_dir,
                     source_id=source.source_id, on_event=on_event,
+                    allow_creative_escalate=job.allow_creative_escalate,
                 )
                 source.variants = [
                     VariantInfo(
@@ -188,9 +192,12 @@ class JobStore:
         # authoritative variant record for the API and is unaffected. Any future route that
         # serves manifest.json from disk must merge/preserve the original manifest first.
         start = max((v.index for v in source.variants), default=0)
+        job = self._jobs.get(job_id)
+        allow_creative_escalate = job.allow_creative_escalate if job else True
         result = self._runner.run(
             self._ws.source_in_path(job_id, source_id, source.filename),
             count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
+            allow_creative_escalate=allow_creative_escalate,
         )
         for v in result.variants:
             source.variants.append(VariantInfo(

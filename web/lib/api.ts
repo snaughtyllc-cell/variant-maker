@@ -16,9 +16,14 @@ export const getJob = (id: string) => fetch(`/api/jobs/${id}`).then(json<JobDeta
 export const getGallery = () => fetch("/api/gallery").then(json<SourceOut[]>);
 export const getDiagnostics = () => fetch("/api/diagnostics").then(json<DiagnosticsItem[]>);
 
-export function createJob(files: File[], count: number): Promise<CreateJobResponse> {
+export function createJob(
+  files: File[],
+  count: number,
+  allowCreativeEscalate: boolean = true,
+): Promise<CreateJobResponse> {
   const fd = new FormData();
   fd.append("count", String(count));
+  fd.append("allow_creative_escalate", String(allowCreativeEscalate));
   for (const f of files) fd.append("files", f, f.name);
   return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }

@@ -47,9 +47,10 @@ def create_app(store: JobStore | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
-    async def create_job(files: list[UploadFile], count: int = Form(...)) -> CreateJobResponse:
+    async def create_job(files: list[UploadFile], count: int = Form(...),
+                          allow_creative_escalate: bool = Form(True)) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
-        job = store.create_job(uploads, count=count)
+        job = store.create_job(uploads, count=count, allow_creative_escalate=allow_creative_escalate)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True) for s in job.sources])
 

@@ -21,7 +21,8 @@ class FakeRunner:
         return self.plan.get(i, "ok")
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
-            on_event: Callable[[VariantEvent], None]) -> SourceResult:
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True) -> SourceResult:
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):

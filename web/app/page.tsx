@@ -14,7 +14,8 @@ export default function StudioPage() {
   const { start, jobId, complete } = useRun();
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
-  const [perVideo, setPerVideo] = useState(20);
+  const [perVideo, setPerVideo] = useState(8);
+  const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +44,7 @@ export default function StudioPage() {
     setError(null);
     setBusy(true);
     try {
-      const resp = await createJob(files, perVideo);
+      const resp = await createJob(files, perVideo, allowCreativeEscalate);
       start(resp);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
@@ -117,7 +118,10 @@ export default function StudioPage() {
           </div>
         )}
 
-        <AdvancedPanel />
+        <AdvancedPanel
+          allowCreativeEscalate={allowCreativeEscalate}
+          onAllowCreativeEscalateChange={setAllowCreativeEscalate}
+        />
       </div>
 
       {/* RIGHT — live progress (Task 6) */}

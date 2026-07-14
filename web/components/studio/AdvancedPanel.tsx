@@ -1,7 +1,15 @@
 "use client";
 import { useState } from "react";
 
-export function AdvancedPanel() {
+interface AdvancedPanelProps {
+  allowCreativeEscalate: boolean;
+  onAllowCreativeEscalateChange: (value: boolean) => void;
+}
+
+export function AdvancedPanel({
+  allowCreativeEscalate,
+  onAllowCreativeEscalateChange,
+}: AdvancedPanelProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -56,6 +64,39 @@ export function AdvancedPanel() {
             <span>Output format</span>
             <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
           </div>
+
+          <label
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 12,
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <span>
+              Allow creative escalate
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 10.5,
+                  color: "var(--color-muted2)",
+                  marginTop: 2,
+                  lineHeight: 1.4,
+                }}
+              >
+                Optimized for uniqueness while keeping a clean look — spends one
+                stronger-preset attempt if lighter passes don&apos;t clear the target.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={allowCreativeEscalate}
+              onChange={(e) => onAllowCreativeEscalateChange(e.target.checked)}
+              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#7c5cff" }}
+            />
+          </label>
         </div>
       )}
     </div>

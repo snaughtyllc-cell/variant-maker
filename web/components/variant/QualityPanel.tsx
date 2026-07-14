@@ -4,6 +4,11 @@ import { vmafPass } from "@/lib/format";
 
 interface QualityPanelProps {
   quality: Quality;
+  uniqueness?: number | null;
+  uniquenessStatus?: string | null;
+  uniquenessTarget?: number | null;
+  escalated?: boolean;
+  bestEffort?: boolean;
 }
 
 function QRow({
@@ -95,9 +100,18 @@ function OkBadge({ ok }: { ok: boolean }) {
   );
 }
 
-export function QualityPanel({ quality }: QualityPanelProps) {
+export function QualityPanel({
+  quality,
+  uniqueness,
+  uniquenessStatus,
+  uniquenessTarget,
+  escalated,
+  bestEffort,
+}: QualityPanelProps) {
   const pass = vmafPass(quality.vmaf);
   const rerollPct = (quality.regen_count / 3) * 100;
+  const uniquenessPct = uniqueness != null ? Math.round(uniqueness * 100) : null;
+  const uniquenessOk = uniquenessStatus === "ok";
 
   return (
     <div>
@@ -109,10 +123,99 @@ export function QualityPanel({ quality }: QualityPanelProps) {
           color: "var(--color-muted2)",
           fontWeight: 700,
           margin: "20px 0 10px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
         }}
       >
-        Quality
+        <span>Quality</span>
+        {escalated && (
+          <span
+            style={{
+              fontSize: 9.5,
+              fontWeight: 800,
+              padding: "2px 7px",
+              borderRadius: 999,
+              textTransform: "none",
+              letterSpacing: 0,
+              color: "#c7b8ff",
+              background: "#1e1740",
+              border: "1px solid #362a68",
+            }}
+          >
+            ⚡ escalated
+          </span>
+        )}
       </div>
+
+      {/* best_effort warning — never claims detection evasion, only describes the render tradeoff */}
+      {bestEffort && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            padding: "9px 11px",
+            marginBottom: 10,
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            color: "#ffd08a",
+            background: "#1c1608",
+            border: "1px solid #3a2c10",
+            borderRadius: 8,
+          }}
+        >
+          <span>⚠</span>
+          <span>
+            Best effort after 3 re-rolls — quality stayed under the floor. Optimized for
+            uniqueness while keeping a clean look.
+          </span>
+        </div>
+      )}
+
+      {/* Uniqueness */}
+      <QRow label="Uniqueness">
+        {uniquenessPct != null ? (
+          <>
+            <Meter pct={uniquenessPct} green={uniquenessOk} amber={!uniquenessOk} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: uniquenessOk ? "#7bf2a8" : "#fbbf24",
+              }}
+            >
+              {uniquenessPct}%
+            </span>
+          </>
+        ) : (
+          <>
+            <Meter pct={0} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: "var(--color-muted)",
+              }}
+            >
+              — / n/a
+            </span>
+          </>
+        )}
+      </QRow>
+      {uniquenessPct != null && uniquenessTarget != null && (
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "var(--color-muted2)",
+            margin: "-4px 2px 8px",
+          }}
+        >
+          target ≥ {Math.round(uniquenessTarget * 100)}%
+        </div>
+      )}
 
       {/* VMAF */}
       <QRow label="VMAF">

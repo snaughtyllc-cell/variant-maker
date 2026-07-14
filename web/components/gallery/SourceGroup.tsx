@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { SourceOut } from "@/lib/types";
-import { regenerate } from "@/lib/api";
-import { sourceUrl } from "@/lib/api";
+import { regenerate, sourceUrl, sourceZipUrl } from "@/lib/api";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -141,6 +140,16 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate }: SourceGroup
           >
             {fullDelivery ? "✓ " : ""}{source.delivered} / {source.requested} delivered
           </span>
+          {source.delivered > 0 && (
+            <a
+              href={sourceZipUrl(source.source_id)}
+              download
+              onClick={(e) => e.stopPropagation()}
+              style={{ fontSize: 12, color: "var(--color-violet-l)", textDecoration: "none" }}
+            >
+              ⬇ Download ZIP
+            </a>
+          )}
           <a
             href="#"
             onClick={(e) => e.stopPropagation()}

@@ -227,7 +227,14 @@ export function VariantSheet({
             </div>
 
             {/* Quality rows */}
-            <QualityPanel quality={variant.quality} />
+            <QualityPanel
+              quality={variant.quality}
+              uniqueness={variant.uniqueness}
+              uniquenessStatus={variant.uniqueness_status}
+              uniquenessTarget={variant.uniqueness_target}
+              escalated={variant.escalated}
+              bestEffort={variant.status === "best_effort"}
+            />
 
             {/* Actions */}
             <VariantActions

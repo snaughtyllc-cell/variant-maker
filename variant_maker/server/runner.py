@@ -46,7 +46,8 @@ class SourceResult:
 
 class Runner(Protocol):
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
-            on_event: Callable[[VariantEvent], None]) -> SourceResult:
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True) -> SourceResult:
         ...
 
 
@@ -54,7 +55,8 @@ class LocalRunner:
     """In-process engine runner. Translates engine callbacks into VariantEvents."""
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
-            on_event: Callable[[VariantEvent], None]) -> SourceResult:
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -77,7 +79,7 @@ class LocalRunner:
             "max_regen": MAX_REGEN,
             "jobs": 1,
             "uniqueness_target": UNIQUENESS_TARGET,
-            "allow_creative_escalate": ALLOW_CREATIVE_ESCALATE,
+            "allow_creative_escalate": allow_creative_escalate,
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

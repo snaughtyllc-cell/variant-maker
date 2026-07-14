@@ -44,6 +44,20 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
         </>
       );
     }
+    if (state === "uniqueness") {
+      return (
+        <span style={{ color: "var(--color-cyan)" }}>
+          ⟡ v{idxStr} checking uniqueness…
+        </span>
+      );
+    }
+    if (state === "escalating") {
+      return (
+        <span style={{ color: "#c7b8ff" }}>
+          ⚡ v{idxStr} escalating strength…
+        </span>
+      );
+    }
     return null;
   };
 
@@ -131,14 +145,21 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
             const vmafRounded = vmaf != null ? Math.round(vmaf) : null;
             const badgeColor =
               vmafRounded == null ? "muted" : vmafRounded >= 93 ? "green" : vmafRounded >= 90 ? "amber" : "red";
+            const uniquenessPct = v.uniqueness != null ? Math.round(v.uniqueness * 100) : null;
+            const isBestEffort = v.status === "best_effort";
             return (
               <VideoThumb
                 key={v.index}
                 src={v.file_url}
                 badge={
-                  vmafRounded != null ? (
-                    <Badge color={badgeColor}>{vmafRounded}</Badge>
-                  ) : undefined
+                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                    {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}
+                    {uniquenessPct != null && (
+                      <Badge color={v.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
+                    )}
+                    {v.escalated && <Badge color="cyan">⚡</Badge>}
+                    {isBestEffort && <Badge color="amber">best effort</Badge>}
+                  </div>
                 }
               />
             );
@@ -162,6 +183,10 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
                   ? `↻ ${inFlight.attempt}/${inFlight.max_attempts}`
                   : inFlight.state === "checking"
                   ? "check"
+                  : inFlight.state === "uniqueness"
+                  ? "⟡ unique"
+                  : inFlight.state === "escalating"
+                  ? "⚡ escalate"
                   : "render"}
               </span>
             </div>
