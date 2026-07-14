@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 # Valid VariantEvent.state values, in lifecycle order.
-STATES = ("rendering", "checking", "rerolling", "done")
+STATES = ("rendering", "checking", "rerolling", "uniqueness", "escalating", "done")
 
 
 @dataclass

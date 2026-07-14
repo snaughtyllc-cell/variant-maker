@@ -17,6 +17,8 @@ DEFAULT_PRESET = "medium"
 DEFAULT_PLATFORM = "tiktok"   # vertical 1080x1920
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
+UNIQUENESS_TARGET = 0.35
+ALLOW_CREATIVE_ESCALATE = True
 
 
 @dataclass
@@ -66,6 +68,8 @@ class LocalRunner:
             "quality_mode": DEFAULT_QUALITY_MODE,
             "max_regen": MAX_REGEN,
             "jobs": 1,
+            "uniqueness_target": UNIQUENESS_TARGET,
+            "allow_creative_escalate": ALLOW_CREATIVE_ESCALATE,
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

@@ -10,7 +10,7 @@ import random
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
-from . import quality
+from . import quality, uniqueness
 from .ffmpeg import render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import get_platform
@@ -45,6 +45,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
     rotate_off = config.get("rotate", "never") == "never"
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
+
+    # Uniqueness gate: try the light (config) preset at escalating strengths; if none
+    # clears the target, spend exactly one creative-escalate attempt on the strong preset.
+    uniqueness_target = config.get("uniqueness_target", 0.35)
+    allow_creative_escalate = config.get("allow_creative_escalate", True)
+    uniq_strengths = config.get("uniq_strengths", [1.0, 1.25, 1.5])
 
     master_seed = config.get("seed")
     if master_seed is None:
@@ -95,12 +101,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
     def _render_one(i: int) -> VariantRecord:
         vseed, fname, path = _prep(i)
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
+        last_strength = uniq_strengths[0] if uniq_strengths else 1.0
 
-        def attempt(strength: float) -> dict:
-            nonlocal attempt_no
+        def attempt(strength: float, use_preset) -> dict:
+            nonlocal attempt_no, last_strength
             attempt_no += 1
+            last_strength = strength
             emit("rendering", index=i, attempt=attempt_no)
-            params = sample(preset, vseed, strength=strength)
+            params = sample(use_preset, vseed, strength=strength)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:
@@ -117,10 +125,38 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     os.remove(tmp)
             return {**g, "params": params, "cmd": cmd, "neural_ops": nops}
 
-        r = quality.regen_until_pass(
-            attempt, max_regen=max_regen, strength=1.0,
-            on_regen=lambda regen, mx: emit("rerolling", index=i, attempt=regen, max_attempts=mx),
-        )
+        def regen(use_preset, start_strength) -> dict:
+            return quality.regen_until_pass(
+                lambda s: attempt(s, use_preset), max_regen=max_regen, strength=start_strength,
+                on_regen=lambda n, mx: emit("rerolling", index=i, attempt=n, max_attempts=mx),
+            )
+
+        # Uniqueness gate: light preset at rising strengths, quality regen inside each
+        # attempt as before. If none clears the target, spend one creative escalate at
+        # the strong preset (still quality-gated) and accept whatever it scores.
+        preset_used = preset.name
+        escalated = False
+        r = None
+        u = {
+            "uniqueness": None, "uniqueness_status": "unknown",
+            "uniqueness_metric": None, "uniqueness_target": uniqueness_target,
+        }
+        for strength in uniq_strengths:
+            r = regen(preset, strength)
+            emit("uniqueness", index=i)
+            u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
+            if r["passed"] and u["uniqueness_status"] in ("ok", "unknown"):
+                break
+        else:
+            if allow_creative_escalate:
+                emit("escalating", index=i)
+                strong = get_preset("strong")
+                r = regen(strong, 1.0)
+                emit("uniqueness", index=i)
+                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
+                preset_used = strong.name
+                escalated = True
+
         info = probe(path)
 
         # Spatial-corruption guard: only tier-2 (upscaled) output can tile-seam; tier-1 is
@@ -152,6 +188,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             quality=quality_info,
             output_sha256=info.sha256, duration_s=info.duration_s,
             status=status,
+            uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
+            uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
+            preset_used=preset_used, strength_final=last_strength, escalated=escalated,
         )
 
     indices = range(1, count + 1)

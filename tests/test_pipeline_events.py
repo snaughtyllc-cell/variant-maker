@@ -36,6 +36,16 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         return {"vmaf": 95.0 if passed else 50.0, "histogram_ok": True, "passed": passed}
     monkeypatch.setattr(pipeline.quality, "passes_guard", fake_guard)
 
+    # Uniqueness gate: always "ok" so it never drives extra render attempts here —
+    # this test is about the quality regen/rerolling event sequence, not the gate.
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: {
+            "uniqueness": 0.5, "uniqueness_status": "ok",
+            "uniqueness_metric": "phash_hist_v1", "uniqueness_target": target,
+        },
+    )
+
     events = []
 
     def record(state, **kw):
@@ -55,10 +65,11 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
 
     by_index = {1: [e for e in events if e[1] == 1], 2: [e for e in events if e[1] == 2]}
 
-    # variant 1 passes first try: rendering(attempt=0) -> checking -> done
+    # variant 1 passes first try: rendering(attempt=0) -> checking -> uniqueness -> done
     assert by_index[1] == [
         ("rendering", 1, 0, None),
         ("checking", 1, None, None),
+        ("uniqueness", 1, None, None),
         ("done", 1, None, None),
     ]
 
@@ -70,6 +81,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         ("rerolling", 2, 1, 3),
         ("rendering", 2, 1, None),
         ("checking", 2, None, None),
+        ("uniqueness", 2, None, None),
         ("done", 2, None, None),
     ]
 
