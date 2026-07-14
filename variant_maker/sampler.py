@@ -83,14 +83,28 @@ def total_distortion(preset: Preset, params: dict) -> float:
     return total
 
 
+def clamp_strength(strength: float) -> float:
+    """Clamp `strength` to the range `sample()` honors.
+
+    Capped at 2.0 (not 1.0): the uniqueness ladder escalates strength ABOVE 1.0 (e.g.
+    1.0 -> 1.25 -> 1.5) to spend more of the budget on later rungs, and that only does
+    anything if values above 1.0 are distinct from 1.0. Callers (e.g. pipeline.py) should
+    use this to compute the EFFECTIVE strength before calling `sample`, so whatever they
+    record as "the strength actually applied" matches what `sample` really used.
+    """
+    return min(2.0, max(0.0, strength))
+
+
 def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: float = 1.0) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
-    `strength` in [0, 1] is the lever the auto-tune controller / quality guard drives: it
-    caps total distortion at `strength * preset.budget`. 1.0 spends the full budget; lower
-    values yield gentler variants. The seed fixes WHICH axes move; strength fixes how far.
+    `strength` in [0, 2] is the lever the auto-tune controller / quality guard drives: it
+    caps total distortion at `strength * preset.budget`. 1.0 spends the full budget; values
+    above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
+    escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
+    WHICH axes move; strength fixes how far.
     """
-    strength = min(1.0, max(0.0, strength))
+    strength = clamp_strength(strength)
     budget = preset.budget * strength
     rng = random.Random(seed)
 

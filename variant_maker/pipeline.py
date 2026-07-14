@@ -16,7 +16,7 @@ from .manifest import Manifest, VariantRecord
 from .platforms import get_platform
 from .presets import get_preset
 from .probe import probe
-from .sampler import derive_seed, sample
+from .sampler import clamp_strength, derive_seed, sample
 
 
 def _ffmpeg_version() -> str:
@@ -101,14 +101,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
     def _render_one(i: int) -> VariantRecord:
         vseed, fname, path = _prep(i)
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
-        last_strength = uniq_strengths[0] if uniq_strengths else 1.0
+        last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
 
         def attempt(strength: float, use_preset) -> dict:
             nonlocal attempt_no, last_strength
             attempt_no += 1
-            last_strength = strength
+            # Record the EFFECTIVE strength (post-clamp) — the value `sample` actually
+            # applies — not the raw ladder/falloff value, which can differ once clamped.
+            effective_strength = clamp_strength(strength)
+            last_strength = effective_strength
             emit("rendering", index=i, attempt=attempt_no)
-            params = sample(use_preset, vseed, strength=strength)
+            params = sample(use_preset, vseed, strength=effective_strength)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:
@@ -141,7 +144,15 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "uniqueness": None, "uniqueness_status": "unknown",
             "uniqueness_metric": None, "uniqueness_target": uniqueness_target,
         }
+        prev_effective = None
         for strength in uniq_strengths:
+            # Belt-and-suspenders: if two ladder rungs clamp to the same effective
+            # strength, the second render would be byte-for-byte identical spend —
+            # skip it rather than pay for a duplicate render.
+            effective = clamp_strength(strength)
+            if r is not None and effective == prev_effective:
+                continue
+            prev_effective = effective
             r = regen(preset, strength)
             emit("uniqueness", index=i)
             u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)

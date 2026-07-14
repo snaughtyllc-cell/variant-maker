@@ -118,6 +118,71 @@ def test_no_escalate_when_allow_creative_escalate_false(monkeypatch, tmp_path):
     assert record.uniqueness_status == "below_target"
 
 
+def test_uniq_strengths_are_not_collapsed_to_the_same_effective_value(monkeypatch, tmp_path):
+    """Task 3 regression: uniq_strengths=[1.0, 1.25, 1.5] used to all clamp to 1.0 inside
+    sample(), so escalating rungs rendered identical params for no extra uniqueness spend.
+    Assert `sample` actually receives three distinct strengths, and `strength_final` on the
+    record reflects the effective (post-clamp) value that was really used."""
+    _stub_common(monkeypatch)
+    seen_strengths = []
+    real_sample = pipeline.sample
+
+    def spy_sample(preset, seed, strength=1.0):
+        seen_strengths.append(strength)
+        return real_sample(preset, seed, strength=strength)
+    monkeypatch.setattr(pipeline, "sample", spy_sample)
+
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: {
+            "uniqueness": 0.1, "uniqueness_status": "below_target",
+            "uniqueness_metric": "phash_hist_v1", "uniqueness_target": 0.35,
+        },
+    )
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0, 1.25, 1.5], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+
+    # All three ladder rungs actually ran (no target ever met) at three DISTINCT
+    # effective strengths — none of them collapsed onto 1.0.
+    assert seen_strengths == [1.0, 1.25, 1.5]
+    assert len(set(seen_strengths)) == 3
+
+    record = manifest.variants[0]
+    assert record.strength_final == 1.5
+
+
+def test_duplicate_effective_strength_rung_is_skipped(monkeypatch, tmp_path):
+    """Belt-and-suspenders: if two configured ladder rungs clamp to the SAME effective
+    strength (e.g. both above the 2.0 hard cap), the second must be skipped rather than
+    re-rendering identical params."""
+    _stub_common(monkeypatch)
+    seen_strengths = []
+    real_sample = pipeline.sample
+
+    def spy_sample(preset, seed, strength=1.0):
+        seen_strengths.append(strength)
+        return real_sample(preset, seed, strength=strength)
+    monkeypatch.setattr(pipeline, "sample", spy_sample)
+
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: {
+            "uniqueness": 0.1, "uniqueness_status": "below_target",
+            "uniqueness_metric": "phash_hist_v1", "uniqueness_target": 0.35,
+        },
+    )
+
+    # 2.5 and 3.0 both clamp to the 2.0 hard cap -> identical effective strength.
+    cfg = _cfg(tmp_path, uniq_strengths=[2.5, 3.0], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+
+    assert seen_strengths == [2.0]  # the duplicate rung never rendered
+
+    record = manifest.variants[0]
+    assert record.strength_final == 2.0
+
+
 def test_emits_uniqueness_and_escalating_states(monkeypatch, tmp_path):
     _stub_common(monkeypatch)
 

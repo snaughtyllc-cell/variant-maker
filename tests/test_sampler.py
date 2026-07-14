@@ -1,6 +1,6 @@
 import pytest
 
-from variant_maker.sampler import derive_seed, sample, total_distortion
+from variant_maker.sampler import clamp_strength, derive_seed, sample, total_distortion
 from variant_maker.presets import SUBTLE, MEDIUM, STRONG
 
 # A deterministic spread of per-variant seeds for distribution tests.
@@ -103,6 +103,39 @@ def test_strength_scales_the_budget(preset):
 def test_zero_strength_is_neutral():
     v = sample(MEDIUM, derive_seed(5, 2), strength=0.0)["video"]
     assert total_distortion(MEDIUM, {"video": v}) <= 1e-9
+
+
+def test_clamp_strength_allows_up_to_two():
+    """Cap raised from 1.0 to 2.0 so the uniqueness ladder's escalating rungs (e.g.
+    1.0 -> 1.25 -> 1.5) don't all collapse to the same clamped value (Task 3 bug)."""
+    assert clamp_strength(1.25) == 1.25
+    assert clamp_strength(1.5) == 1.5
+    assert clamp_strength(2.0) == 2.0
+    assert clamp_strength(2.5) == 2.0  # still hard-capped, just at 2.0 now
+    assert clamp_strength(-1.0) == 0.0
+
+
+@pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
+def test_strength_above_one_can_exceed_the_nominal_budget(preset):
+    """Above 1.0, `strength` caps spend at strength*budget (up to 2x), not budget itself."""
+    for s in SEEDS[:100]:
+        for k in (1.25, 1.5, 2.0):
+            d = total_distortion(preset, sample(preset, s, strength=k))
+            assert d <= k * preset.budget + 1e-9, f"{preset.name} k={k}: {d:.4f}"
+
+
+def test_strength_above_one_diverges_from_strength_one():
+    """The uniqueness ladder only spends more budget on later rungs if strengths above
+    1.0 actually produce different params than 1.0 — regression test for the bug where
+    sample() hard-capped strength at 1.0, making 1.0/1.25/1.5 identical renders."""
+    diverged = False
+    for s in SEEDS:
+        p1 = sample(MEDIUM, s, strength=1.0)
+        p15 = sample(MEDIUM, s, strength=1.5)
+        if p1["video"] != p15["video"]:
+            diverged = True
+            break
+    assert diverged, "strength=1.5 must diverge from strength=1.0 for at least one seed"
 
 
 def test_crf_counts_toward_the_budget():
