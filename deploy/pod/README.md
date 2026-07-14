@@ -58,11 +58,14 @@ docker run --rm -p 3000:3000 -v /workspace/vmdata:/workspace/vmdata variant-make
 
 ## Uniqueness smoke (after pull)
 
+This Pod template exposes HTTP on **7860** (not 3000). In RunPod Connect, use **HTTP service → port `7860`**.
+
 1. Start pod services (`WEB_PORT=7860`)
-2. Generate 3 variants **Light**
-3. Confirm uniqueness scores in Gallery
-4. Mark one **Passed** / one **Duplicate rejected**
-5. Download ZIP
+2. Open the proxy URL (`https://<POD_ID>-7860.proxy.runpod.net`)
+3. Generate 3 variants **Light**
+4. Confirm uniqueness scores in Gallery
+5. Mark one **Passed** / one **Duplicate rejected**
+6. Download ZIP
 
 RunPod HTTP proxy may still buffer SSE; job-detail polling shows progress reliably. Stop the Pod when idle.
 

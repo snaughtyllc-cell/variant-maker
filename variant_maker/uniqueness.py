@@ -18,7 +18,14 @@ def _probe_duration(path: str) -> float:
         capture_output=True,
         text=True,
     )
-    return max(float(out.stdout.strip()), 0.1)
+    raw = out.stdout.strip()
+    if not raw or raw.upper() == "N/A":
+        raise ValueError(f"no valid duration in ffprobe output: {raw!r}")
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"no valid duration in ffprobe output: {raw!r}") from exc
+    return max(duration, 0.1)
 
 
 def extract_gray_frames(path: str, *, n: int = 10, size: int = 32) -> list[bytes]:
@@ -125,5 +132,5 @@ def score_uniqueness(
             "uniqueness_metric": METRIC_VERSION,
             "uniqueness_target": target,
         }
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
         return base

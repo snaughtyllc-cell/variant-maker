@@ -27,3 +27,14 @@ def test_different_colors_score_higher():
 def test_missing_file_unknown():
     r = uniqueness.score_uniqueness("/nope/a.mp4", "/nope/b.mp4")
     assert r["uniqueness"] is None and r["uniqueness_status"] == "unknown"
+
+def test_invalid_probe_duration_unknown(monkeypatch):
+    def fake_probe(_path):
+        raise ValueError("no valid duration in ffprobe output: 'N/A'")
+
+    monkeypatch.setattr(uniqueness, "_probe_duration", fake_probe)
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        _tiny_mp4(a)
+        r = uniqueness.score_uniqueness(a, a, n_frames=2)
+        assert r["uniqueness"] is None and r["uniqueness_status"] == "unknown"
