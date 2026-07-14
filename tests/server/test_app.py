@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 from fastapi.testclient import TestClient
 
@@ -120,6 +121,70 @@ def test_regenerate_endpoint(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["delivered"] == 4  # 2 initial + 2 regenerated, all ok under FakeRunner
     assert client.post("/api/sources/nope/regenerate", data={"n": "1"}).status_code == 404
+
+
+def test_get_job_detail_includes_uniqueness_fields(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    v = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]
+    assert v["uniqueness"] == 0.42
+    assert v["uniqueness_status"] == "ok"
+    assert v["uniqueness_metric"] == "phash+hist"
+    assert v["uniqueness_target"] == 0.35
+    assert v["preset_used"] == "medium"
+    assert v["strength_final"] == 1.0
+    assert v["escalated"] is False
+    assert v["platform_result"] is None
+
+
+def test_platform_result_roundtrip(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+
+    resp = client.post(f"/api/variants/{sid}/{index}/platform-result",
+                       json={"result": "passed"})
+    assert resp.status_code == 200
+    assert resp.json()["platform_result"] == "passed"
+
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["sources"][0]["variants"][0]["platform_result"] == "passed"
+
+    assert client.post(f"/api/variants/{sid}/999/platform-result",
+                       json={"result": "passed"}).status_code == 404
+    assert client.post(f"/api/variants/nope/{index}/platform-result",
+                       json={"result": "passed"}).status_code == 404
+    assert client.post(f"/api/variants/{sid}/{index}/platform-result",
+                       json={"result": "bogus"}).status_code == 422
+
+
+def test_zip_contains_ok_variants(tmp_path):
+    client, store = _client(tmp_path, plan={2: "best_effort"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "3"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    ok_filenames = {v["filename"] for v in src["variants"]}
+
+    resp = client.get(f"/api/sources/{sid}/zip")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/zip"
+
+    import io
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    assert set(zf.namelist()) == ok_filenames
+
+    assert client.get("/api/sources/nope/zip").status_code == 404
 
 
 def test_cli_build_app_serves_health(tmp_path):

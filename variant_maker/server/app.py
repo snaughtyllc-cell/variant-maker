@@ -10,9 +10,21 @@ from sse_starlette.sse import EventSourceResponse
 
 from .events import event_to_dict
 from .jobs import JobSource, JobStore
-from .models import CreateJobResponse, DiagnosticsItem, JobDetail, JobSummary, SourceOut, VariantOut
+from .models import (CreateJobResponse, DiagnosticsItem, JobDetail, JobSummary,
+                     PlatformResultIn, SourceOut, VariantOut)
 from .runner import LocalRunner
 from .workspace import Workspace
+
+
+def _variant_out(source_id: str, v) -> VariantOut:
+    return VariantOut(
+        index=v.index, filename=v.filename, status=v.status, quality=v.quality,
+        file_url=f"/api/variants/{source_id}/{v.filename}",
+        uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
+        uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
+        preset_used=v.preset_used, strength_final=v.strength_final,
+        escalated=v.escalated, platform_result=v.platform_result,
+    )
 
 
 def _source_out(s: JobSource, *, ok_only: bool) -> SourceOut:
@@ -20,11 +32,7 @@ def _source_out(s: JobSource, *, ok_only: bool) -> SourceOut:
     return SourceOut(
         source_id=s.source_id, filename=s.filename, requested=s.requested,
         delivered=s.delivered, shortfall=s.shortfall,
-        variants=[
-            VariantOut(index=v.index, filename=v.filename, status=v.status, quality=v.quality,
-                       file_url=f"/api/variants/{s.source_id}/{v.filename}")
-            for v in variants
-        ],
+        variants=[_variant_out(s.source_id, v) for v in variants],
     )
 
 
@@ -109,5 +117,20 @@ def create_app(store: JobStore | None = None) -> FastAPI:
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
         return _source_out(source, ok_only=True)
+
+    @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
+    def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
+        variant = store.set_platform_result(source_id, index, body.result)
+        if variant is None:
+            raise HTTPException(status_code=404, detail="variant not found")
+        return _variant_out(source_id, variant)
+
+    @app.get("/api/sources/{source_id}/zip")
+    def source_zip(source_id: str):
+        path = store.zip_ok_variants(source_id)
+        if path is None:
+            raise HTTPException(status_code=404, detail="no ok variants for source")
+        return FileResponse(path, media_type="application/zip",
+                            filename=f"{source_id}_variants.zip")
 
     return app

@@ -1,6 +1,8 @@
 """Pydantic response models — the HTTP contract the frontend consumes."""
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -10,6 +12,18 @@ class VariantOut(BaseModel):
     status: str
     quality: dict
     file_url: str
+    uniqueness: float | None = None
+    uniqueness_status: str | None = None
+    uniqueness_metric: str | None = None
+    uniqueness_target: float | None = None
+    preset_used: str | None = None
+    strength_final: float | None = None
+    escalated: bool = False
+    platform_result: str | None = None
+
+
+class PlatformResultIn(BaseModel):
+    result: Literal["passed", "duplicate_reject", "unknown"]
 
 
 class SourceOut(BaseModel):

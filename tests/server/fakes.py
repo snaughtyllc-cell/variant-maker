@@ -36,8 +36,15 @@ class FakeRunner:
             ))
             path = os.path.join(out_dir, fname)
             open(path, "w").close()
-            variants.append(VariantResult(index=i, filename=fname, status=status,
-                                          quality={"vmaf": 95.0}, path=path))
+            variants.append(VariantResult(
+                index=i, filename=fname, status=status, quality={"vmaf": 95.0}, path=path,
+                uniqueness=0.42 if status == "ok" else None,
+                uniqueness_status="ok" if status == "ok" else "unknown",
+                uniqueness_metric="phash+hist" if status == "ok" else None,
+                uniqueness_target=0.35,
+                preset_used="medium", strength_final=1.0, escalated=False,
+                platform_result=None,
+            ))
         mpath = os.path.join(out_dir, "manifest.json")
         open(mpath, "w").close()
         return SourceResult(variants=variants, manifest_path=mpath)

@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import threading
 import uuid
+import zipfile
 from dataclasses import dataclass, field
 
 from .events import VariantEvent
 from .runner import Runner
 from .workspace import Workspace
+
+PLATFORM_RESULTS = ("passed", "duplicate_reject", "unknown")
 
 
 @dataclass
@@ -19,6 +23,14 @@ class VariantInfo:
     filename: str
     status: str
     quality: dict
+    uniqueness: float | None = None
+    uniqueness_status: str | None = None
+    uniqueness_metric: str | None = None
+    uniqueness_target: float | None = None
+    preset_used: str | None = None
+    strength_final: float | None = None
+    escalated: bool = False
+    platform_result: str | None = None
 
 
 @dataclass
@@ -82,6 +94,19 @@ class JobStore:
         try:
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
+                # Record finished variants immediately so polling clients (and
+                # proxies that buffer SSE) can see progress before the source ends.
+                if e.state == "done" and e.filename and e.status and e.quality is not None:
+                    for source in job.sources:
+                        if source.source_id != e.source_id:
+                            continue
+                        if any(v.index == e.index for v in source.variants):
+                            break
+                        source.variants.append(VariantInfo(
+                            source_id=e.source_id, index=e.index, filename=e.filename,
+                            status=e.status, quality=e.quality,
+                        ))
+                        break
 
             for source in job.sources:
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
@@ -91,8 +116,14 @@ class JobStore:
                     source_id=source.source_id, on_event=on_event,
                 )
                 source.variants = [
-                    VariantInfo(source_id=source.source_id, index=v.index, filename=v.filename,
-                                status=v.status, quality=v.quality)
+                    VariantInfo(
+                        source_id=source.source_id, index=v.index, filename=v.filename,
+                        status=v.status, quality=v.quality,
+                        uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
+                        uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
+                        preset_used=v.preset_used, strength_final=v.strength_final,
+                        escalated=v.escalated, platform_result=v.platform_result,
+                    )
                     for v in result.variants
                 ]
         finally:
@@ -165,5 +196,58 @@ class JobStore:
             source.variants.append(VariantInfo(
                 source_id=source_id, index=start + v.index, filename=v.filename,
                 status=v.status, quality=v.quality,
+                uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
+                uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
+                preset_used=v.preset_used, strength_final=v.strength_final,
+                escalated=v.escalated, platform_result=v.platform_result,
             ))
         return source
+
+    def set_platform_result(self, source_id: str, index: int, result: str) -> VariantInfo | None:
+        if result not in PLATFORM_RESULTS:
+            raise ValueError(f"invalid platform_result: {result!r}")
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        variant.platform_result = result
+        self._rewrite_manifest_platform_result(job_id, source_id, index, result)
+        return variant
+
+    def _rewrite_manifest_platform_result(self, job_id: str, source_id: str,
+                                          index: int, result: str) -> None:
+        out_dir = self._ws.source_out_dir(job_id, source_id)
+        path = os.path.join(out_dir, "manifest.json")
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+        changed = False
+        for v in data.get("variants", []):
+            if v.get("index") == index:
+                v["platform_result"] = result
+                changed = True
+        if changed:
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+
+    def zip_ok_variants(self, source_id: str) -> str | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        ok_variants = [v for v in source.variants if v.status == "ok"]
+        if not ok_variants:
+            return None
+        out_dir = self._ws.source_out_dir(job_id, source_id)
+        zip_path = os.path.join(out_dir, f"{source_id}_variants.zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for v in ok_variants:
+                fpath = os.path.join(out_dir, v.filename)
+                if os.path.exists(fpath):
+                    zf.write(fpath, arcname=v.filename)
+        return zip_path

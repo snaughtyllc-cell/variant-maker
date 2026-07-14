@@ -28,6 +28,14 @@ class VariantResult:
     status: str
     quality: dict
     path: str
+    uniqueness: float | None = None
+    uniqueness_status: str | None = None
+    uniqueness_metric: str | None = None
+    uniqueness_target: float | None = None
+    preset_used: str | None = None
+    strength_final: float | None = None
+    escalated: bool = False
+    platform_result: str | None = None
 
 
 @dataclass
@@ -76,6 +84,14 @@ class LocalRunner:
             VariantResult(
                 index=v.index, filename=v.filename, status=v.status,
                 quality=v.quality, path=os.path.join(out_dir, v.filename),
+                uniqueness=getattr(v, "uniqueness", None),
+                uniqueness_status=getattr(v, "uniqueness_status", None),
+                uniqueness_metric=getattr(v, "uniqueness_metric", None),
+                uniqueness_target=getattr(v, "uniqueness_target", None),
+                preset_used=getattr(v, "preset_used", None),
+                strength_final=getattr(v, "strength_final", None),
+                escalated=getattr(v, "escalated", False),
+                platform_result=getattr(v, "platform_result", None),
             )
             for v in manifest.variants
         ]
