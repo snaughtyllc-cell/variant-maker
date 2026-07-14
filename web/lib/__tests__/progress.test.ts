@@ -30,6 +30,18 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.inFlight).toEqual({ index: 1, state: "rerolling", attempt: 2, max_attempts: 3 });
   });
 
+  it("tracks uniqueness inFlight", () => {
+    let r = initRun([{ source_id: "s", filename: "a.mp4", requested: 1 }]);
+    r = reduceEvent(r, { source_id: "s", index: 1, state: "uniqueness", attempt: 0, max_attempts: 0, status: null, quality: null, filename: null });
+    expect(r.bySource.s.inFlight?.state).toBe("uniqueness");
+  });
+
+  it("tracks escalating inFlight", () => {
+    let r = initRun([{ source_id: "s", filename: "a.mp4", requested: 1 }]);
+    r = reduceEvent(r, { source_id: "s", index: 1, state: "escalating", attempt: 1, max_attempts: 2, status: null, quality: null, filename: null });
+    expect(r.bySource.s.inFlight).toEqual({ index: 1, state: "escalating", attempt: 1, max_attempts: 2 });
+  });
+
   it("done(ok) appends a tile, bumps delivered+done, builds file_url, clears inFlight", () => {
     let r = base();
     r = reduceEvent(r, ev({ state: "rendering", index: 1 }));

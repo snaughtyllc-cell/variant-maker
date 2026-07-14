@@ -1,10 +1,17 @@
-import { VariantEvent, Quality } from "./types";
+import { VariantEvent, Quality, PlatformResult } from "./types";
 import { variantUrl } from "./api";
 
-export interface VariantTile { index: number; filename: string; status: string; quality: Quality; file_url: string; }
+export interface VariantTile {
+  index: number; filename: string; status: string; quality: Quality; file_url: string;
+  uniqueness?: number | null; escalated?: boolean; platform_result?: PlatformResult | null;
+}
 export interface SourceProgress {
   source_id: string; filename: string; requested: number; delivered: number; done: number;
-  inFlight?: { index: number; state: "rendering" | "checking" | "rerolling"; attempt: number; max_attempts: number };
+  inFlight?: {
+    index: number;
+    state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating";
+    attempt: number; max_attempts: number;
+  };
   variants: VariantTile[];
 }
 export interface RunProgress { bySource: Record<string, SourceProgress>; complete: boolean; }
@@ -21,18 +28,36 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
   const prev = run.bySource[e.source_id];
   if (!prev) return run; // unknown source (shouldn't happen — seeded from CreateJobResponse)
   const next: SourceProgress = { ...prev, variants: prev.variants };
-  if (e.state === "rendering" || e.state === "checking" || e.state === "rerolling") {
+  if (
+    e.state === "rendering" || e.state === "checking" || e.state === "rerolling" ||
+    e.state === "uniqueness" || e.state === "escalating"
+  ) {
     next.inFlight = { index: e.index, state: e.state, attempt: e.attempt, max_attempts: e.max_attempts };
   } else if (e.state === "done") {
-    if (prev.variants.some((v) => v.index === e.index)) {
+    const existing = prev.variants.find((v) => v.index === e.index);
+    if (existing) {
       // Idempotent: the backend replays the full event log on every (re)connect and
       // EventSource auto-reconnects on network loss. A replayed `done` must not
       // double-append or double-count — only ensure inFlight is cleared.
+      // A later polled `done` (with uniqueness/escalated/platform_result) can still
+      // enrich a tile that first arrived via a plain SSE `done`.
+      next.variants = prev.variants.map((v) =>
+        v.index === e.index
+          ? {
+              ...v,
+              uniqueness: e.uniqueness ?? v.uniqueness,
+              escalated: e.escalated ?? v.escalated,
+              platform_result: e.platform_result ?? v.platform_result,
+            }
+          : v,
+      );
       if (prev.inFlight?.index === e.index) next.inFlight = undefined;
     } else {
       next.variants = [...prev.variants, {
         index: e.index, filename: e.filename!, status: e.status!, quality: e.quality!,
         file_url: variantUrl(e.source_id, e.filename!),
+        uniqueness: e.uniqueness ?? null, escalated: e.escalated ?? false,
+        platform_result: e.platform_result ?? null,
       }];
       next.done = prev.done + 1;
       if (e.status === "ok") next.delivered = prev.delivered + 1;
