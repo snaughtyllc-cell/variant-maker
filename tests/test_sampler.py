@@ -124,3 +124,36 @@ def test_pitch_within_range_with_rubberband():
     for s in SEEDS[:50]:
         pp = sample(MEDIUM, s, rubberband=True)["audio"]["pitch_pct"]
         assert MEDIUM.pitch_pct.lo <= pp <= MEDIUM.pitch_pct.hi
+
+
+def test_sample_includes_crop_offset_and_trim_end():
+    p = sample(MEDIUM, seed=1)
+    assert 0.0 <= p["video"]["crop_x_frac"] <= 1.0
+    assert 0.0 <= p["video"]["crop_y_frac"] <= 1.0
+    assert p["video"]["trim_end_s"] >= 0.0
+
+
+@pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
+def test_crop_offset_and_trim_end_within_bounds(preset):
+    for s in SEEDS[:100]:
+        v = sample(preset, s)["video"]
+        assert 0.0 <= v["crop_x_frac"] <= 1.0
+        assert 0.0 <= v["crop_y_frac"] <= 1.0
+        assert preset.trim_s.lo - 1e-9 <= v["trim_end_s"] <= preset.trim_s.hi + 1e-9
+
+
+def test_crop_offset_axes_are_zero_mean():
+    """Fingerprint offset axes must not systematically drift toward one edge."""
+    for axis in ("crop_x_frac", "crop_y_frac"):
+        vals = [sample(MEDIUM, s)["video"][axis] for s in SEEDS]
+        mean = sum(vals) / len(vals)
+        assert abs(mean - 0.5) < 0.05, f"{axis} biased: mean={mean:.5f}"
+
+
+def test_crop_offset_and_trim_end_are_unbudgeted():
+    """These are fingerprint-only axes; they must never count toward the distortion budget."""
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"].update({"crop_x_frac": 0.0, "crop_y_frac": 1.0, "trim_end_s": 5.0})
+    assert total_distortion(MEDIUM, bumped) == base

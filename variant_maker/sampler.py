@@ -118,6 +118,15 @@ def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: flo
             calm = _calm_point(kind, ref, r.lo, r.hi)
             raw[name] = calm + factor * (raw[name] - calm)
 
+    # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
+    # independently of the shrink step above so a full-strength crop offset never eats
+    # into the quality budget. crop_x_frac/crop_y_frac range over the whole frame
+    # (zero-mean at the centered 0.5); trim_end_s reuses the preset's trim_s range,
+    # drawn independently from trim_s (same distribution, different draw).
+    raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
+    raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
+    raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
+
     gop = rng.choice(preset.gop_choices)
 
     video = dict(raw)

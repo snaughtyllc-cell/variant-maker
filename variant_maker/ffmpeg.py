@@ -37,7 +37,7 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
         *output_color_args(out_color),
     ]
     if src.has_audio:
-        cmd += ["-af", build_audio_filters(params, True),
+        cmd += ["-af", build_audio_filters(params, src, True),
                 "-c:a", "aac", "-b:a", f"{a['aac_kbps']}k"]
     else:
         cmd += ["-an"]

@@ -6,10 +6,14 @@ Video filter ORDER is load-bearing:
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   equalizer -> loudnorm.
 
-Trim is applied from the START (start-trim mirrors cleanly to audio without needing the
-source duration, keeping the two streams in sync). The resize uses color.even_scale_filter
-(the safe even form); color.zscale_convert_filter only fires if the output target ever
-differs from the carried source tags. NEVER let a naive scale reinterpret color range.
+Trim supports an independent START (`trim_s`) and END (`trim_end_s`, a fingerprint
+micro-trim off the tail); end trim needs the source duration (both builders take `src`)
+since ffmpeg's `trim=end=` is an absolute timestamp, not an offset from the tail. Both
+streams mirror the identical trim window, keeping video/audio in sync. Crop punch-in
+also carries an x/y offset fraction (fingerprint axis; 0.5/0.5 == centered). The resize
+uses color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
+if the output target ever differs from the carried source tags. NEVER let a naive scale
+reinterpret color range.
 """
 from __future__ import annotations
 
@@ -30,19 +34,47 @@ _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 
+def _trim_expr(v: dict, duration_s: float) -> str:
+    """Build the `trim=...` (video) / caller prefixes `a` for `atrim=...` (audio) expr.
+
+    Start trim (`trim_s`) and end trim (`trim_end_s`, a fingerprint micro-trim off the
+    tail) are independent axes; end trim needs the source duration since ffmpeg's `trim`
+    end is an absolute timestamp, not an offset from the end.
+    """
+    start_s = v.get("trim_s", 0.0)
+    end_s = v.get("trim_end_s", 0.0)
+    has_start = start_s > _EPS
+    has_end = end_s > _EPS
+    if not has_start and not has_end:
+        return ""
+    if has_start and has_end:
+        return f"trim=start={start_s:.3f}:end={duration_s - end_s:.3f}"
+    if has_start:
+        return f"trim=start={start_s:.3f}"
+    return f"trim=end={duration_s - end_s:.3f}"
+
+
 def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> str:
     v = params["video"]
     out = resolve_output_color(src.color)
     parts: list[str] = []
 
-    # trim (from start; reset PTS so downstream filters see t=0)
-    if v.get("trim_s", 0.0) > _EPS:
-        parts.append(f"trim=start={v['trim_s']:.3f},setpts=PTS-STARTPTS")
+    # trim (start and/or end; reset PTS so downstream filters see t=0). End trim needs the
+    # source duration (fingerprint axis, drawn independently of trim_s in the sampler).
+    trim_expr = _trim_expr(v, src.duration_s)
+    if trim_expr:
+        parts.append(f"{trim_expr},setpts=PTS-STARTPTS")
 
-    # crop punch-in (centered); the scale below restores even dims
+    # crop punch-in with an x/y offset fraction (fingerprint axis); the scale below
+    # restores even dims. Offset 0.5/0.5 == the old centered crop.
     crop_keep = v.get("crop_keep", 1.0)
     if crop_keep < 1.0 - _EPS:
-        parts.append(f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}")
+        crop_x = v.get("crop_x_frac", 0.5)
+        crop_y = v.get("crop_y_frac", 0.5)
+        parts.append(
+            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
+            f"(iw-iw*{crop_keep:.4f})*{crop_x:.4f}:(ih-ih*{crop_keep:.4f})*{crop_y:.4f}"
+        )
 
     # scale: range-aware conversion only when the target differs from source, then even resize
     if needs_conversion(src.color, out):
@@ -80,16 +112,17 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     return ",".join(parts)
 
 
-def build_audio_filters(params: dict, has_audio: bool) -> str:
+def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
     if not has_audio:
         return ""
     v = params["video"]
     a = params["audio"]
     parts: list[str] = []
 
-    # identical trim to video (sync)
-    if v.get("trim_s", 0.0) > _EPS:
-        parts.append(f"atrim=start={v['trim_s']:.3f},asetpts=PTS-STARTPTS")
+    # identical trim to video (sync); "a" prefix mirrors trim/setpts -> atrim/asetpts
+    trim_expr = _trim_expr(v, src.duration_s)
+    if trim_expr:
+        parts.append(f"a{trim_expr},asetpts=PTS-STARTPTS")
 
     # pitch only when rubberband produced a non-zero shift
     pitch = a.get("pitch_pct", 0.0)
