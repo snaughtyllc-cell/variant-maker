@@ -34,6 +34,8 @@ class CreateJobSummary(BaseModel):
 
 
 class CreateJobDetail(CreateJobSummary):
+    phase: str = "queued"
+    message: str | None = None
     stills: list[CreateStillOut] = Field(default_factory=list)
     prompt: PromptOut | None = None
     error: str | None = None

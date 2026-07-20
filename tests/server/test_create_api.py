@@ -62,6 +62,7 @@ def test_get_create_job_detail_lists_stills_and_handoff(tmp_path):
     assert store.wait(job_id, timeout=5)
     detail = client.get(f"/api/create/jobs/{job_id}").json()
     assert detail["state"] == "done"
+    assert detail["phase"] == "done"
     assert len(detail["stills"]) == 2
     assert detail["stills"][0]["filename"] == "still_01.png"
     assert detail["stills"][0]["handoff_filename"] == "still_01.mp4"

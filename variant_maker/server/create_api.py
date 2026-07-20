@@ -180,6 +180,36 @@ class CreateJobStore:
         return path if os.path.isfile(path) else None
 
 
+
+def _phase_and_message(job: CreateJob) -> tuple[str, str | None]:
+    """Map runner events → UI phase (queued|directing|generating|saving|done|failed)."""
+    if job.error:
+        return "failed", job.error
+    if job.state == "done":
+        return "done", None
+    phase = "queued"
+    message = None
+    for e in job.events:
+        s = e.get("state")
+        if s in ("expanding", "expanded"):
+            phase = "directing"
+            message = e.get("message") or message
+        elif s == "generating":
+            phase = "generating"
+            message = e.get("message") or message
+        elif s == "handoff":
+            phase = "saving"
+            message = e.get("message") or message
+        elif s == "done" and e.get("filename"):
+            phase = "generating"
+            message = e.get("message") or message
+        elif s == "error":
+            return "failed", e.get("error") or job.error
+        elif s == "job-done":
+            phase = "done"
+    return phase, message
+
+
 def _still_out(job_id: str, s: CreateStillInfo) -> CreateStillOut:
     return CreateStillOut(
         index=s.index,
@@ -193,6 +223,7 @@ def _still_out(job_id: str, s: CreateStillInfo) -> CreateStillOut:
 
 def _detail(job: CreateJob) -> CreateJobDetail:
     prompt = PromptOut(**job.prompt) if job.prompt else None
+    phase, message = _phase_and_message(job)
     return CreateJobDetail(
         job_id=job.job_id,
         state=job.state,
@@ -200,6 +231,8 @@ def _detail(job: CreateJob) -> CreateJobDetail:
         aspect=job.aspect,  # type: ignore[arg-type]
         count=job.count,
         created_utc=job.created_utc,
+        phase=phase,
+        message=message,
         stills=[_still_out(job.job_id, s) for s in job.stills],
         prompt=prompt,
         error=job.error,

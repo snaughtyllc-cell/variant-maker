@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import { StatusStrip } from "./StatusStrip";
 
 const NAV_LINKS = [
-  { href: "/", label: "Studio" },
+  { href: "/create", label: "Create" },
+  { href: "/", label: "Spoof" },
   { href: "/gallery", label: "Gallery" },
   { href: "/diagnostics", label: "Diagnostics" },
   { href: "/settings/drive", label: "Drive" },
