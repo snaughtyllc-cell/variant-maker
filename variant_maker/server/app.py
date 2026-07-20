@@ -137,6 +137,7 @@ def _resolve_folder_id(folder_url: str) -> str:
 def create_app(
     store: JobStore | None = None,
     *,
+    create_store=None,
     drive: DriveClient | None = None,
     sa_json_path: str | None = None,
     oauth_token_path: str | None = None,
@@ -545,5 +546,10 @@ def create_app(
         except ExportError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return _export_job_out(job)
+
+# Create mode — self-contained router (see create_api.py)
+    from .create_api import mount_create_routes
+    mount_create_routes(app, create_store)
+
 
     return app
