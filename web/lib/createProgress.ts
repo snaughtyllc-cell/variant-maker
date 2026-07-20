@@ -1,10 +1,12 @@
-import { createStillUrl } from "./createApi";
+import { createHandoffUrl, createStillUrl } from "./createApi";
 import { CreateEvent, CreateJobDetail, CreatePhase, CreateStillOut } from "./createTypes";
 
 export interface CreateStillTile {
   index: number;
   filename: string;
   file_url: string;
+  handoff_filename: string;
+  handoff_url: string;
   status: "ok" | "failed";
 }
 
@@ -36,7 +38,18 @@ function upsertStill(
 ): CreateStillTile[] {
   const existing = stills.find((s) => s.index === tile.index);
   if (existing) {
-    return stills.map((s) => (s.index === tile.index ? { ...s, ...tile } : s));
+    return stills.map((s) =>
+      s.index === tile.index
+        ? {
+            ...s,
+            ...tile,
+            // Don't wipe URLs with empty strings from partial SSE events.
+            file_url: tile.file_url || s.file_url,
+            handoff_url: tile.handoff_url || s.handoff_url,
+            handoff_filename: tile.handoff_filename || s.handoff_filename,
+          }
+        : s,
+    );
   }
   return [...stills, tile].sort((a, b) => a.index - b.index);
 }
@@ -72,11 +85,14 @@ export function reduceCreateEvent(
   ev: CreateEvent,
 ): CreateRunProgress {
   if (ev.state === "job-done") {
+    // job-done is terminal for both success and failure — never clear a prior error.
+    const failed = run.failed || !!run.error;
     return {
       ...run,
-      phase: "done",
+      phase: failed ? "failed" : "done",
       complete: true,
-      failed: false,
+      failed,
+      error: failed ? (run.error ?? "Create job failed") : run.error,
       message: ev.message ?? run.message,
     };
   }
@@ -97,10 +113,17 @@ export function reduceCreateEvent(
     ev.state === "still-done" || (ev.state === "done" && !!ev.filename);
   if (isStillDone) {
     if (ev.index == null || !ev.filename) return run;
+    const handoffFilename =
+      ev.handoff_filename ||
+      (ev.filename.endsWith(".png")
+        ? ev.filename.replace(/\.png$/i, ".mp4")
+        : `${ev.filename}.mp4`);
     const tile: CreateStillTile = {
       index: ev.index,
       filename: ev.filename,
       file_url: ev.file_url || "",
+      handoff_filename: handoffFilename,
+      handoff_url: ev.handoff_url || "",
       status: ev.status === "failed" ? "failed" : "ok",
     };
     const stills = upsertStill(run.stills, tile);
@@ -122,7 +145,9 @@ export function reduceCreateEvent(
     message: ev.message ?? run.message,
     stillsTotal: ev.stills_total ?? run.stillsTotal,
     complete: phase === "done",
-    failed: false,
+    // Don't wipe a prior failure when a mid-run phase event arrives late.
+    failed: run.failed,
+    error: run.error,
   };
 }
 
@@ -137,16 +162,16 @@ export function applyCreateJobDetail(
   }
   next = {
     ...next,
-    phase: detail.phase,
+    phase: detail.phase as CreatePhase,
     message: detail.message ?? next.message,
     stillsTotal: detail.count,
-    error: detail.error,
+    error: detail.error ?? next.error,
   };
   if (detail.error || detail.phase === "failed" || detail.state === "failed") {
     next = reduceCreateEvent(next, {
       state: "failed",
-      message: detail.error ?? detail.message,
-      error: detail.error,
+      message: detail.error ?? detail.message ?? "Create job failed",
+      error: detail.error ?? detail.message ?? "Create job failed",
     });
   } else if (detail.state === "done" || detail.phase === "done") {
     next = reduceCreateEvent(next, { state: "job-done", message: detail.message });
@@ -159,7 +184,9 @@ function stillToEvent(jobId: string, s: CreateStillOut): CreateEvent {
     state: "still-done",
     index: s.index,
     filename: s.filename,
+    handoff_filename: s.handoff_filename,
     file_url: s.file_url || createStillUrl(jobId, s.filename),
+    handoff_url: s.handoff_url || createHandoffUrl(jobId, s.handoff_filename),
     status: s.status,
   };
 }

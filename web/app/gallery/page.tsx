@@ -7,8 +7,11 @@ import { filterSources, sortSources } from "@/lib/gallery";
 import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus } from "@/lib/types";
+import { getCreateJobs } from "@/lib/createApi";
+import { CreateJobDetail } from "@/lib/createTypes";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { CreateStillGroup } from "@/components/gallery/CreateStillGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
 import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 
@@ -23,6 +26,7 @@ function GalleryContent() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sort, setSort] = useState<SortMode>("newest");
+  const [createJobs, setCreateJobs] = useState<CreateJobDetail[]>([]);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
@@ -54,6 +58,21 @@ function GalleryContent() {
       mutate();
     }
   }, [complete, mutate]);
+
+  // Load Create stills (Spoof-this handoffs) alongside Spoof variants
+  useEffect(() => {
+    let cancelled = false;
+    getCreateJobs()
+      .then((jobs) => {
+        if (!cancelled) setCreateJobs(jobs);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateJobs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [complete]);
 
   // Parse ?v=<source_id>:<index>
   const vParam = searchParams.get("v");
@@ -102,7 +121,20 @@ function GalleryContent() {
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
+  const createReady = createJobs.filter(
+    (j) =>
+      (j.state === "done" || j.phase === "done") &&
+      !j.error &&
+      j.phase !== "failed" &&
+      j.stills.some((s) => s.status === "ok" && s.handoff_url),
+  );
   const totalVariants = allSources.reduce((acc, s) => acc + s.delivered, 0);
+  const createStillCount = createReady.reduce(
+    (acc, j) => acc + j.stills.filter((s) => s.status === "ok").length,
+    0,
+  );
+  const empty =
+    !isLoading && sorted.length === 0 && createReady.length === 0;
 
   const okRefs = okVariantRefs(allSources, selected);
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
@@ -115,8 +147,8 @@ function GalleryContent() {
   return (
     <>
       <GalleryToolbar
-        count={allSources.length}
-        variantCount={totalVariants}
+        count={allSources.length + createReady.length}
+        variantCount={totalVariants + createStillCount}
         filterMode={filterMode}
         onFilter={setFilterMode}
         sort={sort}
@@ -143,7 +175,7 @@ function GalleryContent() {
           </div>
         )}
 
-        {!isLoading && sorted.length === 0 && (
+        {empty && (
           <div
             style={{
               display: "flex",
@@ -163,10 +195,15 @@ function GalleryContent() {
             <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
               {filterMode === "shortfall"
                 ? "All sources have delivered their full requested count."
-                : "Start a run in the Studio — results appear here after each source completes."}
+                : "Create stills or Spoof variants appear here when a run completes."}
             </div>
           </div>
         )}
+
+        {filterMode === "all" &&
+          createReady.map((job) => (
+            <CreateStillGroup key={job.job_id} job={job} />
+          ))}
 
         {sorted.map((source) => (
           <SourceGroup

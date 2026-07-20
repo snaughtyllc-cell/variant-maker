@@ -1,12 +1,18 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
 import { useCreateRun } from "@/lib/createStore";
 import { phaseLabel } from "@/lib/createProgress";
+import { spoofCreateHandoff } from "@/lib/spoofHandoff";
 
 export function CreateProgressPanel() {
   const { jobId, brief, progress, complete } = useCreateRun();
+  const router = useRouter();
+  const [spoofBusy, setSpoofBusy] = useState<number | null>(null);
+  const [spoofErr, setSpoofErr] = useState<string | null>(null);
 
   if (!jobId) {
     return (
@@ -66,7 +72,27 @@ export function CreateProgressPanel() {
   const done = progress.stills.length;
   const total = progress.stillsTotal || 1;
   const ratio = Math.min(1, done / total);
-  const failed = progress.failed;
+  const failed =
+    progress.failed ||
+    progress.phase === "failed" ||
+    !!progress.error;
+  const errorMessage =
+    progress.error ||
+    (failed ? "Create job failed — check Comfy / Prompt LLM env and try again." : null);
+
+  async function handleSpoof(index: number, handoffUrl: string, handoffFilename: string) {
+    if (spoofBusy != null) return;
+    setSpoofErr(null);
+    setSpoofBusy(index);
+    try {
+      await spoofCreateHandoff({ handoffUrl, handoffFilename });
+      router.push("/");
+    } catch (e) {
+      setSpoofErr(e instanceof Error ? e.message : "Spoof handoff failed");
+    } finally {
+      setSpoofBusy(null);
+    }
+  }
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -84,10 +110,12 @@ export function CreateProgressPanel() {
             {failed ? "Failed" : complete ? "Complete" : phaseLabel(progress.phase)}
           </div>
           <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2 }}>
-            {progress.message ||
-              (complete
-                ? "Stills ready — open Gallery to Spoof"
-                : "Live status updates every second")}
+            {failed
+              ? "Generation stopped — fix the issue below and retry"
+              : progress.message ||
+                (complete
+                  ? "Stills ready — Spoof this or open Gallery"
+                  : "Live status updates every second")}
           </div>
         </div>
 
@@ -127,10 +155,29 @@ export function CreateProgressPanel() {
         </span>
       </div>
 
+      {failed && errorMessage && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 13,
+            padding: "12px 14px",
+            borderRadius: 11,
+            background: "#2a0e0e",
+            border: "1px solid #5a1a1a",
+            color: "#fca5a5",
+            fontSize: 13,
+            lineHeight: 1.45,
+            fontWeight: 600,
+          }}
+        >
+          {errorMessage}
+        </div>
+      )}
+
       <div
         style={{
           background: "var(--color-panel)",
-          border: `1px solid ${!complete && !failed ? "#2f2a52" : "var(--color-line)"}`,
+          border: `1px solid ${!complete && !failed ? "#2f2a52" : failed ? "#5a1a1a" : "var(--color-line)"}`,
           borderRadius: 13,
           padding: 14,
           marginBottom: 13,
@@ -169,19 +216,7 @@ export function CreateProgressPanel() {
           </span>
         </div>
 
-        <ProgressBar value={ratio} />
-
-        {progress.error && (
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              color: "var(--color-red)",
-            }}
-          >
-            {progress.error}
-          </div>
-        )}
+        <ProgressBar value={failed ? 0 : ratio} />
 
         {progress.stills.length > 0 && (
           <div
@@ -217,6 +252,36 @@ export function CreateProgressPanel() {
                     {String(s.index).padStart(2, "0")}
                   </Badge>
                 </div>
+                {complete && !failed && s.status === "ok" && s.handoff_url && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSpoof(
+                        s.index,
+                        s.handoff_url,
+                        s.handoff_filename || `still_${String(s.index).padStart(2, "0")}.mp4`,
+                      )
+                    }
+                    disabled={spoofBusy != null}
+                    style={{
+                      position: "absolute",
+                      left: 4,
+                      right: 4,
+                      bottom: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "5px 4px",
+                      borderRadius: 6,
+                      border: "none",
+                      color: "#fff",
+                      cursor: spoofBusy != null ? "not-allowed" : "pointer",
+                      background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+                      opacity: spoofBusy != null && spoofBusy !== s.index ? 0.55 : 1,
+                    }}
+                  >
+                    {spoofBusy === s.index ? "…" : "Spoof"}
+                  </button>
+                )}
               </div>
             ))}
 
@@ -237,6 +302,12 @@ export function CreateProgressPanel() {
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {spoofErr && (
+          <div style={{ marginTop: 10, fontSize: 12, color: "var(--color-red)" }}>
+            {spoofErr}
           </div>
         )}
       </div>

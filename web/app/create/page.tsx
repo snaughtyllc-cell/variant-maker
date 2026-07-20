@@ -14,7 +14,7 @@ import {
 } from "@/lib/createTypes";
 
 export default function CreatePage() {
-  const { start, jobId, complete } = useCreateRun();
+  const { start, jobId, complete, progress } = useCreateRun();
   const [brief, setBrief] = useState("");
   const [faceRefs, setFaceRefs] = useState<File[]>([]);
   const [aspect, setAspect] = useState<CreateAspect>("9:16");
@@ -22,7 +22,10 @@ export default function CreatePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const runActive = !!jobId && !complete;
+  const failed =
+    progress.failed || progress.phase === "failed" || !!progress.error;
+  // Don't treat failed jobs as "still running" just because state was once done.
+  const runActive = !!jobId && !complete && !failed;
   const briefOk = brief.trim().length >= 3;
 
   const handleFaces = useCallback((incoming: File[]) => {

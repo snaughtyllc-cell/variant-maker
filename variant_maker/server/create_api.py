@@ -162,13 +162,22 @@ class CreateJobStore:
             job.error = str(exc)
             job.events.append({"state": "error", "job_id": job.job_id, "error": str(exc)})
         finally:
-            job.state = "done"
+            # Prefer explicit failed so clients don't treat error jobs as success via state alone.
+            job.state = "failed" if job.error else "done"
             if not job.events or job.events[-1].get("state") != "job-done":
                 job.events.append({"state": "job-done", "job_id": job.job_id})
             self._done[job.job_id].set()
 
     def get(self, job_id: str) -> CreateJob | None:
         return self._jobs.get(job_id)
+
+    def list_jobs(self) -> list[CreateJob]:
+        with self._lock:
+            return sorted(
+                self._jobs.values(),
+                key=lambda j: j.created_utc,
+                reverse=True,
+            )
 
     def wait(self, job_id: str, timeout: float = 30.0) -> bool:
         ev = self._done.get(job_id)
@@ -183,8 +192,8 @@ class CreateJobStore:
 
 def _phase_and_message(job: CreateJob) -> tuple[str, str | None]:
     """Map runner events → UI phase (queued|directing|generating|saving|done|failed)."""
-    if job.error:
-        return "failed", job.error
+    if job.error or job.state == "failed":
+        return "failed", job.error or "Create job failed"
     if job.state == "done":
         return "done", None
     phase = "queued"
@@ -204,7 +213,7 @@ def _phase_and_message(job: CreateJob) -> tuple[str, str | None]:
             phase = "generating"
             message = e.get("message") or message
         elif s == "error":
-            return "failed", e.get("error") or job.error
+            return "failed", e.get("error") or job.error or "Create job failed"
         elif s == "job-done":
             phase = "done"
     return phase, message
@@ -280,6 +289,11 @@ def build_create_router(store: CreateJobStore) -> APIRouter:
             created_utc=job.created_utc,
         )
 
+    @router.get("/api/create/jobs", response_model=list[CreateJobDetail])
+    def list_jobs() -> list[CreateJobDetail]:
+        """Newest-first create jobs for Gallery / Spoof-this handoff."""
+        return [_detail(j) for j in store.list_jobs()]
+
     @router.get("/api/create/jobs/{job_id}", response_model=CreateJobDetail)
     def get_job(job_id: str) -> CreateJobDetail:
         job = store.get(job_id)
@@ -299,7 +313,7 @@ def build_create_router(store: CreateJobStore) -> APIRouter:
                 while sent < len(job.events):
                     yield {"data": json.dumps(job.events[sent])}
                     sent += 1
-                if job.state == "done" and sent >= len(job.events):
+                if job.state in ("done", "failed") and sent >= len(job.events):
                     # ensure terminal event even if runner forgot job-done
                     if not job.events or job.events[-1].get("state") != "job-done":
                         yield {"data": json.dumps({"state": "job-done", "job_id": job_id})}

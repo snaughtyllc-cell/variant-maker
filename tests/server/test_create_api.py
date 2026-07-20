@@ -134,3 +134,45 @@ def test_mount_create_routes_on_app():
     resp = client.get("/api/create/jobs/nope")
     assert resp.status_code == 404
     assert "create job" in resp.json()["detail"]
+
+
+def test_list_create_jobs_newest_first(tmp_path):
+    client, store = _client(tmp_path)
+    a = client.post(
+        "/api/create/jobs",
+        data={"brief": "first", "aspect": "9:16", "count": "1"},
+        files=[("face_refs", ("a.jpg", b"a", "image/jpeg"))],
+    ).json()["job_id"]
+    store.wait(a, timeout=5)
+    # Bump created_utc so newest-first ordering is deterministic within the same second.
+    store.get(a).created_utc = "2026-07-20T00:00:00Z"
+    b = client.post(
+        "/api/create/jobs",
+        data={"brief": "second", "aspect": "9:16", "count": "1"},
+        files=[("face_refs", ("b.jpg", b"b", "image/jpeg"))],
+    ).json()["job_id"]
+    store.wait(b, timeout=5)
+    store.get(b).created_utc = "2026-07-20T00:00:01Z"
+    listed = client.get("/api/create/jobs").json()
+    assert len(listed) == 2
+    assert listed[0]["job_id"] == b
+    assert listed[1]["job_id"] == a
+    assert listed[0]["stills"][0]["handoff_url"].endswith(".mp4")
+
+
+def test_create_job_failure_sets_state_failed_and_error(tmp_path):
+    class BoomRunner:
+        def run(self, **_kwargs):
+            raise RuntimeError("comfy unreachable")
+
+    client, store = _client(tmp_path, runner=BoomRunner())
+    job_id = client.post(
+        "/api/create/jobs",
+        data={"brief": "will fail", "aspect": "9:16", "count": "1"},
+        files=[("face_refs", ("f.jpg", b"f", "image/jpeg"))],
+    ).json()["job_id"]
+    assert store.wait(job_id, timeout=5)
+    detail = client.get(f"/api/create/jobs/{job_id}").json()
+    assert detail["state"] == "failed"
+    assert detail["phase"] == "failed"
+    assert "comfy unreachable" in (detail["error"] or "")

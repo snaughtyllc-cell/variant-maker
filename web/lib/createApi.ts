@@ -29,6 +29,9 @@ export const createEventsUrl = (jobId: string) => `/api/create/jobs/${jobId}/eve
 export const getCreateJob = (id: string) =>
   fetch(`/api/create/jobs/${id}`, { cache: "no-store" }).then(json<CreateJobDetail>);
 
+export const getCreateJobs = () =>
+  fetch("/api/create/jobs", { cache: "no-store" }).then(json<CreateJobDetail[]>);
+
 export interface CreateJobInput {
   brief: string;
   aspect: CreateAspect;

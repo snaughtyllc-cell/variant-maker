@@ -84,4 +84,53 @@ describe("createProgress reducer", () => {
     expect(run.phase).toBe("failed");
     expect(run.error).toBe("comfy down");
   });
+
+  it("job-done after error keeps failed (does not treat as success)", () => {
+    let run = reduceCreateEvent(initCreateRun(1), {
+      state: "error",
+      error: "director timeout",
+    });
+    run = reduceCreateEvent(run, { state: "job-done" });
+    expect(run.complete).toBe(true);
+    expect(run.failed).toBe(true);
+    expect(run.phase).toBe("failed");
+    expect(run.error).toBe("director timeout");
+  });
+
+  it("applyCreateJobDetail treats state/phase failed + error", () => {
+    const detail: CreateJobDetail = {
+      job_id: "c2",
+      brief: "broken",
+      aspect: "9:16",
+      count: 1,
+      created_utc: "2026-07-20T00:00:00Z",
+      state: "failed",
+      phase: "failed",
+      message: null,
+      stills: [],
+      error: "PROMPT_LLM_API_KEY missing",
+    };
+    const run = applyCreateJobDetail(initCreateRun(1), detail);
+    expect(run.failed).toBe(true);
+    expect(run.complete).toBe(true);
+    expect(run.phase).toBe("failed");
+    expect(run.error).toContain("PROMPT_LLM");
+  });
+});
+
+describe("spoofHandoff queue", () => {
+  it("round-trips pending handoff via sessionStorage", async () => {
+    const { queueSpoofHandoff, consumeSpoofHandoff } = await import(
+      "@/lib/spoofHandoff"
+    );
+    queueSpoofHandoff({
+      url: "/api/create/jobs/c1/files/still_01.mp4",
+      filename: "still_01.mp4",
+    });
+    expect(consumeSpoofHandoff()).toEqual({
+      url: "/api/create/jobs/c1/files/still_01.mp4",
+      filename: "still_01.mp4",
+    });
+    expect(consumeSpoofHandoff()).toBeNull();
+  });
 });

@@ -4,6 +4,8 @@ Installs **ComfyUI from scratch** on a RunPod volume and pins one InstantID / SD
 workflow for the Create API (`comfy_client.py`). You do **not** need a pre-built
 Comfy setup.
 
+Create and Spoof share one pod GPU — run them **sequentially** (not in parallel).
+
 ## What this ships
 
 | Path | Role |
@@ -14,26 +16,76 @@ Comfy setup.
 
 Locked stack: **SDXL** (`sd_xl_base_1.0.safetensors`) + **cubiq InstantID** (not FaceID Plus V2).
 
-## One-time bootstrap (on the Pod)
+---
+
+## Copy-paste: one-time bootstrap (on the Pod)
 
 ```bash
 cd /workspace/variant-maker   # or your clone path
+
+# Install ComfyUI + InstantID custom node + models (safe to re-run)
 bash deploy/comfy/bootstrap.sh
-```
 
-Models land on the volume at `/workspace/comfy-models` so restarts do not re-download.
-Then start:
-
-```bash
+# Start ComfyUI on localhost:8188 (blocks; run in tmux/screen or background)
 bash deploy/comfy/start-comfy.sh
 ```
 
-Or bootstrap and start in one shot: `START_AFTER=1 bash deploy/comfy/bootstrap.sh`.
+Bootstrap + start in one shot:
 
-## Wire into pod start (optional one-liner)
+```bash
+START_AFTER=1 bash deploy/comfy/bootstrap.sh
+```
 
-Prefer **not** heavily editing `deploy/pod/start.sh` while Spoof WIP is open.
-From that script, when NVIDIA is present:
+Models land on the volume at `/workspace/comfy-models` so restarts do not re-download.
+
+Smoke check:
+
+```bash
+curl -fsS http://127.0.0.1:8188/system_stats
+# Expect JSON with devices; do not expose 8188 on the RunPod HTTP proxy.
+```
+
+---
+
+## Required env (variant-server / Create API)
+
+Export these before starting `variant-server` (or put them in the pod start env):
+
+```bash
+# Prompt Director (Kimi / Moonshot — or any OpenAI-compatible chat API)
+export PROMPT_LLM_BASE_URL="${PROMPT_LLM_BASE_URL:-https://api.moonshot.ai/v1}"
+export PROMPT_LLM_API_KEY="sk-..."          # required — Create refuses to run without this
+export PROMPT_LLM_MODEL="${PROMPT_LLM_MODEL:-kimi-k2.5}"
+
+# ComfyUI (localhost on the same pod)
+export COMFY_URL="${COMFY_URL:-http://127.0.0.1:8188}"
+export COMFY_WORKFLOW_PATH="${COMFY_WORKFLOW_PATH:-deploy/comfy/workflows/create_instantid_sdxl.json}"
+```
+
+| Env | Required | Default / example | Meaning |
+|-----|----------|-------------------|---------|
+| `PROMPT_LLM_API_KEY` | **yes** | — | OpenAI-compatible API key for the Prompt Director |
+| `PROMPT_LLM_BASE_URL` | no | `https://api.moonshot.ai/v1` | Chat completions base URL (Grok: `https://api.x.ai/v1`) |
+| `PROMPT_LLM_MODEL` | no | `kimi-k2.5` | Model id (`grok-3`, etc.) |
+| `COMFY_URL` | no | `http://127.0.0.1:8188` | ComfyUI HTTP base (localhost only) |
+| `COMFY_WORKFLOW_PATH` | no | `deploy/comfy/workflows/create_instantid_sdxl.json` | API-format workflow JSON |
+
+Without `PROMPT_LLM_API_KEY`, Create routes still mount but jobs fail immediately with a clear config error.
+
+---
+
+## Create + Spoof on the same pod (sequential GPU)
+
+Both Create (Comfy InstantID) and Spoof HQ / Real-ESRGAN want the **same NVIDIA GPU**.
+
+**Policy:** one GPU owner at a time.
+
+1. Start Comfy (`start-comfy.sh`) and leave it up — Create jobs talk to it over `COMFY_URL`.
+2. Run **Create** jobs (brief → stills → H.264 handoff MP4) **or** Spoof / neural upscale jobs — not both at once.
+3. After Create finishes, use Gallery **Spoof this** to send the handoff MP4 into Spoof Studio (`POST /api/jobs`).
+4. While Spoof HQ / Real-ESRGAN is running, pause Create (and ideally idle Comfy) so VRAM does not OOM.
+
+Wire Comfy into pod start when NVIDIA is present (optional):
 
 ```bash
 if command -v nvidia-smi >/dev/null 2>&1; then
@@ -42,24 +94,14 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 fi
 ```
 
-Add `COMFY_PID` to the existing `cleanup` trap / `kill` list.
+Add `COMFY_PID` to the existing `cleanup` trap / `kill` list in `deploy/pod/start.sh`.
 
-## Server env (Create API)
-
-Point the FastAPI Create runner at this Comfy instance:
-
-| Env | Default / example | Meaning |
-|-----|-------------------|---------|
-| `COMFY_URL` | `http://127.0.0.1:8188` | ComfyUI HTTP base (localhost only) |
-| `COMFY_WORKFLOW_PATH` | `deploy/comfy/workflows/create_instantid_sdxl.json` | API-format workflow JSON |
-
-Also used by the Prompt Director (separate from Comfy): `PROMPT_LLM_BASE_URL`,
-`PROMPT_LLM_API_KEY`, `PROMPT_LLM_MODEL`.
+---
 
 ## Workflow injection map
 
 `create_instantid_sdxl.json` is Comfy **API format** (digit node ids). The Create
-runner should overwrite these before `POST /prompt`:
+runner overwrites these before `POST /prompt`:
 
 | Node | Field | Purpose |
 |------|-------|---------|
@@ -85,15 +127,8 @@ watermark bias on exact 1024), `16:9` → 1920×1080.
 | InstantID ControlNet | `comfy-models/controlnet/instantid/diffusion_pytorch_model.safetensors` |
 | InsightFace antelopev2 | `comfy-models/insightface/models/antelopev2/*.onnx` |
 
-## Smoke check
-
-```bash
-curl -fsS http://127.0.0.1:8188/system_stats
-# Expect JSON with devices; do not expose 8188 on the RunPod HTTP proxy.
-```
-
 ## Notes
 
 - Comfy listens on **127.0.0.1 only** — Create mode talks to it from `variant-server` on the same pod.
 - Face analysis provider in the workflow is **CUDA** (GPU pods). If you must run CPU-only, change node `38` `provider` to `CPU`.
-- Create jobs and HQ spoof/neural jobs must not share the GPU at once (server-side lock — owned by the Create API workstream).
+- Gallery **Spoof this** fetches `handoff_url` (short H.264 MP4) and opens Spoof Studio with that file ready.

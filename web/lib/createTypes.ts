@@ -74,6 +74,7 @@ export interface CreateEvent {
   filename?: string | null;
   handoff_filename?: string | null;
   file_url?: string | null;
+  handoff_url?: string | null;
   status?: string | null;
   message?: string | null;
   error?: string | null;

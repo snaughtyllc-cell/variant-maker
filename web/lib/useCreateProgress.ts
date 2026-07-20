@@ -35,11 +35,18 @@ export function useCreateProgress(
       } catch {
         return;
       }
-      // Fill file_url for still-done if server only sent filename
-      if ((ev.state === "still-done" || (ev.state === "done" && ev.filename)) && ev.filename && !ev.file_url) {
+      // Fill file_url / handoff_url for still-done if server only sent filenames
+      if ((ev.state === "still-done" || (ev.state === "done" && ev.filename)) && ev.filename) {
+        const handoff =
+          ev.handoff_filename ||
+          (ev.filename.endsWith(".png")
+            ? ev.filename.replace(/\.png$/i, ".mp4")
+            : `${ev.filename}.mp4`);
         ev = {
           ...ev,
-          file_url: `/api/create/jobs/${jobId}/files/${ev.filename}`,
+          file_url: ev.file_url || `/api/create/jobs/${jobId}/files/${ev.filename}`,
+          handoff_filename: handoff,
+          handoff_url: ev.handoff_url || `/api/create/jobs/${jobId}/files/${handoff}`,
         };
       }
       const next = reduceCreateEvent(runRef.current, ev);
