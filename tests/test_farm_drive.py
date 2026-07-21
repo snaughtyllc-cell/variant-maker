@@ -134,3 +134,26 @@ def test_build_service_requires_some_credential():
     g = d.GoogleDrive()  # no creds, no injected service
     with pytest.raises(ValueError, match="oauth_token|service_account"):
         _ = g.service
+
+
+def test_get_file_returns_metadata(tmp_path):
+    fake = FakeDrive()
+    root = fake.make_folder("root")
+    fid = fake.put_file("a.mp4", _write(tmp_path / "a.mp4"), parent=root)
+    meta = fake.get_file(fid)
+    assert meta.id == fid and meta.name == "a.mp4" and not meta.is_folder
+    assert fake.get_file(root).is_folder
+
+
+def test_trash_removes_from_list(tmp_path):
+    fake = FakeDrive()
+    root = fake.make_folder("root")
+    fid = fake.upload(_write(tmp_path / "m.txt", b"x"), root, name="marker.txt")
+    assert any(f.id == fid for f in fake.list_files(root))
+    fake.trash(fid)
+    assert all(f.id != fid for f in fake.list_files(root))
+
+
+def test_drive_client_requires_get_file_and_trash():
+    assert hasattr(d.DriveClient, "get_file")
+    assert hasattr(d.DriveClient, "trash")

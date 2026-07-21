@@ -47,6 +47,14 @@ class DriveClient(ABC):
     def upload(self, local_path: str, parent_id: str, name: str | None = None) -> str:
         """Upload a local file into `parent_id`; return the new file id."""
 
+    @abstractmethod
+    def get_file(self, file_id: str) -> DriveFile:
+        """Metadata for one file/folder id."""
+
+    @abstractmethod
+    def trash(self, file_id: str) -> None:
+        """Trash (or permanently delete) `file_id` so it no longer appears in list_files."""
+
     def find_or_create_folder(self, name: str, parent_id: str) -> str:
         """Idempotent: reuse a same-named child folder, else create one."""
         existing = self.find_folder(name, parent_id)
@@ -181,3 +189,15 @@ class GoogleDrive(DriveClient):
             body=meta, media_body=media, fields="id", supportsAllDrives=True
         ).execute()
         return res["id"]
+
+    def get_file(self, file_id: str) -> DriveFile:
+        res = self.service.files().get(
+            fileId=file_id, fields="id, name, mimeType, md5Checksum",
+            supportsAllDrives=True,
+        ).execute()
+        return _to_drive_file(res)
+
+    def trash(self, file_id: str) -> None:  # pragma: no cover - needs google libs
+        self.service.files().update(
+            fileId=file_id, body={"trashed": True}, supportsAllDrives=True,
+        ).execute()

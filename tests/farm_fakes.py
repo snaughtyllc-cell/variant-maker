@@ -59,6 +59,14 @@ class FakeDrive(DriveClient):
         return self._store_file(name or os.path.basename(local_path), local_path, parent_id,
                                 "application/octet-stream")
 
+    def get_file(self, file_id: str) -> DriveFile:
+        n = self._nodes[file_id]  # KeyError if missing
+        md5 = self._md5(n["blob"]) if n["blob"] else None
+        return DriveFile(id=file_id, name=n["name"], mime_type=n["mime_type"], md5=md5)
+
+    def trash(self, file_id: str) -> None:
+        del self._nodes[file_id]
+
     # ---- internals ----
     def _store_file(self, name: str, local_path: str, parent: str, mime_type: str) -> str:
         fid = next(self._ids)
