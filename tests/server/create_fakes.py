@@ -70,8 +70,11 @@ class FakeCreateRunner:
         identities: list[str],
         out_dir: str,
         on_event: Callable[[dict], None],
+        lora_name: str | None = None,
+        lora_strength: float | None = None,
+        lora_trigger_word: str | None = None,
     ) -> list[dict]:
-        _ = (brief, aspect, face_refs, identities)
+        _ = (brief, aspect, face_refs, identities, lora_name, lora_strength, lora_trigger_word)
         os.makedirs(out_dir, exist_ok=True)
         stills = []
         on_event({"state": "expanding", "job_id": job_id})

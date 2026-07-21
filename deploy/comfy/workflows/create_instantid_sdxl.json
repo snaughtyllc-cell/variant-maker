@@ -8,6 +8,25 @@
       "title": "Load SDXL Checkpoint"
     }
   },
+  "50": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "lora_name": "create_placeholder.safetensors",
+      "strength_model": 0.8,
+      "strength_clip": 0.8,
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Load Identity LoRA (inject when selected)"
+    }
+  },
   "11": {
     "class_type": "InstantIDModelLoader",
     "inputs": {
@@ -49,7 +68,7 @@
     "inputs": {
       "text": "creator portrait, soft natural light, vertical phone selfie, sharp focus, detailed face",
       "clip": [
-        "4",
+        "50",
         1
       ]
     },
@@ -62,7 +81,7 @@
     "inputs": {
       "text": "deformed, glitch, noisy, low quality, blurry, watermark, text, logo, extra fingers, bad anatomy",
       "clip": [
-        "4",
+        "50",
         1
       ]
     },
@@ -90,7 +109,7 @@
         0
       ],
       "model": [
-        "4",
+        "50",
         0
       ],
       "positive": [

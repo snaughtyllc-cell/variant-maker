@@ -4,6 +4,8 @@ export type CreateAspect = "9:16" | "1:1" | "16:9";
 
 export type CreateJobState = "running" | "done" | "failed";
 
+export type IdentityMode = "face" | "lora" | "both";
+
 /** High-level job phase exposed on GET detail (and mapped from SSE). */
 export type CreatePhase =
   | "queued"
@@ -43,6 +45,9 @@ export interface CreateJobDetail {
   stills: CreateStillOut[];
   error: string | null;
   identities?: string[];
+  identity_mode?: IdentityMode;
+  lora_id?: string | null;
+  lora_strength?: number | null;
   prompt?: { positive: string; negative: string; notes?: string } | null;
 }
 
@@ -54,6 +59,22 @@ export interface CreateJobResponse {
   brief: string;
   state: CreateJobState;
   created_utc: string;
+}
+
+export interface LoraOut {
+  id: string;
+  name: string;
+  trigger_word: string;
+  default_strength: number;
+  filename: string;
+  created_utc: string;
+  comfy_name: string;
+}
+
+export interface LoraTrainStatus {
+  status: "unavailable";
+  message: string;
+  docs: string;
 }
 
 /**
@@ -87,3 +108,8 @@ export const CREATE_ASPECTS: readonly CreateAspect[] = ["9:16", "1:1", "16:9"] a
 export const CREATE_COUNT_MIN = 1;
 export const CREATE_COUNT_MAX = 4;
 export const CREATE_FACE_REF_MAX = 4;
+export const CREATE_IDENTITY_MODES: readonly IdentityMode[] = [
+  "face",
+  "lora",
+  "both",
+] as const;

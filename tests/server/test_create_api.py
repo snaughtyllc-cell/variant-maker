@@ -36,7 +36,7 @@ def test_create_job_returns_201_and_job_id(tmp_path):
     store.wait(body["job_id"], timeout=5)
 
 
-def test_create_job_requires_brief_and_face_ref(tmp_path):
+def test_create_job_requires_brief_and_identity(tmp_path):
     client, _ = _client(tmp_path)
     missing_brief = client.post(
         "/api/create/jobs",
@@ -45,11 +45,11 @@ def test_create_job_requires_brief_and_face_ref(tmp_path):
     )
     assert missing_brief.status_code == 422
 
-    missing_face = client.post(
+    missing_identity = client.post(
         "/api/create/jobs",
         data={"brief": "hotel bathroom", "aspect": "9:16", "count": "1"},
     )
-    assert missing_face.status_code in (400, 422)
+    assert missing_identity.status_code in (400, 422)
 
 
 def test_get_create_job_detail_lists_stills_and_handoff(tmp_path):

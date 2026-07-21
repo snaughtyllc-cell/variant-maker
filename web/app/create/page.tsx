@@ -6,11 +6,15 @@ import { AspectPicker } from "@/components/create/AspectPicker";
 import { CountStepper } from "@/components/create/CountStepper";
 import { CreateGenerateButton } from "@/components/create/CreateGenerateButton";
 import { CreateProgressPanel } from "@/components/create/CreateProgressPanel";
+import { IdentityModeTabs } from "@/components/create/IdentityModeTabs";
+import { LoraIdentityPanel } from "@/components/create/LoraIdentityPanel";
 import { createCreateJob } from "@/lib/createApi";
 import { useCreateRun } from "@/lib/createStore";
 import {
   CREATE_FACE_REF_MAX,
   CreateAspect,
+  IdentityMode,
+  LoraOut,
 } from "@/lib/createTypes";
 
 export default function CreatePage() {
@@ -19,14 +23,33 @@ export default function CreatePage() {
   const [faceRefs, setFaceRefs] = useState<File[]>([]);
   const [aspect, setAspect] = useState<CreateAspect>("9:16");
   const [count, setCount] = useState(1);
+  const [identityMode, setIdentityMode] = useState<IdentityMode>("face");
+  const [selectedLora, setSelectedLora] = useState<LoraOut | null>(null);
+  const [loraStrength, setLoraStrength] = useState(0.8);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const failed =
     progress.failed || progress.phase === "failed" || !!progress.error;
-  // Don't treat failed jobs as "still running" just because state was once done.
   const runActive = !!jobId && !complete && !failed;
   const briefOk = brief.trim().length >= 3;
+
+  const showFaces = identityMode === "face" || identityMode === "both";
+  const showLoras = identityMode === "lora" || identityMode === "both";
+  const facesOk = !showFaces || faceRefs.length > 0;
+  const loraOk = !showLoras || !!selectedLora;
+  const identityOk = facesOk && loraOk;
+
+  const identityHint =
+    identityMode === "face"
+      ? "InstantID"
+      : identityMode === "lora"
+        ? selectedLora
+          ? `LoRA · ${selectedLora.name}`
+          : "pick a LoRA"
+        : selectedLora
+          ? `Both · ${selectedLora.name}`
+          : "Both";
 
   const handleFaces = useCallback((incoming: File[]) => {
     setFaceRefs((prev) => {
@@ -40,8 +63,13 @@ export default function CreatePage() {
     setFaceRefs((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function handleModeChange(mode: IdentityMode) {
+    setIdentityMode(mode);
+    setError(null);
+  }
+
   async function handleGenerate() {
-    if (busy || runActive || !briefOk || faceRefs.length === 0) return;
+    if (busy || runActive || !briefOk || !identityOk) return;
     setError(null);
     setBusy(true);
     try {
@@ -49,7 +77,9 @@ export default function CreatePage() {
         brief: brief.trim(),
         aspect,
         count,
-        faceRefs,
+        faceRefs: showFaces ? faceRefs : [],
+        loraId: showLoras ? selectedLora?.id : null,
+        loraStrength: showLoras ? loraStrength : null,
       });
       start(resp);
     } catch (e) {
@@ -120,10 +150,30 @@ export default function CreatePage() {
             fontWeight: 700,
           }}
         >
-          2 · Face refs
+          2 · Identity
         </p>
-        <FaceDropZone onFiles={handleFaces} currentCount={faceRefs.length} />
-        <FaceRefList files={faceRefs} onRemove={handleRemove} />
+        <IdentityModeTabs
+          value={identityMode}
+          onChange={handleModeChange}
+          disabled={runActive}
+        />
+
+        {showFaces && (
+          <div style={{ marginBottom: showLoras ? 16 : 0 }}>
+            <FaceDropZone onFiles={handleFaces} currentCount={faceRefs.length} />
+            <FaceRefList files={faceRefs} onRemove={handleRemove} />
+          </div>
+        )}
+
+        {showLoras && (
+          <LoraIdentityPanel
+            selectedId={selectedLora?.id ?? null}
+            strength={loraStrength}
+            onSelect={setSelectedLora}
+            onStrengthChange={setLoraStrength}
+            disabled={runActive}
+          />
+        )}
 
         <div style={{ marginTop: 20 }}>
           <AspectPicker value={aspect} onChange={setAspect} disabled={runActive} />
@@ -139,9 +189,11 @@ export default function CreatePage() {
         >
           <CountStepper value={count} onChange={setCount} disabled={runActive} />
           <CreateGenerateButton
-            faceCount={faceRefs.length}
+            faceCount={showFaces ? faceRefs.length : 0}
             stillCount={count}
             briefOk={briefOk}
+            identityOk={identityOk}
+            identityHint={identityHint}
             onClick={handleGenerate}
             disabled={runActive}
             busy={busy}

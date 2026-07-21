@@ -12,9 +12,10 @@ Create and Spoof share one pod GPU — run them **sequentially** (not in paralle
 |------|------|
 | `bootstrap.sh` | Clone ComfyUI + InstantID node, download models to `/workspace/comfy-models`, wire paths |
 | `start-comfy.sh` | Start ComfyUI on `127.0.0.1:8188` (not public) |
-| `workflows/create_instantid_sdxl.json` | Locked **API-format** prompt graph (HTTP `/prompt`) |
+| `workflows/create_instantid_sdxl.json` | Locked **API-format** prompt graph (InstantID + optional `LoraLoader`) |
+| `train_lora.md` | Offline LoRA train notes — upload `.safetensors` via Create UI / API |
 
-Locked stack: **SDXL** (`sd_xl_base_1.0.safetensors`) + **cubiq InstantID** (not FaceID Plus V2).
+Locked stack: **SDXL** (`sd_xl_base_1.0.safetensors`) + **cubiq InstantID** + optional identity **LoRA**.
 
 ---
 
@@ -60,6 +61,8 @@ export PROMPT_LLM_MODEL="${PROMPT_LLM_MODEL:-kimi-k2.5}"
 # ComfyUI (localhost on the same pod)
 export COMFY_URL="${COMFY_URL:-http://127.0.0.1:8188}"
 export COMFY_WORKFLOW_PATH="${COMFY_WORKFLOW_PATH:-deploy/comfy/workflows/create_instantid_sdxl.json}"
+# Optional — where uploaded Create LoRAs are copied for LoraLoader (default under VM_DATA_DIR)
+# export COMFY_LORAS_DIR="/workspace/comfy-models/loras"
 ```
 
 | Env | Required | Default / example | Meaning |

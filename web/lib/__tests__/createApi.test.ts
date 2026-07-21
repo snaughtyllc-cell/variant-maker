@@ -14,6 +14,45 @@ describe("createApi helpers", () => {
     );
     expect(createApi.createEventsUrl("c1")).toBe("/api/create/jobs/c1/events");
   });
+
+  it("createCreateJob FormData includes lora fields when set", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          job_id: "j1",
+          state: "running",
+          brief: "x",
+          aspect: "9:16",
+          count: 1,
+          created_utc: "2026-07-21T00:00:00Z",
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const face = new File([new Uint8Array([1, 2])], "face.jpg", {
+        type: "image/jpeg",
+      });
+      await createApi.createCreateJob({
+        brief: "mirror",
+        aspect: "9:16",
+        count: 1,
+        faceRefs: [face],
+        loraId: "lora123",
+        loraStrength: 0.85,
+      });
+      expect(calls).toHaveLength(1);
+      const fd = calls[0].init?.body as FormData;
+      expect(fd.get("lora_id")).toBe("lora123");
+      expect(fd.get("lora_strength")).toBe("0.85");
+      expect(fd.getAll("face_refs")).toHaveLength(1);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
 });
 
 describe("createProgress reducer", () => {

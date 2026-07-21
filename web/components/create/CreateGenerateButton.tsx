@@ -4,6 +4,8 @@ interface CreateGenerateButtonProps {
   faceCount: number;
   stillCount: number;
   briefOk: boolean;
+  identityOk: boolean;
+  identityHint: string;
   onClick: () => void;
   disabled?: boolean;
   busy?: boolean;
@@ -13,11 +15,13 @@ export function CreateGenerateButton({
   faceCount,
   stillCount,
   briefOk,
+  identityOk,
+  identityHint,
   onClick,
   disabled,
   busy,
 }: CreateGenerateButtonProps) {
-  const isDisabled = disabled || busy || faceCount === 0 || !briefOk;
+  const isDisabled = disabled || busy || !identityOk || !briefOk;
 
   return (
     <button
@@ -52,7 +56,9 @@ export function CreateGenerateButton({
       <small style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85 }}>
         {busy
           ? "in progress"
-          : `${stillCount} still${stillCount !== 1 ? "s" : ""} · ${faceCount} ref${faceCount !== 1 ? "s" : ""}`}
+          : `${stillCount} still${stillCount !== 1 ? "s" : ""} · ${identityHint}${
+              faceCount > 0 ? ` · ${faceCount} ref${faceCount !== 1 ? "s" : ""}` : ""
+            }`}
       </small>
     </button>
   );

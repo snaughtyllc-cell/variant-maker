@@ -1,6 +1,7 @@
 """Create-mode FastAPI router + in-memory job store.
 
 Self-contained so Spoof progress WIP in app.py is untouched until a one-line mount.
+Supports InstantID face refs, uploaded identity LoRAs, or both.
 """
 from __future__ import annotations
 
@@ -17,10 +18,14 @@ from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
+from .create_loras import DEFAULT_STRENGTH, LoraLibrary, LoraRecord
 from .create_models import (
     CreateJobDetail,
     CreateJobResponse,
     CreateStillOut,
+    IdentityMode,
+    LoraOut,
+    LoraTrainStatus,
     PromptOut,
 )
 from .workspace import Workspace
@@ -40,12 +45,35 @@ class CreateRunnerLike(Protocol):
         identities: list[str],
         out_dir: str,
         on_event,
+        lora_name: str | None = None,
+        lora_strength: float | None = None,
+        lora_trigger_word: str | None = None,
     ) -> list[dict]: ...
 
 
 def _now() -> str:
     return (_dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
             .isoformat().replace("+00:00", "Z"))
+
+
+def _identity_mode(has_faces: bool, has_lora: bool) -> IdentityMode:
+    if has_faces and has_lora:
+        return "both"
+    if has_lora:
+        return "lora"
+    return "face"
+
+
+def _lora_out(rec: LoraRecord) -> LoraOut:
+    return LoraOut(
+        id=rec.id,
+        name=rec.name,
+        trigger_word=rec.trigger_word,
+        default_strength=rec.default_strength,
+        filename=rec.filename,
+        created_utc=rec.created_utc,
+        comfy_name=rec.comfy_name,
+    )
 
 
 @dataclass
@@ -64,6 +92,9 @@ class CreateJob:
     count: int
     created_utc: str
     identities: list[str] = field(default_factory=list)
+    identity_mode: IdentityMode = "face"
+    lora_id: str | None = None
+    lora_strength: float | None = None
     state: str = "running"
     events: list[dict] = field(default_factory=list)
     stills: list[CreateStillInfo] = field(default_factory=list)
@@ -74,12 +105,29 @@ class CreateJob:
 class CreateJobStore:
     """In-memory Create jobs; parallel to Spoof JobStore, separate namespace."""
 
-    def __init__(self, workspace: Workspace, runner: CreateRunnerLike) -> None:
+    def __init__(
+        self,
+        workspace: Workspace,
+        runner: CreateRunnerLike,
+        *,
+        lora_library: LoraLibrary | None = None,
+    ) -> None:
         self._ws = workspace
         self._runner = runner
+        self._loras = lora_library or LoraLibrary(
+            os.path.join(workspace.root, "create_loras"),
+            comfy_loras_dir=os.environ.get(
+                "COMFY_LORAS_DIR",
+                os.path.join(workspace.root, "comfy-models", "loras"),
+            ),
+        )
         self._jobs: dict[str, CreateJob] = {}
         self._lock = threading.Lock()
         self._done: dict[str, threading.Event] = {}
+
+    @property
+    def loras(self) -> LoraLibrary:
+        return self._loras
 
     def create_job(
         self,
@@ -87,8 +135,10 @@ class CreateJobStore:
         brief: str,
         aspect: str,
         count: int,
-        face_refs: list[tuple[str, bytes]],
+        face_refs: list[tuple[str, bytes]] | None = None,
         identities: list[str] | None = None,
+        lora_id: str | None = None,
+        lora_strength: float | None = None,
     ) -> CreateJob:
         if aspect not in ALLOWED_ASPECTS:
             raise ValueError(f"aspect must be one of {ALLOWED_ASPECTS}")
@@ -96,8 +146,22 @@ class CreateJobStore:
             raise ValueError("count must be 1..4")
         if not brief.strip():
             raise ValueError("brief is required")
-        if not face_refs:
-            raise ValueError("at least one face_ref is required")
+
+        face_refs = list(face_refs or [])
+        lora_id = (lora_id or "").strip() or None
+        lora_rec: LoraRecord | None = None
+        if lora_id:
+            lora_rec = self._loras.get(lora_id)
+            if lora_rec is None:
+                raise ValueError(f"unknown lora_id: {lora_id}")
+        if not face_refs and lora_rec is None:
+            raise ValueError("at least one face_ref or a lora_id is required")
+
+        strength = lora_strength
+        if lora_rec is not None and strength is None:
+            strength = lora_rec.default_strength
+        if strength is not None and (strength < 0.0 or strength > 2.0):
+            raise ValueError("lora_strength must be between 0 and 2")
 
         job_id = uuid.uuid4().hex[:12]
         job_dir = os.path.join(self._ws.root, "create", job_id)
@@ -114,6 +178,7 @@ class CreateJobStore:
                 f.write(data)
             saved_refs.append((safe, data))
 
+        mode = _identity_mode(bool(saved_refs), lora_rec is not None)
         job = CreateJob(
             job_id=job_id,
             brief=brief.strip(),
@@ -121,18 +186,28 @@ class CreateJobStore:
             count=count,
             created_utc=_now(),
             identities=list(identities or ["creator"]),
+            identity_mode=mode,
+            lora_id=lora_rec.id if lora_rec else None,
+            lora_strength=strength if lora_rec else None,
         )
         with self._lock:
             self._jobs[job_id] = job
             self._done[job_id] = threading.Event()
         threading.Thread(
             target=self._run_job,
-            args=(job, saved_refs, out_dir),
+            args=(job, saved_refs, out_dir, lora_rec, strength),
             daemon=True,
         ).start()
         return job
 
-    def _run_job(self, job: CreateJob, face_refs: list[tuple[str, bytes]], out_dir: str) -> None:
+    def _run_job(
+        self,
+        job: CreateJob,
+        face_refs: list[tuple[str, bytes]],
+        out_dir: str,
+        lora_rec: LoraRecord | None,
+        lora_strength: float | None,
+    ) -> None:
         try:
             def on_event(e: dict) -> None:
                 job.events.append(e)
@@ -157,6 +232,9 @@ class CreateJobStore:
                 identities=job.identities,
                 out_dir=out_dir,
                 on_event=on_event,
+                lora_name=lora_rec.comfy_name if lora_rec else None,
+                lora_strength=lora_strength if lora_rec else None,
+                lora_trigger_word=lora_rec.trigger_word if lora_rec else None,
             )
         except Exception as exc:  # noqa: BLE001 — surface to clients via job.error
             job.error = str(exc)
@@ -246,6 +324,9 @@ def _detail(job: CreateJob) -> CreateJobDetail:
         prompt=prompt,
         error=job.error,
         identities=list(job.identities),
+        identity_mode=job.identity_mode,
+        lora_id=job.lora_id,
+        lora_strength=job.lora_strength,
     )
 
 
@@ -258,17 +339,26 @@ def build_create_router(store: CreateJobStore) -> APIRouter:
         aspect: str = Form("9:16"),
         count: int = Form(1),
         identities: str = Form("creator"),
-        face_refs: list[UploadFile] = File(...),
+        lora_id: str | None = Form(None),
+        lora_strength: float | None = Form(None),
+        face_refs: list[UploadFile] | None = File(None),
     ) -> CreateJobResponse:
         if count < 1 or count > 4:
             raise HTTPException(status_code=422, detail="count must be 1..4")
         if aspect not in ALLOWED_ASPECTS:
             raise HTTPException(status_code=422, detail=f"aspect must be one of {ALLOWED_ASPECTS}")
-        if not face_refs:
-            raise HTTPException(status_code=422, detail="at least one face_ref is required")
-        uploads = [(f.filename or f"face_{i}.jpg", await f.read()) for i, f in enumerate(face_refs)]
-        if not any(data for _, data in uploads):
-            raise HTTPException(status_code=422, detail="face_refs must not be empty")
+        uploads: list[tuple[str, bytes]] = []
+        if face_refs:
+            for i, f in enumerate(face_refs):
+                data = await f.read()
+                if data:
+                    uploads.append((f.filename or f"face_{i}.jpg", data))
+        lid = (lora_id or "").strip() or None
+        if not uploads and not lid:
+            raise HTTPException(
+                status_code=422,
+                detail="at least one face_ref or a lora_id is required",
+            )
         idents = [p.strip() for p in identities.split(",") if p.strip()] or ["creator"]
         try:
             job = store.create_job(
@@ -277,6 +367,8 @@ def build_create_router(store: CreateJobStore) -> APIRouter:
                 count=count,
                 face_refs=uploads,
                 identities=idents,
+                lora_id=lid,
+                lora_strength=lora_strength,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -329,6 +421,55 @@ def build_create_router(store: CreateJobStore) -> APIRouter:
             raise HTTPException(status_code=404, detail="file not found")
         media = "video/mp4" if filename.lower().endswith(".mp4") else "image/png"
         return FileResponse(path, media_type=media)
+
+    # --- LoRA identity library ---
+
+    @router.get("/api/create/loras", response_model=list[LoraOut])
+    def list_loras() -> list[LoraOut]:
+        return [_lora_out(r) for r in store.loras.list()]
+
+    @router.post("/api/create/loras", status_code=201, response_model=LoraOut)
+    async def upload_lora(
+        name: str = Form(...),
+        trigger_word: str = Form(""),
+        default_strength: float = Form(DEFAULT_STRENGTH),
+        file: UploadFile = File(...),
+    ) -> LoraOut:
+        data = await file.read()
+        try:
+            rec = store.loras.register(
+                name=name,
+                data=data,
+                filename=file.filename,
+                trigger_word=trigger_word,
+                default_strength=default_strength,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _lora_out(rec)
+
+    # Register /train before /{lora_id} so "train" is not captured as an id.
+    @router.post("/api/create/loras/train", response_model=LoraTrainStatus)
+    async def train_lora(
+        name: str = Form(""),
+        photos: list[UploadFile] | None = File(None),
+    ) -> LoraTrainStatus:
+        """Stub: on-pod training not wired. Prefer uploading a trained .safetensors."""
+        _ = (name, photos)
+        return LoraTrainStatus()
+
+    @router.get("/api/create/loras/{lora_id}", response_model=LoraOut)
+    def get_lora(lora_id: str) -> LoraOut:
+        rec = store.loras.get(lora_id)
+        if rec is None:
+            raise HTTPException(status_code=404, detail="lora not found")
+        return _lora_out(rec)
+
+    @router.delete("/api/create/loras/{lora_id}", status_code=204)
+    def delete_lora(lora_id: str):
+        if not store.loras.delete(lora_id):
+            raise HTTPException(status_code=404, detail="lora not found")
+        return None
 
     return router
 
