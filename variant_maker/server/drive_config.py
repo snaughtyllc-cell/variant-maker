@@ -4,8 +4,15 @@ import os
 from dataclasses import dataclass
 from typing import Literal, Mapping
 
+from .drive_oauth import OAuthTokenStore, oauth_client_configured
+
 ENV_SA_JSON = "VARIANT_DRIVE_SERVICE_ACCOUNT_JSON"
+ENV_OAUTH_CLIENT_ID = "VARIANT_DRIVE_OAUTH_CLIENT_ID"
+ENV_OAUTH_CLIENT_SECRET = "VARIANT_DRIVE_OAUTH_CLIENT_SECRET"
+ENV_OAUTH_REDIRECT_URI = "VARIANT_DRIVE_OAUTH_REDIRECT_URI"
+
 DriveStatus = Literal["ready", "not_configured", "auth_failed"]
+AuthMode = Literal["oauth", "service_account"]
 
 
 @dataclass(frozen=True)
@@ -13,6 +20,9 @@ class DriveConfigInfo:
     status: DriveStatus
     sa_email: str | None
     message: str
+    auth_mode: AuthMode | None = None
+    connected_email: str | None = None
+    oauth_available: bool = False
 
 
 def read_sa_email(sa_json_path: str) -> str | None:
@@ -25,27 +35,84 @@ def read_sa_email(sa_json_path: str) -> str | None:
     return email if isinstance(email, str) and email else None
 
 
-def resolve_drive_status(
-    sa_json_path: str | None = None,
-    *,
-    environ: Mapping[str, str] | None = None,
-) -> DriveConfigInfo:
-    env = environ if environ is not None else os.environ
-    path = sa_json_path if sa_json_path is not None else env.get(ENV_SA_JSON)
-    if not path:
-        return DriveConfigInfo(
-            "not_configured", None,
-            "Drive not configured — set VARIANT_DRIVE_SERVICE_ACCOUNT_JSON",
-        )
+def _sa_info(path: str) -> DriveConfigInfo:
     if not os.path.isfile(path):
         return DriveConfigInfo(
             "auth_failed", None,
             f"Drive service account JSON unreadable: {path}",
+            oauth_available=False,
         )
     email = read_sa_email(path)
     if email is None:
         return DriveConfigInfo(
             "auth_failed", None,
             f"Drive service account JSON invalid or missing client_email: {path}",
+            oauth_available=False,
         )
-    return DriveConfigInfo("ready", email, "Drive ready")
+    return DriveConfigInfo(
+        "ready", email, "Drive ready",
+        auth_mode="service_account",
+        connected_email=email,
+        oauth_available=False,
+    )
+
+
+def resolve_drive_status(
+    sa_json_path: str | None = None,
+    *,
+    oauth_token_path: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> DriveConfigInfo:
+    """Resolve Studio Drive readiness.
+
+    Preference order: usable OAuth refresh token → service account JSON → not configured.
+    """
+    env = environ if environ is not None else os.environ
+    oauth_ok = oauth_client_configured(env)
+
+    if oauth_token_path:
+        store = OAuthTokenStore(oauth_token_path)
+        if store.exists():
+            email = store.read_email()
+            try:
+                data = store.load()
+            except (OSError, json.JSONDecodeError, ValueError):
+                return DriveConfigInfo(
+                    "auth_failed", None,
+                    f"Drive OAuth token unreadable: {oauth_token_path}",
+                    oauth_available=oauth_ok,
+                )
+            if not data.get("refresh_token") and not data.get("token"):
+                return DriveConfigInfo(
+                    "auth_failed", None,
+                    f"Drive OAuth token missing credentials: {oauth_token_path}",
+                    oauth_available=oauth_ok,
+                )
+            return DriveConfigInfo(
+                "ready", email, "Drive ready (Google OAuth)",
+                auth_mode="oauth",
+                connected_email=email,
+                oauth_available=True,
+            )
+
+    path = sa_json_path if sa_json_path is not None else env.get(ENV_SA_JSON)
+    if path:
+        info = _sa_info(path)
+        return DriveConfigInfo(
+            info.status, info.sa_email, info.message,
+            auth_mode=info.auth_mode,
+            connected_email=info.connected_email,
+            oauth_available=oauth_ok,
+        )
+
+    if oauth_ok:
+        return DriveConfigInfo(
+            "not_configured", None,
+            "Drive not connected — Connect Google in Settings",
+            oauth_available=True,
+        )
+    return DriveConfigInfo(
+        "not_configured", None,
+        "Drive not configured — Connect Google (OAuth) or set VARIANT_DRIVE_SERVICE_ACCOUNT_JSON",
+        oauth_available=False,
+    )

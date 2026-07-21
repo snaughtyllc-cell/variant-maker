@@ -37,8 +37,12 @@ def make_runner(kind: str) -> Runner:
 
 
 def build_app(data_dir: str, runner_kind: str = "local") -> FastAPI:
-    return create_app(JobStore(Workspace(data_dir), make_runner(runner_kind)),
-                      sa_json_path=os.environ.get(ENV_SA_JSON))
+    ws = Workspace(data_dir)
+    return create_app(
+        JobStore(ws, make_runner(runner_kind)),
+        sa_json_path=os.environ.get(ENV_SA_JSON),
+        oauth_token_path=ws.oauth_token_path(),
+    )
 
 
 def main() -> None:

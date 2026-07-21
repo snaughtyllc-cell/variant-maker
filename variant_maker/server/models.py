@@ -26,6 +26,14 @@ class PlatformResultIn(BaseModel):
     result: Literal["passed", "duplicate_reject", "unknown"]
 
 
+class InFlightOut(BaseModel):
+    """Live mid-variant state for proxies that buffer SSE."""
+    index: int
+    state: str
+    attempt: int = 0
+    max_attempts: int = 0
+
+
 class SourceOut(BaseModel):
     source_id: str
     filename: str
@@ -33,6 +41,9 @@ class SourceOut(BaseModel):
     delivered: int
     shortfall: int
     variants: list[VariantOut] = []
+    in_flight: InFlightOut | None = None
+    job_state: str | None = None  # "running" | "done" — drives shortfall copy
+    failed: int = 0               # best_effort + corrupt count (Diagnostics population)
 
 
 class JobSummary(BaseModel):
@@ -49,6 +60,13 @@ class JobDetail(BaseModel):
     created_utc: str
     state: str
     sources: list[SourceOut] = []
+
+
+class JobEventsSnapshot(BaseModel):
+    """JSON replay of the in-memory event log — used when SSE is buffered by a proxy."""
+    job_id: str
+    state: str
+    events: list[dict] = []
 
 
 class CreateJobResponse(BaseModel):
@@ -68,6 +86,9 @@ class DriveStatusOut(BaseModel):
     status: str
     sa_email: str | None = None
     message: str
+    auth_mode: str | None = None
+    connected_email: str | None = None
+    oauth_available: bool = False
 
 
 class DestinationOut(BaseModel):

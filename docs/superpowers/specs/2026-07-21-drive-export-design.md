@@ -1,9 +1,9 @@
 # VaryForge Google Drive Export — Design
 
 **Date:** 2026-07-21  
-**Status:** Brainstorm approved — awaiting user spec review  
+**Status:** Implemented (SA + OAuth option C)  
 **Product name:** VaryForge (codebase: `variant-maker`)  
-**Approach:** Approach 1 — Gallery **Send to Drive** on the existing farm Drive client (service account), with destination records shaped for future OAuth.
+**Approach:** Approach 1 — Gallery **Send to Drive** on the farm `DriveClient`, with destinations. Auth: service account **or** company OAuth (option C).
 
 ---
 
@@ -12,14 +12,15 @@
 | Topic | Decision |
 |-------|----------|
 | Approach | Gallery manual “Send to Drive” (Approach 1) |
-| Auth (v1) | Company shared Drive via Google **service account** already used by farm |
+| Auth (v1) | Company shared Drive via Google **service account** (when keys available) |
+| Auth (option C) | **OAuth Web client** + refresh token on Pod — required when SA JSON keys are blocked |
 | Destinations | Saved list: friendly name + folder ID parsed from a pasted Drive folder link |
 | Trigger | Manual only — user picks destination after selecting variants |
 | What uploads | Video files only; variants with `status: "ok"` |
 | Progress | Export job with progress + success/fail; partial retry of failed items |
 | Collision | Keep source filenames; suffix on name collision in the target folder |
-| Forward-compat | Destination records include `auth_mode: "service_account"` |
-| Out of v1 | Per-user OAuth/SaaS, auto-upload, ZIP/manifest packaging, view-only public links, full Drive tree browse |
+| Forward-compat | Destination `auth_mode`: `"service_account"` or `"oauth"` |
+| Out of scope | Multi-tenant per-user SaaS OAuth, auto-upload, ZIP/manifest, public links, full tree browse |
 
 ---
 
@@ -66,22 +67,44 @@ If farm Drive extras (`google-api-python-client`, `google-auth`) or the service-
 
 ---
 
-## 3. Auth (v1)
+## 3. Auth
 
-**Mechanism:** one Google service account JSON key mounted on the Pod (same pattern as farm auth: path to a JSON file).
+Two mechanisms; **OAuth is the path that must work** when Google Cloud blocks downloadable SA keys. Prefer a stored OAuth refresh token over SA when both are present.
 
-**Folder access:** each destination folder must be shared with the service account email as **Editor** (or equivalent write access). Ownership of the folder can be any account in the company shared Drive; identity is the folder ID, not “My Drive of the SA.”
+### 3a. Service account (optional)
 
-**Probe on add:** when creating or updating a destination, the server:
+**Mechanism:** one Google service account JSON key mounted on the Pod (`VARIANT_DRIVE_SERVICE_ACCOUNT_JSON`).
+
+**Folder access:** share each destination folder with the SA email as **Editor**.
+
+### 3b. OAuth (option C — company, admin-once)
+
+**Mechanism:** Google Cloud **OAuth 2.0 Client ID** (Web application) — not an SA JSON key. Env on Pod:
+
+| Env | Purpose |
+|-----|---------|
+| `VARIANT_DRIVE_OAUTH_CLIENT_ID` | Web client ID |
+| `VARIANT_DRIVE_OAUTH_CLIENT_SECRET` | Web client secret |
+| `VARIANT_DRIVE_OAUTH_REDIRECT_URI` | Optional override; default derived from request / documented RunPod URL |
+
+**Redirect URI (RunPod proxy, same origin as UI):**  
+`https://li25cvxk21j8jn-8888.proxy.runpod.net/api/drive/oauth/callback`  
+(Next.js rewrites `/api/*` → FastAPI so cookies/redirect stay on the proxy host.)
+
+**Flow:** Settings → **Connect Google** → Google consent (Drive scope sufficient to upload into folders the signed-in user can access) → callback stores refresh token at `{workspace}/drive/oauth_token.json` → status shows connected email → destinations / Send to Drive use `GoogleDrive(oauth_token=…)`. **Disconnect** deletes the token file.
+
+**Folder access (OAuth):** the signed-in Google account must already be able to write the destination folder (owner or Editor). No SA share step.
+
+### 3c. Probe on add (both modes)
+
+When creating or updating a destination, the server:
 
 1. Parses the pasted folder URL → folder ID.
-2. Uses the farm Drive client to confirm the folder exists (metadata / list children succeeds for that id and mime is a folder).
-3. Confirms write access with a real upload probe: upload a tiny temporary marker file into the folder, then trash/delete it. Listing alone is not enough — Editor share mistakes must fail before the destination is saved. (`DriveClient` may need a small trash/delete method for cleanup; that is in scope for this feature, not a farm-runner change.)
-4. Rejects the save with a clear error if the folder is missing, not a folder, or not writable (“Cannot write to this folder — share it as Editor with `<sa-email>`”).
+2. Confirms the id is a folder via `DriveClient.get_file`.
+3. Write probe: upload a tiny marker, then trash it.
+4. Rejects with a clear error if missing / not a folder / not writable (SA message includes share-with-email when known; OAuth message names the connected account).
 
-**Runtime misconfig:** if the SA JSON path is unset, unreadable, or credentials fail to build, Drive export APIs return a structured “not configured” / “auth failed” state. The Gallery action and Destinations UI stay visible but disabled (or show the same honest banner) — never pretend upload will work.
-
-**Not in v1:** interactive OAuth consent, storing user refresh tokens, or per-operator Google identities. Destination records still carry `auth_mode: "service_account"` so a later OAuth mode can coexist without a schema break.
+**Runtime misconfig:** no usable SA and no OAuth token → Drive disabled with an honest banner. If OAuth client env is set but not connected, UI offers **Connect Google**.
 
 ---
 
@@ -94,7 +117,7 @@ If farm Drive extras (`google-api-python-client`, `google-auth`) or the service-
   "id": "dst_…",
   "name": "Reels drops",
   "folder_id": "1AbC…",
-  "auth_mode": "service_account"
+  "auth_mode": "oauth"
 }
 ```
 
@@ -103,7 +126,7 @@ If farm Drive extras (`google-api-python-client`, `google-auth`) or the service-
 | `id` | Server-assigned stable id |
 | `name` | Friendly label shown in pickers |
 | `folder_id` | Google Drive folder ID (never store the full URL as the source of truth) |
-| `auth_mode` | Always `"service_account"` in v1; reserved for future `"oauth"` |
+| `auth_mode` | `"service_account"` or `"oauth"` — matches the Drive client in use when the destination was saved |
 
 ### URL → folder ID
 
@@ -196,13 +219,14 @@ A settings surface (Studio settings or dedicated Drive destinations page — sam
 - Add / edit / delete
 - **Test access** button
 - Banner when Drive is not configured on the Pod
+- **Connect Google** / connected email + **Disconnect** when OAuth client is configured
 
 ### Gallery action
 
 - Multi-select (or current selection model) of variants → **Send to Drive**
 - Destination picker (saved destinations only — no tree browse)
 - Disabled / honest empty state when:
-  - Drive SA not configured
+  - Drive not connected (no OAuth token and no SA)
   - No destinations saved
   - Selection has no `ok` videos
 
@@ -216,7 +240,10 @@ Exact path names may match existing `/api/…` conventions; behavior is fixed:
 
 | Endpoint intent | Notes |
 |-----------------|-------|
-| Drive config status | Whether SA is configured / reachable enough to attempt exports |
+| Drive config status | Whether SA or OAuth is ready; `auth_mode`, connected email, `oauth_available` |
+| OAuth start | Redirect to Google consent |
+| OAuth callback | Exchange code → persist refresh token → redirect to Settings |
+| OAuth disconnect | Clear stored token |
 | Destinations CRUD | Create/list/update/delete |
 | Destination test | Probe write access for one destination |
 | Create export | Start job for `ok` variant refs → destination |
@@ -231,7 +258,8 @@ All mutating Drive calls go through `DriveClient` (real `GoogleDrive` on Pod; fa
 
 | Situation | User-visible outcome |
 |-----------|----------------------|
-| SA JSON missing / invalid | Drive disabled; config banner |
+| SA JSON missing / invalid and no OAuth token | Drive disabled; config banner + Connect Google when OAuth client env set |
+| OAuth not connected | Connect Google button; destinations/export disabled until ready |
 | Folder link unparseable | Validation error on save |
 | Folder not found / not writable | Probe fails; destination not saved (or test fails) |
 | Variant not `ok` or file missing | Skip or reject that item; do not mark job fully succeeded |
@@ -263,7 +291,7 @@ These stay deferred; v1 schemas avoid painting into a corner:
 | Later | Notes |
 |-------|--------|
 | Auto-upload after render | Hook on job completion; still uses destinations |
-| Per-user OAuth | New `auth_mode`; destinations may gain user binding |
+| Multi-tenant per-operator OAuth | Company admin-once OAuth is in; per-user binding deferred |
 | ZIP / manifest upload | Packaging step before or instead of loose files |
 | View-only public links | Separate sharing API; not implied by upload |
 | Full Drive tree browse | Picker UI over `list_files`; destinations remain ID-based |
@@ -272,11 +300,12 @@ These stay deferred; v1 schemas avoid painting into a corner:
 
 ## 11. Scope check
 
-This design is one implementation plan:
+Implementation plan:
 
 1. Wire Pod SA config + Drive status into Studio.
 2. Destinations CRUD + URL parse + probe.
 3. Export job + Gallery Send to Drive + progress/retry.
-4. Tests with fake Drive client.
+4. **OAuth option C:** client env, token store, start/callback/disconnect, UI Connect/Disconnect.
+5. Tests with fake Drive client + faked OAuth exchange (no live Google in CI).
 
-No farm-runner revival, no OAuth product work, and no packaging features in the same plan.
+No farm-runner revival and no packaging features in the same plan.

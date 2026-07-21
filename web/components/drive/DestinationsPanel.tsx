@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   createDestination,
   deleteDestination,
+  disconnectDriveOAuth,
   getDriveStatus,
   listDestinations,
   testDestination,
@@ -17,6 +18,7 @@ export function DestinationsPanel() {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const [name, setName] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
@@ -48,6 +50,21 @@ export function DestinationsPanel() {
   useEffect(() => {
     refresh();
   }, []);
+
+  async function handleDisconnect() {
+    if (!window.confirm("Disconnect Google Drive? Destinations stay saved but exports stop until you reconnect.")) {
+      return;
+    }
+    setDisconnecting(true);
+    try {
+      await disconnectDriveOAuth();
+      await refresh();
+    } catch (err) {
+      console.error("Failed to disconnect Drive", err);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -130,9 +147,81 @@ export function DestinationsPanel() {
 
   const driveNotReady = status != null && status.status !== "ready";
   const addFormDisabled = driveNotReady || submitting;
+  const connectedEmail = status?.connected_email || status?.sa_email || null;
+  const oauthAvailable = Boolean(status?.oauth_available);
+  const isOauth = status?.auth_mode === "oauth";
 
   return (
     <div>
+      {/* Connection card */}
+      <div
+        style={{
+          background: "var(--color-panel)",
+          border: "1px solid var(--color-line)",
+          borderRadius: 14,
+          padding: 16,
+          marginBottom: 18,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
+          Google account
+        </div>
+        {status?.status === "ready" && connectedEmail ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: "var(--color-text)" }}>
+              Connected as <b>{connectedEmail}</b>
+              {status.auth_mode ? (
+                <span style={{ color: "var(--color-muted)" }}> · {status.auth_mode}</span>
+              ) : null}
+            </div>
+            {isOauth && (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                style={{
+                  ...secondaryBtnStyle,
+                  color: "var(--color-red)",
+                  cursor: disconnecting ? "not-allowed" : "pointer",
+                  opacity: disconnecting ? 0.7 : 1,
+                }}
+              >
+                {disconnecting ? "Disconnecting…" : "Disconnect"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
+              {status?.message ?? "Checking Drive configuration…"}
+            </div>
+            {oauthAvailable ? (
+              <a
+                href="/api/drive/oauth/start"
+                style={{
+                  ...primaryBtnStyle,
+                  display: "inline-block",
+                  textAlign: "center",
+                  textDecoration: "none",
+                  width: "fit-content",
+                }}
+              >
+                Connect Google
+              </a>
+            ) : (
+              <div style={{ fontSize: 12, color: "#ffd08a" }}>
+                OAuth client not set on this Pod — ask an admin to set{" "}
+                <code>VARIANT_DRIVE_OAUTH_CLIENT_ID</code> /{" "}
+                <code>VARIANT_DRIVE_OAUTH_CLIENT_SECRET</code>.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Banner when Drive is not ready */}
       {driveNotReady && (
         <div
@@ -153,7 +242,7 @@ export function DestinationsPanel() {
             <span>⚠</span>
             <b>{status!.message}</b>
           </div>
-          {status!.sa_email && (
+          {status!.auth_mode === "service_account" && status!.sa_email && (
             <div style={{ color: "var(--color-muted)", fontSize: 12 }}>
               Share folders as Editor with {status!.sa_email}
             </div>
@@ -325,8 +414,12 @@ export function DestinationsPanel() {
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <button
                     onClick={() => handleTest(dest.id)}
-                    disabled={testingId === dest.id}
-                    style={secondaryBtnStyle}
+                    disabled={testingId === dest.id || driveNotReady}
+                    style={{
+                      ...secondaryBtnStyle,
+                      opacity: testingId === dest.id || driveNotReady ? 0.7 : 1,
+                      cursor: testingId === dest.id || driveNotReady ? "not-allowed" : "pointer",
+                    }}
                   >
                     {testingId === dest.id ? "Testing…" : "Test access"}
                   </button>

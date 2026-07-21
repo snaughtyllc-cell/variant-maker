@@ -27,10 +27,10 @@ describe("truncateFolderId", () => {
 describe("sendDisabledReason", () => {
   it("blocks when not configured", () => {
     expect(sendDisabledReason(
-      { status: "not_configured", sa_email: null, message: "Drive not configured — set VARIANT_DRIVE_SERVICE_ACCOUNT_JSON" },
+      { status: "not_configured", sa_email: null, message: "Drive not connected — Connect Google in Settings" },
       [{ id: "dst_1", name: "R", folder_id: "f", auth_mode: "service_account" }],
       [{ source_id: "s1", index: 1 }],
-    )).toMatch(/not configured/i);
+    )).toMatch(/Connect Google|not configured/i);
   });
   it("blocks when no destinations", () => {
     expect(sendDisabledReason(

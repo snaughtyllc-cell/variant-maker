@@ -3,24 +3,48 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import uuid
+from typing import Any, Callable, Mapping
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
-from .drive_config import resolve_drive_status
+from .drive_config import (
+    ENV_OAUTH_CLIENT_ID,
+    ENV_OAUTH_CLIENT_SECRET,
+    ENV_OAUTH_REDIRECT_URI,
+    resolve_drive_status,
+)
 from .drive_exports import (ExportError, ExportJob, ExportRunner, ExportStore, VariantRef,
                             build_export_files)
+from .drive_oauth import (
+    OAuthTokenStore,
+    build_authorization_url,
+    exchange_code_for_token,
+    fetch_connected_email,
+    new_oauth_state,
+    public_request_base,
+    resolve_redirect_uri,
+)
 from .drive_urls import DriveUrlError, parse_folder_id
 from .events import event_to_dict
-from .jobs import JobSource, JobStore
+from .jobs import Job, JobSource, JobStore
 from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
                      DiagnosticsItem, DriveStatusOut, ExportCreateIn, ExportFileOut, ExportJobOut,
-                     JobDetail, JobSummary, PlatformResultIn, SourceOut, VariantOut)
+                     InFlightOut, JobDetail, JobEventsSnapshot, JobSummary, PlatformResultIn,
+                     SourceOut, VariantOut)
 from .runner import LocalRunner
 from .workspace import Workspace
 from variant_maker.farm.drive import DriveClient
+
+_IN_FLIGHT_STATES = frozenset({"rendering", "checking", "rerolling", "uniqueness", "escalating"})
+_UPLOAD_META: dict[str, dict] = {}
+
+ExchangeFn = Callable[..., dict[str, Any]]
+FetchEmailFn = Callable[[dict[str, Any]], str | None]
 
 
 def _variant_out(source_id: str, v) -> VariantOut:
@@ -34,12 +58,31 @@ def _variant_out(source_id: str, v) -> VariantOut:
     )
 
 
-def _source_out(s: JobSource, *, ok_only: bool) -> SourceOut:
+def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
+    if job is None:
+        return None
+    for e in reversed(job.events):
+        if e.source_id != source_id:
+            continue
+        if e.state in _IN_FLIGHT_STATES:
+            return InFlightOut(
+                index=e.index, state=e.state, attempt=e.attempt, max_attempts=e.max_attempts,
+            )
+        if e.state == "done":
+            return None
+    return None
+
+
+def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
+    failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt"))
     return SourceOut(
         source_id=s.source_id, filename=s.filename, requested=s.requested,
         delivered=s.delivered, shortfall=s.shortfall,
         variants=[_variant_out(s.source_id, v) for v in variants],
+        in_flight=_in_flight(job, s.source_id),
+        job_state=job.state if job is not None else None,
+        failed=failed,
     )
 
 
@@ -57,9 +100,25 @@ def _export_job_out(job: ExportJob) -> ExportJobOut:
     )
 
 
-def _build_drive_client(sa_json_path: str) -> DriveClient:
+def _drive_status_out(info) -> DriveStatusOut:
+    return DriveStatusOut(
+        status=info.status,
+        sa_email=info.sa_email,
+        message=info.message,
+        auth_mode=info.auth_mode,
+        connected_email=info.connected_email,
+        oauth_available=info.oauth_available,
+    )
+
+
+def _build_drive_client(*, sa_json_path: str | None = None,
+                        oauth_token_path: str | None = None) -> DriveClient:
     from variant_maker.farm.drive import GoogleDrive
-    return GoogleDrive(service_account_json=sa_json_path)
+    if oauth_token_path:
+        return GoogleDrive(oauth_token=oauth_token_path)
+    if sa_json_path:
+        return GoogleDrive(service_account_json=sa_json_path)
+    raise ValueError("need sa_json_path or oauth_token_path")
 
 
 def _resolve_folder_id(folder_url: str) -> str:
@@ -75,24 +134,79 @@ def _resolve_folder_id(folder_url: str) -> str:
         raise
 
 
-def create_app(store: JobStore | None = None, *, drive: DriveClient | None = None,
-                sa_json_path: str | None = None) -> FastAPI:
+def create_app(
+    store: JobStore | None = None,
+    *,
+    drive: DriveClient | None = None,
+    sa_json_path: str | None = None,
+    oauth_token_path: str | None = None,
+    oauth_environ: Mapping[str, str] | None = None,
+    oauth_exchange: ExchangeFn | None = None,
+    oauth_fetch_email: FetchEmailFn | None = None,
+) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
     app = FastAPI(title="variant-maker control plane")
     app.state.store = store
 
-    drive_info = resolve_drive_status(sa_json_path)
+    oauth_env: Mapping[str, str] = oauth_environ if oauth_environ is not None else os.environ
+    if oauth_token_path is None:
+        oauth_token_path = store._ws.oauth_token_path()
+    token_store = OAuthTokenStore(oauth_token_path)
+    app.state.oauth_token_store = token_store
+    app.state.oauth_environ = oauth_env
+    app.state.oauth_pending_states = set()
+    app.state.oauth_exchange = oauth_exchange or exchange_code_for_token
+    app.state.oauth_fetch_email = oauth_fetch_email or fetch_connected_email
+
+    # Explicit "" means "no SA" (tests); None means fall through to env.
+    sa_arg = None if sa_json_path in (None, "") else sa_json_path
+    drive_info = resolve_drive_status(
+        sa_arg,
+        oauth_token_path=oauth_token_path,
+        environ=oauth_env if oauth_environ is not None else None,
+    )
+    if sa_json_path == "":
+        drive_info = resolve_drive_status(
+            None, oauth_token_path=oauth_token_path, environ=oauth_env,
+        )
+
     if drive is None and drive_info.status == "ready":
-        drive = _build_drive_client(sa_json_path)
+        if drive_info.auth_mode == "oauth":
+            drive = _build_drive_client(oauth_token_path=oauth_token_path)
+        elif sa_arg:
+            drive = _build_drive_client(sa_json_path=sa_arg)
+        else:
+            from .drive_config import ENV_SA_JSON
+            env_sa = oauth_env.get(ENV_SA_JSON) if oauth_environ is not None else os.environ.get(ENV_SA_JSON)
+            if env_sa:
+                drive = _build_drive_client(sa_json_path=env_sa)
+
     app.state.drive = drive
     app.state.drive_info = drive_info
     app.state.destinations = DestinationStore(store._ws.destinations_path())
     app.state.exports = ExportStore(store._ws.exports_dir())
 
+    def _refresh_drive_info() -> None:
+        app.state.drive_info = resolve_drive_status(
+            None if sa_json_path in (None, "") else sa_json_path,
+            oauth_token_path=oauth_token_path,
+            environ=oauth_env,
+        )
+
+    def _account_email() -> str | None:
+        info = app.state.drive_info
+        return info.connected_email or info.sa_email
+
     def _require_drive() -> None:
         if app.state.drive is None or app.state.drive_info.status != "ready":
             raise HTTPException(status_code=503, detail=app.state.drive_info.message)
+
+    def _redirect_uri_for(request: Request) -> str:
+        explicit = oauth_env.get(ENV_OAUTH_REDIRECT_URI)
+        fallback = str(request.base_url).rstrip("/")
+        base = public_request_base(request.headers, fallback)
+        return resolve_redirect_uri(oauth_env, request_base=base, explicit=explicit)
 
     @app.get("/api/health")
     def health() -> dict:
@@ -103,6 +217,58 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
                           allow_creative_escalate: bool = Form(True)) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(uploads, count=count, allow_creative_escalate=allow_creative_escalate)
+        return CreateJobResponse(job_id=job.job_id,
+                                 sources=[_source_out(s, ok_only=True) for s in job.sources])
+
+    @app.post("/api/uploads")
+    def init_upload(filename: str = Form(...), size: int = Form(...)) -> dict:
+        """Start a chunked upload (RunPod HTTP proxy drops large multipart bodies)."""
+        upload_id = uuid.uuid4().hex[:12]
+        safe = os.path.basename(filename) or "video.mp4"
+        path = store._ws.upload_blob_path(upload_id, safe)
+        open(path, "wb").close()
+        _UPLOAD_META[upload_id] = {"filename": safe, "size": int(size), "received": 0, "path": path}
+        return {"upload_id": upload_id, "chunk_hint": 2_000_000}
+
+    @app.put("/api/uploads/{upload_id}")
+    async def put_upload_chunk(upload_id: str, request: Request, offset: int = 0) -> dict:
+        meta = _UPLOAD_META.get(upload_id)
+        if meta is None:
+            raise HTTPException(status_code=404, detail="upload not found")
+        data = await request.body()
+        path = meta["path"]
+        with open(path, "r+b") as f:
+            f.seek(int(offset))
+            f.write(data)
+            received = f.tell()
+            # if writing past EOF with holes, size is max
+            f.seek(0, os.SEEK_END)
+            received = max(received, f.tell())
+        meta["received"] = max(meta["received"], received)
+        return {"received": meta["received"]}
+
+    @app.post("/api/jobs/from-uploads", status_code=201, response_model=CreateJobResponse)
+    def create_job_from_uploads(
+        upload_ids: str = Form(...),
+        count: int = Form(...),
+        allow_creative_escalate: bool = Form(True),
+    ) -> CreateJobResponse:
+        ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
+        if not ids:
+            raise HTTPException(status_code=400, detail="upload_ids required")
+        paths: list[tuple[str, str]] = []
+        for uid in ids:
+            meta = _UPLOAD_META.get(uid)
+            if meta is None:
+                raise HTTPException(status_code=404, detail=f"upload not found: {uid}")
+            if meta["received"] <= 0 or not os.path.exists(meta["path"]):
+                raise HTTPException(status_code=400, detail=f"upload incomplete: {uid}")
+            paths.append((meta["filename"], meta["path"]))
+        job = store.create_job_from_paths(
+            paths, count=count, allow_creative_escalate=allow_creative_escalate,
+        )
+        for uid in ids:
+            _UPLOAD_META.pop(uid, None)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True) for s in job.sources])
 
@@ -118,7 +284,20 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
-                         state=job.state, sources=[_source_out(s, ok_only=True) for s in job.sources])
+                         state=job.state,
+                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources])
+
+    @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
+    def job_events_snapshot(job_id: str) -> JobEventsSnapshot:
+        """Non-streaming event log for proxies that buffer SSE (e.g. RunPod HTTP)."""
+        job = store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return JobEventsSnapshot(
+            job_id=job.job_id,
+            state=job.state,
+            events=[event_to_dict(e) for e in job.events],
+        )
 
     @app.get("/api/jobs/{job_id}/events")
     async def job_events(job_id: str):
@@ -142,7 +321,11 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
 
     @app.get("/api/gallery", response_model=list[SourceOut])
     def gallery() -> list[SourceOut]:
-        return [_source_out(s, ok_only=True) for s in store.gallery()]
+        out = []
+        for job in store.list():
+            for s in job.sources:
+                out.append(_source_out(s, ok_only=True, job=job))
+        return out
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:
@@ -188,8 +371,78 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
 
     @app.get("/api/drive/status", response_model=DriveStatusOut)
     def drive_status() -> DriveStatusOut:
-        info = app.state.drive_info
-        return DriveStatusOut(status=info.status, sa_email=info.sa_email, message=info.message)
+        _refresh_drive_info()
+        return _drive_status_out(app.state.drive_info)
+
+    @app.get("/api/drive/oauth/start")
+    def drive_oauth_start(request: Request):
+        if not oauth_env.get(ENV_OAUTH_CLIENT_ID) or not oauth_env.get(ENV_OAUTH_CLIENT_SECRET):
+            raise HTTPException(
+                status_code=503,
+                detail="OAuth not configured — set VARIANT_DRIVE_OAUTH_CLIENT_ID and "
+                       "VARIANT_DRIVE_OAUTH_CLIENT_SECRET",
+            )
+        state = new_oauth_state()
+        app.state.oauth_pending_states.add(state)
+        redirect_uri = _redirect_uri_for(request)
+        url = build_authorization_url(
+            client_id=oauth_env[ENV_OAUTH_CLIENT_ID],
+            redirect_uri=redirect_uri,
+            state=state,
+        )
+        return RedirectResponse(url=url, status_code=302)
+
+    @app.get("/api/drive/oauth/callback")
+    def drive_oauth_callback(request: Request, code: str | None = None, state: str | None = None,
+                             error: str | None = None):
+        settings_ok = "/settings/drive?oauth=connected"
+        settings_err = "/settings/drive?oauth=error"
+        if error:
+            return RedirectResponse(url=f"{settings_err}&reason={error}", status_code=302)
+        if not code or not state:
+            return RedirectResponse(url=f"{settings_err}&reason=missing_code", status_code=302)
+        if state not in app.state.oauth_pending_states:
+            return RedirectResponse(url=f"{settings_err}&reason=bad_state", status_code=302)
+        app.state.oauth_pending_states.discard(state)
+
+        client_id = oauth_env.get(ENV_OAUTH_CLIENT_ID, "")
+        client_secret = oauth_env.get(ENV_OAUTH_CLIENT_SECRET, "")
+        redirect_uri = _redirect_uri_for(request)
+        try:
+            token_data = app.state.oauth_exchange(
+                code=code,
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+            )
+            email = app.state.oauth_fetch_email(token_data)
+            if email:
+                token_data = {**token_data, "email": email}
+            # Persist client secrets alongside token so GoogleDrive can refresh headless
+            token_data.setdefault("client_id", client_id)
+            token_data.setdefault("client_secret", client_secret)
+            token_store.save(token_data)
+        except Exception:
+            return RedirectResponse(url=f"{settings_err}&reason=exchange_failed", status_code=302)
+
+        try:
+            app.state.drive = _build_drive_client(oauth_token_path=oauth_token_path)
+        except Exception:
+            pass
+        _refresh_drive_info()
+        return RedirectResponse(url=settings_ok, status_code=302)
+
+    @app.post("/api/drive/oauth/disconnect")
+    def drive_oauth_disconnect() -> dict:
+        token_store.clear()
+        if app.state.drive_info.auth_mode == "oauth":
+            app.state.drive = None
+        _refresh_drive_info()
+        # Re-attach SA client if still configured
+        if app.state.drive is None and app.state.drive_info.status == "ready":
+            if app.state.drive_info.auth_mode == "service_account" and sa_arg:
+                app.state.drive = _build_drive_client(sa_json_path=sa_arg)
+        return {"ok": True}
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])
     def list_destinations() -> list[DestinationOut]:
@@ -202,11 +455,17 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
             folder_id = _resolve_folder_id(body.folder_url)
         except DriveUrlError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        auth_mode = app.state.drive_info.auth_mode or "service_account"
         try:
-            probe_folder_writable(app.state.drive, folder_id, sa_email=app.state.drive_info.sa_email)
+            probe_folder_writable(
+                app.state.drive, folder_id,
+                sa_email=_account_email(), auth_mode=auth_mode,
+            )
         except DestinationError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        dest = app.state.destinations.create(name=body.name, folder_id=folder_id)
+        dest = app.state.destinations.create(
+            name=body.name, folder_id=folder_id, auth_mode=auth_mode,
+        )
         return _destination_out(dest)
 
     @app.patch("/api/drive/destinations/{dest_id}", response_model=DestinationOut)
@@ -216,6 +475,7 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
         if existing is None:
             raise HTTPException(status_code=404, detail="destination not found")
         folder_id = None
+        auth_mode = app.state.drive_info.auth_mode or existing.auth_mode
         if body.folder_url is not None:
             try:
                 folder_id = _resolve_folder_id(body.folder_url)
@@ -223,8 +483,10 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
                 raise HTTPException(status_code=400, detail=str(e)) from e
             if folder_id != existing.folder_id:
                 try:
-                    probe_folder_writable(app.state.drive, folder_id,
-                                          sa_email=app.state.drive_info.sa_email)
+                    probe_folder_writable(
+                        app.state.drive, folder_id,
+                        sa_email=_account_email(), auth_mode=auth_mode,
+                    )
                 except DestinationError as e:
                     raise HTTPException(status_code=400, detail=str(e)) from e
         updated = app.state.destinations.update(dest_id, name=body.name, folder_id=folder_id)
@@ -244,8 +506,11 @@ def create_app(store: JobStore | None = None, *, drive: DriveClient | None = Non
         if dest is None:
             raise HTTPException(status_code=404, detail="destination not found")
         try:
-            probe_folder_writable(app.state.drive, dest.folder_id,
-                                  sa_email=app.state.drive_info.sa_email)
+            probe_folder_writable(
+                app.state.drive, dest.folder_id,
+                sa_email=_account_email(),
+                auth_mode=app.state.drive_info.auth_mode or dest.auth_mode,
+            )
         except DestinationError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         return {"ok": True}

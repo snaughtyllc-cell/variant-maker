@@ -11,7 +11,19 @@ export interface VariantOut {
   preset_used?: string | null; strength_final?: number | null;
   escalated?: boolean; platform_result?: PlatformResult | null;
 }
-export interface SourceOut { source_id: string; filename: string; requested: number; delivered: number; shortfall: number; variants: VariantOut[]; }
+export interface InFlightOut {
+  index: number;
+  state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating";
+  attempt: number;
+  max_attempts: number;
+}
+export interface SourceOut {
+  source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
+  variants: VariantOut[];
+  in_flight?: InFlightOut | null;
+  job_state?: "running" | "done" | string | null;
+  failed?: number;
+}
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
@@ -21,8 +33,12 @@ export interface VariantEvent {
   state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating" | "done";
   attempt: number; max_attempts: number;
   status: string | null; quality: Quality | null; filename: string | null;
-  // Not present on raw SSE events; populated when synthesized from a polled VariantOut.
-  uniqueness?: number | null; escalated?: boolean; platform_result?: PlatformResult | null;
+  uniqueness?: number | null;
+  uniqueness_status?: string | null;
+  uniqueness_metric?: string | null;
+  uniqueness_target?: number | null;
+  escalated?: boolean;
+  platform_result?: PlatformResult | null;
 }
 export const VMAF_FLOOR = 90;
 
@@ -31,6 +47,9 @@ export interface DriveStatus {
   status: DriveStatusValue;
   sa_email: string | null;
   message: string;
+  auth_mode?: string | null;
+  connected_email?: string | null;
+  oauth_available?: boolean;
 }
 export interface Destination {
   id: string;

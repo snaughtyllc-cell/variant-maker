@@ -6,6 +6,67 @@ This uses **Tier-1 (FFmpeg/CPU)**. An RTX 4000 works fine; GPU neural upscale is
 
 ---
 
+## Google Drive export (OAuth — recommended)
+
+Service-account JSON keys are often blocked by org policy. Prefer a **Web OAuth client**
+(not an SA key) and Connect Google once in Studio Settings.
+
+### 1. Google Cloud Console
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → select/create a project.
+2. **APIs & Services → Library** → enable **Google Drive API**.
+3. **APIs & Services → OAuth consent screen**
+   - User type: **Internal** (Workspace) or **External** (then add test users).
+   - App name: e.g. `VaryForge Studio`
+   - Scopes: add Drive (`.../auth/drive` and/or `.../auth/drive.file`).
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Name: `VaryForge Pod`
+   - **Authorized redirect URIs** — add exactly:
+
+```
+https://li25cvxk21j8jn-8888.proxy.runpod.net/api/drive/oauth/callback
+```
+
+   (If the Pod proxy host changes, update this URI and `VARIANT_DRIVE_OAUTH_REDIRECT_URI`.)
+
+5. Copy the **Client ID** and **Client secret**.
+
+### 2. Pod environment
+
+On the Pod (or in the start script / systemd unit), export:
+
+```bash
+export VARIANT_DRIVE_OAUTH_CLIENT_ID="….apps.googleusercontent.com"
+export VARIANT_DRIVE_OAUTH_CLIENT_SECRET="…"
+export VARIANT_DRIVE_OAUTH_REDIRECT_URI="https://li25cvxk21j8jn-8888.proxy.runpod.net/api/drive/oauth/callback"
+# Optional fallback if you still have an SA key:
+# export VARIANT_DRIVE_SERVICE_ACCOUNT_JSON=/workspace/secrets/drive-sa.json
+```
+
+Also install the farm extra if missing: `pip install -e '.[farm]'` (needs `google-auth-oauthlib`).
+
+Token file (created after Connect Google): `/workspace/vmdata/drive/oauth_token.json`  
+Do **not** commit this file.
+
+### 3. Connect in the UI
+
+1. Open `https://li25cvxk21j8jn-8888.proxy.runpod.net/settings/drive`
+2. Click **Connect Google** → complete consent as the company Drive account
+3. Confirm “Connected as …” and email
+4. Add destinations (paste folder links the signed-in account can edit)
+5. Gallery → select ok variants → **Send to Drive**
+
+**Disconnect** clears the refresh token on the Pod.
+
+### 4. Restart notes
+
+After setting env vars, restart API + UI (re-run `deploy/pod/start.sh` or kill/restart
+`variant-server` + `next start`). Env must be present in the process that runs
+`variant-server` — setting them only in a shell that then exits does nothing.
+
+---
+
 ## Option A — existing Pod (fastest, recommended)
 
 Repo is private, so clone with a GitHub token (or upload the folder). In the Pod terminal:

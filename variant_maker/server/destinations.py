@@ -28,20 +28,31 @@ class Destination:
     id: str
     name: str
     folder_id: str
-    auth_mode: str  # always "service_account" in v1
+    auth_mode: str  # "service_account" | "oauth"
 
 
-def _not_writable_message(sa_email: str | None) -> str:
-    if sa_email:
-        return f"Cannot write to this folder — share it as Editor with {sa_email}"
+def _not_writable_message(account_email: str | None, *, auth_mode: str | None = None) -> str:
+    if account_email and auth_mode == "oauth":
+        return (
+            f"Cannot write to this folder — sign in as an account that can edit it "
+            f"(connected: {account_email})"
+        )
+    if account_email:
+        return f"Cannot write to this folder — share it as Editor with {account_email}"
     return "Cannot write to this folder"
 
 
-def probe_folder_writable(drive: DriveClient, folder_id: str, *, sa_email: str | None = None) -> None:
+def probe_folder_writable(
+    drive: DriveClient,
+    folder_id: str,
+    *,
+    sa_email: str | None = None,
+    auth_mode: str | None = None,
+) -> None:
     try:
         meta = drive.get_file(folder_id)
     except Exception as e:
-        raise DestinationError(_not_writable_message(sa_email)) from e
+        raise DestinationError(_not_writable_message(sa_email, auth_mode=auth_mode)) from e
 
     if not meta.is_folder:
         raise DestinationError(f"Drive id {folder_id!r} is not a folder")
@@ -54,7 +65,7 @@ def probe_folder_writable(drive: DriveClient, folder_id: str, *, sa_email: str |
         file_id = drive.upload(path, folder_id, name=PROBE_MARKER_NAME)
         drive.trash(file_id)
     except Exception as e:
-        raise DestinationError(_not_writable_message(sa_email)) from e
+        raise DestinationError(_not_writable_message(sa_email, auth_mode=auth_mode)) from e
     finally:
         try:
             os.remove(path)
@@ -77,13 +88,13 @@ class DestinationStore:
                 return d
         return None
 
-    def create(self, *, name: str, folder_id: str) -> Destination:
+    def create(self, *, name: str, folder_id: str, auth_mode: str = "service_account") -> Destination:
         destinations = self._load()
         dest = Destination(
             id=f"dst_{secrets.token_hex(6)}",
             name=name,
             folder_id=folder_id,
-            auth_mode="service_account",
+            auth_mode=auth_mode,
         )
         destinations.append(dest)
         self._save(destinations)

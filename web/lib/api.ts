@@ -34,20 +34,61 @@ export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`
 
 export const getHealth = () => fetch("/api/health").then(json<{ status: string }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
-export const getJob = (id: string) => fetch(`/api/jobs/${id}`).then(json<JobDetail>);
+export const getJob = (id: string) =>
+  fetch(`/api/jobs/${id}`, { cache: "no-store" }).then(json<JobDetail>);
 export const getGallery = () => fetch("/api/gallery").then(json<SourceOut[]>);
 export const getDiagnostics = () => fetch("/api/diagnostics").then(json<DiagnosticsItem[]>);
 
-export function createJob(
+/** RunPod's HTTP proxy often drops multipart bodies above a few MB — chunk instead. */
+const CHUNK_THRESHOLD = 3_500_000;
+const CHUNK_SIZE = 2_000_000;
+
+async function uploadFileChunked(file: File): Promise<string> {
+  const initFd = new FormData();
+  initFd.append("filename", file.name);
+  initFd.append("size", String(file.size));
+  const init = await fetch("/api/uploads", { method: "POST", body: initFd }).then(
+    json<{ upload_id: string; chunk_hint?: number }>,
+  );
+  const chunkSize = init.chunk_hint || CHUNK_SIZE;
+  let offset = 0;
+  while (offset < file.size) {
+    const blob = file.slice(offset, offset + chunkSize);
+    const buf = await blob.arrayBuffer();
+    const res = await fetch(`/api/uploads/${init.upload_id}?offset=${offset}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buf,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    offset += blob.size;
+  }
+  return init.upload_id;
+}
+
+export async function createJob(
   files: File[],
   count: number,
   allowCreativeEscalate: boolean = true,
 ): Promise<CreateJobResponse> {
+  const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
+  if (!needsChunk) {
+    const fd = new FormData();
+    fd.append("count", String(count));
+    fd.append("allow_creative_escalate", String(allowCreativeEscalate));
+    for (const f of files) fd.append("files", f, f.name);
+    return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
+  }
+
+  const uploadIds: string[] = [];
+  for (const f of files) {
+    uploadIds.push(await uploadFileChunked(f));
+  }
   const fd = new FormData();
+  fd.append("upload_ids", uploadIds.join(","));
   fd.append("count", String(count));
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
-  for (const f of files) fd.append("files", f, f.name);
-  return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
+  return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
 export function regenerate(sourceId: string, n: number): Promise<SourceOut> {
@@ -65,6 +106,11 @@ export function setPlatformResult(sourceId: string, index: number, result: Platf
 }
 
 export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveStatus>);
+
+export async function disconnectDriveOAuth(): Promise<void> {
+  const res = await fetch("/api/drive/oauth/disconnect", { method: "POST" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
 
 export const listDestinations = () => fetch("/api/drive/destinations").then(json<Destination[]>);
 

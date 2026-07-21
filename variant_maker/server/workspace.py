@@ -29,6 +29,14 @@ class Workspace:
             f.write(data)
         return path
 
+    def upload_staging_dir(self, upload_id: str) -> str:
+        d = os.path.join(self.root, "uploads", upload_id)
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def upload_blob_path(self, upload_id: str, filename: str) -> str:
+        return os.path.join(self.upload_staging_dir(upload_id), filename)
+
     def drive_dir(self) -> str:
         d = os.path.join(self.root, "drive")
         os.makedirs(d, exist_ok=True)
@@ -36,6 +44,9 @@ class Workspace:
 
     def destinations_path(self) -> str:
         return os.path.join(self.drive_dir(), "destinations.json")
+
+    def oauth_token_path(self) -> str:
+        return os.path.join(self.drive_dir(), "oauth_token.json")
 
     def exports_dir(self) -> str:
         d = os.path.join(self.drive_dir(), "exports")
