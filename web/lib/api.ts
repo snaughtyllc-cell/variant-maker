@@ -1,7 +1,29 @@
 import { CreateJobResponse, Destination, DiagnosticsItem, DriveStatus, ExportJob, ExportVariantRef, JobDetail, JobSummary, PlatformResult, SourceOut, VariantOut } from "./types";
 
+/**
+ * FastAPI error bodies are `{"detail": string | Array<{msg: string, ...}>}`.
+ * Prefer that over the generic status text so actionable messages (e.g. Drive
+ * permission/quota errors) reach the UI instead of "400 Bad Request".
+ */
+async function errorMessage(res: Response): Promise<string> {
+  const fallback = `${res.status} ${res.statusText}`;
+  try {
+    const body = await res.clone().json();
+    const detail = body?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail.length) {
+      return detail
+        .map((d) => (typeof d === "string" ? d : d?.msg ?? JSON.stringify(d)))
+        .join("; ");
+    }
+  } catch {
+    // Body wasn't JSON (or was empty) — fall back to status text below.
+  }
+  return fallback;
+}
+
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -67,7 +89,7 @@ export function updateDestination(
 
 export async function deleteDestination(id: string): Promise<void> {
   const res = await fetch(`/api/drive/destinations/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
 }
 
 export const testDestination = (id: string) =>

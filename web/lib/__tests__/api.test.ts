@@ -52,3 +52,30 @@ it("createDriveExport posts destination and variants", async () => {
     method: "POST",
   }));
 });
+
+describe("error responses surface FastAPI `detail`", () => {
+  it("throws the detail string from a JSON error body", async () => {
+    const detail = "Cannot write to this folder — share it as Editor with sa@example.iam.gserviceaccount.com";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail }), { status: 400, statusText: "Bad Request" }),
+    );
+    await expect(api.getDriveStatus()).rejects.toThrow(detail);
+  });
+
+  it("joins array-style validation `detail` entries", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: [{ msg: "no ok videos in selection" }, { msg: "destination required" }] }),
+        { status: 422, statusText: "Unprocessable Entity" },
+      ),
+    );
+    await expect(api.getDriveStatus()).rejects.toThrow("no ok videos in selection; destination required");
+  });
+
+  it("falls back to status text when the body isn't JSON", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>not json</html>", { status: 500, statusText: "Internal Server Error" }),
+    );
+    await expect(api.getDriveStatus()).rejects.toThrow("500 Internal Server Error");
+  });
+});
