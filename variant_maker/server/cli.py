@@ -8,6 +8,7 @@ import sys
 from fastapi import FastAPI
 
 from .app import create_app
+from .drive_config import ENV_SA_JSON
 from .jobs import JobStore
 from .runner import LocalRunner, Runner
 from .runpod_client import HttpRunPodClient
@@ -36,7 +37,8 @@ def make_runner(kind: str) -> Runner:
 
 
 def build_app(data_dir: str, runner_kind: str = "local") -> FastAPI:
-    return create_app(JobStore(Workspace(data_dir), make_runner(runner_kind)))
+    return create_app(JobStore(Workspace(data_dir), make_runner(runner_kind)),
+                      sa_json_path=os.environ.get(ENV_SA_JSON))
 
 
 def main() -> None:

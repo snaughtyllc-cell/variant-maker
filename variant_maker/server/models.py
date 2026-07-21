@@ -62,3 +62,54 @@ class DiagnosticsItem(BaseModel):
     filename: str
     status: str
     quality: dict
+
+
+class DriveStatusOut(BaseModel):
+    status: str
+    sa_email: str | None = None
+    message: str
+
+
+class DestinationOut(BaseModel):
+    id: str
+    name: str
+    folder_id: str
+    auth_mode: str
+
+
+class DestinationCreateIn(BaseModel):
+    name: str
+    folder_url: str
+
+
+class DestinationUpdateIn(BaseModel):
+    name: str | None = None
+    folder_url: str | None = None
+
+
+class ExportVariantRefIn(BaseModel):
+    source_id: str
+    index: int
+
+
+class ExportCreateIn(BaseModel):
+    destination_id: str
+    variants: list[ExportVariantRefIn]
+
+
+class ExportFileOut(BaseModel):
+    source_id: str
+    index: int
+    filename: str
+    status: str
+    error: str | None = None
+    drive_file_id: str | None = None
+
+
+class ExportJobOut(BaseModel):
+    export_id: str
+    destination_id: str
+    folder_id: str
+    state: str
+    created_utc: str
+    files: list[ExportFileOut] = []

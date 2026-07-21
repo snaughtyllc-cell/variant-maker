@@ -8,12 +8,19 @@ from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
+from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
+from .drive_config import resolve_drive_status
+from .drive_exports import (ExportError, ExportJob, ExportRunner, ExportStore, VariantRef,
+                            build_export_files)
+from .drive_urls import DriveUrlError, parse_folder_id
 from .events import event_to_dict
 from .jobs import JobSource, JobStore
-from .models import (CreateJobResponse, DiagnosticsItem, JobDetail, JobSummary,
-                     PlatformResultIn, SourceOut, VariantOut)
+from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
+                     DiagnosticsItem, DriveStatusOut, ExportCreateIn, ExportFileOut, ExportJobOut,
+                     JobDetail, JobSummary, PlatformResultIn, SourceOut, VariantOut)
 from .runner import LocalRunner
 from .workspace import Workspace
+from variant_maker.farm.drive import DriveClient
 
 
 def _variant_out(source_id: str, v) -> VariantOut:
@@ -36,11 +43,56 @@ def _source_out(s: JobSource, *, ok_only: bool) -> SourceOut:
     )
 
 
-def create_app(store: JobStore | None = None) -> FastAPI:
+def _destination_out(d: Destination) -> DestinationOut:
+    return DestinationOut(id=d.id, name=d.name, folder_id=d.folder_id, auth_mode=d.auth_mode)
+
+
+def _export_job_out(job: ExportJob) -> ExportJobOut:
+    return ExportJobOut(
+        export_id=job.export_id, destination_id=job.destination_id, folder_id=job.folder_id,
+        state=job.state, created_utc=job.created_utc,
+        files=[ExportFileOut(source_id=f.source_id, index=f.index, filename=f.filename,
+                             status=f.status, error=f.error, drive_file_id=f.drive_file_id)
+               for f in job.files],
+    )
+
+
+def _build_drive_client(sa_json_path: str) -> DriveClient:
+    from variant_maker.farm.drive import GoogleDrive
+    return GoogleDrive(service_account_json=sa_json_path)
+
+
+def _resolve_folder_id(folder_url: str) -> str:
+    """`parse_folder_id`'s bare-id heuristic requires 10+ chars (real Drive ids are
+    long); fall back to treating any non-URL, non-file-link token as a literal id and
+    let the write-probe be the real check, so short test-double ids still resolve."""
+    s = (folder_url or "").strip()
+    try:
+        return parse_folder_id(s)
+    except DriveUrlError:
+        if s and "://" not in s and "/" not in s:
+            return s
+        raise
+
+
+def create_app(store: JobStore | None = None, *, drive: DriveClient | None = None,
+                sa_json_path: str | None = None) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
     app = FastAPI(title="variant-maker control plane")
     app.state.store = store
+
+    drive_info = resolve_drive_status(sa_json_path)
+    if drive is None and drive_info.status == "ready":
+        drive = _build_drive_client(sa_json_path)
+    app.state.drive = drive
+    app.state.drive_info = drive_info
+    app.state.destinations = DestinationStore(store._ws.destinations_path())
+    app.state.exports = ExportStore(store._ws.exports_dir())
+
+    def _require_drive() -> None:
+        if app.state.drive is None or app.state.drive_info.status != "ready":
+            raise HTTPException(status_code=503, detail=app.state.drive_info.message)
 
     @app.get("/api/health")
     def health() -> dict:
@@ -133,5 +185,100 @@ def create_app(store: JobStore | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="no ok variants for source")
         return FileResponse(path, media_type="application/zip",
                             filename=f"{source_id}_variants.zip")
+
+    @app.get("/api/drive/status", response_model=DriveStatusOut)
+    def drive_status() -> DriveStatusOut:
+        info = app.state.drive_info
+        return DriveStatusOut(status=info.status, sa_email=info.sa_email, message=info.message)
+
+    @app.get("/api/drive/destinations", response_model=list[DestinationOut])
+    def list_destinations() -> list[DestinationOut]:
+        return [_destination_out(d) for d in app.state.destinations.list()]
+
+    @app.post("/api/drive/destinations", status_code=201, response_model=DestinationOut)
+    def create_destination(body: DestinationCreateIn) -> DestinationOut:
+        _require_drive()
+        try:
+            folder_id = _resolve_folder_id(body.folder_url)
+        except DriveUrlError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        try:
+            probe_folder_writable(app.state.drive, folder_id, sa_email=app.state.drive_info.sa_email)
+        except DestinationError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        dest = app.state.destinations.create(name=body.name, folder_id=folder_id)
+        return _destination_out(dest)
+
+    @app.patch("/api/drive/destinations/{dest_id}", response_model=DestinationOut)
+    def update_destination(dest_id: str, body: DestinationUpdateIn) -> DestinationOut:
+        _require_drive()
+        existing = app.state.destinations.get(dest_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        folder_id = None
+        if body.folder_url is not None:
+            try:
+                folder_id = _resolve_folder_id(body.folder_url)
+            except DriveUrlError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            if folder_id != existing.folder_id:
+                try:
+                    probe_folder_writable(app.state.drive, folder_id,
+                                          sa_email=app.state.drive_info.sa_email)
+                except DestinationError as e:
+                    raise HTTPException(status_code=400, detail=str(e)) from e
+        updated = app.state.destinations.update(dest_id, name=body.name, folder_id=folder_id)
+        return _destination_out(updated)
+
+    @app.delete("/api/drive/destinations/{dest_id}", status_code=204)
+    def delete_destination(dest_id: str) -> None:
+        _require_drive()
+        if not app.state.destinations.delete(dest_id):
+            raise HTTPException(status_code=404, detail="destination not found")
+        return None
+
+    @app.post("/api/drive/destinations/{dest_id}/test")
+    def test_destination(dest_id: str) -> dict:
+        _require_drive()
+        dest = app.state.destinations.get(dest_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        try:
+            probe_folder_writable(app.state.drive, dest.folder_id,
+                                  sa_email=app.state.drive_info.sa_email)
+        except DestinationError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return {"ok": True}
+
+    @app.post("/api/drive/exports", status_code=201, response_model=ExportJobOut)
+    def create_export(body: ExportCreateIn) -> ExportJobOut:
+        _require_drive()
+        dest = app.state.destinations.get(body.destination_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        refs = [VariantRef(source_id=v.source_id, index=v.index) for v in body.variants]
+        try:
+            files = build_export_files(store, refs)
+        except ExportError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
+        ExportRunner(app.state.drive, app.state.exports).start(job)
+        return _export_job_out(job)
+
+    @app.get("/api/drive/exports/{export_id}", response_model=ExportJobOut)
+    def get_export(export_id: str) -> ExportJobOut:
+        job = app.state.exports.get(export_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="export not found")
+        return _export_job_out(job)
+
+    @app.post("/api/drive/exports/{export_id}/retry", response_model=ExportJobOut)
+    def retry_export(export_id: str) -> ExportJobOut:
+        _require_drive()
+        try:
+            job = ExportRunner(app.state.drive, app.state.exports).retry_failed(export_id)
+        except ExportError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        return _export_job_out(job)
 
     return app
