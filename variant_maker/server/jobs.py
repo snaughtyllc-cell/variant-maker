@@ -159,6 +159,13 @@ class JobStore:
     def _locate(self, source_id: str) -> tuple[str, JobSource] | None:
         return self._source_index.get(source_id)
 
+    def get_variant(self, source_id: str, index: int) -> VariantInfo | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        _, source = loc
+        return next((v for v in source.variants if v.index == index), None)
+
     def find_variant(self, source_id: str, filename: str) -> str | None:
         loc = self._locate(source_id)
         if loc is None:
