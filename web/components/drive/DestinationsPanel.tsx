@@ -27,6 +27,7 @@ export function DestinationsPanel() {
   const [editName, setEditName] = useState("");
   const [editFolderUrl, setEditFolderUrl] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
+  const [savingEditId, setSavingEditId] = useState<string | null>(null);
 
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export function DestinationsPanel() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting) return;
+    if (driveNotReady || submitting) return;
     setFormError(null);
     setSubmitting(true);
     try {
@@ -78,7 +79,9 @@ export function DestinationsPanel() {
   }
 
   async function handleSaveEdit(id: string) {
+    if (driveNotReady || savingEditId) return;
     setEditError(null);
+    setSavingEditId(id);
     try {
       const patch: { name?: string; folder_url?: string } = { name: editName.trim() };
       if (editFolderUrl.trim()) patch.folder_url = editFolderUrl.trim();
@@ -87,6 +90,8 @@ export function DestinationsPanel() {
       setEditingId(null);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update destination");
+    } finally {
+      setSavingEditId(null);
     }
   }
 
@@ -124,6 +129,7 @@ export function DestinationsPanel() {
   }
 
   const driveNotReady = status != null && status.status !== "ready";
+  const addFormDisabled = driveNotReady || submitting;
 
   return (
     <div>
@@ -172,24 +178,29 @@ export function DestinationsPanel() {
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
           Add destination
         </div>
+        {driveNotReady && status && (
+          <div style={{ fontSize: 12, color: "#ffd08a" }}>{status.message}</div>
+        )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
             required
-            style={inputStyle}
+            disabled={driveNotReady}
+            style={disabledInputStyle(driveNotReady)}
           />
           <input
             value={folderUrl}
             onChange={(e) => setFolderUrl(e.target.value)}
             placeholder="Paste Drive folder link"
             required
-            style={{ ...inputStyle, flex: 1, minWidth: 220 }}
+            disabled={driveNotReady}
+            style={{ ...disabledInputStyle(driveNotReady), flex: 1, minWidth: 220 }}
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={addFormDisabled}
             style={{
               fontSize: 12.5,
               fontWeight: 700,
@@ -198,8 +209,8 @@ export function DestinationsPanel() {
               border: "none",
               padding: "9px 16px",
               borderRadius: 9,
-              cursor: submitting ? "not-allowed" : "pointer",
-              opacity: submitting ? 0.7 : 1,
+              cursor: addFormDisabled ? "not-allowed" : "pointer",
+              opacity: addFormDisabled ? 0.7 : 1,
             }}
           >
             {submitting ? "Adding…" : "Add"}
@@ -235,6 +246,7 @@ export function DestinationsPanel() {
       {destinations.map((dest) => {
         const isEditing = editingId === dest.id;
         const testResult = testResults[dest.id];
+        const editSaveDisabled = driveNotReady || savingEditId === dest.id;
         return (
           <div
             key={dest.id}
@@ -248,26 +260,40 @@ export function DestinationsPanel() {
           >
             {isEditing ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {driveNotReady && status && (
+                  <div style={{ fontSize: 12, color: "#ffd08a" }}>{status.message}</div>
+                )}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Name"
-                    style={inputStyle}
+                    disabled={driveNotReady}
+                    style={disabledInputStyle(driveNotReady)}
                   />
                   <input
                     value={editFolderUrl}
                     onChange={(e) => setEditFolderUrl(e.target.value)}
                     placeholder="New Drive folder link (optional)"
-                    style={{ ...inputStyle, flex: 1, minWidth: 220 }}
+                    disabled={driveNotReady}
+                    style={{ ...disabledInputStyle(driveNotReady), flex: 1, minWidth: 220 }}
                   />
                 </div>
                 {editError && (
                   <div style={{ fontSize: 12, color: "var(--color-red)" }}>{editError}</div>
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => handleSaveEdit(dest.id)} style={primaryBtnStyle}>
-                    Save
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEdit(dest.id)}
+                    disabled={editSaveDisabled}
+                    style={{
+                      ...primaryBtnStyle,
+                      cursor: editSaveDisabled ? "not-allowed" : "pointer",
+                      opacity: editSaveDisabled ? 0.7 : 1,
+                    }}
+                  >
+                    {savingEditId === dest.id ? "Saving…" : "Save"}
                   </button>
                   <button onClick={cancelEdit} style={secondaryBtnStyle}>
                     Cancel
@@ -332,6 +358,14 @@ const inputStyle: React.CSSProperties = {
   color: "var(--color-text)",
   outline: "none",
 };
+
+function disabledInputStyle(disabled: boolean): React.CSSProperties {
+  return {
+    ...inputStyle,
+    opacity: disabled ? 0.6 : 1,
+    cursor: disabled ? "not-allowed" : "text",
+  };
+}
 
 const secondaryBtnStyle: React.CSSProperties = {
   fontSize: 12,
