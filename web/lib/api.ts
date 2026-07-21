@@ -1,4 +1,4 @@
-import { CreateJobResponse, DiagnosticsItem, JobDetail, JobSummary, PlatformResult, SourceOut, VariantOut } from "./types";
+import { CreateJobResponse, Destination, DiagnosticsItem, DriveStatus, ExportJob, ExportVariantRef, JobDetail, JobSummary, PlatformResult, SourceOut, VariantOut } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -41,3 +41,48 @@ export function setPlatformResult(sourceId: string, index: number, result: Platf
     body: JSON.stringify({ result }),
   }).then(json<VariantOut>);
 }
+
+export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveStatus>);
+
+export const listDestinations = () => fetch("/api/drive/destinations").then(json<Destination[]>);
+
+export function createDestination(name: string, folderUrl: string): Promise<Destination> {
+  return fetch("/api/drive/destinations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, folder_url: folderUrl }),
+  }).then(json<Destination>);
+}
+
+export function updateDestination(
+  id: string,
+  patch: { name?: string; folder_url?: string },
+): Promise<Destination> {
+  return fetch(`/api/drive/destinations/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  }).then(json<Destination>);
+}
+
+export async function deleteDestination(id: string): Promise<void> {
+  const res = await fetch(`/api/drive/destinations/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+}
+
+export const testDestination = (id: string) =>
+  fetch(`/api/drive/destinations/${id}/test`, { method: "POST" }).then(json<{ ok: boolean }>);
+
+export function createDriveExport(destinationId: string, variants: ExportVariantRef[]): Promise<ExportJob> {
+  return fetch("/api/drive/exports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ destination_id: destinationId, variants }),
+  }).then(json<ExportJob>);
+}
+
+export const getDriveExport = (exportId: string) =>
+  fetch(`/api/drive/exports/${exportId}`, { cache: "no-store" }).then(json<ExportJob>);
+
+export const retryDriveExport = (exportId: string) =>
+  fetch(`/api/drive/exports/${exportId}/retry`, { method: "POST" }).then(json<ExportJob>);

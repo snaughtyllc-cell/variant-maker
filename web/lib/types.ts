@@ -25,3 +25,36 @@ export interface VariantEvent {
   uniqueness?: number | null; escalated?: boolean; platform_result?: PlatformResult | null;
 }
 export const VMAF_FLOOR = 90;
+
+export type DriveStatusValue = "ready" | "not_configured" | "auth_failed";
+export interface DriveStatus {
+  status: DriveStatusValue;
+  sa_email: string | null;
+  message: string;
+}
+export interface Destination {
+  id: string;
+  name: string;
+  folder_id: string;
+  auth_mode: string;
+}
+export interface ExportVariantRef {
+  source_id: string;
+  index: number;
+}
+export interface ExportFile {
+  source_id: string;
+  index: number;
+  filename: string;
+  status: string;
+  error?: string | null;
+  drive_file_id?: string | null;
+}
+export interface ExportJob {
+  export_id: string;
+  destination_id: string;
+  folder_id: string;
+  state: string;
+  created_utc: string;
+  files: ExportFile[];
+}

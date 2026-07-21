@@ -39,3 +39,16 @@ describe("regenerate posts form n", () => {
     expect(body.get("n")).toBe("2");
   });
 });
+
+it("createDriveExport posts destination and variants", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ export_id: "exp_1", state: "pending", files: [] }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const { createDriveExport } = await import("@/lib/api");
+  await createDriveExport("dst_1", [{ source_id: "s1", index: 1 }]);
+  expect(fetchMock).toHaveBeenCalledWith("/api/drive/exports", expect.objectContaining({
+    method: "POST",
+  }));
+});
