@@ -12,6 +12,11 @@ export function okVariantRefs(sources: SourceOut[], selected: Set<string>): Expo
   return refs;
 }
 
+export function truncateFolderId(id: string, keep = 8): string {
+  if (id.length <= keep * 2 + 1) return id;
+  return `${id.slice(0, keep)}…${id.slice(-keep)}`;
+}
+
 export function sendDisabledReason(
   status: DriveStatus | null,
   destinations: Destination[],

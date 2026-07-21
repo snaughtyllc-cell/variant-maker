@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
+import { okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
 import type { SourceOut } from "@/lib/types";
 
 const sources: SourceOut[] = [{
@@ -15,6 +15,12 @@ describe("okVariantRefs", () => {
   it("keeps only ok selected", () => {
     const sel = new Set(["s1:1", "s1:2"]);
     expect(okVariantRefs(sources, sel)).toEqual([{ source_id: "s1", index: 1 }]);
+  });
+});
+
+describe("truncateFolderId", () => {
+  it("truncates long folder ids", () => {
+    expect(truncateFolderId("1AbCdefghijk0123456789XYZ", 4)).toBe("1AbC…9XYZ");
   });
 });
 

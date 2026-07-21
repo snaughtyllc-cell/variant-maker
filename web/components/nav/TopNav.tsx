@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
   { href: "/diagnostics", label: "Diagnostics" },
+  { href: "/settings/drive", label: "Drive" },
 ] as const;
 
 export function TopNav() {
