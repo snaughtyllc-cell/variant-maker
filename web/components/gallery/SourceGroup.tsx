@@ -8,9 +8,11 @@ interface SourceGroupProps {
   source: SourceOut;
   onOpenVariant: (sourceId: string, index: number) => void;
   onRegenerate: () => void;
+  selected: Set<string>;
+  onToggleVariant: (key: string) => void;
 }
 
-export function SourceGroup({ source, onOpenVariant, onRegenerate }: SourceGroupProps) {
+export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onToggleVariant }: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
 
@@ -201,14 +203,19 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate }: SourceGroup
       {open && (
         <div style={{ padding: 16 }}>
           <div className="grid grid-cols-3 min-[700px]:grid-cols-5 min-[1100px]:grid-cols-8 gap-2.5">
-            {source.variants.map((variant) => (
-              <VariantCard
-                key={variant.index}
-                variant={variant}
-                sourceId={source.source_id}
-                onOpen={() => onOpenVariant(source.source_id, variant.index)}
-              />
-            ))}
+            {source.variants.map((variant) => {
+              const key = `${source.source_id}:${variant.index}`;
+              return (
+                <VariantCard
+                  key={variant.index}
+                  variant={variant}
+                  sourceId={source.source_id}
+                  onOpen={() => onOpenVariant(source.source_id, variant.index)}
+                  selected={selected.has(key)}
+                  onToggle={() => onToggleVariant(key)}
+                />
+              );
+            })}
           </div>
         </div>
       )}

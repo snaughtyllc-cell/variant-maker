@@ -33,3 +33,12 @@ export function sendDisabledReason(
   }
   return null;
 }
+
+export function exportProgressLabel(job: {
+  files: { status: string; filename: string }[];
+}): { done: number; total: number; current: string | null } {
+  const total = job.files.length;
+  const done = job.files.filter((f) => f.status === "succeeded" || f.status === "failed").length;
+  const current = job.files.find((f) => f.status === "uploading")?.filename ?? null;
+  return { done, total, current };
+}

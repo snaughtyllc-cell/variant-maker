@@ -10,6 +10,9 @@ interface GalleryToolbarProps {
   onFilter: (mode: FilterMode) => void;
   sort: SortMode;
   onSort: (sort: SortMode) => void;
+  selectedCount: number;
+  sendDisabledReason: string | null;
+  onSend: () => void;
 }
 
 export function GalleryToolbar({
@@ -19,7 +22,11 @@ export function GalleryToolbar({
   onFilter,
   sort,
   onSort,
+  selectedCount,
+  sendDisabledReason,
+  onSend,
 }: GalleryToolbarProps) {
+  const sendDisabled = sendDisabledReason != null;
   const chipBase: React.CSSProperties = {
     fontSize: 12,
     color: "var(--color-muted)",
@@ -70,6 +77,29 @@ export function GalleryToolbar({
         >
           Sort: {sort === "newest" ? "Newest" : "Newest"} ▾
         </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={onSend}
+            disabled={sendDisabled}
+            title={sendDisabledReason ?? undefined}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#fff",
+              background: sendDisabled ? "#3a2c5c" : "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+              border: "none",
+              padding: "7px 14px",
+              borderRadius: 8,
+              cursor: sendDisabled ? "not-allowed" : "pointer",
+              opacity: sendDisabled ? 0.6 : 1,
+            }}
+          >
+            ⇪ Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}
+          </button>
+          {sendDisabled && (
+            <span style={{ fontSize: 11, color: "var(--color-muted)" }}>{sendDisabledReason}</span>
+          )}
+        </div>
       </div>
     </div>
   );

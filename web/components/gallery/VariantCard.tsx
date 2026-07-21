@@ -6,9 +6,11 @@ interface VariantCardProps {
   variant: VariantOut;
   sourceId: string;
   onOpen: () => void;
+  selected: boolean;
+  onToggle: () => void;
 }
 
-export function VariantCard({ variant, onOpen }: VariantCardProps) {
+export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCardProps) {
   const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
   const spatialOk = variant.quality?.spatial_ok === true;
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
@@ -143,7 +145,8 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
         position: "relative",
         overflow: "hidden",
         cursor: "pointer",
-        border: "1px solid var(--color-line)",
+        border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
+        boxShadow: selected ? "0 0 0 2px #7c5cff44" : undefined,
         transition: "transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease",
       }}
       onMouseEnter={(e) => {
@@ -153,16 +156,38 @@ export function VariantCard({ variant, onOpen }: VariantCardProps) {
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = "";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--color-line)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = selected ? "0 0 0 2px #7c5cff44" : "";
+        (e.currentTarget as HTMLDivElement).style.borderColor = selected ? "#7c5cff" : "var(--color-line)";
       }}
     >
+      {/* Selection checkbox */}
+      <input
+        type="checkbox"
+        checked={selected}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        aria-label={`Select v${String(variant.index).padStart(2, "0")}`}
+        style={{
+          position: "absolute",
+          top: 5,
+          left: 5,
+          width: 13,
+          height: 13,
+          zIndex: 3,
+          cursor: "pointer",
+          accentColor: "#7c5cff",
+        }}
+      />
+
       {/* Index label */}
       <span
         style={{
           position: "absolute",
           top: 5,
-          left: 6,
+          left: 22,
           fontSize: 9,
           color: "#fff",
           opacity: 0.8,

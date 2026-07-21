@@ -4,9 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
 import { filterSources, sortSources } from "@/lib/gallery";
+import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
+import { getDriveStatus, listDestinations } from "@/lib/api";
+import type { Destination, DriveStatus } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
+import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -19,6 +23,30 @@ function GalleryContent() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sort, setSort] = useState<SortMode>("newest");
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+
+  // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
+  useEffect(() => {
+    Promise.all([getDriveStatus(), listDestinations()])
+      .then(([status, dests]) => {
+        setDriveStatus(status);
+        setDestinations(dests);
+      })
+      .catch((e) => console.error("Failed to load Drive status", e));
+  }, []);
+
+  function handleToggleVariant(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // Revalidate gallery when active run completes
   useEffect(() => {
@@ -76,6 +104,14 @@ function GalleryContent() {
 
   const totalVariants = allSources.reduce((acc, s) => acc + s.delivered, 0);
 
+  const okRefs = okVariantRefs(allSources, selected);
+  const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
+
+  function handleSendModalClose() {
+    setSendModalOpen(false);
+    setSelected(new Set());
+  }
+
   return (
     <>
       <GalleryToolbar
@@ -85,6 +121,9 @@ function GalleryContent() {
         onFilter={setFilterMode}
         sort={sort}
         onSort={setSort}
+        selectedCount={selected.size}
+        sendDisabledReason={disabledReason}
+        onSend={() => setSendModalOpen(true)}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
@@ -135,6 +174,8 @@ function GalleryContent() {
             source={source}
             onOpenVariant={handleOpenVariant}
             onRegenerate={() => mutate()}
+            selected={selected}
+            onToggleVariant={handleToggleVariant}
           />
         ))}
       </div>
@@ -149,6 +190,15 @@ function GalleryContent() {
           onClose={handleSheetClose}
           onNav={handleSheetNav}
           onRegenerate={() => mutate()}
+        />
+      )}
+
+      {/* Send to Drive modal — only opened when the toolbar button is enabled */}
+      {sendModalOpen && (
+        <SendToDriveModal
+          refs={okRefs}
+          destinations={destinations}
+          onClose={handleSendModalClose}
         />
       )}
     </>

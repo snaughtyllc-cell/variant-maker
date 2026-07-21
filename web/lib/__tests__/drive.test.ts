@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
+import { exportProgressLabel, okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
 import type { SourceOut } from "@/lib/types";
 
 const sources: SourceOut[] = [{
@@ -52,5 +52,17 @@ describe("sendDisabledReason", () => {
       [{ id: "dst_1", name: "R", folder_id: "f", auth_mode: "service_account" }],
       [{ source_id: "s1", index: 1 }],
     )).toBeNull();
+  });
+});
+
+describe("exportProgressLabel", () => {
+  it("counts finished and current", () => {
+    expect(exportProgressLabel({
+      files: [
+        { status: "succeeded", filename: "v01.mp4" },
+        { status: "uploading", filename: "v02.mp4" },
+        { status: "pending", filename: "v03.mp4" },
+      ],
+    })).toEqual({ done: 1, total: 3, current: "v02.mp4" });
   });
 });
