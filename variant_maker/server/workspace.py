@@ -28,3 +28,16 @@ class Workspace:
         with open(path, "wb") as f:
             f.write(data)
         return path
+
+    def drive_dir(self) -> str:
+        d = os.path.join(self.root, "drive")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def destinations_path(self) -> str:
+        return os.path.join(self.drive_dir(), "destinations.json")
+
+    def exports_dir(self) -> str:
+        d = os.path.join(self.drive_dir(), "exports")
+        os.makedirs(d, exist_ok=True)
+        return d
