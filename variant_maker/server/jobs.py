@@ -360,8 +360,12 @@ class JobStore:
                 ):
                     continue
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
-                in_path = maybe_normalize_upload(in_path)
-                source.filename = os.path.basename(in_path)
+                proxied = maybe_normalize_upload(in_path)
+                new_name = os.path.basename(proxied)
+                if new_name != source.filename:
+                    source.filename = new_name
+                    self._persist(job)
+                in_path = proxied
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
                 resume = getattr(self._runner, "resume_run", None)
                 if skip_finished and callable(resume) and source.runpod_job_id:

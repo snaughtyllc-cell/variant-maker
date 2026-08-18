@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, DragEvent } from "react";
-import { dropZoneBrowse, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
+import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
 import { accepts } from "@/lib/files";
 
 interface DropZoneProps {
@@ -84,6 +84,18 @@ export function DropZone({ onFiles }: DropZoneProps) {
         }}
       >
         {dropZoneSubcopy()}
+      </span>
+      <span
+        style={{
+          display: "block",
+          fontSize: 11,
+          color: "var(--color-muted)",
+          marginTop: 8,
+          lineHeight: 1.4,
+          padding: "0 8px",
+        }}
+      >
+        {dropZoneHint()}
       </span>
       <div
         style={{

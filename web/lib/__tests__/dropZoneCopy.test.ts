@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dropZoneBrowse, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
+import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
 import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
 
 describe("drop zone copy", () => {
@@ -7,6 +7,7 @@ describe("drop zone copy", () => {
     expect(dropZoneTitle()).toBe("Add videos");
     expect(dropZoneSubcopy()).toMatch(/tap/i);
     expect(dropZoneBrowse()).toMatch(/camera roll|files/i);
+    expect(dropZoneHint()).toMatch(/1080/i);
   });
 });
 
