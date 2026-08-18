@@ -1,6 +1,12 @@
 name: Build VaryForge control-plane image
 
 on:
+  push:
+    branches:
+      - cursor/railway-runpod-split-c975
+    paths:
+      - deploy/runpod/**
+      - .github/workflows/build-variant-cp.yml
   workflow_dispatch:
 
 permissions:
