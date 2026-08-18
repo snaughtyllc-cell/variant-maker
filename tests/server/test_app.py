@@ -36,6 +36,18 @@ def test_create_job_returns_sources(tmp_path):
     store.wait(body["job_id"], timeout=5)
 
 
+def test_create_job_quality_mode_hq(tmp_path):
+    client, store = _client(tmp_path)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "quality_mode": "hq"},
+    )
+    assert resp.status_code == 201
+    store.wait(resp.json()["job_id"], timeout=5)
+    assert store._runner.last_quality_mode == "hq"
+
+
 def test_get_job_detail_shows_ok_variants_and_counts(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",

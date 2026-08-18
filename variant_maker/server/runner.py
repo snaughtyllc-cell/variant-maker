@@ -24,6 +24,13 @@ MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 ALLOW_CREATIVE_ESCALATE = True
 
 
+def normalize_quality_mode(value: str | None, *, default: str = DEFAULT_QUALITY_MODE) -> str:
+    if value is None:
+        return default
+    mode = str(value).strip().lower()
+    return mode if mode in ("fast", "hq") else default
+
+
 @dataclass
 class VariantResult:
     index: int
@@ -50,7 +57,8 @@ class SourceResult:
 class Runner(Protocol):
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True) -> SourceResult:
+            allow_creative_escalate: bool = True,
+            quality_mode: str = DEFAULT_QUALITY_MODE) -> SourceResult:
         ...
 
 
@@ -59,7 +67,8 @@ class LocalRunner:
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True) -> SourceResult:
+            allow_creative_escalate: bool = True,
+            quality_mode: str = DEFAULT_QUALITY_MODE) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -86,7 +95,7 @@ class LocalRunner:
             "count": count,
             "preset": DEFAULT_PRESET,
             "platform": DEFAULT_PLATFORM,
-            "quality_mode": DEFAULT_QUALITY_MODE,
+            "quality_mode": normalize_quality_mode(quality_mode),
             "max_regen": MAX_REGEN,
             "jobs": 1,
             "uniqueness_target": UNIQUENESS_TARGET,

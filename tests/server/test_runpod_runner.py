@@ -96,6 +96,24 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
     assert captured["quality_mode"] == "fast"
 
 
+def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
+    captured = {}
+
+    class CapturingClient:
+        def stream_run(self, payload):
+            captured.update(payload["input"])
+            return iter([{"type": "result", "variants": [], "manifest_key": None}])
+
+    monkeypatch.setenv("VARIANT_QUALITY_MODE", "fast")
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    RunPodServerlessRunner(store, CapturingClient()).run(
+        str(src), count=1, out_dir=str(tmp_path / "o"), source_id="s",
+        on_event=lambda e: None, quality_mode="hq")
+    assert captured["quality_mode"] == "hq"
+
+
 def test_runner_accepts_allow_creative_escalate(tmp_path):
     captured = {}
 

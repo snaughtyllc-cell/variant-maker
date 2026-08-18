@@ -96,3 +96,24 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
     assert captured["max_regen"] == 3
     assert captured["jobs"] == 1
     assert captured["count"] == 5
+
+
+def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
+    from variant_maker.server import runner as runner_mod
+    captured = {}
+
+    def fake_run(config, *, on_event=None):
+        captured.update(config)
+        open(f"{config['out']}/manifest.json", "w").close()
+
+        class M:
+            variants = []
+
+        return M()
+
+    monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    LocalRunner().run(
+        "src.mp4", count=1, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="hq",
+    )
+    assert captured["quality_mode"] == "hq"

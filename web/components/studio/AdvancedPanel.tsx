@@ -4,11 +4,15 @@ import { useState } from "react";
 interface AdvancedPanelProps {
   allowCreativeEscalate: boolean;
   onAllowCreativeEscalateChange: (value: boolean) => void;
+  qualityMode: "fast" | "hq";
+  onQualityModeChange: (value: "fast" | "hq") => void;
 }
 
 export function AdvancedPanel({
   allowCreativeEscalate,
   onAllowCreativeEscalateChange,
+  qualityMode,
+  onQualityModeChange,
 }: AdvancedPanelProps) {
   const [open, setOpen] = useState(false);
 
@@ -63,6 +67,41 @@ export function AdvancedPanel({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Output format</span>
             <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12 }}>
+            <span>
+              Quality
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 10.5,
+                  color: "var(--color-muted2)",
+                  marginTop: 2,
+                  lineHeight: 1.4,
+                }}
+              >
+                Fast is FFmpeg only. HQ runs Phase 8 AI upscale (sharper, more different,
+                slower — start with 1–2 variants on a 20–30s clip).
+              </span>
+            </span>
+            <select
+              value={qualityMode}
+              onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
+              style={{
+                marginLeft: 12,
+                flexShrink: 0,
+                background: "#16161f",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-line)",
+                borderRadius: 8,
+                padding: "6px 8px",
+                fontSize: 12,
+              }}
+            >
+              <option value="fast">Fast</option>
+              <option value="hq">HQ (Phase 8)</option>
+            </select>
           </div>
 
           <label

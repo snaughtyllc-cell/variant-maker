@@ -70,12 +70,14 @@ export async function createJob(
   files: File[],
   count: number,
   allowCreativeEscalate: boolean = true,
+  qualityMode: "fast" | "hq" = "fast",
 ): Promise<CreateJobResponse> {
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
     const fd = new FormData();
     fd.append("count", String(count));
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
+    fd.append("quality_mode", qualityMode);
     for (const f of files) fd.append("files", f, f.name);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
@@ -88,6 +90,7 @@ export async function createJob(
   fd.append("upload_ids", uploadIds.join(","));
   fd.append("count", String(count));
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
+  fd.append("quality_mode", qualityMode);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 

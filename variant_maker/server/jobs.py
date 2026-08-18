@@ -10,7 +10,7 @@ import zipfile
 from dataclasses import dataclass, field
 
 from .events import VariantEvent
-from .runner import Runner
+from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
 from variant_maker.normalize import maybe_normalize_upload
 
@@ -59,6 +59,7 @@ class Job:
     state: str = "running"
     events: list[VariantEvent] = field(default_factory=list)
     allow_creative_escalate: bool = True
+    quality_mode: str = "fast"
 
 
 def _now() -> str:
@@ -76,7 +77,8 @@ class JobStore:
         self._source_index: dict[str, tuple[str, JobSource]] = {}
 
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
-                    allow_creative_escalate: bool = True) -> Job:
+                    allow_creative_escalate: bool = True,
+                    quality_mode: str = "fast") -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -84,10 +86,11 @@ class JobStore:
             self._ws.save_upload(job_id, source_id, filename, data)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-        return self._start_job(job_id, sources, count, allow_creative_escalate)
+        return self._start_job(job_id, sources, count, allow_creative_escalate, quality_mode)
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
-                               allow_creative_escalate: bool = True) -> Job:
+                               allow_creative_escalate: bool = True,
+                               quality_mode: str = "fast") -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -98,12 +101,13 @@ class JobStore:
             os.replace(abs_path, dest)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-        return self._start_job(job_id, sources, count, allow_creative_escalate)
+        return self._start_job(job_id, sources, count, allow_creative_escalate, quality_mode)
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
-                    allow_creative_escalate: bool) -> Job:
+                    allow_creative_escalate: bool,                     quality_mode: str = "fast") -> Job:
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
-                   allow_creative_escalate=allow_creative_escalate)
+                   allow_creative_escalate=allow_creative_escalate,
+                   quality_mode=normalize_quality_mode(quality_mode))
         with self._lock:
             self._jobs[job_id] = job
             self._done[job_id] = threading.Event()
@@ -144,6 +148,7 @@ class JobStore:
                     in_path, count=job.count, out_dir=out_dir,
                     source_id=source.source_id, on_event=on_event,
                     allow_creative_escalate=job.allow_creative_escalate,
+                    quality_mode=job.quality_mode,
                 )
                 source.variants = [
                     VariantInfo(
@@ -188,6 +193,7 @@ class JobStore:
             sources: list[JobSource] = []
             created_utc = None
             count = 0
+            quality_mode = "fast"
             for source_id in sorted(os.listdir(job_dir)):
                 source_dir = os.path.join(job_dir, source_id)
                 if not os.path.isdir(source_dir):
@@ -207,6 +213,7 @@ class JobStore:
                 run = data.get("run") if isinstance(data.get("run"), dict) else {}
                 requested = int(run.get("count") or len(data.get("variants") or []) or 0)
                 count = max(count, requested)
+                quality_mode = normalize_quality_mode(run.get("quality_mode"), default=quality_mode)
                 filename = source_id
                 in_dir = os.path.join(source_dir, "in")
                 if os.path.isdir(in_dir):
@@ -242,6 +249,7 @@ class JobStore:
                 created_utc=str(created_utc or _now()),
                 sources=sources,
                 state="done",
+                quality_mode=quality_mode,
             )
             with self._lock:
                 self._jobs[job_id] = job
@@ -313,10 +321,12 @@ class JobStore:
         start = max((v.index for v in source.variants), default=0)
         job = self._jobs.get(job_id)
         allow_creative_escalate = job.allow_creative_escalate if job else True
+        quality_mode = job.quality_mode if job else "fast"
         result = self._runner.run(
             self._ws.source_in_path(job_id, source_id, source.filename),
             count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
             allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode,
         )
         for v in result.variants:
             source.variants.append(VariantInfo(

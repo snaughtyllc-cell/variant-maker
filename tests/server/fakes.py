@@ -22,7 +22,10 @@ class FakeRunner:
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True) -> SourceResult:
+            allow_creative_escalate: bool = True,
+            quality_mode: str = "fast") -> SourceResult:
+        self.last_quality_mode = quality_mode
+        self.last_allow_creative_escalate = allow_creative_escalate
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):

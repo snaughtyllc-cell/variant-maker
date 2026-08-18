@@ -24,7 +24,7 @@ class _PausingRunner:
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True) -> SourceResult:
+            allow_creative_escalate: bool = True, quality_mode: str = "fast") -> SourceResult:
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):
@@ -153,3 +153,22 @@ def test_regenerate_appends_variants(tmp_path):
     assert result is src
     assert len(src.variants) == 4
     assert [v.index for v in src.variants] == [1, 2, 3, 4]
+
+
+def test_create_job_passes_quality_mode_hq_to_runner(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    assert runner.last_quality_mode == "hq"
+    assert job.quality_mode == "hq"
+
+
+def test_regenerate_keeps_job_quality_mode(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    store.regenerate(src.source_id, 1)
+    assert runner.last_quality_mode == "hq"

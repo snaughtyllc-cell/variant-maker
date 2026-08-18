@@ -24,7 +24,17 @@ describe("createJob posts multipart with files + count", () => {
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
     const body = (init as RequestInit).body as FormData;
     expect(body.get("count")).toBe("3");
+    expect(body.get("quality_mode")).toBe("fast");
     expect(body.getAll("files").length).toBe(1);
+  });
+
+  it("sends quality_mode hq when requested", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 2, true, "hq");
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("quality_mode")).toBe("hq");
   });
 });
 

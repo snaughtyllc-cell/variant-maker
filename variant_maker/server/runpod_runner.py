@@ -15,6 +15,7 @@ from .runner import (
     UNIQUENESS_TARGET,
     SourceResult,
     VariantResult,
+    normalize_quality_mode,
 )
 from .runpod_client import RunPodClient
 from .storage import ObjectStore
@@ -35,7 +36,8 @@ class RunPodServerlessRunner:
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True) -> SourceResult:
+            allow_creative_escalate: bool = True,
+            quality_mode: str | None = None) -> SourceResult:
         basename = os.path.basename(source_path)
         source_key = f"inputs/{source_id}/{basename}"
         self._store.put(source_key, source_path)
@@ -43,7 +45,8 @@ class RunPodServerlessRunner:
         payload = {"input": {
             "source_key": source_key, "source_id": source_id, "count": count,
             "preset": DEFAULT_PRESET, "platform": DEFAULT_PLATFORM,
-            "quality_mode": _quality_mode(), "max_regen": MAX_REGEN,
+            "quality_mode": normalize_quality_mode(quality_mode, default=_quality_mode()),
+            "max_regen": MAX_REGEN,
             "allow_creative_escalate": allow_creative_escalate,
             "uniqueness_target": UNIQUENESS_TARGET,
             "uniq_strengths": list(UNIQ_STRENGTHS),

@@ -282,9 +282,13 @@ def create_app(
 
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(files: list[UploadFile], count: int = Form(...),
-                          allow_creative_escalate: bool = Form(True)) -> CreateJobResponse:
+                          allow_creative_escalate: bool = Form(True),
+                          quality_mode: str = Form("fast")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
-        job = store.create_job(uploads, count=count, allow_creative_escalate=allow_creative_escalate)
+        job = store.create_job(
+            uploads, count=count, allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode,
+        )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True) for s in job.sources])
 
@@ -320,6 +324,7 @@ def create_app(
         upload_ids: str = Form(...),
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
+        quality_mode: str = Form("fast"),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -334,6 +339,7 @@ def create_app(
             paths.append((meta["filename"], meta["path"]))
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode,
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)

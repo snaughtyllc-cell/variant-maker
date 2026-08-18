@@ -17,6 +17,7 @@ export default function StudioPage() {
   const [durations, setDurations] = useState<number[]>([]);
   const [perVideo, setPerVideo] = useState(5);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
+  const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +46,7 @@ export default function StudioPage() {
     setError(null);
     setBusy(true);
     try {
-      const resp = await createJob(files, perVideo, allowCreativeEscalate);
+      const resp = await createJob(files, perVideo, allowCreativeEscalate, qualityMode);
       start(resp);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
@@ -124,6 +125,8 @@ export default function StudioPage() {
         <AdvancedPanel
           allowCreativeEscalate={allowCreativeEscalate}
           onAllowCreativeEscalateChange={setAllowCreativeEscalate}
+          qualityMode={qualityMode}
+          onQualityModeChange={setQualityMode}
         />
       </div>
 
