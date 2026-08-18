@@ -13,6 +13,9 @@ interface GalleryToolbarProps {
   selectedCount: number;
   sendDisabledReason: string | null;
   onSend: () => void;
+  selectAllLabel: string;
+  selectAllDisabled?: boolean;
+  onSelectAll: () => void;
 }
 
 export function GalleryToolbar({
@@ -25,6 +28,9 @@ export function GalleryToolbar({
   selectedCount,
   sendDisabledReason,
   onSend,
+  selectAllLabel,
+  selectAllDisabled,
+  onSelectAll,
 }: GalleryToolbarProps) {
   const sendDisabled = sendDisabledReason != null;
   const chipBase: React.CSSProperties = {
@@ -70,7 +76,21 @@ export function GalleryToolbar({
         >
           Sort: {sort === "newest" ? "Newest" : "Newest"} ▾
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onSelectAll}
+            disabled={selectAllDisabled}
+            style={{
+              ...chipBase,
+              minHeight: 44,
+              fontWeight: 700,
+              opacity: selectAllDisabled ? 0.5 : 1,
+              cursor: selectAllDisabled ? "not-allowed" : "pointer",
+            }}
+          >
+            {selectAllLabel}
+          </button>
           <button
             onClick={onSend}
             disabled={sendDisabled}

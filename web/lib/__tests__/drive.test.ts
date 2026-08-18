@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { exportProgressLabel, oauthErrorMessage, okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
+import {
+  exportProgressLabel,
+  oauthErrorMessage,
+  okVariantKeys,
+  okVariantRefs,
+  selectAllLabel,
+  selectionHasAllOk,
+  sendDisabledReason,
+  truncateFolderId,
+  withOkSelection,
+} from "@/lib/drive";
 import type { SourceOut } from "@/lib/types";
 
 const sources: SourceOut[] = [{
@@ -15,6 +25,32 @@ describe("okVariantRefs", () => {
   it("keeps only ok selected", () => {
     const sel = new Set(["s1:1", "s1:2"]);
     expect(okVariantRefs(sources, sel)).toEqual([{ source_id: "s1", index: 1 }]);
+  });
+});
+
+describe("select all ok variants", () => {
+  it("lists only ok keys", () => {
+    expect(okVariantKeys(sources)).toEqual(["s1:1"]);
+  });
+
+  it("selects every ok variant and deselects them", () => {
+    const all = withOkSelection(new Set(), sources, true);
+    expect([...all]).toEqual(["s1:1"]);
+    expect(selectionHasAllOk(all, sources)).toBe(true);
+    expect([...withOkSelection(all, sources, false)]).toEqual([]);
+  });
+
+  it("does not drop unrelated keys when deselecting a source", () => {
+    const mixed = withOkSelection(new Set(["other:9"]), sources, true);
+    expect(mixed.has("other:9")).toBe(true);
+    const cleared = withOkSelection(mixed, sources, false);
+    expect([...cleared]).toEqual(["other:9"]);
+  });
+
+  it("labels the toolbar action", () => {
+    expect(selectAllLabel(false, 20)).toBe("Select all (20)");
+    expect(selectAllLabel(true, 20)).toBe("Deselect all");
+    expect(selectAllLabel(false, 0)).toBe("Select all");
   });
 });
 

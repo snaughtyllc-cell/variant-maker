@@ -12,6 +12,41 @@ export function okVariantRefs(sources: SourceOut[], selected: Set<string>): Expo
   return refs;
 }
 
+export function okVariantKeys(sources: SourceOut[]): string[] {
+  const keys: string[] = [];
+  for (const source of sources) {
+    for (const variant of source.variants) {
+      if (variant.status !== "ok") continue;
+      keys.push(`${source.source_id}:${variant.index}`);
+    }
+  }
+  return keys;
+}
+
+export function selectionHasAllOk(selected: Set<string>, sources: SourceOut[]): boolean {
+  const keys = okVariantKeys(sources);
+  return keys.length > 0 && keys.every((k) => selected.has(k));
+}
+
+export function withOkSelection(
+  selected: Set<string>,
+  sources: SourceOut[],
+  select: boolean,
+): Set<string> {
+  const next = new Set(selected);
+  for (const key of okVariantKeys(sources)) {
+    if (select) next.add(key);
+    else next.delete(key);
+  }
+  return next;
+}
+
+export function selectAllLabel(allSelected: boolean, okCount: number): string {
+  if (okCount === 0) return "Select all";
+  if (allSelected) return "Deselect all";
+  return `Select all (${okCount})`;
+}
+
 export function oauthErrorMessage(reason: string | null | undefined): string {
   switch (reason) {
     case "exchange_failed":

@@ -4,9 +4,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
 import { filterSources, sortSources } from "@/lib/gallery";
-import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
+import {
+  okVariantKeys,
+  okVariantRefs,
+  selectAllLabel,
+  selectionHasAllOk,
+  sendDisabledReason,
+  withOkSelection,
+} from "@/lib/drive";
 import { getDriveStatus, listDestinations } from "@/lib/api";
-import type { Destination, DriveStatus } from "@/lib/types";
+import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
@@ -106,6 +113,16 @@ function GalleryContent() {
 
   const okRefs = okVariantRefs(allSources, selected);
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
+  const visibleOkCount = okVariantKeys(sorted).length;
+  const allVisibleSelected = selectionHasAllOk(selected, sorted);
+
+  function handleSelectAllVisible() {
+    setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
+  }
+
+  function handleToggleSelectSource(source: SourceOut, select: boolean) {
+    setSelected((prev) => withOkSelection(prev, [source], select));
+  }
 
   function handleSendModalClose() {
     setSendModalOpen(false);
@@ -121,9 +138,12 @@ function GalleryContent() {
         onFilter={setFilterMode}
         sort={sort}
         onSort={setSort}
-        selectedCount={selected.size}
+        selectedCount={okRefs.length}
         sendDisabledReason={disabledReason}
         onSend={() => setSendModalOpen(true)}
+        selectAllLabel={selectAllLabel(allVisibleSelected, visibleOkCount)}
+        selectAllDisabled={visibleOkCount === 0}
+        onSelectAll={handleSelectAllVisible}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
@@ -176,6 +196,7 @@ function GalleryContent() {
             onRegenerate={() => mutate()}
             selected={selected}
             onToggleVariant={handleToggleVariant}
+            onToggleSelectSource={handleToggleSelectSource}
           />
         ))}
       </div>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, sourceUrl, sourceZipUrl } from "@/lib/api";
 import { shortfallCopy } from "@/lib/shortfallCopy";
+import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -11,9 +12,12 @@ interface SourceGroupProps {
   onRegenerate: () => void;
   selected: Set<string>;
   onToggleVariant: (key: string) => void;
+  onToggleSelectSource: (source: SourceOut, select: boolean) => void;
 }
 
-export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onToggleVariant }: SourceGroupProps) {
+export function SourceGroup({
+  source, onOpenVariant, onRegenerate, selected, onToggleVariant, onToggleSelectSource,
+}: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
 
@@ -47,6 +51,9 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
 
   const thumbUrl = source.variants[0]?.file_url;
   const thumbSrc = thumbUrl ?? sourceUrl(source.source_id);
+  const okCount = okVariantKeys([source]).length;
+  const sourceAllSelected = selectionHasAllOk(selected, [source]);
+  const sourceSelectLabel = sourceAllSelected ? "Deselect" : `Select ${okCount}`;
 
   return (
     <div
@@ -146,6 +153,28 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
           >
             {fullDelivery ? "✓ " : ""}{source.delivered} / {source.requested} delivered
           </span>
+          {okCount > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelectSource(source, !sourceAllSelected);
+              }}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--color-violet-l)",
+                background: "#15101f",
+                border: "1px solid #2c2748",
+                padding: "7px 10px",
+                minHeight: 36,
+                borderRadius: 8,
+                cursor: "pointer",
+              }}
+            >
+              {sourceSelectLabel}
+            </button>
+          )}
           {source.delivered > 0 && (
             <a
               href={sourceZipUrl(source.source_id)}
