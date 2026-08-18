@@ -109,14 +109,14 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS:
-        parts.append(f"noise=alls={int(round(v['grain']))}:allf=t+u")
-    if platform.fps:
-        parts.append(f"fps={platform.fps:g}")
-
-    # tempo (one speed factor; audio mirrors it via atempo)
-    speed = v.get("speed", 1.0)
-    if abs(speed - 1.0) > _EPS:
-        parts.append(f"setpts={1.0 / speed:.6f}*PTS")
+        parts.append(f"noise=alls={round(v['grain'])}:allf=t+u")
+    # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
+    if not v.get("defer_tempo"):
+        if platform.fps:
+            parts.append(f"fps={platform.fps:g}")
+        speed = v.get("speed", 1.0)
+        if abs(speed - 1.0) > _EPS:
+            parts.append(f"setpts={1.0 / speed:.6f}*PTS")
 
     parts.append("format=yuv420p")
     return ",".join(parts)

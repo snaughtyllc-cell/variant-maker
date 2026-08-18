@@ -8,6 +8,7 @@ import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
+import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 
@@ -15,7 +16,7 @@ export default function StudioPage() {
   const { start, jobId, complete } = useRun();
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
-  const [perVideo, setPerVideo] = useState(5);
+  const [perVideo, setPerVideo] = useState(DEFAULT_PER_VIDEO);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [busy, setBusy] = useState(false);
@@ -101,7 +102,9 @@ export default function StudioPage() {
             value={perVideo}
             onChange={setPerVideo}
             min={1}
+            max={MAX_PER_VIDEO}
             fileCount={files.length}
+            qualityMode={qualityMode}
           />
           <GenerateButton
             fileCount={files.length}

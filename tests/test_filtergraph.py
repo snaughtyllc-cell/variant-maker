@@ -1,6 +1,6 @@
 from variant_maker import filtergraph
-from variant_maker.probe import ColorTags, SourceInfo
 from variant_maker.platforms import get_platform
+from variant_maker.probe import ColorTags, SourceInfo
 
 
 def make_params(**overrides):
@@ -58,6 +58,19 @@ def test_video_filters_golden():
 
 def test_audio_filters_golden():
     assert filtergraph.build_audio_filters(make_params(), make_src(), has_audio=True) == EXPECTED_AF
+
+
+def test_defer_tempo_omits_fps_and_speed_setpts_keeps_trim_setpts():
+    """HQ RIFE owns fps/tempo; ffmpeg must not also drop/dupe. Audio atempo is unchanged."""
+    p = make_params(video={"defer_tempo": True})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "fps=" not in vf
+    assert "setpts=0.980392*PTS" not in vf
+    assert "setpts=PTS-STARTPTS" in vf
+    assert vf == EXPECTED_VF.replace("fps=30,setpts=0.980392*PTS,", "")
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert af == EXPECTED_AF
+    assert "atempo=1.020000" in af
 
 
 # ---- structural invariants --------------------------------------------------

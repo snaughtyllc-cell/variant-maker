@@ -102,11 +102,15 @@ Status legend: ✅ done & verified · 🔨 to build
   we fan-out jobs / drop fp32 / skip extra encodes. Do **not** raise min workers to keep a
   GPU warm all day. Do **not** pin Blackwell MIG (`sm_120`). Prefer 4090 / L40S over L4.
 
-## Phase 9 — Neural interpolation  🔨
-- `neural/interpolate.py`: RIFE retime for speed/fps changes (replaces drop/dupe).
+## Phase 9 — Neural interpolation  ✅
+- `neural/interpolate.py`: gated module (`available` / `needed` / `build_interpolate_cmd` +
+  `interpolate_dir`) and HQ hook in `upscale_clip` (`defer_tempo` on neural-pre, RIFE after PNG
+  extract). Fast is unchanged (never calls `upscale_clip`). No RIFE binary in Docker yet.
 
-## Phase 10 — Content protection  🔨
-- `neural/protect.py`: segment subject/face/text; mask gates destructive transforms.
+## Phase 10 — Content protection  🔨 (module in, not wired)
+- `neural/protect.py`: lazy gate (`available()` via MediaPipe/SAM import or
+  `$VARIANT_MAKER_PROTECT_BACKEND`); `build_protection_mask` returns None (no weight download).
+  Pure `mask_blocks_crop` / `clamp_crop_keep` unit-tested. Pipeline gating is later.
 
 ## Phase 11 — Auto-tune controller  🔨  ← the "B" payoff
 - Bisection on `sample(..., strength=…)` → the strength that hits the **similarity target**
@@ -118,8 +122,7 @@ Status legend: ✅ done & verified · 🔨 to build
 - Spec still exists (`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`).
 - **Do not build this next.** Gallery labeling / Drop Ledger learning / `platform_result`
   bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
-- After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12,
-  and not Phase 9 (RIFE) until HQ can finish one short clip on the live worker.
+- After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12.
 
 ## Phase 13 — Stronger audio uniqueness  🔨
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
