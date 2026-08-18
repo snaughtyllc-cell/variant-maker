@@ -108,6 +108,16 @@ Status legend: ✅ done & verified · 🔨 to build
   staying above the quality floor. This is where the AI owns per-variant intensity, not the user.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
+## Phase 12 — Platform outcome tracking (learning loop)  🔨
+- The **real platform is the oracle.** We do not predict IG/TikTok/Reels flags in-process.
+- After a Drive drop: unlabeled `platform_result` **counts as pass**. Explicit
+  `flagged` / `duplicate_reject` is the miss we learn from.
+- Near-term: make Drop Ledger + Gallery labeling the VA path (sheet stays source of
+  truth; sync must not blank labels). Map Drive filenames/`drop_url` back to variant rows.
+- Later: those rows (Sheet first, DB only if we outgrow it) bias uniqueness / presets /
+  Phase 11. Auto-checking a live account is optional automation — not a detector.
+- Design: `docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`.
+
 ---
 
 ### Definition of done (every phase)

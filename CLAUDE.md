@@ -12,7 +12,9 @@ Full design: `docs/spec.md`. Build steps: `PLAN.md`.
 ## Scope guards (do not drift)
 - **NOT a detector.** A local "would-the-platform-catch-this" predictor is a *later* project.
   For now the real platform is the oracle; we test variants on it and label them. The only
-  hook we keep is the manifest's `platform_result` field.
+  hook we keep is the manifest's `platform_result` field. Unlabeled after a drop = pass;
+  flagged/duplicate-reject is the miss. Easier labeling + Drop Ledger learning is **Phase 12**
+  (`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`) — not a built-in IG checker.
 - **NOT a platform-spoofing engine.** Beating a specific detector is layered on later.
 - Don't add Redis/queues/cloud/desktop-app/account-proxy logic. Local CLI only.
 

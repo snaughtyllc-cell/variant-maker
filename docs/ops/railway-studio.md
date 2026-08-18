@@ -85,3 +85,8 @@ Studio → Settings → Drive → Connect Google.
 
 Share the Railway URL. One login is enough (no multi-user accounts yet). Treat
 the URL like a password until you add auth.
+
+**Platform flags:** Gallery variant sheet can mark Passed / Duplicate rejected
+(`platform_result`). Unlabeled clips count as pass. Drop Ledger (Google Sheet)
+is the durable log — API exists; Studio “ensure/sync” UX is Phase 12. See
+`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`.
