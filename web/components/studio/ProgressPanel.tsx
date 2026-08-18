@@ -1,10 +1,11 @@
 "use client";
 import { useRun } from "@/lib/runStore";
 import { runDeliveredNone } from "@/lib/progress";
+import { liveRunSubcopy } from "@/lib/hqWaitCopy";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete, clear } = useRun();
+  const { jobId, progress, complete, clear, qualityMode } = useRun();
 
   // Empty state — no job running
   if (!jobId) {
@@ -78,7 +79,7 @@ export function ProgressPanel() {
       ? emptyFail
         ? "The job ended without any playable variants. Try Fast (not HQ) and a smaller 1080p file."
         : "All variants done — open Gallery"
-      : "Live status updates every second. Stay here until tiles appear; Gallery stays empty until a variant finishes.";
+      : liveRunSubcopy(qualityMode);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -153,7 +154,7 @@ export function ProgressPanel() {
       {/* Source cards — scrollable */}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {sources.map((source) => (
-          <SourceProgressCard key={source.source_id} source={source} />
+          <SourceProgressCard key={source.source_id} source={source} qualityMode={qualityMode} />
         ))}
       </div>
     </div>

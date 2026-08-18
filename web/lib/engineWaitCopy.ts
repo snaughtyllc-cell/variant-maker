@@ -4,6 +4,7 @@ export const ENGINE_WAIT_HEADING = "Engine wait";
 
 export const ENGINE_WAIT_LINES = [
   "First Generate after a quiet stretch can sit 30 seconds to a couple of minutes before progress moves. That is the GPU waking up — it is not stuck.",
+  "HQ is slower than Fast. Once it says v01 rendering / HQ upscaling, it is already working on every frame — often several minutes before the first thumb. That silence is the AI step, not a freeze.",
   "After a job finishes, the engine stays warm for about 10 minutes. Generate again in that window and encoding starts right away (time to reorganize the next clip).",
   "If nobody has generated for longer than that, the next click waits on a cold start again. Idle GPU is billed only during that warm window, not all day.",
 ] as const;

@@ -8,6 +8,8 @@ describe("engineWaitCopy", () => {
     expect(blob).toMatch(/30 seconds|couple of minutes/i);
     expect(blob).toMatch(/not stuck/i);
     expect(blob).toMatch(/10 minutes/i);
+    expect(blob).toMatch(/HQ is slower/i);
+    expect(blob).toMatch(/several minutes/i);
     expect(blob).not.toMatch(/one minute/i);
   });
 });

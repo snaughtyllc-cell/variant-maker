@@ -3,12 +3,14 @@ import { SourceProgress } from "@/lib/progress";
 import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
 import { VideoThumb } from "@/components/common/VideoThumb";
+import { QualityMode, inFlightRenderingLabel } from "@/lib/hqWaitCopy";
 
 interface SourceProgressCardProps {
   source: SourceProgress;
+  qualityMode?: QualityMode;
 }
 
-export function SourceProgressCard({ source }: SourceProgressCardProps) {
+export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgressCardProps) {
   const { filename, requested, delivered, done, inFlight, variants } = source;
   const progress = requested > 0 ? done / requested : 0;
   const isActive = !!inFlight;
@@ -24,7 +26,7 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
     if (state === "rendering") {
       return (
         <span style={{ color: "var(--color-cyan)" }}>
-          ● v{idxStr} rendering…
+          {inFlightRenderingLabel(index, qualityMode)}
         </span>
       );
     }
@@ -130,8 +132,8 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
         <span>{delivered} ready</span>
       </div>
 
-      {/* Variant thumbnails grid — only render if any variants exist */}
-      {variants.length > 0 && (
+      {/* Thumbs + in-flight slot (show the dashed tile during v01 too) */}
+      {(variants.length > 0 || inFlight) && (
         <div
           style={{
             display: "grid",
@@ -187,6 +189,8 @@ export function SourceProgressCard({ source }: SourceProgressCardProps) {
                   ? "⟡ unique"
                   : inFlight.state === "escalating"
                   ? "⚡ escalate"
+                  : qualityMode === "hq"
+                  ? "HQ"
                   : "render"}
               </span>
             </div>

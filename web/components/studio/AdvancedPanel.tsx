@@ -82,7 +82,8 @@ export function AdvancedPanel({
                 }}
               >
                 Fast is quick, non-AI. HQ runs AI upscale — sharper and more
-                different, a little slower.
+                different. First HQ variant often sits on rendering for several
+                minutes with no thumb.
               </span>
             </span>
             <select

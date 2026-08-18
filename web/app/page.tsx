@@ -53,7 +53,7 @@ export default function StudioPage() {
     setBusy(true);
     try {
       const resp = await createJob(files, perVideo, allowCreativeEscalate, qualityMode);
-      start(resp);
+      start(resp, qualityMode);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
