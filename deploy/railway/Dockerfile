@@ -39,7 +39,6 @@ RUN pip install --no-cache-dir ".[server,farm,serverless]" \
  && chmod +x /app/deploy/pod/start.sh
 
 EXPOSE 3000
-VOLUME ["/data"]
 
 # Railway sets $PORT. start.sh maps WEB_PORT from PORT.
 CMD ["/app/deploy/pod/start.sh"]
