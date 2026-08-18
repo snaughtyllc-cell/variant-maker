@@ -199,6 +199,58 @@ def test_gallery_groups_sources_ok_only(tmp_path):
     assert gallery[0]["variants"][0]["uniqueness"] == 0.42
 
 
+def test_gallery_lists_newest_job_first(tmp_path):
+    """Sources must sort by job created_utc, not filename or job-id order."""
+    client, store = _client(tmp_path)
+    older = client.post(
+        "/api/jobs",
+        files=[("files", ("apple.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()
+    store.wait(older["job_id"], timeout=5)
+    store.get(older["job_id"]).created_utc = "2026-01-01T00:00:00Z"
+
+    newer = client.post(
+        "/api/jobs",
+        files=[("files", ("zebra.mp4", b"y", "video/mp4"))],
+        data={"count": "1"},
+    ).json()
+    store.wait(newer["job_id"], timeout=5)
+    store.get(newer["job_id"]).created_utc = "2026-08-18T12:00:00Z"
+
+    gallery = client.get("/api/gallery").json()
+    assert [s["filename"] for s in gallery] == ["zebra.mp4", "apple.mp4"]
+    assert gallery[0]["created_utc"] == "2026-08-18T12:00:00Z"
+
+
+def _write_gallery_manifest(tmp_path, job_id: str, source_id: str, filename: str, created_utc: str) -> None:
+    out = tmp_path / "jobs" / job_id / source_id / "out"
+    inn = tmp_path / "jobs" / job_id / source_id / "in"
+    out.mkdir(parents=True)
+    inn.mkdir(parents=True)
+    (inn / filename).write_bytes(b"x")
+    (out / "manifest.json").write_text(json.dumps({
+        "created_utc": created_utc,
+        "source": {"path": filename},
+        "run": {"platform": "reels", "count": 1},
+        "variants": [{
+            "index": 1, "filename": "v01.mp4", "status": "ok",
+            "quality": {"vmaf": 95},
+        }],
+    }))
+
+
+def test_gallery_hydrated_jobs_sort_by_created_utc_not_job_id(tmp_path):
+    """Restart hydrate walks job dirs alphabetically; gallery must still be newest-first."""
+    _write_gallery_manifest(tmp_path, "aaa-old-id", "src-a", "apple.mp4", "2026-01-01T00:00:00Z")
+    _write_gallery_manifest(tmp_path, "zzz-new-id", "src-z", "zebra.mp4", "2026-08-18T12:00:00Z")
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store.hydrate_from_disk() == 2
+    client = TestClient(create_app(store))
+    gallery = client.get("/api/gallery").json()
+    assert [s["filename"] for s in gallery] == ["zebra.mp4", "apple.mp4"]
+
+
 def test_diagnostics_lists_non_ok(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort", 3: "best_effort"})
     job_id = client.post("/api/jobs",

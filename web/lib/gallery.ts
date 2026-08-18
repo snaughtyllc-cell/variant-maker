@@ -5,5 +5,11 @@ export function filterSources(sources: SourceOut[], mode: "all" | "shortfall"): 
 }
 
 export function sortSources(sources: SourceOut[], by: "newest"): SourceOut[] {
-  return by === "newest" ? [...sources].reverse() : sources;
+  if (by !== "newest") return sources;
+  return [...sources].sort((a, b) => {
+    const ta = a.created_utc ?? "";
+    const tb = b.created_utc ?? "";
+    if (ta !== tb) return tb.localeCompare(ta);
+    return 0;
+  });
 }

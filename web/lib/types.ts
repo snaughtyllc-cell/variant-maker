@@ -23,6 +23,7 @@ export interface SourceOut {
   in_flight?: InFlightOut | null;
   job_state?: "running" | "done" | string | null;
   failed?: number;
+  created_utc?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }

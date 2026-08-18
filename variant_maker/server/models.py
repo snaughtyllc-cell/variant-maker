@@ -44,6 +44,7 @@ class SourceOut(BaseModel):
     in_flight: InFlightOut | None = None
     job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt count (Diagnostics population)
+    created_utc: str | None = None
 
 
 class JobSummary(BaseModel):

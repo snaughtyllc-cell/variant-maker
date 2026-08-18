@@ -102,6 +102,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None) -> Sourc
         in_flight=_in_flight(job, s.source_id),
         job_state=job.state if job is not None else None,
         failed=failed,
+        created_utc=job.created_utc if job is not None else None,
     )
 
 
@@ -414,6 +415,7 @@ def create_app(
         for job in store.list():
             for s in job.sources:
                 out.append(_source_out(s, ok_only=True, job=job))
+        out.sort(key=lambda s: s.created_utc or "", reverse=True)
         return out
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
