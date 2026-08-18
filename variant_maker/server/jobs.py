@@ -7,6 +7,7 @@ import os
 import threading
 import uuid
 import zipfile
+from dataclasses import dataclass, field
 from typing import Literal
 
 from variant_maker.normalize import maybe_normalize_upload

@@ -5,10 +5,10 @@ import zipfile
 
 from fastapi.testclient import TestClient
 
+from tests.server.fakes import FakeRunner
 from variant_maker.server.app import create_app
 from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
 from variant_maker.server.workspace import Workspace
-from tests.server.fakes import FakeRunner
 
 
 def test_health_ok():
@@ -394,9 +394,8 @@ def test_zip_404_when_ok_variants_are_missing_from_disk(tmp_path):
 
 def test_zip_and_file_routes_pull_missing_outputs_from_object_store(tmp_path):
     """GPU finished (job.json has variants) but Railway never copied mp4s — fetch from R2."""
-    from tests.server.fakes import FakeObjectStore
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
-    from tests.server.fakes import FakeRunPodClient
 
     blobstore = FakeObjectStore()
     ws = Workspace(str(tmp_path))

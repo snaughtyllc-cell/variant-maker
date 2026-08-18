@@ -9,6 +9,7 @@ from tests.server.fakes import FakeRunner
 from variant_maker.server.events import VariantEvent
 from variant_maker.server.jobs import (
     COPY_FAILED_MSG,
+    Job,
     JobSource,
     JobStore,
     VariantInfo,
@@ -310,9 +311,8 @@ def test_job_errors_when_ok_metadata_has_no_files(tmp_path):
 
 
 def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
-    from tests.server.fakes import FakeObjectStore
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
-    from tests.server.fakes import FakeRunPodClient
 
     blobstore = FakeObjectStore()
     ws = Workspace(str(tmp_path))
@@ -325,7 +325,6 @@ def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
     staged.write_bytes(b"RETRY-COPY-BYTES")
     blobstore.put(f"outputs/{source_id}/v01.mp4", str(staged))
 
-    from variant_maker.server.jobs import Job
     job = Job(
         job_id=job_id, count=1, created_utc="2026-08-18T00:00:00Z",
         sources=[JobSource(

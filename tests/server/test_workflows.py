@@ -1,12 +1,14 @@
 import json
 import os
 
+import pytest
 from farm_fakes import FakeDrive
 from fastapi.testclient import TestClient
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.app import create_app
 from variant_maker.server.jobs import JobStore
+from variant_maker.server.workflow_runner import _export_source
 from variant_maker.server.workspace import Workspace
 
 
@@ -197,12 +199,10 @@ def test_workflow_exports_each_inbox_video_into_its_own_subfolder(tmp_path):
 
 def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path):
     """Don't stamp the ledger done if GPU metadata is ok but Studio has no mp4s."""
-    from variant_maker.server.workflow_runner import _export_source
-
     drive = FakeDrive()
     client, store, _ = _app(tmp_path, drive)
     inbox_dest, inbox = _dest(client, drive, "Inbox")
-    out_dest, out = _dest(client, drive, "Out")
+    out_dest, _ = _dest(client, drive, "Out")
     clip = tmp_path / "ghost.mp4"
     clip.write_bytes(b"ghost-clip")
     drive.put_file("ghost.mp4", str(clip), parent=inbox)
@@ -225,7 +225,6 @@ def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path
         if os.path.isfile(path):
             os.remove(path)
 
-    import pytest
     with pytest.raises(RuntimeError, match="didn't copy"):
         _export_source(
             drive, store, job, source,
