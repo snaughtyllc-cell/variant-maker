@@ -54,7 +54,7 @@ export function GenerateButton({
       {busy ? "Generating…" : jobId ? (complete ? "New run first" : "Generating…") : "Generate"}
       <small style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85 }}>
         {busy || (jobId && !complete)
-          ? "in progress — Cancel on the right if this was a mistake"
+          ? "in progress — Cancel on the live run if this was a mistake"
           : jobId && complete
             ? "New run clears this pack"
             : `${total} variant${total !== 1 ? "s" : ""}`}

@@ -15,11 +15,11 @@ export function TopNav() {
 
   return (
     <header
-      className="flex items-center gap-[18px] px-[18px] py-3 border-b border-line"
+      className="top-nav flex items-center gap-2.5 px-3 py-2.5 border-b border-line sm:gap-[18px] sm:px-[18px] sm:py-3"
       style={{ background: "linear-gradient(180deg, #101018, #0c0c12)" }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 font-extrabold text-[15px] tracking-[0.2px] text-text">
+      <div className="flex items-center gap-2 font-extrabold text-[15px] tracking-[0.2px] text-text shrink-0">
         <span
           className="w-[18px] h-[18px] rounded-[6px] inline-block flex-none"
           style={{
@@ -27,11 +27,11 @@ export function TopNav() {
             boxShadow: "0 0 12px #7c5cff66",
           }}
         />
-        Variant Studio
+        <span className="hidden min-[400px]:inline">VaryForge</span>
       </div>
 
       {/* Nav links */}
-      <nav className="flex gap-1 ml-2">
+      <nav className="top-nav__links flex gap-1 ml-0 sm:ml-2 min-w-0">
         {NAV_LINKS.map(({ href, label }) => {
           const active =
             href === "/"
@@ -41,7 +41,7 @@ export function TopNav() {
             <Link
               key={href}
               href={href}
-              className="text-[13px] px-3 py-1.5 rounded-lg no-underline transition-colors"
+              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
               style={
                 active
                   ? { color: "#ffffff", background: "#1b1b27" }
@@ -55,7 +55,7 @@ export function TopNav() {
       </nav>
 
       {/* Status pills — push to right */}
-      <div className="ml-auto">
+      <div className="ml-auto shrink-0">
         <StatusStrip />
       </div>
     </header>

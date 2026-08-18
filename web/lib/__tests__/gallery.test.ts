@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { filterSources, sortSources } from "@/lib/gallery";
 const mk = (id: string, shortfall: number, created_utc = "") => ({
   source_id: id, filename: id, requested: 5, delivered: 5 - shortfall, shortfall,
-  variants: [] as const, created_utc,
+  variants: [], created_utc,
 });
 describe("gallery helpers", () => {
   it("filter shortfall keeps only under-delivered", () => {

@@ -32,7 +32,7 @@ export function GalleryToolbar({
     color: "var(--color-muted)",
     background: "#14141d",
     border: "1px solid var(--color-line)",
-    padding: "6px 11px",
+    padding: "10px 11px",
     borderRadius: 8,
     cursor: "pointer",
     userSelect: "none",
@@ -46,19 +46,12 @@ export function GalleryToolbar({
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "16px 20px 6px",
-        gap: 14,
-      }}
-    >
+    <div className="gallery-toolbar">
       <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
         <b style={{ color: "var(--color-text)" }}>{count}</b> sources ·{" "}
         <b style={{ color: "var(--color-text)" }}>{variantCount}</b> variants delivered
       </div>
-      <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+      <div className="gallery-toolbar__actions">
         <span
           style={filterMode === "all" ? chipOn : chipBase}
           onClick={() => onFilter("all")}
@@ -88,7 +81,8 @@ export function GalleryToolbar({
               color: "#fff",
               background: sendDisabled ? "#3a2c5c" : "linear-gradient(135deg, #7c5cff, #ff4d8d)",
               border: "none",
-              padding: "7px 14px",
+              padding: "10px 14px",
+              minHeight: 44,
               borderRadius: 8,
               cursor: sendDisabled ? "not-allowed" : "pointer",
               opacity: sendDisabled ? 0.6 : 1,

@@ -29,12 +29,12 @@ export function StatusStrip() {
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {loading ? "Connecting…" : ready && online ? "Engine ready" : "Engine offline"}
+        {loading ? "…" : ready && online ? "Ready" : "Offline"}
       </span>
 
-      {/* Local mode pill */}
+      {/* Local mode pill — desktop only; phones hide it to keep the bar usable */}
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+        className="status-cpu inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
         style={{ background: "#14141d" }}
       >
         Local&nbsp;·&nbsp;CPU&nbsp;<strong className="text-text font-semibold">fast</strong>

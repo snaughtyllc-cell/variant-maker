@@ -30,15 +30,15 @@ export function VariantStepper({
   }
 
   const btnStyle: React.CSSProperties = {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     background: "#1c1c28",
     border: "1px solid var(--color-line)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 16,
+    fontSize: 20,
     color: "var(--color-text)",
     cursor: "pointer",
     userSelect: "none",

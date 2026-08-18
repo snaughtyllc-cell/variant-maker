@@ -73,7 +73,7 @@ export function AdvancedPanel({
             <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12, gap: 10, flexWrap: "wrap" }}>
             <span>
               Quality
               <span

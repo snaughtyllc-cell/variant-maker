@@ -11,6 +11,7 @@ import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
+import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
 
 export default function StudioPage() {
   const { start, jobId, complete } = useRun();
@@ -60,21 +61,9 @@ export default function StudioPage() {
   }
 
   return (
-    <main
-      style={{
-        display: "grid",
-        gridTemplateColumns: "0.95fr 1.05fr",
-        minHeight: "calc(100vh - 49px)", // subtract top nav height
-        background: "var(--color-bg)",
-      }}
-    >
+    <main className={studioShellClass(!!jobId)}>
       {/* LEFT — cockpit */}
-      <div
-        style={{
-          padding: "22px",
-          borderRight: "1px solid var(--color-line)",
-        }}
-      >
+      <div className="studio-cockpit">
         <p
           style={{
             fontSize: 11,
@@ -94,7 +83,7 @@ export default function StudioPage() {
 
         <FileList files={files} durations={durations} onRemove={handleRemove} />
 
-        <div style={{ display: "flex", gap: 12, alignItems: "stretch", marginTop: 20 }}>
+        <div className="studio-actions">
           <VariantStepper
             value={perVideo}
             onChange={setPerVideo}
@@ -139,16 +128,8 @@ export default function StudioPage() {
         />
       </div>
 
-      {/* RIGHT — live progress (Task 6) */}
-      <div
-        style={{
-          padding: "18px 20px",
-          background: "#0c0c11",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
+      {/* RIGHT — live progress (on phones: hidden until a run, then pinned on top) */}
+      <div className={studioProgressIdleClass(!!jobId)}>
         <ProgressPanel />
       </div>
     </main>

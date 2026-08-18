@@ -127,7 +127,7 @@ function GalleryContent() {
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div style={{ padding: "8px 20px 22px" }}>
+      <div style={{ padding: "8px 16px 22px" }}>
         {isLoading && (
           <div
             style={{

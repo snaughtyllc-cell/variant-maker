@@ -72,6 +72,7 @@ export function VariantSheet({
         {/* Panel — right-docked slide-over */}
         <Dialog.Content
           aria-describedby={undefined}
+          className="variant-sheet"
           style={{
             position: "fixed",
             top: 0,
@@ -112,8 +113,8 @@ export function VariantSheet({
               disabled={isFirst}
               aria-label="Previous variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "#16161f",
                 border: "1px solid var(--color-line)",
@@ -121,7 +122,7 @@ export function VariantSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 color: isFirst ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isFirst ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isFirst ? 0.4 : 1,
@@ -166,8 +167,8 @@ export function VariantSheet({
               disabled={isLast}
               aria-label="Next variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "#16161f",
                 border: "1px solid var(--color-line)",
@@ -175,7 +176,7 @@ export function VariantSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 color: isLast ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isLast ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isLast ? 0.4 : 1,
@@ -188,8 +189,8 @@ export function VariantSheet({
             <Dialog.Close
               aria-label="Close"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "transparent",
                 border: "none",

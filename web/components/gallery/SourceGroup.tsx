@@ -60,15 +60,16 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
     >
       {/* Group header */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 13,
-          padding: "14px 16px",
-          borderBottom: "1px solid var(--color-line)",
-          cursor: "pointer",
-          userSelect: "none",
-        }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 13,
+            padding: "14px 16px",
+            borderBottom: "1px solid var(--color-line)",
+            cursor: "pointer",
+            userSelect: "none",
+            flexWrap: "wrap",
+          }}
         onClick={() => setOpen(o => !o)}
       >
         {/* Chevron */}
@@ -128,7 +129,7 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
         </div>
 
         {/* Right side: delivery pill + folder link */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <span
             style={{
               display: "inline-flex",
@@ -155,13 +156,12 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
               ⬇ Download ZIP
             </a>
           )}
-          <a
-            href="#"
-            onClick={(e) => e.stopPropagation()}
+          <span
+            className="source-folder-link"
             style={{ fontSize: 12, color: "var(--color-violet-l)", textDecoration: "none" }}
           >
             ⌅ Open source folder
-          </a>
+          </span>
         </div>
       </div>
 

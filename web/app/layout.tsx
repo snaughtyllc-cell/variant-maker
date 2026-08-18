@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RunProvider } from "../lib/runStore";
@@ -15,8 +15,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Variant Studio",
-  description: "Local zero-config video variant studio",
+  title: "VaryForge",
+  description: "Video variant studio — Fast daily packs from your phone or desktop",
+  appleWebApp: {
+    capable: true,
+    title: "VaryForge",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0a0a0e",
 };
 
 // Prevent static HTML shells from being cached by RunPod's CDN with stale JS refs.

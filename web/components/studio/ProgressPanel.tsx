@@ -70,7 +70,7 @@ export function ProgressPanel() {
             maxWidth: 200,
           }}
         >
-          Drop a video and hit Generate — progress shows here
+          Add a video and Generate — live tiles show here
         </p>
       </div>
     );
@@ -107,18 +107,20 @@ export function ProgressPanel() {
           justifyContent: "space-between",
           marginBottom: 14,
           flexShrink: 0,
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
             {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2, maxWidth: 280, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
             {sub}
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {jobId && !complete && (
             <button
               type="button"
@@ -129,8 +131,9 @@ export function ProgressPanel() {
                 border: "1px solid #5a1a1a",
                 color: "var(--color-red)",
                 borderRadius: 8,
-                padding: "6px 10px",
-                fontSize: 12,
+                padding: "10px 12px",
+                fontSize: 13,
+                minHeight: 44,
                 cursor: cancelling ? "wait" : "pointer",
               }}
             >
@@ -146,8 +149,9 @@ export function ProgressPanel() {
                 border: "1px solid var(--color-line)",
                 color: "var(--color-text)",
                 borderRadius: 8,
-                padding: "6px 10px",
-                fontSize: 12,
+                padding: "10px 12px",
+                fontSize: 13,
+                minHeight: 44,
                 cursor: "pointer",
               }}
             >
