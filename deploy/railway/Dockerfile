@@ -18,10 +18,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ffmpeg WITH libvmaf so VARIANT_RUNNER=local works before RunPod is wired.
+# The previous johnvansickle archive endpoint is unreachable from Railway's build
+# workers. BtbN publishes a Linux static GPL build with libvmaf enabled.
 RUN cd /tmp \
- && wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
- && tar xf ffmpeg-release-amd64-static.tar.xz \
- && cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/ \
+ && curl -fsSL --retry 5 --retry-all-errors \
+      -o ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+ && tar xf ffmpeg.tar.xz \
+ && cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg \
+       ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ \
  && rm -rf /tmp/ffmpeg-* \
  && test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
 
