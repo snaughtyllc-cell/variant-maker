@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useJobProgress } from "@/lib/useJobProgress";
 
 class MockES {
@@ -32,5 +32,25 @@ describe("useJobProgress", () => {
   it("waits until sources are known before opening", () => {
     renderHook(() => useJobProgress("j1", []));
     expect(MockES.last).toBeNull();
+  });
+
+  it("clears v01 rendering when poll says the job is done (GPU timeout)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 1, created_utc: "", state: "done",
+        error: "GPU job failed or hit the 20-minute limit.",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 1, delivered: 0, shortfall: 1,
+          variants: [],
+          in_flight: { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() => useJobProgress("j1", sources));
+    await waitFor(() => {
+      expect(result.current.complete).toBe(true);
+    });
+    expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.failed).toMatch(/20-minute/);
   });
 });

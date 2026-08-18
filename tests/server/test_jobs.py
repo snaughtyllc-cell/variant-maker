@@ -172,3 +172,20 @@ def test_regenerate_keeps_job_quality_mode(tmp_path):
     src = store.get(job.job_id).sources[0]
     store.regenerate(src.source_id, 1)
     assert runner.last_quality_mode == "hq"
+
+
+class _BoomRunner:
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast"):
+        on_event(VariantEvent(source_id=source_id, index=1, state="rendering"))
+        raise RuntimeError("RunPod job abc ended: FAILED")
+
+
+def test_runner_crash_marks_done_with_gpu_timeout_copy(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), _BoomRunner())
+    job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert job.error is not None
+    assert "20-minute" in job.error
+    assert job.sources[0].delivered == 0

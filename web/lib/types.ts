@@ -25,7 +25,7 @@ export interface SourceOut {
   failed?: number;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
-export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; }
+export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt"; quality: Quality; }
 export interface VariantEvent {

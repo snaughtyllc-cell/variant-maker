@@ -140,6 +140,24 @@ def test_get_job_exposes_in_flight_from_event_log(tmp_path):
     }
 
 
+def test_done_job_does_not_keep_rendering_in_flight(tmp_path):
+    from variant_maker.server.events import VariantEvent
+
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    sid = job.sources[0].source_id
+    job.events.append(VariantEvent(source_id=sid, index=1, state="rendering"))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["state"] == "done"
+    assert detail["sources"][0]["in_flight"] is None
+    assert detail.get("error") in (None, "")
+
+
 def test_gallery_groups_sources_ok_only(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",

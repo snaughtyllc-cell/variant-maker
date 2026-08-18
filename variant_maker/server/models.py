@@ -60,6 +60,7 @@ class JobDetail(BaseModel):
     created_utc: str
     state: str
     sources: list[SourceOut] = []
+    error: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):

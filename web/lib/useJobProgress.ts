@@ -50,7 +50,17 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       }
     }
   }
-  if (detail.state === "done") next = reduceEvent(next, { state: "job-done" });
+  if (detail.state === "done") {
+    const cleared: RunProgress = {
+      ...next,
+      complete: true,
+      failed: detail.error || next.failed || null,
+      bySource: Object.fromEntries(
+        Object.entries(next.bySource).map(([id, s]) => [id, { ...s, inFlight: undefined }]),
+      ),
+    };
+    next = reduceEvent(cleared, { state: "job-done" });
+  }
   return next;
 }
 

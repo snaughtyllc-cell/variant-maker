@@ -60,6 +60,18 @@ class Job:
     events: list[VariantEvent] = field(default_factory=list)
     allow_creative_escalate: bool = True
     quality_mode: str = "fast"
+    error: str | None = None
+
+
+def _public_job_error(exc: BaseException) -> str:
+    """Short UI string. RunPod FAILED after ~20 min is the HQ hang, not a mystery freeze."""
+    raw = str(exc)
+    if "ended: FAILED" in raw or "ended: CANCELLED" in raw or "TIMED_OUT" in raw.upper():
+        return (
+            "GPU job failed or hit the 20-minute limit. That HQ run is over — "
+            "New run, then Fast for the usual pack."
+        )
+    return raw or type(exc).__name__
 
 
 def _now() -> str:
@@ -162,9 +174,10 @@ class JobStore:
                     for v in result.variants
                 ]
         except Exception as exc:
-            # Uncaught pipeline/ffmpeg errors previously killed the worker thread
+            # Uncaught pipeline/ffmpeg/RunPod errors previously killed the worker thread
             # while finally still marked the job "done" with 0 variants — UI looked
             # like a silent failure. Log clearly; job still closes in finally.
+            job.error = _public_job_error(exc)
             print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
             job.state = "done"

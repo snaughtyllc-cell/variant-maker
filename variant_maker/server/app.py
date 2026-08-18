@@ -76,6 +76,10 @@ def _variant_out(source_id: str, v) -> VariantOut:
 def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
     if job is None:
         return None
+    # A finished job must not keep "v01 rendering" — last event is often rendering
+    # when RunPod kills HQ at the 20-minute cap.
+    if job.state == "done":
+        return None
     for e in reversed(job.events):
         if e.source_id != source_id:
             continue
@@ -359,7 +363,8 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources])
+                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources],
+                         error=job.error)
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:
