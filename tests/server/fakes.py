@@ -1,0 +1,122 @@
+"""A deterministic Runner that needs no ffmpeg — for JobStore / app tests."""
+from __future__ import annotations
+
+import os
+from typing import Callable
+
+from variant_maker.server.events import VariantEvent
+from variant_maker.server.gpu_worker import process_job
+from variant_maker.server.runner import SourceResult, VariantResult
+
+
+class FakeRunner:
+    """plan: {variant_index: status}. Emits the full lifecycle and writes placeholder files."""
+
+    def __init__(self, plan: dict[int, str] | None = None) -> None:
+        # default (empty plan): every variant is "ok".
+        # Pass a {variant_index: status} dict to override specific indices.
+        self.plan = plan or {}
+
+    def _status(self, i: int) -> str:
+        return self.plan.get(i, "ok")
+
+    def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True) -> SourceResult:
+        os.makedirs(out_dir, exist_ok=True)
+        variants = []
+        for i in range(1, count + 1):
+            status = self._status(i)
+            fname = f"v{i:02d}.mp4"
+            on_event(VariantEvent(source_id=source_id, index=i, state="rendering"))
+            on_event(VariantEvent(source_id=source_id, index=i, state="checking"))
+            uniq = 0.42 if status == "ok" else None
+            uniq_status = "ok" if status == "ok" else "unknown"
+            uniq_metric = "ssim_bits_v1" if status == "ok" else None
+            uniq_target = 24 / 64
+            quality = {"vmaf": 95.0 if status == "ok" else 50.0, "bits": 27 if status == "ok" else None}
+            on_event(VariantEvent(
+                source_id=source_id, index=i, state="done",
+                status=status, quality=quality, filename=fname,
+                uniqueness=uniq, uniqueness_status=uniq_status,
+                uniqueness_metric=uniq_metric, uniqueness_target=uniq_target,
+                escalated=False, preset_used="medium", strength_final=1.0,
+            ))
+            path = os.path.join(out_dir, fname)
+            open(path, "w").close()
+            variants.append(VariantResult(
+                index=i, filename=fname, status=status, quality=quality, path=path,
+                uniqueness=uniq, uniqueness_status=uniq_status,
+                uniqueness_metric=uniq_metric, uniqueness_target=uniq_target,
+                preset_used="medium", strength_final=1.0, escalated=False,
+                platform_result=None,
+            ))
+        mpath = os.path.join(out_dir, "manifest.json")
+        import json
+        with open(mpath, "w", encoding="utf-8") as f:
+            json.dump({
+                "created_utc": "2026-01-01T00:00:00Z",
+                "source": {"path": source_path},
+                "run": {"platform": "tiktok", "count": count, "preset": "medium"},
+                "variants": [
+                    {
+                        "index": v.index,
+                        "filename": v.filename,
+                        "status": v.status,
+                        "quality": v.quality,
+                        "uniqueness": v.uniqueness,
+                        "uniqueness_status": v.uniqueness_status,
+                        "uniqueness_metric": v.uniqueness_metric,
+                        "uniqueness_target": v.uniqueness_target,
+                        "preset_used": v.preset_used,
+                        "strength_final": v.strength_final,
+                        "escalated": v.escalated,
+                        "platform_result": v.platform_result,
+                        "seed": v.index,
+                        "params": {"video": {"crop_keep": 0.97}},
+                    }
+                    for v in variants
+                ],
+            }, f)
+        return SourceResult(variants=variants, manifest_path=mpath)
+
+
+class FakeRunPodClient:
+    """Yields a scripted list of output chunks; ignores the payload. No network."""
+
+    def __init__(self, chunks: list[dict]) -> None:
+        self._chunks = chunks
+
+    def stream_run(self, payload: dict):
+        yield from self._chunks
+
+
+class LoopbackRunPodClient:
+    """Drives the REAL gpu_worker.process_job against a shared store — no network, no cloud.
+    Used to verify the runner<->worker chunk contract end to end."""
+
+    def __init__(self, store, work_dir: str) -> None:
+        self._store = store
+        self._work_dir = work_dir
+
+    def stream_run(self, payload: dict):
+        yield from process_job(payload["input"], self._store, work_dir=self._work_dir)
+
+
+class FakeObjectStore:
+    """In-memory object store for tests — no network, no boto3."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, bytes] = {}
+
+    def put(self, key: str, local_path: str) -> None:
+        with open(local_path, "rb") as f:
+            self._data[key] = f.read()
+
+    def get(self, key: str, local_path: str) -> None:
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(self._data[key])
+
+    def list_prefix(self, prefix: str) -> list[str]:
+        return [k for k in self._data if k.startswith(prefix)]
