@@ -114,15 +114,12 @@ Status legend: ✅ done & verified · 🔨 to build
   staying above the quality floor. This is where the AI owns per-variant intensity, not the user.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
-## Phase 12 — Platform outcome tracking (learning loop)  🔨
-- The **real platform is the oracle.** We do not predict IG/TikTok/Reels flags in-process.
-- After a Drive drop: unlabeled `platform_result` **counts as pass**. Explicit
-  `flagged` / `duplicate_reject` is the miss we learn from.
-- Near-term: make Drop Ledger + Gallery labeling the VA path (sheet stays source of
-  truth; sync must not blank labels). Map Drive filenames/`drop_url` back to variant rows.
-- Later: those rows (Sheet first, DB only if we outgrow it) bias uniqueness / presets /
-  Phase 11. Auto-checking a live account is optional automation — not a detector.
-- Design: `docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`.
+## Phase 12 — Platform outcome tracking (learning loop)  ⏸ skipped for now
+- Spec still exists (`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`).
+- **Do not build this next.** Gallery labeling / Drop Ledger learning / `platform_result`
+  bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
+- After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12,
+  and not Phase 9 (RIFE) until HQ can finish one short clip on the live worker.
 
 ## Phase 13 — Stronger audio uniqueness  🔨
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
