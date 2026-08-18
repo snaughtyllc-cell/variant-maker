@@ -30,24 +30,54 @@ class FakeRunner:
             fname = f"v{i:02d}.mp4"
             on_event(VariantEvent(source_id=source_id, index=i, state="rendering"))
             on_event(VariantEvent(source_id=source_id, index=i, state="checking"))
+            uniq = 0.42 if status == "ok" else None
+            uniq_status = "ok" if status == "ok" else "unknown"
+            uniq_metric = "ssim_bits_v1" if status == "ok" else None
+            uniq_target = 24 / 64
+            quality = {"vmaf": 95.0 if status == "ok" else 50.0, "bits": 27 if status == "ok" else None}
             on_event(VariantEvent(
                 source_id=source_id, index=i, state="done",
-                status=status, quality={"vmaf": 95.0 if status == "ok" else 50.0},
-                filename=fname,
+                status=status, quality=quality, filename=fname,
+                uniqueness=uniq, uniqueness_status=uniq_status,
+                uniqueness_metric=uniq_metric, uniqueness_target=uniq_target,
+                escalated=False, preset_used="medium", strength_final=1.0,
             ))
             path = os.path.join(out_dir, fname)
             open(path, "w").close()
             variants.append(VariantResult(
-                index=i, filename=fname, status=status, quality={"vmaf": 95.0}, path=path,
-                uniqueness=0.42 if status == "ok" else None,
-                uniqueness_status="ok" if status == "ok" else "unknown",
-                uniqueness_metric="phash+hist" if status == "ok" else None,
-                uniqueness_target=0.35,
+                index=i, filename=fname, status=status, quality=quality, path=path,
+                uniqueness=uniq, uniqueness_status=uniq_status,
+                uniqueness_metric=uniq_metric, uniqueness_target=uniq_target,
                 preset_used="medium", strength_final=1.0, escalated=False,
                 platform_result=None,
             ))
         mpath = os.path.join(out_dir, "manifest.json")
-        open(mpath, "w").close()
+        import json
+        with open(mpath, "w", encoding="utf-8") as f:
+            json.dump({
+                "created_utc": "2026-01-01T00:00:00Z",
+                "source": {"path": source_path},
+                "run": {"platform": "tiktok", "count": count, "preset": "medium"},
+                "variants": [
+                    {
+                        "index": v.index,
+                        "filename": v.filename,
+                        "status": v.status,
+                        "quality": v.quality,
+                        "uniqueness": v.uniqueness,
+                        "uniqueness_status": v.uniqueness_status,
+                        "uniqueness_metric": v.uniqueness_metric,
+                        "uniqueness_target": v.uniqueness_target,
+                        "preset_used": v.preset_used,
+                        "strength_final": v.strength_final,
+                        "escalated": v.escalated,
+                        "platform_result": v.platform_result,
+                        "seed": v.index,
+                        "params": {"video": {"crop_keep": 0.97}},
+                    }
+                    for v in variants
+                ],
+            }, f)
         return SourceResult(variants=variants, manifest_path=mpath)
 
 

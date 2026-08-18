@@ -7,6 +7,15 @@ export function formatDuration(s: number): string {
 }
 export function vmafPass(v: number): boolean { return v >= VMAF_FLOOR; }
 
+/** Path-B cheap readout: same SSIM-bits scale as uniqueness (similarity = 1 − uniqueness). */
+export function similarityFromUniqueness(uniqueness: number): number {
+  return 1 - uniqueness;
+}
+
+export function pct01(v: number): number {
+  return Math.round(Math.min(1, Math.max(0, v)) * 100);
+}
+
 export function diagnosticsReason(d: DiagnosticsItem): { title: string; metric: string; corrupt: boolean } {
   if (d.status === "corrupt" || d.quality.spatial_ok === false) {
     const sv = d.quality.spatial_vmaf ?? 0;

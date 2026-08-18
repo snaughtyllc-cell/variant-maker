@@ -16,7 +16,13 @@ from .probe import SourceInfo
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise subprocess.CalledProcessError(
+            result.returncode, result.args, output=result.stdout, stderr=detail or result.stderr,
+        )
+    return result
 
 
 def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path: str) -> list[str]:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import random
 import subprocess
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from . import quality, uniqueness
@@ -17,6 +18,12 @@ from .platforms import get_platform
 from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, sample
+
+# Top-tail vs TikFusion's ~18-bit floor: default target 24/64 ≈ 0.375.
+DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
+# Wider ladder so medium can clear 24 bits before the one creative escalate.
+DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
+DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 
 
 def _ffmpeg_version() -> str:
@@ -47,14 +54,21 @@ def run(config: dict, *, on_event=None) -> Manifest:
     jobs = max(1, config.get("jobs", 1))
 
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
-    # clears the target, spend exactly one creative-escalate attempt on the strong preset.
-    uniqueness_target = config.get("uniqueness_target", 0.35)
+    # clears the target (and peer-bits floor), spend exactly one creative-escalate
+    # attempt on the strong preset.
+    uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
     allow_creative_escalate = config.get("allow_creative_escalate", True)
-    uniq_strengths = config.get("uniq_strengths", [1.0, 1.25, 1.5])
+    uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
+    min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
 
     master_seed = config.get("seed")
     if master_seed is None:
         master_seed = random.randrange(2 ** 32)
+
+    # Same-batch diversity: earlier accepted variants in this source run (TikFusion
+    # crossPasses / minBitsVsCopies). Shared across workers when jobs > 1.
+    kept_paths: list[str] = []
+    kept_lock = threading.Lock()
 
     # Tier 2 is lazy-imported and gated: hq requested AND the upscaler is actually usable.
     neural = None
@@ -134,15 +148,46 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 on_regen=lambda n, mx: emit("rerolling", index=i, attempt=n, max_attempts=mx),
             )
 
+        def _peer_bits(variant_path: str) -> int | None:
+            """Lowest SSIM bits vs earlier kept variants; None if no peers yet."""
+            with kept_lock:
+                peers = list(kept_paths)
+            if not peers:
+                return None
+            scores: list[int] = []
+            for peer in peers:
+                try:
+                    scores.append(uniqueness.bits_vs(variant_path, peer))
+                except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
+                    continue
+            return min(scores) if scores else None
+
+        def _gate_ok(u_score: dict, peer_min: int | None) -> bool:
+            """Pass when source uniqueness clears (or unknown) AND peers clear min bits."""
+            if peer_min is not None and peer_min < min_bits_vs_peers:
+                return False
+            return u_score["uniqueness_status"] in ("ok", "unknown")
+
+        def _apply_peer_status(u_score: dict, peer_min: int | None) -> dict:
+            """Record peer distance; demote ok → below_target when peers are too close."""
+            out = dict(u_score)
+            out["min_bits_vs_peers"] = peer_min
+            if peer_min is not None and peer_min < min_bits_vs_peers:
+                if out.get("uniqueness_status") == "ok":
+                    out["uniqueness_status"] = "below_target"
+            return out
+
         # Uniqueness gate: light preset at rising strengths, quality regen inside each
-        # attempt as before. If none clears the target, spend one creative escalate at
-        # the strong preset (still quality-gated) and accept whatever it scores.
+        # attempt as before. Source bits AND same-batch peer bits must clear. If none
+        # clears, spend one creative escalate at the strong preset (still quality-gated)
+        # and accept whatever it scores — leave below_target visible, never fake a score.
         preset_used = preset.name
         escalated = False
         r = None
         u = {
             "uniqueness": None, "uniqueness_status": "unknown",
             "uniqueness_metric": None, "uniqueness_target": uniqueness_target,
+            "bits": None, "min_bits_vs_peers": None,
         }
         prev_effective = None
         for strength in uniq_strengths:
@@ -156,7 +201,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             r = regen(preset, strength)
             emit("uniqueness", index=i)
             u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-            if r["passed"] and u["uniqueness_status"] in ("ok", "unknown"):
+            peer_min = _peer_bits(path)
+            u = _apply_peer_status(u, peer_min)
+            if r["passed"] and _gate_ok(u, peer_min):
                 break
         else:
             if allow_creative_escalate:
@@ -165,6 +212,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 r = regen(strong, 1.0)
                 emit("uniqueness", index=i)
                 u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
+                peer_min = _peer_bits(path)
+                u = _apply_peer_status(u, peer_min)
                 preset_used = strong.name
                 escalated = True
 
@@ -190,8 +239,20 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
             "regen_count": r["regen_count"], "passed": r["passed"],
             "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
+            "bits": u.get("bits"),
+            "min_bits_vs_peers": u.get("min_bits_vs_peers"),
         }
-        emit("done", index=i, status=status, quality=quality_info, filename=fname)
+        # Accept into the peer set only when we ship a real file (any non-corrupt status).
+        if status != "corrupt" and os.path.exists(path):
+            with kept_lock:
+                kept_paths.append(path)
+
+        emit(
+            "done", index=i, status=status, quality=quality_info, filename=fname,
+            uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
+            uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
+            escalated=escalated, preset_used=preset_used, strength_final=last_strength,
+        )
 
         return VariantRecord(
             index=i, filename=fname, seed=vseed, params=r["params"], ffmpeg_cmd=r["cmd"],

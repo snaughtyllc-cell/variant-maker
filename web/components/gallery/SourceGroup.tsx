@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, sourceUrl, sourceZipUrl } from "@/lib/api";
+import { shortfallCopy } from "@/lib/shortfallCopy";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -18,6 +19,8 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
 
   const hasShortfall = source.shortfall > 0;
   const fullDelivery = source.shortfall === 0;
+  const stillRunning = source.job_state === "running" || !!source.in_flight;
+  const shortfallMsg = shortfallCopy(source);
 
   // Compute avg VMAF
   const vmafValues = source.variants.map(v => v.quality.vmaf).filter(Boolean);
@@ -30,7 +33,7 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
   const allSpatial = spatialCount === source.variants.length && source.variants.length > 0;
 
   async function handleRegenerate() {
-    if (regenLoading) return;
+    if (regenLoading || stillRunning) return;
     setRegenLoading(true);
     try {
       await regenerate(source.source_id, source.shortfall);
@@ -163,7 +166,7 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
       </div>
 
       {/* Shortfall bar — ONLY when shortfall > 0 */}
-      {open && hasShortfall && (
+      {open && hasShortfall && shortfallMsg && (
         <div
           style={{
             display: "flex",
@@ -176,26 +179,28 @@ export function SourceGroup({ source, onOpenVariant, onRegenerate, selected, onT
             color: "#ffd08a",
           }}
         >
-          <span>⚠ {source.shortfall} variant{source.shortfall !== 1 ? "s" : ""} fell short after auto-retry — they&apos;re in Diagnostics.</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
-            disabled={regenLoading}
-            style={{
-              marginLeft: "auto",
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              border: "none",
-              padding: "7px 14px",
-              borderRadius: 9,
-              cursor: regenLoading ? "not-allowed" : "pointer",
-              boxShadow: "0 4px 14px #ff4d8d33",
-              opacity: regenLoading ? 0.7 : 1,
-            }}
-          >
-            {regenLoading ? "Regenerating…" : `↻ Regenerate ${source.shortfall}`}
-          </button>
+          <span>⚠ {shortfallMsg}</span>
+          {!stillRunning && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
+              disabled={regenLoading}
+              style={{
+                marginLeft: "auto",
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: "#fff",
+                background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+                border: "none",
+                padding: "7px 14px",
+                borderRadius: 9,
+                cursor: regenLoading ? "not-allowed" : "pointer",
+                boxShadow: "0 4px 14px #ff4d8d33",
+                opacity: regenLoading ? 0.7 : 1,
+              }}
+            >
+              {regenLoading ? "Regenerating…" : `↻ Regenerate ${source.shortfall}`}
+            </button>
+          )}
         </div>
       )}
 

@@ -7,12 +7,19 @@ def test_variant_event_to_dict_roundtrips_fields():
         source_id="s1", index=3, state="done",
         attempt=2, max_attempts=3, status="ok",
         quality={"vmaf": 91.0}, filename="clip_v03_abcd1234.mp4",
+        uniqueness=0.42, uniqueness_status="ok",
+        uniqueness_metric="ssim_bits_v1", uniqueness_target=24 / 64,
+        escalated=True, preset_used="strong", strength_final=1.0,
     )
     d = event_to_dict(e)
     assert d == {
         "source_id": "s1", "index": 3, "state": "done",
         "attempt": 2, "max_attempts": 3, "status": "ok",
         "quality": {"vmaf": 91.0}, "filename": "clip_v03_abcd1234.mp4",
+        "uniqueness": 0.42, "uniqueness_status": "ok",
+        "uniqueness_metric": "ssim_bits_v1", "uniqueness_target": 24 / 64,
+        "escalated": True, "preset_used": "strong", "strength_final": 1.0,
+        "platform_result": None,
     }
 
 

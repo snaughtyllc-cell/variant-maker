@@ -14,7 +14,7 @@ export default function StudioPage() {
   const { start, jobId, complete } = useRun();
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
-  const [perVideo, setPerVideo] = useState(8);
+  const [perVideo, setPerVideo] = useState(5);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

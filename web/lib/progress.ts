@@ -3,7 +3,9 @@ import { variantUrl } from "./api";
 
 export interface VariantTile {
   index: number; filename: string; status: string; quality: Quality; file_url: string;
-  uniqueness?: number | null; escalated?: boolean; platform_result?: PlatformResult | null;
+  uniqueness?: number | null; uniqueness_status?: string | null;
+  uniqueness_target?: number | null; escalated?: boolean;
+  platform_result?: PlatformResult | null;
 }
 export interface SourceProgress {
   source_id: string; filename: string; requested: number; delivered: number; done: number;
@@ -46,6 +48,8 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
           ? {
               ...v,
               uniqueness: e.uniqueness ?? v.uniqueness,
+              uniqueness_status: e.uniqueness_status ?? v.uniqueness_status,
+              uniqueness_target: e.uniqueness_target ?? v.uniqueness_target,
               escalated: e.escalated ?? v.escalated,
               platform_result: e.platform_result ?? v.platform_result,
             }
@@ -56,7 +60,10 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
       next.variants = [...prev.variants, {
         index: e.index, filename: e.filename!, status: e.status!, quality: e.quality!,
         file_url: variantUrl(e.source_id, e.filename!),
-        uniqueness: e.uniqueness ?? null, escalated: e.escalated ?? false,
+        uniqueness: e.uniqueness ?? null,
+        uniqueness_status: e.uniqueness_status ?? null,
+        uniqueness_target: e.uniqueness_target ?? null,
+        escalated: e.escalated ?? false,
         platform_result: e.platform_result ?? null,
       }];
       next.done = prev.done + 1;

@@ -3,7 +3,7 @@ export interface Quality {
   spatial_vmaf: number | null; spatial_ok: boolean | null;
 }
 export type Status = "ok" | "best_effort" | "corrupt";
-export type PlatformResult = "passed" | "duplicate_reject" | "unknown";
+export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
 export interface VariantOut {
   index: number; filename: string; status: Status; quality: Quality; file_url: string;
   uniqueness?: number | null; uniqueness_status?: string | null;

@@ -14,7 +14,12 @@ from urllib.parse import urlencode
 
 # Enough to upload into folders the signed-in user can already access (paste-folder flow).
 # drive.file alone cannot write to arbitrary folder IDs the app did not create.
-OAUTH_SCOPES = ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+# spreadsheets: Drop Ledger (VaryForge Drop Ledger) durable platform labels.
+OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"

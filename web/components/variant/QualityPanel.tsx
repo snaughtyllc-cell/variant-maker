@@ -1,6 +1,6 @@
 "use client";
 import { Quality } from "@/lib/types";
-import { vmafPass } from "@/lib/format";
+import { pct01, similarityFromUniqueness, vmafPass } from "@/lib/format";
 
 interface QualityPanelProps {
   quality: Quality;
@@ -110,8 +110,15 @@ export function QualityPanel({
 }: QualityPanelProps) {
   const pass = vmafPass(quality.vmaf);
   const rerollPct = (quality.regen_count / 3) * 100;
-  const uniquenessPct = uniqueness != null ? Math.round(uniqueness * 100) : null;
+  const uniquenessPct = uniqueness != null ? pct01(uniqueness) : null;
   const uniquenessOk = uniquenessStatus === "ok";
+  // Same SSIM-bits scale: similarity = 1 − uniqueness (lower better).
+  const similarity = uniqueness != null ? similarityFromUniqueness(uniqueness) : null;
+  const similarityPct = similarity != null ? pct01(similarity) : null;
+  const similarityTarget =
+    uniquenessTarget != null ? similarityFromUniqueness(uniquenessTarget) : null;
+  // Green when uniqueness clears its target (implies similarity ≤ 1 − target).
+  const similarityOk = uniquenessOk;
 
   return (
     <div>
@@ -173,7 +180,7 @@ export function QualityPanel({
         </div>
       )}
 
-      {/* Uniqueness */}
+      {/* Uniqueness — higher better */}
       <QRow label="Uniqueness">
         {uniquenessPct != null ? (
           <>
@@ -213,7 +220,51 @@ export function QualityPanel({
             margin: "-4px 2px 8px",
           }}
         >
-          target ≥ {Math.round(uniquenessTarget * 100)}%
+          target ≥ {pct01(uniquenessTarget)}% (higher better)
+        </div>
+      )}
+
+      {/* Similarity — same scale, lower better */}
+      <QRow label="Similarity">
+        {similarityPct != null ? (
+          <>
+            <Meter pct={similarityPct} green={similarityOk} amber={!similarityOk} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: similarityOk ? "#7bf2a8" : "#fbbf24",
+              }}
+            >
+              {similarityPct}%
+            </span>
+          </>
+        ) : (
+          <>
+            <Meter pct={0} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: "var(--color-muted)",
+              }}
+            >
+              — / n/a
+            </span>
+          </>
+        )}
+      </QRow>
+      {similarityPct != null && similarityTarget != null && (
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "var(--color-muted2)",
+            margin: "-4px 2px 8px",
+          }}
+        >
+          target ≤ {pct01(similarityTarget)}% (lower better · 1 − uniqueness)
         </div>
       )}
 
@@ -293,31 +344,6 @@ export function QualityPanel({
           {quality.regen_count} / 3
         </span>
       </QRow>
-
-      {/* Similarity — locked/greyed */}
-      <QRow label="Similarity" locked>
-        <Meter pct={0} />
-        <span
-          style={{
-            fontSize: 12.5,
-            fontWeight: 800,
-            flexShrink: 0,
-            color: "var(--color-muted)",
-          }}
-        >
-          — %
-        </span>
-      </QRow>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--color-muted2)",
-          margin: "-2px 2px 0",
-          lineHeight: 1.5,
-        }}
-      >
-        Similarity readout arrives with the auto-tune brain (target ≤35%). Parked for now.
-      </div>
     </div>
   );
 }

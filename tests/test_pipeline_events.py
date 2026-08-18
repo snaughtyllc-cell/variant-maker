@@ -42,16 +42,21 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: {
             "uniqueness": 0.5, "uniqueness_status": "ok",
-            "uniqueness_metric": "phash_hist_v1", "uniqueness_target": target,
+            "uniqueness_metric": "ssim_bits_v1", "uniqueness_target": target,
+            "bits": 32,
         },
     )
+    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
 
     events = []
+    done_kwargs = []
 
     def record(state, **kw):
         # capture (state, index, attempt, max_attempts) so ordering AND the per-event
         # kwargs (esp. the rendering `attempt` counter) are locked, not just membership.
         events.append((state, kw.get("index"), kw.get("attempt"), kw.get("max_attempts")))
+        if state == "done":
+            done_kwargs.append(kw)
 
     cfg = {
         "input": "src.mp4", "count": 2, "preset": "medium", "platform": "none",
@@ -85,6 +90,11 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         ("done", 2, None, None),
     ]
 
-    # done events carry status + filename (kwargs not captured in the tuple above)
-    done = [e for e in events if e[0] == "done"]
-    assert len(done) == 2
+    # done events carry status + filename + uniqueness scores for progressive UI.
+    assert len(done_kwargs) == 2
+    for kw in done_kwargs:
+        assert kw.get("status") in ("ok", "best_effort", "corrupt")
+        assert kw.get("filename")
+        assert kw.get("uniqueness") == 0.5
+        assert kw.get("uniqueness_status") == "ok"
+        assert kw.get("uniqueness_metric") == "ssim_bits_v1"

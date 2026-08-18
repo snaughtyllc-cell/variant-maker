@@ -23,7 +23,7 @@ class VariantOut(BaseModel):
 
 
 class PlatformResultIn(BaseModel):
-    result: Literal["passed", "duplicate_reject", "unknown"]
+    result: Literal["passed", "duplicate_reject", "flagged", "unknown"]
 
 
 class InFlightOut(BaseModel):
@@ -134,3 +134,31 @@ class ExportJobOut(BaseModel):
     state: str
     created_utc: str
     files: list[ExportFileOut] = []
+
+
+class DropLedgerStatusOut(BaseModel):
+    configured: bool
+    spreadsheet_id: str | None = None
+    spreadsheet_url: str | None = None
+    message: str
+
+
+class DropLedgerSyncIn(BaseModel):
+    job_ids: list[str] | None = None  # None / empty → all jobs on disk
+    ensure: bool = True
+
+
+class DropLedgerSyncOut(BaseModel):
+    spreadsheet_id: str
+    spreadsheet_url: str
+    job_ids: list[str]
+    rows: int
+    inserted: int
+    updated: int
+    unchanged: int
+
+
+class DropLedgerEnsureOut(BaseModel):
+    spreadsheet_id: str
+    spreadsheet_url: str
+    created: bool

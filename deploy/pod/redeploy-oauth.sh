@@ -6,12 +6,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-POD_HOST="${POD_HOST:-root@47.47.180.20}"
-POD_PORT="${POD_PORT:-29661}"
+POD_HOST="${POD_HOST:-root@213.192.2.76}"
+POD_PORT="${POD_PORT:-40082}"
 KEY="${SSH_KEY:-$HOME/.ssh/runpod_variantfarm}"
 
 echo "==> rsync → ${POD_HOST}:${POD_PORT}"
-rsync -az --delete \
+rsync -az --delete --no-owner --no-group \
   --exclude '.venv' --exclude 'web/node_modules' --exclude 'web/.next' \
   --exclude '.git' --exclude '.DS_Store' --exclude '*.pyc' --exclude '__pycache__' \
   -e "ssh -p ${POD_PORT} -i ${KEY} -o StrictHostKeyChecking=accept-new" \
@@ -21,7 +21,10 @@ echo "==> install + build + restart on Pod"
 ssh -p "$POD_PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "$POD_HOST" bash -s <<'EOF'
 set -euo pipefail
 cd /workspace/variant-maker
-python3 -m pip install -q -e '.[server,farm]' --root-user-action=ignore
+if [[ ! -x .venv/bin/pip ]]; then
+  python3 -m venv .venv
+fi
+.venv/bin/pip install -q -e '.[server,farm]'
 cd web && npm ci --silent && npm run build
 set +e
 pkill -f ffmpeg || true
@@ -39,6 +42,7 @@ nohup env WEB_PORT=8888 DATA_DIR=/workspace/vmdata \
 sleep 12
 curl -fsS http://127.0.0.1:8000/api/health; echo
 curl -fsS http://127.0.0.1:8000/api/drive/status; echo
+curl -fsS http://127.0.0.1:8000/api/drop-ledger/status; echo
 curl -fsS -o /dev/null -w "ui:%{http_code}\n" http://127.0.0.1:8888/
 EOF
 

@@ -30,8 +30,18 @@ from .probe import SourceInfo
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
+# ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
+# Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
+_LOUDNORM_MIN_S = 3.0
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
+
+
+def _remaining_duration_s(v: dict, duration_s: float) -> float:
+    """Wall-clock seconds left after start/end trim (before speed change)."""
+    start_s = v.get("trim_s", 0.0)
+    end_s = v.get("trim_end_s", 0.0)
+    return max(0.0, duration_s - start_s - end_s)
 
 
 def _trim_expr(v: dict, duration_s: float) -> str:
@@ -137,5 +147,10 @@ def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
     for freq, gain in zip(freqs, gains):
         parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
 
-    parts.append(f"loudnorm=I={a['loudnorm_i']:.1f}:TP=-1.5:LRA=11")
+    # loudnorm after atempo — effective length is remaining/speed. Short clips
+    # make loudnorm emit NaN which AAC rejects (exit 234).
+    speed = max(a.get("speed", 1.0), _EPS)
+    effective_s = _remaining_duration_s(v, src.duration_s) / speed
+    if effective_s >= _LOUDNORM_MIN_S:
+        parts.append(f"loudnorm=I={a['loudnorm_i']:.1f}:TP=-1.5:LRA=11")
     return ",".join(parts)

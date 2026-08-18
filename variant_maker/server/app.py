@@ -30,13 +30,25 @@ from .drive_oauth import (
     resolve_redirect_uri,
 )
 from .drive_urls import DriveUrlError, parse_folder_id
+from .drop_ledger import (
+    ensure_ledger,
+    list_job_ids_on_disk,
+    load_manifest_rows,
+    resolve_sheet_id,
+    spreadsheet_url,
+    sync_rows,
+    update_platform_result_cell,
+    write_sheet_id_file,
+)
 from .events import event_to_dict
 from .jobs import Job, JobSource, JobStore
 from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
-                     DiagnosticsItem, DriveStatusOut, ExportCreateIn, ExportFileOut, ExportJobOut,
+                     DiagnosticsItem, DriveStatusOut, DropLedgerEnsureOut, DropLedgerStatusOut,
+                     DropLedgerSyncIn, DropLedgerSyncOut, ExportCreateIn, ExportFileOut, ExportJobOut,
                      InFlightOut, JobDetail, JobEventsSnapshot, JobSummary, PlatformResultIn,
                      SourceOut, VariantOut)
 from .runner import LocalRunner
+from .sheets import GoogleSheets, SheetsClient
 from .workspace import Workspace
 from variant_maker.farm.drive import DriveClient
 
@@ -138,14 +150,18 @@ def create_app(
     store: JobStore | None = None,
     *,
     drive: DriveClient | None = None,
+    sheets: SheetsClient | None = None,
     sa_json_path: str | None = None,
     oauth_token_path: str | None = None,
     oauth_environ: Mapping[str, str] | None = None,
     oauth_exchange: ExchangeFn | None = None,
     oauth_fetch_email: FetchEmailFn | None = None,
+    hydrate: bool = True,
 ) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
+    if hydrate:
+        store.hydrate_from_disk()
     app = FastAPI(title="variant-maker control plane")
     app.state.store = store
 
@@ -158,6 +174,7 @@ def create_app(
     app.state.oauth_pending_states = set()
     app.state.oauth_exchange = oauth_exchange or exchange_code_for_token
     app.state.oauth_fetch_email = oauth_fetch_email or fetch_connected_email
+    drop_sheet_path = store._ws.drop_sheet_config_path()
 
     # Explicit "" means "no SA" (tests); None means fall through to env.
     sa_arg = None if sa_json_path in (None, "") else sa_json_path
@@ -182,7 +199,14 @@ def create_app(
             if env_sa:
                 drive = _build_drive_client(sa_json_path=env_sa)
 
+    if sheets is None and drive_info.status == "ready" and drive_info.auth_mode == "oauth":
+        try:
+            sheets = GoogleSheets(oauth_token=oauth_token_path)
+        except Exception:
+            sheets = None
+
     app.state.drive = drive
+    app.state.sheets = sheets
     app.state.drive_info = drive_info
     app.state.destinations = DestinationStore(store._ws.destinations_path())
     app.state.exports = ExportStore(store._ws.exports_dir())
@@ -201,6 +225,38 @@ def create_app(
     def _require_drive() -> None:
         if app.state.drive is None or app.state.drive_info.status != "ready":
             raise HTTPException(status_code=503, detail=app.state.drive_info.message)
+
+    def _require_sheets() -> SheetsClient:
+        if app.state.sheets is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Sheets not available — Connect Google in Settings → Drive "
+                       "(must grant Spreadsheets scope)",
+            )
+        return app.state.sheets
+
+    def _current_sheet_id() -> str | None:
+        return resolve_sheet_id(oauth_env, drop_sheet_path)
+
+    def _persist_sheet_id(sid: str) -> None:
+        write_sheet_id_file(drop_sheet_path, sid)
+
+    def _sync_platform_result_to_sheet(source_id: str, index: int, result: str) -> None:
+        sheets_client = app.state.sheets
+        sid = _current_sheet_id()
+        if sheets_client is None or not sid:
+            return
+        loc = store._locate(source_id)
+        if loc is None:
+            return
+        job_id, _ = loc
+        try:
+            update_platform_result_cell(
+                sheets_client, sid,
+                job_id=job_id, source_id=source_id, index=index, result=result,
+            )
+        except Exception as exc:
+            print(f"drop ledger platform_result write failed: {exc}", flush=True)
 
     def _redirect_uri_for(request: Request) -> str:
         explicit = oauth_env.get(ENV_OAUTH_REDIRECT_URI)
@@ -359,7 +415,62 @@ def create_app(
         variant = store.set_platform_result(source_id, index, body.result)
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
+        _sync_platform_result_to_sheet(source_id, index, body.result)
         return _variant_out(source_id, variant)
+
+    @app.get("/api/drop-ledger/status", response_model=DropLedgerStatusOut)
+    def drop_ledger_status() -> DropLedgerStatusOut:
+        sid = _current_sheet_id()
+        if sid:
+            return DropLedgerStatusOut(
+                configured=True, spreadsheet_id=sid,
+                spreadsheet_url=spreadsheet_url(sid),
+                message="Drop Ledger configured",
+            )
+        if app.state.sheets is None:
+            return DropLedgerStatusOut(
+                configured=False,
+                message="Connect Google (Settings → Drive), then POST /api/drop-ledger/ensure",
+            )
+        return DropLedgerStatusOut(
+            configured=False,
+            message="No sheet yet — POST /api/drop-ledger/ensure to create VaryForge Drop Ledger",
+        )
+
+    @app.post("/api/drop-ledger/ensure", response_model=DropLedgerEnsureOut)
+    def drop_ledger_ensure() -> DropLedgerEnsureOut:
+        sheets_client = _require_sheets()
+        existing = _current_sheet_id()
+        created = existing is None
+        sid = ensure_ledger(sheets_client, existing)
+        _persist_sheet_id(sid)
+        return DropLedgerEnsureOut(
+            spreadsheet_id=sid, spreadsheet_url=spreadsheet_url(sid), created=created,
+        )
+
+    @app.post("/api/drop-ledger/sync", response_model=DropLedgerSyncOut)
+    def drop_ledger_sync(body: DropLedgerSyncIn | None = None) -> DropLedgerSyncOut:
+        sheets_client = _require_sheets()
+        body = body or DropLedgerSyncIn()
+        sid = _current_sheet_id()
+        if body.ensure or not sid:
+            sid = ensure_ledger(sheets_client, sid)
+            _persist_sheet_id(sid)
+        assert sid is not None
+        job_ids = body.job_ids or list_job_ids_on_disk(store._ws.root)
+        rows: list = []
+        for jid in job_ids:
+            rows.extend(load_manifest_rows(store._ws.root, jid))
+        stats = sync_rows(sheets_client, sid, rows)
+        return DropLedgerSyncOut(
+            spreadsheet_id=sid,
+            spreadsheet_url=spreadsheet_url(sid),
+            job_ids=list(job_ids),
+            rows=len(rows),
+            inserted=stats["inserted"],
+            updated=stats["updated"],
+            unchanged=stats["unchanged"],
+        )
 
     @app.get("/api/sources/{source_id}/zip")
     def source_zip(source_id: str):
@@ -427,6 +538,10 @@ def create_app(
 
         try:
             app.state.drive = _build_drive_client(oauth_token_path=oauth_token_path)
+        except Exception:
+            pass
+        try:
+            app.state.sheets = GoogleSheets(oauth_token=oauth_token_path)
         except Exception:
             pass
         _refresh_drive_info()

@@ -53,23 +53,26 @@ SUBTLE = Preset(
 )
 
 MEDIUM = Preset(
-    name="medium", budget=0.60,
-    crop_keep=Range(0.95, 0.98), rotate_deg=Range(-0.3, 0.3),
+    name="medium", budget=0.65,
+    # Wider geometry so the uniqueness ladder can clear a 24-bit gate without
+    # leaning on color alone (still "light look" vs strong escalate).
+    crop_keep=Range(0.90, 0.97), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03), hue_deg=Range(-3, 3),
-    grain=Range(6, 12), unsharp=Range(0.2, 0.35), speed=Range(0.98, 1.02),
-    trim_s=Range(0.10, 0.30), crf=Range(19, 22), gop_choices=(48, 60, 90),
+    grain=Range(7, 14), unsharp=Range(0.2, 0.35), speed=Range(0.96, 1.04),
+    trim_s=Range(0.15, 0.50), crf=Range(19, 22), gop_choices=(48, 60, 90),
     loudnorm_i=Range(-15, -13), eq_gain_db=Range(-2, 2), eq_bands=2,
     pitch_pct=Range(-2.0, 2.0), aac_kbps=Range(128, 192),
 )
 
 STRONG = Preset(
-    name="strong", budget=0.85,
-    crop_keep=Range(0.90, 0.95), rotate_deg=Range(-0.8, 0.8),
+    name="strong", budget=0.90,
+    # Creative escalate: geometric push sized for ≥24 bits when light ladder stalls.
+    crop_keep=Range(0.80, 0.92), rotate_deg=Range(-2.0, 2.0),
     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05), hue_deg=Range(-6, 6),
-    grain=Range(12, 20), unsharp=Range(0.3, 0.4), speed=Range(0.96, 1.04),
-    trim_s=Range(0.20, 0.50), crf=Range(20, 23), gop_choices=(60, 90, 120),
+    grain=Range(14, 22), unsharp=Range(0.3, 0.45), speed=Range(0.94, 1.06),
+    trim_s=Range(0.30, 0.85), crf=Range(20, 23), gop_choices=(60, 90, 120),
     loudnorm_i=Range(-16, -13), eq_gain_db=Range(-3, 3), eq_bands=2,
     pitch_pct=Range(-4.0, 4.0), aac_kbps=Range(128, 192),
 )

@@ -169,3 +169,18 @@ def test_trim_end_mirrors_on_audio():
     af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)
     assert "atrim=start=0.200:end=9.500" in af
     assert "asetpts=PTS-STARTPTS" in af
+
+
+def test_loudnorm_skipped_on_short_remaining_audio():
+    """loudnorm emits NaN on ~1–2s clips; AAC then fails — omit it under the floor."""
+    p = make_params(video={"trim_s": 0.265, "trim_end_s": 0.173},
+                    audio={"speed": 0.978485})
+    af = filtergraph.build_audio_filters(p, make_src(duration=2.0), has_audio=True)
+    assert "loudnorm=" not in af
+    assert "equalizer=" in af  # other fingerprint axes still apply
+
+
+def test_loudnorm_kept_when_remaining_audio_is_long_enough():
+    p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.0})
+    af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)
+    assert "loudnorm=I=-14.0:TP=-1.5:LRA=11" in af

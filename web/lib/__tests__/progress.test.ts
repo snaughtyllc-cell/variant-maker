@@ -70,6 +70,17 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.variants).toHaveLength(1);
   });
 
+    it("done(ok) carries uniqueness onto the tile", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
+      uniqueness: 0.42, uniqueness_status: "ok", uniqueness_target: 0.375, escalated: true,
+    }));
+    expect(r.bySource.s1.variants[0]).toMatchObject({
+      uniqueness: 0.42, uniqueness_status: "ok", uniqueness_target: 0.375, escalated: true,
+    });
+  });
+
   it("job-done marks complete", () => {
     let r = base();
     r = reduceEvent(r, { state: "job-done" });

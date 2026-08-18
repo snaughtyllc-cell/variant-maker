@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   description: "Local zero-config video variant studio",
 };
 
+// Prevent static HTML shells from being cached by RunPod's CDN with stale JS refs.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function RootLayout({
   children,
 }: Readonly<{

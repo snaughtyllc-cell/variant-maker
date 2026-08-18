@@ -52,6 +52,7 @@ def test_build_authorization_url_includes_offline_and_scope():
     assert qs["prompt"] == ["consent"]
     assert qs["state"] == ["abc123"]
     assert "drive.file" in qs["scope"][0]
+    assert "spreadsheets" in qs["scope"][0]
 
 
 def test_status_oauth_ready_when_token_present(tmp_path, monkeypatch):

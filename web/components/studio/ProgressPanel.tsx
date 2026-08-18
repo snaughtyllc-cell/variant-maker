@@ -82,7 +82,7 @@ export function ProgressPanel() {
           <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2 }}>
             {complete
               ? "All variants done"
-              : "The AI is auto-tuning each variant"}
+              : "Live status updates every second"}
           </div>
         </div>
 

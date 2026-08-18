@@ -72,7 +72,7 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
         </div>
       )}
 
-      {/* Empty state — the normal/happy state */}
+          {/* Empty state — the normal/happy state */}
       {items.length === 0 && (
         <div
           style={{
@@ -89,7 +89,10 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
           }}
         >
           <span style={{ fontSize: 18 }}>✓</span>
-          <span>Nothing failed — all variants delivered.</span>
+          <span>
+            Nothing in Diagnostics — only best-effort / corrupt variants appear here.
+            Incomplete runs show as shortfall on Gallery until they finish.
+          </span>
         </div>
       )}
 

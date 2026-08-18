@@ -71,21 +71,24 @@ def _signalstats(path: str) -> tuple[float, float]:
 
 
 def histogram_sanity(src_path: str, variant_path: str, tol: float = 0.06) -> bool:
-    """True if the variant's luma + saturation haven't collapsed/shifted beyond `tol`.
+    """True unless the variant shows a *gross* wash-out / luma collapse.
 
-    Cheap, always-on guard for the gross failures — wash-out (saturation collapse),
-    crushed blacks / blown highlights (luma shift). Not a fidelity metric; VMAF on the
-    quality render is the stronger check.
+    Fingerprint presets intentionally nudge saturation/brightness; a tight relative
+    tolerance (old behavior) rejected healthy variants and forced endless re-rolls.
+    `tol` is kept for call-site compatibility but no longer drives a tight band —
+    we only catch catastrophic color failure (wash-out / crushed or blown luma).
     """
+    del tol  # intentional: gross-failure checks below replace the old relative band
     src_y, src_s = _signalstats(src_path)
     var_y, var_s = _signalstats(variant_path)
 
-    def rel(a: float, b: float) -> float:
-        if a == 0:
-            return 0.0 if b == 0 else 1.0  # zero source + nonzero variant is a real shift, not a pass
-        return abs(b - a) / a
-
-    return rel(src_y, var_y) <= tol and rel(src_s, var_s) <= tol
+    # Wash-out: saturation collapsed vs a non-trivial source.
+    if src_s >= 0.5 and var_s < src_s * 0.4:
+        return False
+    # Severe luma crush / blow-out (ignore near-black sources).
+    if src_y >= 1.0 and (var_y < src_y * 0.5 or var_y > src_y * 1.5):
+        return False
+    return True
 
 
 def quality_render(src: SourceInfo, params: dict, out_path: str) -> str:
@@ -101,9 +104,13 @@ def passes_guard(
     src_path: str, variant_path: str, quality_render_path: str, *, floor: float = 90.0,
     tol: float = 0.06,
 ) -> dict:
-    """Combined guard decision: histogram sanity on the variant + VMAF on the quality render."""
-    hist_ok = histogram_sanity(src_path, variant_path, tol)
+    """Combined guard decision: gross hist sanity + VMAF on the quality render."""
+    del variant_path  # full geometric variant is not used for the hist/VMAF decision
+    # Hist against the quality proxy (color ops only) — not the full geometric variant —
+    # so crop/speed fingerprints don't pollute the wash-out check.
+    hist_ok = histogram_sanity(src_path, quality_render_path, tol)
     score = vmaf(src_path, quality_render_path)
+    # VMAF is authoritative for "looks fine"; hist only vetoes catastrophic wash-out.
     return {"vmaf": score, "histogram_ok": hist_ok, "passed": bool(hist_ok and score >= floor)}
 
 

@@ -39,10 +39,13 @@ Farm inbox automation (`2026-06-27-drive-farm-automation-design.md`) is a **diff
 
 | Item | Value |
 |------|--------|
-| SSH | `ssh root@47.47.180.127 -p 13500 -i ~/.ssh/runpod_variantfarm` |
-| SSH key note | Prefer `~/.ssh/runpod_variantfarm`. If that fails, try `id_ed25519` / the key RunPod shows — `id_ed25519` is often missing on local machines. |
-| UI (proxy) | `https://z5ca7b44igctac-8888.proxy.runpod.net` |
-| Restart on Pod | `bash /workspace/start-varyforge.sh` |
+| SSH | `ssh root@213.192.2.76 -p 40082 -i ~/.ssh/runpod_variantfarm` |
+| SSH key note | Prefer `~/.ssh/runpod_variantfarm`. Fallback `id_ed25519` is often missing locally. |
+| UI (proxy) | `https://4favaamr1akoda-8888.proxy.runpod.net` |
+| Restart Studio | `bash /workspace/start-varyforge.sh` |
+| Restart Comfy (localhost) | `bash /workspace/start-comfy.sh` — **127.0.0.1:8188 only**, not on proxy |
+| Restart both | `bash /workspace/start-all.sh` |
+| GPU (snapshot) | 1× NVIDIA RTX PRO 6000 Blackwell Server Edition |
 
 Drive Settings URL shape:
 
@@ -90,13 +93,47 @@ https://<POD_ID>-8888.proxy.runpod.net/api/drive/oauth/callback
 Example for the snapshot Pod above:
 
 ```
-https://z5ca7b44igctac-8888.proxy.runpod.net/api/drive/oauth/callback
+https://4favaamr1akoda-8888.proxy.runpod.net/api/drive/oauth/callback
 ```
 
 5. Copy Client ID + Client secret into `/workspace/secrets/drive-oauth.env` (and set `VARIANT_DRIVE_OAUTH_REDIRECT_URI` to the same URI).
-6. Restart Studio so `variant-server` inherits the env (`bash /workspace/start-varyforge.sh` or redeploy script below).
+6. Enable **Google Sheets API** (same project) — required for the Drop Ledger.
+7. Restart Studio so `variant-server` inherits the env (`bash /workspace/start-varyforge.sh` or redeploy script below).
 
 Mismatch of redirect URI (Console vs env vs actual proxy host) is the most common Connect Google failure.
+
+---
+
+## Drop Ledger (platform Passed / Rejected labels)
+
+Durable Google Sheet that survives Pod wipes. Labels here are **training data for a future
+preset/escalate bias** — there is **no auto-tune yet**.
+
+| Item | Value |
+|------|--------|
+| Sheet title | `VaryForge Drop Ledger` |
+| Config (on Pod, not committed) | `/workspace/vmdata/drive/drop_sheet.json` or env `VARIANT_DROP_SHEET_ID` |
+| Ensure | `POST /api/drop-ledger/ensure` |
+| Sync (upsert by job_id+variant_id) | `POST /api/drop-ledger/sync` with optional `{"job_ids":["…"]}` |
+| Status | `GET /api/drop-ledger/status` |
+
+**OAuth:** Connect Google must include **Spreadsheets** scope. After deploy, open
+**Settings → Drive → Connect Google** (reconnect once) so the new scope is granted.
+
+**How VAs label today**
+
+1. Prefer Gallery → open variant → **Passed upload** / **Duplicate rejected** (writes
+   `platform_result` locally + updates the Sheet row when ledger is configured).
+2. Or edit the Sheet `platform_result` column directly:
+   `passed` \| `duplicate_reject` \| `flagged` \| `unknown` (blank = unlabeled).
+
+**Seed recent jobs (example)**
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/drop-ledger/sync \
+  -H 'Content-Type: application/json' \
+  -d '{"job_ids":["b9b359a18d3b","bc11837cc38a"],"ensure":true}'
+```
 
 ---
 
@@ -134,7 +171,7 @@ From a Mac with SSH access to the Pod:
 
 ```bash
 # Defaults in the script may lag the live Pod — override host/port:
-POD_HOST=root@47.47.180.127 POD_PORT=13500 bash deploy/pod/redeploy-oauth.sh
+POD_HOST=root@213.192.2.76 POD_PORT=40036 bash deploy/pod/redeploy-oauth.sh
 ```
 
 Script: [`deploy/pod/redeploy-oauth.sh`](../../deploy/pod/redeploy-oauth.sh)
@@ -153,6 +190,26 @@ curl -fsS http://127.0.0.1:8000/api/drive/status
 Expect Drive status to show connected / ready after OAuth env + Connect Google — not “not configured”.
 
 ---
+
+
+---
+
+## ComfyUI / Create Mode on this Pod
+
+Studio **Create** UI talks to local Comfy InstantID (deploy from **`create-mode`**).
+
+| Item | Value |
+|------|--------|
+| Studio Create | `https://<POD>-8888.proxy.runpod.net/create` |
+| Install | `bash /workspace/variant-maker/deploy/comfy/bootstrap.sh` |
+| Models | `/workspace/comfy-models` (SDXL + InstantID + antelopev2) |
+| Listen | `127.0.0.1:8188` only — do **not** expose via RunPod HTTP proxy |
+| API → Comfy | `COMFY_URL=http://127.0.0.1:8188` (set in `deploy/pod/start.sh`) |
+| Workflow | `COMFY_WORKFLOW_PATH=.../deploy/comfy/workflows/create_instantid_sdxl.json` |
+| Health | `curl -fsS http://127.0.0.1:8188/system_stats` |
+| GPU | Sequential with Spoof HQ — pin `CUDA_VISIBLE_DEVICES=0` when multi-GPU |
+
+See also `docs/ops/create-mode-comfy.md` on the create-mode branch.
 
 ## Do not
 

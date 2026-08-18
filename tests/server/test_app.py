@@ -72,6 +72,62 @@ def test_sse_events_stream_until_job_done(tmp_path):
     assert states[-1] == "job-done"
 
 
+def test_events_snapshot_returns_json_log(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "2"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    snap = client.get(f"/api/jobs/{job_id}/events-snapshot").json()
+    assert snap["job_id"] == job_id
+    assert snap["state"] == "done"
+    states = [e.get("state") for e in snap["events"]]
+    assert states.count("done") == 2
+    assert "rendering" in states
+
+
+def test_chunked_upload_then_create_job(tmp_path):
+    client, store = _client(tmp_path)
+    payload = b"fake-video-bytes-" * 1000
+    init = client.post(
+        "/api/uploads",
+        data={"filename": "clip.mp4", "size": str(len(payload))},
+    )
+    assert init.status_code == 200
+    upload_id = init.json()["upload_id"]
+    mid = len(payload) // 2
+    r1 = client.put(f"/api/uploads/{upload_id}?offset=0", content=payload[:mid])
+    r2 = client.put(f"/api/uploads/{upload_id}?offset={mid}", content=payload[mid:])
+    assert r1.status_code == 200 and r2.status_code == 200
+    job = client.post(
+        "/api/jobs/from-uploads",
+        data={"upload_ids": upload_id, "count": "1", "allow_creative_escalate": "true"},
+    )
+    assert job.status_code == 201
+    body = job.json()
+    assert body["sources"][0]["filename"] == "clip.mp4"
+    store.wait(body["job_id"], timeout=5)
+
+
+def test_get_job_exposes_in_flight_from_event_log(tmp_path):
+    from variant_maker.server.events import VariantEvent
+
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    job.state = "running"
+    sid = job.sources[0].source_id
+    job.events.append(VariantEvent(source_id=sid, index=2, state="uniqueness"))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["sources"][0]["in_flight"] == {
+        "index": 2, "state": "uniqueness", "attempt": 0, "max_attempts": 0,
+    }
+
+
 def test_gallery_groups_sources_ok_only(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",
@@ -82,7 +138,10 @@ def test_gallery_groups_sources_ok_only(tmp_path):
     assert len(gallery) == 1
     assert gallery[0]["delivered"] == 2
     assert gallery[0]["shortfall"] == 1
+    assert gallery[0]["failed"] == 1
+    assert gallery[0]["job_state"] == "done"
     assert all(v["status"] == "ok" for v in gallery[0]["variants"])
+    assert gallery[0]["variants"][0]["uniqueness"] == 0.42
 
 
 def test_diagnostics_lists_non_ok(tmp_path):
@@ -94,6 +153,21 @@ def test_diagnostics_lists_non_ok(tmp_path):
     diag = client.get("/api/diagnostics").json()
     assert len(diag) == 2
     assert all(d["status"] == "best_effort" for d in diag)
+
+
+def test_done_events_carry_uniqueness_fields(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    snap = client.get(f"/api/jobs/{job_id}/events-snapshot").json()
+    done = [e for e in snap["events"] if e.get("state") == "done"]
+    assert len(done) == 1
+    assert done[0]["uniqueness"] == 0.42
+    assert done[0]["uniqueness_status"] == "ok"
+    assert done[0]["uniqueness_metric"] == "ssim_bits_v1"
+    assert done[0]["uniqueness_target"] == 24 / 64
 
 
 def test_serve_variant_and_source_files(tmp_path):
@@ -132,8 +206,8 @@ def test_get_job_detail_includes_uniqueness_fields(tmp_path):
     v = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]
     assert v["uniqueness"] == 0.42
     assert v["uniqueness_status"] == "ok"
-    assert v["uniqueness_metric"] == "phash+hist"
-    assert v["uniqueness_target"] == 0.35
+    assert v["uniqueness_metric"] == "ssim_bits_v1"
+    assert v["uniqueness_target"] == 24 / 64
     assert v["preset_used"] == "medium"
     assert v["strength_final"] == 1.0
     assert v["escalated"] is False

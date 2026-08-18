@@ -66,35 +66,41 @@ sample(light preset, strength)
 
 ## 3. Uniqueness metric
 
-**Module:** new `variant_maker/uniqueness.py` (pure where possible, unit-tested).
+**Module:** `variant_maker/uniqueness.py`
 
-**Method (v1)**
+**Method (`ssim_bits_v1` — TikFusion-aligned)**
 
-1. Sample a fixed number of frames (8–12), evenly spaced, from source and variant.
-2. Primary: **perceptual hash (pHash) distance** across frame pairs → normalized.
-3. Secondary: **color/luma histogram distance** across the same samples.
-4. Combine into a single `uniqueness ∈ [0, 1]` (higher = more different).
-5. Optional later (not required for v1 ship): short audio fingerprint distance.
+1. Sample **3 frames** at 25% / 50% / 75% of duration from source and variant.
+2. Scale each frame to a fixed canvas (576×1024) and run ffmpeg **SSIM**.
+3. Convert like TikFusion: `bits = round((1 - mean_ssim) * 64)`.
+4. Expose `uniqueness = bits / 64` (higher = more different) with target **24/64 ≈ 0.375**
+   (TikFusion Smart Detector floor is ~18 bits / ~28%; we gate above that for top-tail).
+5. Same-batch peer check: `min_bits_vs_peers >= 10` against earlier kept variants
+   (TikFusion uses 8; we raise slightly).
+6. UI Similarity meter (cheap Path-B): `similarity = 1 − uniqueness` on the same scale
+   (lower better; target ≤ `1 − uniqueness_target`).
 
 **Properties**
 
 - Fixed frame count so cost stays bounded on long clips (unlike full-video VMAF).
-- Identical / near-identical inputs score near 0; heavy crop/grade scores higher (monotonicity tested).
-- Metric version string recorded in the manifest (e.g. `uniqueness_metric: "phash_hist_v1"`) so calibration survives formula changes.
+- Identical / near-identical inputs score near 0 bits; heavy crop/grade scores higher.
+- Metric version string recorded in the manifest (`uniqueness_metric: "ssim_bits_v1"`).
 
 **Target band**
 
-- Starting threshold is a tunable constant (e.g. `uniqueness_target`), **not** claimed to equal any platform’s internal cutoff.
-- Calibration path: user labels batches `passed` / `duplicate_reject` → we adjust the target in a later pass without rewriting the engine.
+- Default `uniqueness_target = 24/64` (~37.5% unique) — above TikFusion’s ~18-bit pass
+  floor so mediocre variants don’t clear our gate. Not claimed to equal any platform cutoff.
+- Calibration path: user labels batches `passed` / `duplicate_reject` → we adjust later without rewriting the engine.
+- If smoke shows endless escalate under the 24-bit gate, fall back to **22 bits** and document.
 
 **Failure of the metric itself**
 
 - If uniqueness cannot be computed (decode error, empty frames): treat as `uniqueness: null`, `uniqueness_status: "unknown"`.
-- Do **not** escalate forever. If quality passed, keep the variant and flag unknown in UI.
+- Do **not** escalate forever. If quality passed, keep the variant and flag unknown / below_target in UI — never fake a high score.
 
 **Separation from quality**
 
-- `quality.py` stays the quality floor only.
+- `quality.py` stays the quality floor only (gross-washout hist + VMAF-authoritative).
 - Uniqueness is a sibling gate. Never sacrifice the quality floor to chase a higher uniqueness score.
 
 ---

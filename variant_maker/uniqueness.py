@@ -1,9 +1,33 @@
-"""Local video uniqueness scorer: aHash + luma histogram via ffmpeg frame extracts."""
+"""Local video uniqueness scorer: TikFusion-aligned SSIM "bits" via ffmpeg.
+
+Samples 3 frames at 25% / 50% / 75% of duration, scales to a fixed size, runs
+ffmpeg SSIM per pair, then converts like TikFusion:
+
+    bits = round((1 - mean_ssim) * 64)
+
+Higher bits = more different. This improves local duplicate-resilience tuning;
+it does not guarantee platform accept rates.
+"""
 from __future__ import annotations
 
+import os
+import re
 import subprocess
+import tempfile
 
-METRIC_VERSION = "phash_hist_v1"
+METRIC_VERSION = "ssim_bits_v1"
+# TikFusion Smart Detector floor ≈ 18 bits (~28% unique). VaryForge defaults
+# above that for top-tail resilience: 24 bits ≈ 37.5% unique.
+TARGET_BITS = 24
+DEFAULT_TARGET = TARGET_BITS / 64.0  # ≈ 0.375
+# Same-batch peer floor; TikFusion uses 8 — we raise slightly for diversity.
+MIN_PEER_BITS = 10
+FRAME_FRACS = (0.25, 0.50, 0.75)
+# Vertical TikTok/Reels-ish canvas used for pairwise SSIM.
+SSIM_WIDTH = 576
+SSIM_HEIGHT = 1024
+
+_SSIM_ALL_RE = re.compile(r"SSIM\s+(?:Y|R):[^\n]*?\sAll:([0-9.]+)")
 
 
 def _probe_duration(path: str) -> float:
@@ -28,109 +52,127 @@ def _probe_duration(path: str) -> float:
     return max(duration, 0.1)
 
 
-def extract_gray_frames(path: str, *, n: int = 10, size: int = 32) -> list[bytes]:
-    duration = _probe_duration(path)
-    frames: list[bytes] = []
-    expected = size * size
-    for i in range(n):
-        t = (i + 0.5) / n * duration
-        out = subprocess.run(
-            [
-                "ffmpeg", "-v", "error",
-                "-ss", str(t),
-                "-i", path,
-                "-vf", f"scale={size}:{size},format=gray",
-                "-frames:v", "1",
-                "-f", "rawvideo", "-",
-            ],
-            check=True,
-            capture_output=True,
-        )
-        if len(out.stdout) != expected:
-            return []
-        frames.append(out.stdout)
-    return frames
+def bits_from_ssim(mean_ssim: float) -> int:
+    """TikFusion conversion: bits ∈ [0, 64], higher = more different."""
+    return int(round((1.0 - float(mean_ssim)) * 64))
 
 
-def ahash(frame: bytes, size: int = 32) -> int:
-    block = size // 8
-    cells: list[float] = []
-    for by in range(8):
-        for bx in range(8):
-            total = 0
-            for y in range(by * block, (by + 1) * block):
-                row_off = y * size
-                for x in range(bx * block, (bx + 1) * block):
-                    total += frame[row_off + x]
-            cells.append(total / (block * block))
-    mean = sum(cells) / len(cells)
-    result = 0
-    for i, v in enumerate(cells):
-        if v >= mean:
-            result |= 1 << i
-    return result
+def similarity_from_uniqueness(uniqueness: float) -> float:
+    """Cheap Path-B readout: similarity = 1 − uniqueness (same SSIM-bits scale)."""
+    return 1.0 - float(uniqueness)
 
 
-def _luma_histogram(frame: bytes, bins: int = 16) -> list[float]:
-    hist = [0] * bins
-    for byte in frame:
-        hist[min(byte * bins // 256, bins - 1)] += 1
-    total = len(frame)
-    return [h / total for h in hist]
+def _extract_frame(path: str, t: float, out_path: str) -> None:
+    """Extract one scaled frame near ``t`` seconds. Falls back to t=0 if seek misses."""
+    vf = (
+        f"scale={SSIM_WIDTH}:{SSIM_HEIGHT}:force_original_aspect_ratio=decrease,"
+        f"pad={SSIM_WIDTH}:{SSIM_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+    )
+    last_err: subprocess.CalledProcessError | None = None
+    # Post-input -ss is more reliable on short clips; retry t=0 if the seek is past EOF.
+    for seek in (max(0.0, t), 0.0):
+        if os.path.exists(out_path):
+            os.remove(out_path)
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-v", "error",
+                    "-i", path,
+                    "-ss", f"{seek:.6f}",
+                    "-vf", vf,
+                    "-frames:v", "1",
+                    "-y", out_path,
+                ],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            last_err = exc
+            continue
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return
+    if last_err is not None:
+        raise last_err
+    raise ValueError(f"failed to extract frame at t={t} from {path}")
 
 
-def histogram_distance(a: bytes, b: bytes) -> float:
-    ha = _luma_histogram(a)
-    hb = _luma_histogram(b)
-    l1 = sum(abs(x - y) for x, y in zip(ha, hb, strict=True))
-    return l1 / 2.0
+
+def _ssim_pair(ref_path: str, dist_path: str) -> float:
+    """Return All-channel SSIM for two still images (0..1)."""
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-v", "info",
+            "-i", ref_path,
+            "-i", dist_path,
+            "-lavfi", "ssim",
+            "-f", "null", "-",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    # SSIM line is on stderr for ffmpeg.
+    text = (proc.stderr or "") + (proc.stdout or "")
+    match = _SSIM_ALL_RE.search(text)
+    if not match:
+        raise ValueError(f"no SSIM All= value in ffmpeg output: {text[-500]!r}")
+    return float(match.group(1))
 
 
-def _hamming(a: int, b: int) -> int:
-    return (a ^ b).bit_count()
+def mean_ssim(path_a: str, path_b: str) -> float:
+    """Mean SSIM across the three TikFusion-aligned sample points."""
+    dur_a = _probe_duration(path_a)
+    dur_b = _probe_duration(path_b)
+    with tempfile.TemporaryDirectory(prefix="vm-ssim-") as tmp:
+        scores: list[float] = []
+        for i, frac in enumerate(FRAME_FRACS):
+            fa = os.path.join(tmp, f"a_{i}.png")
+            fb = os.path.join(tmp, f"b_{i}.png")
+            _extract_frame(path_a, frac * dur_a, fa)
+            _extract_frame(path_b, frac * dur_b, fb)
+            scores.append(_ssim_pair(fa, fb))
+        return sum(scores) / len(scores)
+
+
+def bits_vs(path_a: str, path_b: str) -> int:
+    """SSIM bits between two videos (TikFusion-style). Raises on probe/ffmpeg failure."""
+    return bits_from_ssim(mean_ssim(path_a, path_b))
 
 
 def score_uniqueness(
     src_path: str,
     variant_path: str,
     *,
-    n_frames: int = 10,
     target: float | None = None,
+    n_frames: int | None = None,  # retained for call-site compat; ignored (fixed 3 frames)
 ) -> dict:
+    """Score variant uniqueness vs source.
+
+    Returns uniqueness ∈ [0, 1] as bits/64, plus raw ``bits`` for logs/tests.
+    """
+    del n_frames  # fixed FRAME_FRACS — kept in signature for older callers
     base = {
         "uniqueness": None,
         "uniqueness_status": "unknown",
         "uniqueness_metric": METRIC_VERSION,
         "uniqueness_target": target,
+        "bits": None,
     }
     try:
-        src_frames = extract_gray_frames(src_path, n=n_frames)
-        var_frames = extract_gray_frames(variant_path, n=n_frames)
-        if not src_frames or not var_frames or len(src_frames) != len(var_frames):
-            return base
-
-        phash_dists: list[float] = []
-        hist_dists: list[float] = []
-        for sf, vf in zip(src_frames, var_frames, strict=True):
-            phash_dists.append(_hamming(ahash(sf), ahash(vf)) / 64.0)
-            hist_dists.append(histogram_distance(sf, vf))
-
-        mean_phash = sum(phash_dists) / len(phash_dists)
-        mean_hist = sum(hist_dists) / len(hist_dists)
-        score = max(0.0, min(1.0, 0.7 * mean_phash + 0.3 * mean_hist))
-
+        bits = bits_vs(src_path, variant_path)
+        score = max(0.0, min(1.0, bits / 64.0))
         if target is None:
             status = "ok"
         elif score >= target:
             status = "ok"
         else:
             status = "below_target"
-
         return {
             "uniqueness": score,
             "uniqueness_status": status,
             "uniqueness_metric": METRIC_VERSION,
             "uniqueness_target": target,
+            "bits": bits,
         }
     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
         return base

@@ -1,0 +1,15 @@
+import { SourceOut } from "./types";
+
+/** Gallery shortfall banner copy. Never claims Diagnostics for still-running jobs. */
+export function shortfallCopy(source: SourceOut): string | null {
+  if (source.shortfall <= 0) return null;
+  const n = source.shortfall;
+  const plural = n === 1 ? "" : "s";
+  if (source.job_state === "running" || source.in_flight) {
+    return `Still rendering — ${source.delivered}/${source.requested} delivered so far.`;
+  }
+  if ((source.failed ?? 0) > 0) {
+    return `${n} variant${plural} fell short after auto-retry — they're in Diagnostics.`;
+  }
+  return `${n} variant${plural} missing / not delivered — Regenerate to fill the gap.`;
+}

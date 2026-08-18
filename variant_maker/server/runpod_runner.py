@@ -43,6 +43,14 @@ class RunPodServerlessRunner:
                     attempt=e.get("attempt", 0), max_attempts=e.get("max_attempts", 0),
                     status=e.get("status"), quality=e.get("quality"),
                     filename=e.get("filename"),
+                    uniqueness=e.get("uniqueness"),
+                    uniqueness_status=e.get("uniqueness_status"),
+                    uniqueness_metric=e.get("uniqueness_metric"),
+                    uniqueness_target=e.get("uniqueness_target"),
+                    escalated=bool(e.get("escalated", False)),
+                    preset_used=e.get("preset_used"),
+                    strength_final=e.get("strength_final"),
+                    platform_result=e.get("platform_result"),
                 ))
             elif chunk.get("type") == "result":
                 variants_meta = chunk.get("variants", [])

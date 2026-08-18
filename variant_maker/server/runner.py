@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
-from .. import pipeline
+from .. import pipeline, uniqueness
 from .events import VariantEvent
 
 # Stage-1 LocalRunner defaults (see plan Global Constraints).
@@ -17,7 +17,10 @@ DEFAULT_PRESET = "medium"
 DEFAULT_PLATFORM = "tiktok"   # vertical 1080x1920
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
-UNIQUENESS_TARGET = 0.35
+# Top-tail gate: 24 bits ≈ 37.5% unique (TikFusion floor is ~18).
+UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
+UNIQ_STRENGTHS = list(pipeline.DEFAULT_UNIQ_STRENGTHS)
+MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 ALLOW_CREATIVE_ESCALATE = True
 
 
@@ -67,6 +70,14 @@ class LocalRunner:
                 status=kw.get("status"),
                 quality=kw.get("quality"),
                 filename=kw.get("filename"),
+                uniqueness=kw.get("uniqueness"),
+                uniqueness_status=kw.get("uniqueness_status"),
+                uniqueness_metric=kw.get("uniqueness_metric"),
+                uniqueness_target=kw.get("uniqueness_target"),
+                escalated=bool(kw.get("escalated", False)),
+                preset_used=kw.get("preset_used"),
+                strength_final=kw.get("strength_final"),
+                platform_result=kw.get("platform_result"),
             ))
 
         config = {
@@ -79,6 +90,8 @@ class LocalRunner:
             "max_regen": MAX_REGEN,
             "jobs": 1,
             "uniqueness_target": UNIQUENESS_TARGET,
+            "uniq_strengths": list(UNIQ_STRENGTHS),
+            "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "allow_creative_escalate": allow_creative_escalate,
         }
         manifest = pipeline.run(config, on_event=engine_event)
