@@ -78,7 +78,11 @@ Repo: `snaughtyllc-cell/variant-maker`, branch `cursor/railway-runpod-split-c975
 3. Create a RunPod **Serverless** endpoint from that image:
    - **Start command (required — override image CMD):**
      `python -u /app/deploy/runpod/cp_handler.py`
-   - GPU: RTX 4090 or similar (proven path).
+   - GPU: **RTX 4090 / L40S** (~$1–2/hr while running). Proven path is 4090.
+     Skip L4 if HQ should feel faster. **Do not** pin Blackwell PRO 6000 MIG (`sm_120`).
+     Min/active workers stay **0** (or 1 only during a work session). A $2 card does
+     not 20× a serial HQ batch; raise **execution timeout** (e.g. 3600s) only for
+     HQ experiments, not as the way to ship 20 HQ variants.
    - **FlashBoot: on**
    - **Active / min workers: 1** for VA hours (0 boot). Use 0 only if you accept a
      first-job wait after idle.

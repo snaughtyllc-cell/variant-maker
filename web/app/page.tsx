@@ -7,7 +7,7 @@ import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
-import { readDurations, tooLargeMessage } from "@/lib/files";
+import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 
@@ -133,6 +133,7 @@ export default function StudioPage() {
           onAllowCreativeEscalateChange={setAllowCreativeEscalate}
           qualityMode={qualityMode}
           onQualityModeChange={setQualityMode}
+          totalVariants={totalVariants(files.length, perVideo)}
         />
       </div>
 

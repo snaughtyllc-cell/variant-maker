@@ -95,6 +95,12 @@ Status legend: ✅ done & verified · 🔨 to build
 - **Flicker checked OK:** on a high-motion clip, neural YDIF (10.1) ≤ fast (10.6) — no added shimmer.
 - **Still TODO:** the linux/GPU-container build for the cloud worker (see farm spec).
 - **Acceptance:** hq is sharper + more distinct than fast while staying in the quality floor. ✅
+- **Throughput (do not skip):** HQ is serial today (`jobs: 1` on the worker). Each variant is
+  PNG frames → Real-ESRGAN `--fp32` → reassemble → VMAF. A faster GPU (4090-class, ~$1–2/hr)
+  cuts the AI step; **20 HQ variants still queue one-after-another** and can hit the RunPod
+  **20 min execution timeout**. Usual batch of ~20 stays **Fast**. HQ = 1–3 hero takes until
+  we fan-out jobs / drop fp32 / skip extra encodes. Do **not** raise min workers to keep a
+  GPU warm all day. Do **not** pin Blackwell MIG (`sm_120`). Prefer 4090 / L40S over L4.
 
 ## Phase 9 — Neural interpolation  🔨
 - `neural/interpolate.py`: RIFE retime for speed/fps changes (replaces drop/dupe).

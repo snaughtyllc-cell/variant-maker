@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
+import { HQ_BATCH_WARN_AT, hqBatchHint } from "@/lib/hqThroughputCopy";
 
 interface AdvancedPanelProps {
   allowCreativeEscalate: boolean;
   onAllowCreativeEscalateChange: (value: boolean) => void;
   qualityMode: "fast" | "hq";
   onQualityModeChange: (value: "fast" | "hq") => void;
+  totalVariants?: number;
 }
 
 export function AdvancedPanel({
@@ -13,8 +15,10 @@ export function AdvancedPanel({
   onAllowCreativeEscalateChange,
   qualityMode,
   onQualityModeChange,
+  totalVariants = 0,
 }: AdvancedPanelProps) {
   const [open, setOpen] = useState(false);
+  const hqHint = hqBatchHint(qualityMode, totalVariants);
 
   return (
     <div
@@ -81,9 +85,7 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is quick, non-AI. HQ runs AI upscale — sharper and more
-                different. First HQ variant often sits on rendering for several
-                minutes with no thumb.
+                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
               </span>
             </span>
             <select
@@ -104,6 +106,19 @@ export function AdvancedPanel({
               <option value="hq">HQ (Phase 8)</option>
             </select>
           </div>
+
+          {hqHint && (
+            <p
+              style={{
+                margin: "10px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: totalVariants >= HQ_BATCH_WARN_AT ? "var(--color-amber)" : "var(--color-muted2)",
+              }}
+            >
+              {hqHint}
+            </p>
+          )}
 
           <label
             style={{

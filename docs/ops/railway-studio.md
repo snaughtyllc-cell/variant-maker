@@ -20,8 +20,10 @@ falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
 too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,
 **idle timeout ~10 min**, `VARIANT_QUALITY_MODE=fast` (see
 [`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)).
-Overnight GPU is $0; a warm window after the last job costs ~$0.69/hr only while
-that worker is still up.
+Overnight GPU is $0; a warm window after the last job costs GPU-hours only while
+that worker is still up. Prefer a **4090-class** card (~$1–2/hr while running) over
+L4 for HQ; **min workers stay 0**. HQ is still one variant at a time — do not expect
+20 HQ files in a few minutes from GPU class alone.
 
 ## 1. Railway (Codex can do this)
 
