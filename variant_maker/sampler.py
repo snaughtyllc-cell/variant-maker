@@ -2,7 +2,7 @@
 
 Contract:
   derive_seed(master, index) -> stable per-variant seed
-  sample(preset, seed, *, rubberband=False) -> Params {"video": {...}, "audio": {...}}
+  sample(preset, seed, *, rubberband=False, duration_s=None) -> Params {"video": {...}, "audio": {...}}
     - every axis drawn from preset ranges via a seeded RNG
     - color/geometry axes are ZERO-MEAN (straddle neutral) — no systematic shift
     - transform axes scaled down so total normalized distortion <= preset.budget
@@ -20,6 +20,11 @@ import hashlib
 import random
 
 from .presets import Preset
+
+# Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
+_MIN_REMAINING_S = 0.05
+_REMAINING_FRACTION = 0.5
+_REMAINING_CAP_S = 1.0
 
 # Axis model. kind "sym" => zero-mean around `ref` (a neutral value); kind "dir" => one-
 # directional, calm at the range end named by `ref` ("lo" or "hi"). `budgeted` axes share
@@ -83,6 +88,34 @@ def total_distortion(preset: Preset, params: dict) -> float:
     return total
 
 
+def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[float, float]:
+    """Scale head/tail trims so a short clip keeps a usable remaining duration.
+
+    Fingerprint trims are drawn from preset ranges that assume a typical social clip.
+    On a 1s source, STRONG's 0.30–0.85s per end would otherwise consume the whole file.
+    Long clips are unchanged: the cap only fires when start+end would leave less than
+    max(50ms, half the duration), capped at 1s remaining.
+    """
+    start = max(0.0, float(trim_s))
+    end = max(0.0, float(trim_end_s))
+    if duration_s <= 0:
+        return 0.0, 0.0
+    remaining_floor = min(
+        _REMAINING_CAP_S,
+        max(_MIN_REMAINING_S, duration_s * _REMAINING_FRACTION),
+        duration_s,
+    )
+    budget = max(0.0, duration_s - remaining_floor)
+    total = start + end
+    if total > budget and total > 0:
+        scale = budget / total
+        start *= scale
+        end *= scale
+    start = min(start, budget)
+    end = min(end, max(0.0, duration_s - start - remaining_floor))
+    return round(start, 4), round(end, 4)
+
+
 def clamp_strength(strength: float) -> float:
     """Clamp `strength` to the range `sample()` honors.
 
@@ -95,14 +128,22 @@ def clamp_strength(strength: float) -> float:
     return min(2.0, max(0.0, strength))
 
 
-def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: float = 1.0) -> dict:
+def sample(
+    preset: Preset,
+    seed: int,
+    *,
+    rubberband: bool = False,
+    strength: float = 1.0,
+    duration_s: float | None = None,
+) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
     `strength` in [0, 2] is the lever the auto-tune controller / quality guard drives: it
     caps total distortion at `strength * preset.budget`. 1.0 spends the full budget; values
     above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
     escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
-    WHICH axes move; strength fixes how far.
+    WHICH axes move; strength fixes how far. `duration_s` (when given) scales head/tail
+    trim so a short source keeps a usable remaining duration.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -140,6 +181,10 @@ def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: flo
     raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
     raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
+    if duration_s is not None:
+        raw["trim_s"], raw["trim_end_s"] = clamp_trims(
+            raw["trim_s"], raw["trim_end_s"], duration_s,
+        )
 
     gop = rng.choice(preset.gop_choices)
 

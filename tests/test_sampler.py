@@ -1,6 +1,12 @@
 import pytest
 
-from variant_maker.sampler import clamp_strength, derive_seed, sample, total_distortion
+from variant_maker.sampler import (
+    clamp_strength,
+    clamp_trims,
+    derive_seed,
+    sample,
+    total_distortion,
+)
 from variant_maker.presets import SUBTLE, MEDIUM, STRONG
 
 # A deterministic spread of per-variant seeds for distribution tests.
@@ -190,3 +196,27 @@ def test_crop_offset_and_trim_end_are_unbudgeted():
     bumped = {"video": dict(p["video"])}
     bumped["video"].update({"crop_x_frac": 0.0, "crop_y_frac": 1.0, "trim_end_s": 5.0})
     assert total_distortion(MEDIUM, bumped) == base
+
+
+def test_clamp_trims_keeps_half_of_a_short_clip():
+    """Strong-range head+tail (~0.85+0.85) must not gut a 1s source."""
+    start, end = clamp_trims(0.85, 0.85, 1.0)
+    assert start + end == pytest.approx(0.5)
+    assert start == pytest.approx(end)
+    assert start > 0.0
+
+
+def test_clamp_trims_leaves_long_clips_alone():
+    start, end = clamp_trims(0.2, 0.5, 10.0)
+    assert (start, end) == (0.2, 0.5)
+
+
+def test_sample_with_duration_scales_trims_on_short_clips():
+    p = sample(STRONG, derive_seed(7, 1), duration_s=1.0)
+    v = p["video"]
+    remaining = 1.0 - v["trim_s"] - v["trim_end_s"]
+    assert remaining >= 0.5 - 1e-9
+    unbounded = sample(STRONG, derive_seed(7, 1))
+    assert unbounded["video"]["trim_s"] + unbounded["video"]["trim_end_s"] > (
+        v["trim_s"] + v["trim_end_s"]
+    )

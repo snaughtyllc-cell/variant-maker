@@ -177,6 +177,15 @@ def test_trim_start_and_end_together():
     assert "trim=start=0.200:end=9.500" in vf
 
 
+def test_trim_overspend_on_short_clip_is_scaled():
+    """Filtergraph must not emit trim=start:end with end <= start on a 1s clip."""
+    p = make_params(video={"trim_s": 0.85, "trim_end_s": 0.85})
+    vf = filtergraph.build_video_filters(p, make_src(duration=1.0), REELS)
+    assert "trim=start=0.250:end=0.750" in vf
+    af = filtergraph.build_audio_filters(p, make_src(duration=1.0), has_audio=True)
+    assert "atrim=start=0.250:end=0.750" in af
+
+
 def test_trim_end_mirrors_on_audio():
     p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.5})
     af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)

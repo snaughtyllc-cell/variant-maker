@@ -27,6 +27,7 @@ from .color import (
 )
 from .platforms import Platform
 from .probe import SourceInfo
+from .sampler import clamp_trims
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
@@ -39,8 +40,7 @@ _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 def _remaining_duration_s(v: dict, duration_s: float) -> float:
     """Wall-clock seconds left after start/end trim (before speed change)."""
-    start_s = v.get("trim_s", 0.0)
-    end_s = v.get("trim_end_s", 0.0)
+    start_s, end_s = clamp_trims(v.get("trim_s", 0.0), v.get("trim_end_s", 0.0), duration_s)
     return max(0.0, duration_s - start_s - end_s)
 
 
@@ -49,10 +49,10 @@ def _trim_expr(v: dict, duration_s: float) -> str:
 
     Start trim (`trim_s`) and end trim (`trim_end_s`, a fingerprint micro-trim off the
     tail) are independent axes; end trim needs the source duration since ffmpeg's `trim`
-    end is an absolute timestamp, not an offset from the end.
+    end is an absolute timestamp, not an offset from the end. Combined trims are scaled
+    via clamp_trims so a short source cannot emit end <= start.
     """
-    start_s = v.get("trim_s", 0.0)
-    end_s = v.get("trim_end_s", 0.0)
+    start_s, end_s = clamp_trims(v.get("trim_s", 0.0), v.get("trim_end_s", 0.0), duration_s)
     has_start = start_s > _EPS
     has_end = end_s > _EPS
     if not has_start and not has_end:

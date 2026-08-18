@@ -19,7 +19,7 @@ class FakeSrc:
 def _stub_common(monkeypatch):
     monkeypatch.setattr(pipeline, "probe", lambda p: FakeSrc())
     monkeypatch.setattr(pipeline, "_ffmpeg_version", lambda: "test")
-    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0, rubberband=False: {
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, **_kw: {
         "video": {"rotate_deg": 0.0}, "audio": {},
     })
 
@@ -135,9 +135,9 @@ def test_uniq_strengths_are_not_collapsed_to_the_same_effective_value(monkeypatc
     seen_strengths = []
     real_sample = pipeline.sample
 
-    def spy_sample(preset, seed, strength=1.0, rubberband=False):
-        seen_strengths.append(strength)
-        return real_sample(preset, seed, strength=strength, rubberband=rubberband)
+    def spy_sample(preset, seed, **kwargs):
+        seen_strengths.append(kwargs.get("strength", 1.0))
+        return real_sample(preset, seed, **kwargs)
     monkeypatch.setattr(pipeline, "sample", spy_sample)
 
     monkeypatch.setattr(
@@ -167,9 +167,9 @@ def test_duplicate_effective_strength_rung_is_skipped(monkeypatch, tmp_path):
     seen_strengths = []
     real_sample = pipeline.sample
 
-    def spy_sample(preset, seed, strength=1.0, rubberband=False):
-        seen_strengths.append(strength)
-        return real_sample(preset, seed, strength=strength, rubberband=rubberband)
+    def spy_sample(preset, seed, **kwargs):
+        seen_strengths.append(kwargs.get("strength", 1.0))
+        return real_sample(preset, seed, **kwargs)
     monkeypatch.setattr(pipeline, "sample", spy_sample)
 
     monkeypatch.setattr(

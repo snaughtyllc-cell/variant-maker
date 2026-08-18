@@ -115,7 +115,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
         records = []
         for i in range(1, count + 1):
             vseed, fname, path = _prep(i)
-            params = sample(preset, vseed, rubberband=rubberband)
+            params = sample(
+                preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
+            )
             params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
@@ -152,6 +154,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             emit("rendering", index=i, attempt=attempt_no)
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
+                duration_s=src.duration_s,
             )
             params = protect.apply_to_params(params, frame_path=protect_frame)
             if rotate_off:
