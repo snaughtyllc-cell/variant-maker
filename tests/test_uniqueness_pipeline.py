@@ -58,6 +58,8 @@ def _cfg(tmp_path, **overrides):
         "input": "src.mp4", "count": 1, "preset": "medium", "platform": "none",
         "out": str(tmp_path), "quality_mode": "fast", "jobs": 1, "max_regen": 3,
         "uniqueness_target": DEFAULT_TARGET,
+        # Ladder tests pin this off. Product Fast defaults auto_tune on.
+        "auto_tune": False,
     }
     cfg.update(overrides)
     return cfg
@@ -254,7 +256,7 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
 
 
 def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch, tmp_path):
-    """Opt-in bisection: uniqueness starts below target then clears; Fast ladder unused."""
+    """Fast default: uniqueness starts below target then clears; 3-rung ladder unused."""
     _stub_common(monkeypatch)
     n = {"scores": 0}
 
@@ -266,7 +268,8 @@ def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch,
 
     monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
 
-    cfg = _cfg(tmp_path, auto_tune=True, allow_creative_escalate=True)
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
     manifest = pipeline.run(cfg)
 
     record = manifest.variants[0]

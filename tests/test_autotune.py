@@ -107,6 +107,21 @@ def test_tune_min_span_stops_after_first_when_already_tight():
     assert out["passed"] is True
 
 
+def test_tune_stop_on_clear_does_not_hunt_milder():
+    seen = []
+
+    def attempt(strength):
+        seen.append(strength)
+        return {"passed": True, "uniqueness": 0.5, "id": len(seen)}
+
+    out = autotune.tune(
+        attempt, target=DEFAULT_TARGET, max_iters=5, stop_on_clear=True,
+    )
+    assert out["id"] == 1
+    assert out["autotune_iters"] == 1
+    assert len(seen) == 1
+
+
 def test_tune_starts_at_mid_of_bounds():
     seen = []
 

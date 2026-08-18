@@ -65,7 +65,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
-    auto_tune = config.get("auto_tune", False)
+    # Fast is the daily pack: auto-tune on unless the caller opts out. HQ stays
+    # one-pass (Real-ESRGAN) so bisection cannot blow the GPU time cap.
+    auto_tune = config.get("auto_tune")
+    if auto_tune is None:
+        auto_tune = config.get("quality_mode", "fast") != "hq"
 
     master_seed = config.get("seed")
     if master_seed is None:
@@ -93,6 +97,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "preset": preset.name,
         "platform": platform.name,
         "quality_mode": config.get("quality_mode", "fast"),
+        "auto_tune": bool(auto_tune),
+        "rubberband": bool(rubberband),
         "count": count,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
@@ -222,7 +228,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     "uniqueness": u_try["uniqueness"],
                 }
 
-            tuned = autotune.tune(_tune_attempt, target=uniqueness_target)
+            tuned = autotune.tune(
+                _tune_attempt, target=uniqueness_target, stop_on_clear=True,
+            )
             r = {
                 "params": tuned["params"],
                 "cmd": tuned["cmd"],

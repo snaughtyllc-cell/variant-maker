@@ -96,6 +96,7 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
     assert captured["max_regen"] == 3
     assert captured["jobs"] == 1
     assert captured["count"] == 5
+    assert captured["auto_tune"] is True
 
 
 def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
@@ -117,3 +118,4 @@ def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
         on_event=lambda e: None, quality_mode="hq",
     )
     assert captured["quality_mode"] == "hq"
+    assert captured["auto_tune"] is False

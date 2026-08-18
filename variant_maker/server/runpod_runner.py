@@ -15,6 +15,7 @@ from .runner import (
     UNIQUENESS_TARGET,
     SourceResult,
     VariantResult,
+    hq_job_limits,
     normalize_quality_mode,
 )
 from .runpod_client import RunPodClient
@@ -42,15 +43,20 @@ class RunPodServerlessRunner:
         source_key = f"inputs/{source_id}/{basename}"
         self._store.put(source_key, source_path)
 
+        quality_mode = normalize_quality_mode(quality_mode, default=_quality_mode())
+        limits = hq_job_limits(quality_mode)
         payload = {"input": {
             "source_key": source_key, "source_id": source_id, "count": count,
             "preset": DEFAULT_PRESET, "platform": DEFAULT_PLATFORM,
-            "quality_mode": normalize_quality_mode(quality_mode, default=_quality_mode()),
-            "max_regen": MAX_REGEN,
-            "allow_creative_escalate": allow_creative_escalate,
+            "quality_mode": quality_mode,
+            "max_regen": limits.get("max_regen", MAX_REGEN),
+            "allow_creative_escalate": limits.get(
+                "allow_creative_escalate", allow_creative_escalate,
+            ),
             "uniqueness_target": UNIQUENESS_TARGET,
-            "uniq_strengths": list(UNIQ_STRENGTHS),
+            "uniq_strengths": limits.get("uniq_strengths", list(UNIQ_STRENGTHS)),
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
+            "auto_tune": limits.get("auto_tune", True),
         }}
 
         variants_meta: list[dict] = []

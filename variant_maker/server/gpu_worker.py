@@ -50,17 +50,21 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     out_dir = os.path.join(work_dir, "out")
     os.makedirs(out_dir, exist_ok=True)
 
+    quality_mode = job_input.get("quality_mode", "hq")
+    auto_tune = job_input.get("auto_tune")
+    if auto_tune is None:
+        auto_tune = quality_mode != "hq"
     config = {
         "input": in_path, "out": out_dir, "count": count,
         "preset": job_input.get("preset", DEFAULT_PRESET),
         "platform": job_input.get("platform", DEFAULT_PLATFORM),
-        "quality_mode": job_input.get("quality_mode", "hq"),
+        "quality_mode": quality_mode,
         "max_regen": job_input.get("max_regen", MAX_REGEN), "jobs": 1,
         "uniqueness_target": job_input.get("uniqueness_target", UNIQUENESS_TARGET),
         "uniq_strengths": job_input.get("uniq_strengths", list(UNIQ_STRENGTHS)),
         "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),
         "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
-        "auto_tune": job_input.get("auto_tune", False),
+        "auto_tune": auto_tune,
         "rubberband": job_input.get("rubberband"),
     }
 

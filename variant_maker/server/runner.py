@@ -22,6 +22,20 @@ UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 UNIQ_STRENGTHS = list(pipeline.DEFAULT_UNIQ_STRENGTHS)
 MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 ALLOW_CREATIVE_ESCALATE = True
+HQ_UNIQ_STRENGTHS = [1.0]
+HQ_MAX_REGEN = 1
+
+
+def hq_job_limits(quality_mode: str) -> dict:
+    """Per-mode job knobs. Fast gets auto-tune; HQ is one Real-ESRGAN pass."""
+    if quality_mode == "hq":
+        return {
+            "uniq_strengths": list(HQ_UNIQ_STRENGTHS),
+            "max_regen": HQ_MAX_REGEN,
+            "allow_creative_escalate": False,
+            "auto_tune": False,
+        }
+    return {"auto_tune": True}
 
 
 def normalize_quality_mode(value: str | None, *, default: str = DEFAULT_QUALITY_MODE) -> str:
@@ -89,19 +103,24 @@ class LocalRunner:
                 platform_result=kw.get("platform_result"),
             ))
 
+        quality_mode = normalize_quality_mode(quality_mode)
+        limits = hq_job_limits(quality_mode)
         config = {
             "input": source_path,
             "out": out_dir,
             "count": count,
             "preset": DEFAULT_PRESET,
             "platform": DEFAULT_PLATFORM,
-            "quality_mode": normalize_quality_mode(quality_mode),
-            "max_regen": MAX_REGEN,
+            "quality_mode": quality_mode,
+            "max_regen": limits.get("max_regen", MAX_REGEN),
             "jobs": 1,
             "uniqueness_target": UNIQUENESS_TARGET,
-            "uniq_strengths": list(UNIQ_STRENGTHS),
+            "uniq_strengths": limits.get("uniq_strengths", list(UNIQ_STRENGTHS)),
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
-            "allow_creative_escalate": allow_creative_escalate,
+            "allow_creative_escalate": limits.get(
+                "allow_creative_escalate", allow_creative_escalate,
+            ),
+            "auto_tune": limits.get("auto_tune", True),
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

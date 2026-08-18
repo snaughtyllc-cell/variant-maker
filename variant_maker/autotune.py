@@ -44,6 +44,7 @@ def tune(
     hi: float = 1.8,
     max_iters: int = 5,
     min_span: float = 0.05,
+    stop_on_clear: bool = False,
 ) -> dict:
     """Bisect strength until uniqueness clears ``target`` (or ``max_iters``).
 
@@ -52,6 +53,9 @@ def tune(
 
     ``best`` is the last result that passed AND ``uniqueness >= target``;
     otherwise the last result. Tags ``autotune_iters`` on the returned dict.
+
+    ``stop_on_clear``: Fast daily packs stop at the first hit so a 20-pack does
+    not pay five extra encodes hunting a milder strength.
     """
     strength = (lo + hi) / 2
     best = None
@@ -66,6 +70,8 @@ def tune(
         uniqueness = result.get("uniqueness")
         if result.get("passed") and uniqueness is not None and uniqueness >= target:
             best = result
+            if stop_on_clear:
+                break
         lo, hi, strength = step(
             lo, hi, passed=result["passed"], uniqueness=uniqueness, target=target,
         )

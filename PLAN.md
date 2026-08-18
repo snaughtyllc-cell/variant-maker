@@ -112,8 +112,9 @@ Status legend: ✅ done & verified · 🔨 to build
 
 ## Phase 11 — Auto-tune controller  ✅
 - Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default
-  `uniqueness.DEFAULT_TARGET` 0.375). Opt-in: `config["auto_tune"]` default **False** so Fast
-  20-packs keep the 3-rung uniqueness ladder. Path-B 35% similarity is later calibration.
+  `uniqueness.DEFAULT_TARGET` 0.375). **Fast default on** (`stop_on_clear` so a pack
+  stops at the first uniqueness+quality hit). HQ stays **off** (one Real-ESRGAN pass).
+  Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
 ## Phase 12 — Platform outcome tracking (learning loop)  ⏸ skipped for now

@@ -70,11 +70,12 @@ def test_runner_sends_hq_defaults_in_payload(tmp_path):
     assert captured["quality_mode"] == "hq"
     assert captured["preset"] == "medium"
     assert captured["platform"] == "tiktok"
-    assert captured["max_regen"] == 3
+    assert captured["max_regen"] == 1
     assert captured["count"] == 7
     assert captured["source_id"] == "s"
     assert captured["source_key"] == "inputs/s/in.mp4"
-    assert captured["allow_creative_escalate"] is True
+    assert captured["allow_creative_escalate"] is False
+    assert captured["auto_tune"] is False
     assert captured["uniqueness_target"] == DEFAULT_TARGET
 
 
@@ -94,6 +95,7 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
         str(src), count=1, out_dir=str(tmp_path / "o"), source_id="s",
         on_event=lambda e: None)
     assert captured["quality_mode"] == "fast"
+    assert captured["auto_tune"] is True
 
 
 def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
@@ -112,6 +114,7 @@ def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
         str(src), count=1, out_dir=str(tmp_path / "o"), source_id="s",
         on_event=lambda e: None, quality_mode="hq")
     assert captured["quality_mode"] == "hq"
+    assert captured["auto_tune"] is False
 
 
 def test_runner_accepts_allow_creative_escalate(tmp_path):
