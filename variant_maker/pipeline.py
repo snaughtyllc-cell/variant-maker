@@ -99,6 +99,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),
+        "protect": False,
         "count": count,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
@@ -125,6 +126,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
         return Manifest(source=src.to_dict(), run=run_meta, variants=records)
 
     os.makedirs(out_dir, exist_ok=True)
+    protect_frame = None
+    from .neural import protect as protect_mod
+    if protect_mod.available():
+        protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
+    run_meta["protect"] = protect_frame is not None
 
     def _render_one(i: int) -> VariantRecord:
         token = config.get("cancel_token")
@@ -147,7 +153,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
             )
-            params = protect.apply_to_params(params)
+            params = protect.apply_to_params(params, frame_path=protect_frame)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:

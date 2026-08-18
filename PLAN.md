@@ -105,10 +105,10 @@ Status legend: ✅ done & verified · 🔨 to build
   `interpolate_dir`) and HQ hook in `upscale_clip` (`defer_tempo` on neural-pre, RIFE after PNG
   extract). Fast is unchanged (never calls `upscale_clip`). No RIFE binary in Docker yet.
 
-## Phase 10 — Content protection  ✅ (wired, no-op without a segmenter)
-- `neural/protect.py`: `apply_to_params` after `sample()` in Fast and HQ. Without MediaPipe/SAM
-  the mask is None → identity. When a mask edge exists, `clamp_crop_keep` stops crop punching
-  a protected edge. No SAM download.
+## Phase 10 — Content protection  ✅
+- `neural/protect.py`: mid-frame grab + face boxes (MediaPipe if present, else OpenCV Haar).
+  `apply_to_params` after `sample()` on Fast and HQ. No SAM download. No face → identity.
+  Face near an edge raises `crop_keep`; large coverage disables crop.
 
 ## Phase 11 — Auto-tune controller  ✅
 - Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default

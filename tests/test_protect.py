@@ -11,6 +11,7 @@ def test_available_is_false_without_mediapipe_or_env(monkeypatch):
     monkeypatch.delenv("VARIANT_MAKER_PROTECT_BACKEND", raising=False)
     monkeypatch.setattr(protect, "_mediapipe_importable", lambda: False)
     monkeypatch.setattr(protect, "_sam_importable", lambda: False)
+    monkeypatch.setattr(protect, "_opencv_importable", lambda: False)
     assert protect.available() is False
 
 
@@ -19,6 +20,7 @@ def test_available_is_true_when_backend_env_set(monkeypatch):
     monkeypatch.setenv("VARIANT_MAKER_PROTECT_BACKEND", "mediapipe")
     monkeypatch.setattr(protect, "_mediapipe_importable", lambda: False)
     monkeypatch.setattr(protect, "_sam_importable", lambda: False)
+    monkeypatch.setattr(protect, "_opencv_importable", lambda: False)
     assert protect.available() is True
 
 
@@ -102,3 +104,45 @@ def test_apply_to_params_raises_crop_keep_with_mask_edge_frac():
     assert params["video"]["crop_keep"] == 0.90
     assert out is not params
     assert out["video"] is not params["video"]
+
+
+def test_mask_stats_tightens_crop_when_face_is_near_edge():
+    # 100x100 frame; face flush to the left edge
+    stats = protect.mask_stats([(0.0, 40.0, 20.0, 80.0)], 100, 100)
+    assert stats["coverage"] > 0.0
+    assert stats["edge_frac"] >= 0.03
+    assert protect.clamp_crop_keep(0.90, stats["edge_frac"]) >= 0.97
+
+
+def test_mask_stats_center_face_does_not_force_keep_to_one():
+    stats = protect.mask_stats([(40.0, 40.0, 60.0, 60.0)], 100, 100)
+    assert stats["coverage"] < 0.15
+    kept = protect.clamp_crop_keep(0.95, stats["edge_frac"])
+    assert kept == 0.95
+
+
+def test_apply_to_params_uses_built_mask_from_frame(monkeypatch):
+    monkeypatch.setattr(
+        protect, "build_protection_mask",
+        lambda *a, **k: {"coverage": 0.04, "edge_frac": 0.08, "n_faces": 1},
+    )
+    params = {"video": {"crop_keep": 0.90}, "audio": {}}
+    out = protect.apply_to_params(params, frame_path="mid.png")
+    assert out["video"]["crop_keep"] >= 0.92
+    assert params["video"]["crop_keep"] == 0.90
+
+
+def test_apply_to_params_blocks_crop_when_coverage_high(monkeypatch):
+    monkeypatch.setattr(
+        protect, "build_protection_mask",
+        lambda *a, **k: {"coverage": 0.40, "edge_frac": 0.02, "n_faces": 1},
+    )
+    out = protect.apply_to_params({"video": {"crop_keep": 0.90}}, frame_path="mid.png")
+    assert out["video"]["crop_keep"] == 1.0
+
+
+def test_detect_face_boxes_uses_injected_detector(monkeypatch, tmp_path):
+    frame = tmp_path / "f.png"
+    frame.write_bytes(b"x")
+    monkeypatch.setattr(protect, "_detect_impl", lambda path: [(1, 2, 3, 4)])
+    assert protect.detect_face_boxes(str(frame)) == [(1, 2, 3, 4)]
