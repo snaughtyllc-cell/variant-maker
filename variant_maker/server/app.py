@@ -15,6 +15,7 @@ from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 
+from .captions import CaptionError, CaptionStore, split_caption_bank
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
 from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
@@ -55,7 +56,9 @@ from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, Des
                      DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
                      ExportCreateIn, ExportFileOut, ExportJobOut, InFlightOut, JobDetail,
                      JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
-                     VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn)
+                     VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn,
+                     CaptionAdvanceIn, CaptionBankOut, CaptionBulkIn, CaptionCreateIn, CaptionOut,
+                     CaptionPreviewOut)
 from .runner import LocalRunner
 from .sheets import GoogleSheets, SheetsClient
 from .workflow_runner import tick_workflow
@@ -167,6 +170,7 @@ def _workflow_out(w: Workflow) -> WorkflowOut:
         poll_seconds=w.poll_seconds,
         last_sweep_at=w.last_sweep_at,
         last_summary=_workflow_summary_out(w.last_summary),
+        auto_caption=w.auto_caption,
     )
 
 
@@ -281,6 +285,7 @@ def create_app(
     app.state.destinations = DestinationStore(store._ws.destinations_path())
     app.state.exports = ExportStore(store._ws.exports_dir())
     app.state.workflows = WorkflowStore(store._ws.workflows_path())
+    app.state.captions = CaptionStore(store._ws.captions_path())
     app.state.workflow_tick_lock = threading.Lock()
 
     def _refresh_drive_info() -> None:
@@ -376,6 +381,7 @@ def create_app(
                 job_store=store,
                 ledger=ledger,
                 work_dir=store._ws.workflow_work_dir(),
+                caption_store=app.state.captions,
             )
         return app.state.workflows.update(
             wf.id, last_sweep_at=ts, last_summary=result.as_dict(), touch_sweep=True,
@@ -864,6 +870,7 @@ def create_app(
                 allow_creative_escalate=body.allow_creative_escalate,
                 enabled=body.enabled,
                 poll_seconds=body.poll_seconds,
+                auto_caption=body.auto_caption,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -888,6 +895,7 @@ def create_app(
                 allow_creative_escalate=body.allow_creative_escalate,
                 enabled=body.enabled,
                 poll_seconds=body.poll_seconds,
+                auto_caption=body.auto_caption,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -913,17 +921,78 @@ def create_app(
             raise HTTPException(status_code=404, detail="workflow not found")
         return _workflow_out(_run_workflow_tick(wf))
 
+    @app.get("/api/captions", response_model=CaptionBankOut)
+    def list_captions() -> CaptionBankOut:
+        bank = app.state.captions
+        return CaptionBankOut(
+            cursor=bank.cursor(),
+            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
+        )
+
+    @app.get("/api/captions/preview", response_model=CaptionPreviewOut)
+    def preview_captions(n: int = 1) -> CaptionPreviewOut:
+        return CaptionPreviewOut(captions=app.state.captions.peek(max(0, n)))
+
+    @app.post("/api/captions", status_code=201, response_model=CaptionOut)
+    def create_caption(body: CaptionCreateIn) -> CaptionOut:
+        try:
+            cap = app.state.captions.add(body.text)
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return CaptionOut(id=cap.id, text=cap.text)
+
+    @app.post("/api/captions/bulk", status_code=201, response_model=CaptionBankOut)
+    def bulk_captions(body: CaptionBulkIn) -> CaptionBankOut:
+        try:
+            app.state.captions.add_many(split_caption_bank(body.raw))
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        bank = app.state.captions
+        return CaptionBankOut(
+            cursor=bank.cursor(),
+            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
+        )
+
+    @app.patch("/api/captions/{caption_id}", response_model=CaptionOut)
+    def update_caption(caption_id: str, body: CaptionCreateIn) -> CaptionOut:
+        try:
+            cap = app.state.captions.update(caption_id, body.text)
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if cap is None:
+            raise HTTPException(status_code=404, detail="caption not found")
+        return CaptionOut(id=cap.id, text=cap.text)
+
+    @app.delete("/api/captions/{caption_id}", status_code=204)
+    def delete_caption(caption_id: str) -> None:
+        if not app.state.captions.delete(caption_id):
+            raise HTTPException(status_code=404, detail="caption not found")
+
+    @app.post("/api/captions/advance", response_model=CaptionBankOut)
+    def advance_captions(body: CaptionAdvanceIn) -> CaptionBankOut:
+        bank = app.state.captions
+        bank.advance(body.n)
+        return CaptionBankOut(
+            cursor=bank.cursor(),
+            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
+        )
+
     @app.post("/api/drive/exports", status_code=201, response_model=ExportJobOut)
     def create_export(body: ExportCreateIn) -> ExportJobOut:
         _require_drive()
         dest = app.state.destinations.get(body.destination_id)
         if dest is None:
             raise HTTPException(status_code=404, detail="destination not found")
-        refs = [VariantRef(source_id=v.source_id, index=v.index) for v in body.variants]
+        refs = [
+            VariantRef(source_id=v.source_id, index=v.index, caption=v.caption)
+            for v in body.variants
+        ]
         try:
             files = build_export_files(store, refs)
         except ExportError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        if body.consume_bank:
+            app.state.captions.advance(len(files))
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
         ExportRunner(app.state.drive, app.state.exports).start(job)
         return _export_job_out(job)

@@ -88,6 +88,57 @@ def test_export_ok_variant(tmp_path):
     assert any(f.name == "v01.mp4" for f in drive.list_files(folder))
 
 
+def test_caption_bank_crud_and_preview(tmp_path):
+    client, _, _ = _app(tmp_path)
+    created = client.post("/api/captions", json={"text": "First #reels"}).json()
+    assert created["text"] == "First #reels"
+    client.post("/api/captions", json={"text": "Second #fyp"})
+    listed = client.get("/api/captions").json()
+    assert listed["cursor"] == 0
+    assert [c["text"] for c in listed["items"]] == ["First #reels", "Second #fyp"]
+    preview = client.get("/api/captions/preview", params={"n": 3}).json()
+    assert preview["captions"] == ["First #reels", "Second #fyp", "First #reels"]
+    assert client.get("/api/captions").json()["cursor"] == 0
+    advanced = client.post("/api/captions/advance", json={"n": 1}).json()
+    assert advanced["cursor"] == 1
+    assert client.delete(f"/api/captions/{created['id']}").status_code == 204
+    assert [c["text"] for c in client.get("/api/captions").json()["items"]] == ["Second #fyp"]
+
+
+def test_export_uses_per_variant_caption(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    client, store, ws = _app(tmp_path, drive=drive)
+    dest = client.post("/api/drive/destinations", json={
+        "name": "Out", "folder_url": folder,
+    }).json()
+    job = Job(job_id="j1", count=1, created_utc="Z", state="done")
+    src = JobSource(source_id="s1", filename="a.mp4", requested=1)
+    Path(ws.source_out_dir("j1", "s1"), "v01.mp4").write_bytes(b"vid")
+    src.variants.append(VariantInfo(
+        source_id="s1", index=1, filename="v01.mp4", status="ok", quality={},
+    ))
+    job.sources.append(src)
+    store._jobs["j1"] = job
+    store._source_index["s1"] = ("j1", src)
+    resp = client.post("/api/drive/exports", json={
+        "destination_id": dest["id"],
+        "consume_bank": True,
+        "variants": [{"source_id": "s1", "index": 1, "caption": "Gallery edit #reels"}],
+    })
+    assert resp.status_code == 201
+    export_id = resp.json()["export_id"]
+    import time
+    for _ in range(50):
+        detail = client.get(f"/api/drive/exports/{export_id}").json()
+        if detail["state"] in ("succeeded", "partial", "failed"):
+            break
+        time.sleep(0.05)
+    assert detail["state"] == "succeeded"
+    assert any(f.name == "Gallery edit #reels.mp4" for f in drive.list_files(folder))
+    assert detail["files"][0]["filename"] == "Gallery edit #reels.mp4"
+
+
 def test_export_rejects_when_no_ok(tmp_path):
     drive = FakeDrive()
     folder = drive.make_folder("out")

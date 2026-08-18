@@ -44,6 +44,14 @@ def test_build_export_files_filters_non_ok(tmp_path):
     assert len(files) == 1 and files[0].filename == "v01.mp4"
 
 
+def test_build_export_files_uses_caption_as_drive_name(tmp_path):
+    store, _ = _store_with_ok(tmp_path)
+    files = build_export_files(
+        store, [VariantRef("s1", 1, caption="POV: she said #reels")],
+    )
+    assert files[0].filename == "POV: she said #reels.mp4"
+
+
 def test_build_export_files_empty_raises(tmp_path):
     store, _ = _store_with_ok(tmp_path)
     with pytest.raises(ExportError, match="No ok videos"):

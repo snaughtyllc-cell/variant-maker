@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { createDriveExport } from "@/lib/api";
+import { createDriveExport, previewCaptions } from "@/lib/api";
+import { captionFilenamePreview } from "@/lib/captions";
 import type { Destination, ExportJob, ExportVariantRef } from "@/lib/types";
 import { ExportProgress } from "./ExportProgress";
 
@@ -16,13 +17,36 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<ExportJob | null>(null);
+  const [captions, setCaptions] = useState<string[]>(() => refs.map(() => ""));
+  const [fromBank, setFromBank] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    previewCaptions(refs.length)
+      .then((out) => {
+        if (cancelled) return;
+        if (out.captions.length > 0) {
+          setCaptions(out.captions);
+          setFromBank(true);
+        }
+      })
+      .catch(() => {/* keep blank captions; VA can type them */});
+    return () => { cancelled = true; };
+  }, [refs.length]);
 
   async function handleConfirm() {
     if (!destinationId || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      const created = await createDriveExport(destinationId, refs);
+      const created = await createDriveExport(
+        destinationId,
+        refs.map((ref, i) => ({
+          ...ref,
+          caption: (captions[i] ?? "").trim() || undefined,
+        })),
+        fromBank,
+      );
       setJob(created);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start export");
@@ -50,8 +74,10 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 420,
+            width: 480,
             maxWidth: "calc(100vw - 32px)",
+            maxHeight: "calc(100vh - 48px)",
+            overflow: "auto",
             background: "linear-gradient(180deg, #0e0e15, #0b0b11)",
             border: "1px solid var(--color-line2)",
             borderRadius: 16,
@@ -89,7 +115,8 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
           {!job && (
             <>
               <div style={{ fontSize: 12.5, color: "var(--color-muted)", marginBottom: 14 }}>
-                {refs.length} variant{refs.length !== 1 ? "s" : ""} selected
+                {refs.length} variant{refs.length !== 1 ? "s" : ""} selected. Filename is the
+                Repurpose caption — edit before send.
               </div>
               <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Destination</span>
@@ -113,6 +140,36 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
                   ))}
                 </select>
               </label>
+
+              <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10, maxHeight: 280, overflow: "auto" }}>
+                {refs.map((ref, i) => (
+                  <label key={`${ref.source_id}:${ref.index}`} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: 11.5, color: "var(--color-muted)" }}>
+                      v{String(ref.index).padStart(2, "0")} → {captionFilenamePreview(captions[i] ?? "", `v${String(ref.index).padStart(2, "0")}.mp4`)}
+                    </span>
+                    <textarea
+                      value={captions[i] ?? ""}
+                      onChange={(e) => {
+                        const next = [...captions];
+                        next[i] = e.target.value;
+                        setCaptions(next);
+                      }}
+                      rows={2}
+                      placeholder="Caption (Drive filename)"
+                      style={{
+                        background: "var(--color-panel2)",
+                        border: "1px solid var(--color-line)",
+                        borderRadius: 9,
+                        padding: "8px 10px",
+                        fontSize: 12.5,
+                        color: "var(--color-text)",
+                        outline: "none",
+                        resize: "vertical",
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
 
               {error && (
                 <div style={{ fontSize: 12, color: "var(--color-red)", marginTop: 10 }}>{error}</div>

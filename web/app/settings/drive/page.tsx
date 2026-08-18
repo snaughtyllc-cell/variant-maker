@@ -1,4 +1,5 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
+import { CaptionBankPanel } from "@/components/drive/CaptionBankPanel";
 
 export default function DriveSettingsPage() {
   return (
@@ -36,6 +37,8 @@ export default function DriveSettingsPage() {
 
       <div style={{ padding: "14px 20px 22px" }}>
         <DestinationsPanel />
+        <div style={{ height: 28 }} />
+        <CaptionBankPanel />
       </div>
     </main>
   );

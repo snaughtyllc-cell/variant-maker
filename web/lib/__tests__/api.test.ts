@@ -85,14 +85,27 @@ describe("retryCopy", () => {
   });
 });
 
-it("createDriveExport posts destination and variants", async () => {
+it("createDriveExport posts destination, variants, and consume_bank", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ export_id: "exp_1", state: "pending", files: [] }), { status: 200 }),
   );
-  await api.createDriveExport("dst_1", [{ source_id: "s1", index: 1 }]);
-  expect(fetchMock).toHaveBeenCalledWith("/api/drive/exports", expect.objectContaining({
-    method: "POST",
-  }));
+  await api.createDriveExport("dst_1", [{ source_id: "s1", index: 1, caption: "POV #reels" }], true);
+  const [, init] = fetchMock.mock.calls[0];
+  expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+    destination_id: "dst_1",
+    variants: [{ source_id: "s1", index: 1, caption: "POV #reels" }],
+    consume_bank: true,
+  });
+});
+
+describe("captions API", () => {
+  it("listCaptions GETs /api/captions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ cursor: 0, items: [] }), { status: 200 }),
+    );
+    await api.listCaptions();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/captions");
+  });
 });
 
 describe("listDestinationVideos", () => {
@@ -145,6 +158,7 @@ describe("workflows API", () => {
     poll_seconds: 120,
     last_sweep_at: null,
     last_summary: null,
+    auto_caption: false,
   };
 
   it("listWorkflows GETs /api/workflows", async () => {

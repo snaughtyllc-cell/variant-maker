@@ -4,6 +4,7 @@ import {
   workflowFoldersMustDiffer,
   workflowNeedTwoFolders,
   workflowOutputHint,
+  workflowAutoCaptionHint,
   workflowPageBlurb,
 } from "@/lib/workflowCopy";
 
@@ -15,6 +16,8 @@ describe("workflow folder layout copy", () => {
     expect(workflowFoldersMustDiffer()).toMatch(/different/i);
     expect(workflowNeedTwoFolders()).toMatch(/two Drive folders/i);
     expect(workflowOutputHint()).toMatch(/one subfolder per source/i);
+    expect(workflowAutoCaptionHint()).toMatch(/off by default/i);
+    expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
   });
 
   it("treats the same destination or the same Drive folder as a clash", () => {

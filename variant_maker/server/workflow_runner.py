@@ -15,6 +15,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.layout import source_output_subfolder
 from variant_maker.farm.ledger import Ledger
 from variant_maker.probe import sha256_file
+from variant_maker.server.captions import CaptionStore, caption_filename
 from variant_maker.server.jobs import COPY_FAILED_MSG, Job, JobSource, JobStore
 from variant_maker.server.workflows import Workflow
 
@@ -72,6 +73,7 @@ def _export_source(
     stem: str,
     sha: str,
     output_folder_id: str,
+    caption_store: CaptionStore | None = None,
 ) -> tuple[str, int]:
     variants = _uploadable(source)
     if not variants:
@@ -80,12 +82,14 @@ def _export_source(
     sub_id = drive.find_or_create_folder(sub_name, output_folder_id)
     if not sub_id or sub_id == output_folder_id:
         raise RuntimeError("refusing to dump variants into the parent output folder")
+    captions = caption_store.take(len(variants)) if caption_store is not None else []
     uploaded = 0
-    for v in variants:
+    for i, v in enumerate(variants):
         path = job_store.find_variant(source.source_id, v.filename)
         if path is None:
             continue
-        drive.upload(path, sub_id, name=v.filename)
+        cap = captions[i] if i < len(captions) else None
+        drive.upload(path, sub_id, name=caption_filename(cap, v.filename))
         uploaded += 1
     if uploaded == 0:
         raise RuntimeError(COPY_FAILED_MSG)
@@ -102,6 +106,7 @@ def _harvest(
     output_folder_id: str,
     summary: TickSummary,
     max_attempts: int,
+    caption_store: CaptionStore | None = None,
 ) -> int:
     """Finish exports for jobs that left `running`. Returns how many are still in flight."""
     still = 0
@@ -133,6 +138,7 @@ def _harvest(
             sub_id, n = _export_source(
                 drive, job_store, job, source,
                 stem=stem, sha=sha, output_folder_id=output_folder_id,
+                caption_store=caption_store,
             )
         except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
             ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=file_id, md5=md5)
@@ -219,12 +225,15 @@ def tick_workflow(
     work_dir: str,
     max_attempts: int = 3,
     max_inflight: int = 1,
+    caption_store: CaptionStore | None = None,
 ) -> TickSummary:
     summary = TickSummary()
     if inbox_folder_id == output_folder_id:
         summary.error = "inbox and output folders must be different"
         return summary
-    still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts)
+    bank = caption_store if workflow.auto_caption else None
+    still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
+                     caption_store=bank)
     _queue_new(
         workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
         max_attempts=max_attempts, slots=max(0, max_inflight - still),
@@ -239,6 +248,7 @@ def tick_workflow(
     if done_already:
         # Don't double-count running from the first harvest; reset running then re-harvest.
         summary.running = 0
-        still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts)
+        still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
+                         caption_store=bank)
         summary.running = still
     return summary

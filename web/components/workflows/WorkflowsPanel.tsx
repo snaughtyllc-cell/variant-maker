@@ -18,6 +18,7 @@ import {
   workflowInboxHint,
   workflowNeedTwoFolders,
   workflowOutputHint,
+  workflowAutoCaptionHint,
 } from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
@@ -53,6 +54,7 @@ export function WorkflowsPanel() {
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
+  const [autoCaption, setAutoCaption] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -109,6 +111,7 @@ export function WorkflowsPanel() {
         quality_mode: qualityMode,
         enabled,
         poll_seconds: Math.round(pollMinutes * 60),
+        auto_caption: autoCaption,
       });
       setWorkflows((prev) => [...prev, created]);
       setName("");
@@ -126,6 +129,18 @@ export function WorkflowsPanel() {
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle workflow", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleToggleAutoCaption(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const updated = await updateWorkflow(wf.id, { auto_caption: !wf.auto_caption });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to toggle auto-caption", err);
     } finally {
       setActionId(null);
     }
@@ -340,6 +355,22 @@ export function WorkflowsPanel() {
           Watch folder (auto-poll)
         </label>
 
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
+          <input
+            type="checkbox"
+            checked={autoCaption}
+            onChange={(e) => setAutoCaption(e.target.checked)}
+            disabled={destinations.length === 0 || driveNotReady}
+            style={{ accentColor: "#7c5cff", marginTop: 2 }}
+          />
+          <span>
+            Auto-caption from bank
+            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
+              {workflowAutoCaptionHint()}
+            </span>
+          </span>
+        </label>
+
         {formError && <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>}
 
         <button
@@ -406,6 +437,7 @@ export function WorkflowsPanel() {
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
                   {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
+                  {wf.auto_caption ? " · auto-caption on" : ""}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted2)", marginTop: 6 }}>
                   Last sweep: {formatSummary(wf.last_summary)}
@@ -430,6 +462,24 @@ export function WorkflowsPanel() {
                     style={{ accentColor: "#7c5cff" }}
                   />
                   Watch
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--color-text)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!wf.auto_caption}
+                    disabled={busy}
+                    onChange={() => handleToggleAutoCaption(wf)}
+                    style={{ accentColor: "#7c5cff" }}
+                  />
+                  Auto-caption
                 </label>
                 <button
                   type="button"

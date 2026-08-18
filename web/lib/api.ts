@@ -1,4 +1,6 @@
 import {
+  Caption,
+  CaptionBank,
   CreateJobResponse,
   Destination,
   DiagnosticsItem,
@@ -164,11 +166,19 @@ export async function deleteDestination(id: string): Promise<void> {
 export const testDestination = (id: string) =>
   fetch(`/api/drive/destinations/${id}/test`, { method: "POST" }).then(json<{ ok: boolean }>);
 
-export function createDriveExport(destinationId: string, variants: ExportVariantRef[]): Promise<ExportJob> {
+export function createDriveExport(
+  destinationId: string,
+  variants: ExportVariantRef[],
+  consumeBank = false,
+): Promise<ExportJob> {
   return fetch("/api/drive/exports", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ destination_id: destinationId, variants }),
+    body: JSON.stringify({
+      destination_id: destinationId,
+      variants,
+      consume_bank: consumeBank,
+    }),
   }).then(json<ExportJob>);
 }
 
@@ -212,6 +222,7 @@ export function createWorkflow(body: {
   allow_creative_escalate?: boolean;
   enabled?: boolean;
   poll_seconds?: number;
+  auto_caption?: boolean;
 }): Promise<Workflow> {
   return fetch("/api/workflows", {
     method: "POST",
@@ -231,6 +242,7 @@ export function updateWorkflow(
     allow_creative_escalate: boolean;
     enabled: boolean;
     poll_seconds: number;
+    auto_caption: boolean;
   }>,
 ): Promise<Workflow> {
   return fetch(`/api/workflows/${id}`, {
@@ -247,3 +259,39 @@ export async function deleteWorkflow(id: string): Promise<void> {
 
 export const runWorkflow = (id: string) =>
   fetch(`/api/workflows/${id}/run`, { method: "POST" }).then(json<Workflow>);
+
+export const listCaptions = () => fetch("/api/captions").then(json<CaptionBank>);
+
+export const previewCaptions = (n: number) =>
+  fetch(`/api/captions/preview?n=${encodeURIComponent(String(n))}`).then(
+    json<{ captions: string[] }>,
+  );
+
+export function createCaption(text: string): Promise<Caption> {
+  return fetch("/api/captions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }).then(json<Caption>);
+}
+
+export function bulkCaptions(raw: string): Promise<CaptionBank> {
+  return fetch("/api/captions/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw }),
+  }).then(json<CaptionBank>);
+}
+
+export function updateCaption(id: string, text: string): Promise<Caption> {
+  return fetch(`/api/captions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }).then(json<Caption>);
+}
+
+export async function deleteCaption(id: string): Promise<void> {
+  const res = await fetch(`/api/captions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}

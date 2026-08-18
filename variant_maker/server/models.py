@@ -116,11 +116,13 @@ class DestinationUpdateIn(BaseModel):
 class ExportVariantRefIn(BaseModel):
     source_id: str
     index: int
+    caption: str | None = None
 
 
 class ExportCreateIn(BaseModel):
     destination_id: str
     variants: list[ExportVariantRefIn]
+    consume_bank: bool = False
 
 
 class ExportFileOut(BaseModel):
@@ -210,6 +212,7 @@ class WorkflowOut(BaseModel):
     poll_seconds: int
     last_sweep_at: str | None = None
     last_summary: WorkflowSummaryOut | None = None
+    auto_caption: bool = False
 
 
 class WorkflowCreateIn(BaseModel):
@@ -221,6 +224,7 @@ class WorkflowCreateIn(BaseModel):
     allow_creative_escalate: bool = True
     enabled: bool = False
     poll_seconds: int = 120
+    auto_caption: bool = False
 
 
 class WorkflowUpdateIn(BaseModel):
@@ -232,3 +236,30 @@ class WorkflowUpdateIn(BaseModel):
     allow_creative_escalate: bool | None = None
     enabled: bool | None = None
     poll_seconds: int | None = None
+    auto_caption: bool | None = None
+
+
+class CaptionOut(BaseModel):
+    id: str
+    text: str
+
+
+class CaptionBankOut(BaseModel):
+    cursor: int = 0
+    items: list[CaptionOut] = []
+
+
+class CaptionCreateIn(BaseModel):
+    text: str
+
+
+class CaptionBulkIn(BaseModel):
+    raw: str
+
+
+class CaptionAdvanceIn(BaseModel):
+    n: int
+
+
+class CaptionPreviewOut(BaseModel):
+    captions: list[str] = []

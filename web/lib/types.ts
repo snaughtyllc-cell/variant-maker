@@ -64,6 +64,7 @@ export interface Destination {
 export interface ExportVariantRef {
   source_id: string;
   index: number;
+  caption?: string | null;
 }
 export interface ExportFile {
   source_id: string;
@@ -99,6 +100,16 @@ export interface WorkflowSummary {
   error?: string | null;
 }
 
+export interface Caption {
+  id: string;
+  text: string;
+}
+
+export interface CaptionBank {
+  cursor: number;
+  items: Caption[];
+}
+
 export interface Workflow {
   id: string;
   name: string;
@@ -111,4 +122,5 @@ export interface Workflow {
   poll_seconds: number;
   last_sweep_at: string | null;
   last_summary: WorkflowSummary | null;
+  auto_caption: boolean;
 }

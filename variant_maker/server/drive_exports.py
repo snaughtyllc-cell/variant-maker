@@ -18,6 +18,7 @@ import threading
 from dataclasses import dataclass, field
 
 from variant_maker.farm.drive import DriveClient
+from variant_maker.server.captions import caption_filename
 from variant_maker.server.drive_names import unique_upload_name
 from variant_maker.server.jobs import JobStore
 
@@ -30,6 +31,7 @@ class ExportError(Exception):
 class VariantRef:
     source_id: str
     index: int
+    caption: str | None = None
 
 
 @dataclass
@@ -70,7 +72,8 @@ def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[Expo
         if local_path is None:
             continue
         files.append(ExportFile(
-            source_id=ref.source_id, index=ref.index, filename=variant.filename,
+            source_id=ref.source_id, index=ref.index,
+            filename=caption_filename(ref.caption, variant.filename),
             local_path=local_path, status="pending",
         ))
     if not files:

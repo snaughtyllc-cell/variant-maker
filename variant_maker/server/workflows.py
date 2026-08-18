@@ -33,6 +33,7 @@ class Workflow:
     poll_seconds: int = DEFAULT_POLL_SECONDS
     last_sweep_at: str | None = None
     last_summary: dict | None = None
+    auto_caption: bool = False
 
 
 def _validate(
@@ -89,6 +90,7 @@ class WorkflowStore:
         allow_creative_escalate: bool = True,
         enabled: bool = False,
         poll_seconds: int = DEFAULT_POLL_SECONDS,
+        auto_caption: bool = False,
     ) -> Workflow:
         name, inbox, output, count, quality, poll_seconds = _validate(
             name=name,
@@ -109,6 +111,7 @@ class WorkflowStore:
             allow_creative_escalate=bool(allow_creative_escalate),
             enabled=bool(enabled),
             poll_seconds=poll_seconds,
+            auto_caption=bool(auto_caption),
         )
         items.append(wf)
         self._save(items)
@@ -129,6 +132,7 @@ class WorkflowStore:
         last_sweep_at: str | None = None,
         last_summary: dict | None = None,
         touch_sweep: bool = False,
+        auto_caption: bool | None = None,
     ) -> Workflow | None:
         items = self._load()
         for i, w in enumerate(items):
@@ -156,6 +160,7 @@ class WorkflowStore:
                 poll_seconds=poll,
                 last_sweep_at=last_sweep_at if touch_sweep else w.last_sweep_at,
                 last_summary=last_summary if touch_sweep else w.last_summary,
+                auto_caption=w.auto_caption if auto_caption is None else bool(auto_caption),
             )
             items[i] = updated
             self._save(items)
@@ -191,6 +196,7 @@ class WorkflowStore:
                 poll_seconds=int(item.get("poll_seconds") or DEFAULT_POLL_SECONDS),
                 last_sweep_at=item.get("last_sweep_at"),
                 last_summary=item.get("last_summary") if isinstance(item.get("last_summary"), dict) else None,
+                auto_caption=bool(item.get("auto_caption") or False),
             ))
         return out
 

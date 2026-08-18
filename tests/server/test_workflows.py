@@ -55,6 +55,7 @@ def test_workflow_crud(tmp_path):
     assert wf["name"] == "Reels pack"
     assert wf["count"] == 5
     assert wf["enabled"] is True
+    assert wf["auto_caption"] is False
     listed = client.get("/api/workflows").json()
     assert len(listed) == 1
     patched = client.patch(f"/api/workflows/{wf['id']}", json={"enabled": False}).json()
@@ -195,6 +196,54 @@ def test_workflow_exports_each_inbox_video_into_its_own_subfolder(tmp_path):
         packed = {c.name for c in drive.list_files(folder.id)}
         assert "manifest.json" in packed
         assert {n for n in packed if n.endswith(".mp4")} == {"v01.mp4", "v02.mp4", "v03.mp4"}
+
+
+def test_workflow_does_not_auto_caption_unless_turned_on(tmp_path):
+    """Caption bank must not rename workflow uploads unless auto_caption is on."""
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip-bytes")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    client.post("/api/captions", json={"text": "POV from the bank #reels"})
+    wf = client.post("/api/workflows", json={
+        "name": "No auto",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+    }).json()
+    assert wf["auto_caption"] is False
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 1)
+    packed = {c.name for c in drive.list_files(_folders(drive, out)[0].id)}
+    assert "v01.mp4" in packed
+    assert not any(n.startswith("POV") for n in packed)
+
+
+def test_workflow_auto_caption_names_drive_files_from_bank(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip-bytes")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    client.post("/api/captions", json={"text": "Wait for it #reels"})
+    wf = client.post("/api/workflows", json={
+        "name": "Auto cap",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+        "auto_caption": True,
+    }).json()
+    assert wf["auto_caption"] is True
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 1)
+    packed = {c.name for c in drive.list_files(_folders(drive, out)[0].id)}
+    assert "Wait for it #reels.mp4" in packed
+    assert "v01.mp4" not in packed
 
 
 def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path):

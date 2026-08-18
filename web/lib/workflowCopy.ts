@@ -24,6 +24,10 @@ export function workflowOutputHint(): string {
   return "Finished packs land here. One subfolder per source clip.";
 }
 
+export function workflowAutoCaptionHint(): string {
+  return "Off by default. When on, workflow uploads name each file from the caption bank (Repurpose reads that name as the post). Gallery Send to Drive still lets you edit first.";
+}
+
 export function workflowFoldersClash(
   inbox: { id: string; folder_id: string },
   output: { id: string; folder_id: string },
