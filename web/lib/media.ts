@@ -39,6 +39,8 @@ export function previewTime(duration: number, fallback: number = PREVIEW_SECONDS
 /** Decode one frame onto the element. Safe to call from loadedmetadata / loadeddata. */
 export function paintVideoFrame(video: HTMLVideoElement | null): void {
   if (!video) return;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
   const t = previewTime(video.duration);
   if (video.currentTime < 0.05) {
     try {
@@ -49,6 +51,15 @@ export function paintVideoFrame(video: HTMLVideoElement | null): void {
   }
   const play = video.play();
   if (play && typeof play.then === "function") {
-    play.then(() => video.pause()).catch(() => {/* autoplay blocked */});
+    play
+      .then(() => {
+        video.pause();
+        const v = video as HTMLVideoElement & {
+          webkitDisplayingFullscreen?: boolean;
+          webkitExitFullscreen?: () => void;
+        };
+        if (v.webkitDisplayingFullscreen) v.webkitExitFullscreen?.();
+      })
+      .catch(() => {/* autoplay blocked */});
   }
 }

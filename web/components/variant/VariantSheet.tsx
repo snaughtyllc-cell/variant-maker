@@ -96,19 +96,11 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "14px 16px",
-              borderBottom: "1px solid var(--color-line)",
-              flexShrink: 0,
-            }}
-          >
+          {/* Header — above the video layer; padded out of the iPhone status bar */}
+          <div className="variant-sheet__header">
             {/* Prev */}
             <button
+              type="button"
               onClick={() => onNav(-1)}
               disabled={isFirst}
               aria-label="Previous variant"
@@ -163,6 +155,7 @@ export function VariantSheet({
 
             {/* Next */}
             <button
+              type="button"
               onClick={() => onNav(+1)}
               disabled={isLast}
               aria-label="Next variant"
@@ -187,6 +180,7 @@ export function VariantSheet({
 
             {/* Close */}
             <Dialog.Close
+              type="button"
               aria-label="Close"
               style={{
                 width: 44,

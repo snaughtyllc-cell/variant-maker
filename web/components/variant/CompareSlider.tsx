@@ -1,5 +1,10 @@
 "use client";
-import { useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  compareTouchIntent,
+  releasePointerCaptureSafe,
+  startsCompareDragImmediately,
+} from "@/lib/compareGesture";
 import { clipInset, paintVideoFrame, videoFrameSrc } from "@/lib/media";
 
 export interface CompareSliderVideoRefs {
@@ -35,38 +40,60 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
     setPct(Math.min(100, Math.max(0, raw)));
   }, []);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
+  const endDrag = useCallback((e?: React.PointerEvent<HTMLElement>) => {
+    dragging.current = false;
+    start.current = null;
+    if (e) releasePointerCaptureSafe(e.currentTarget, e.pointerId);
+  }, []);
+
+  // Failsafe: if iOS swallows pointerup on the node, don't leave dragging latched
+  // (a latched drag + leftover capture eats Close / prev / next taps).
+  useEffect(() => {
+    const onUp = () => {
+      dragging.current = false;
+      start.current = null;
+    };
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     start.current = { x: e.clientX, y: e.clientY };
-    // Mouse / pen: slide immediately. Touch waits so a vertical flick can scroll.
-    if (e.pointerType !== "touch") {
+    // Mouse/pen may capture so the split follows outside the pane.
+    // Touch must not — leftover capture on iOS eats Close / prev / next taps.
+    if (startsCompareDragImmediately(e.pointerType)) {
       dragging.current = true;
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* some browsers refuse capture */
+      }
       updatePct(e.clientX);
     }
   }, [updatePct]);
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
     if (dragging.current) {
       updatePct(e.clientX);
       return;
     }
     if (!start.current || e.pointerType !== "touch") return;
-    const dx = e.clientX - start.current.x;
-    const dy = e.clientY - start.current.y;
-    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-    if (Math.abs(dy) >= Math.abs(dx)) {
+    const intent = compareTouchIntent(
+      e.clientX - start.current.x,
+      e.clientY - start.current.y,
+    );
+    if (intent === "undecided") return;
+    if (intent === "scroll") {
       start.current = null;
       return;
     }
     dragging.current = true;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     updatePct(e.clientX);
   }, [updatePct]);
-
-  const onPointerUp = useCallback(() => {
-    dragging.current = false;
-    start.current = null;
-  }, []);
 
   const videoStyle: React.CSSProperties = {
     position: "absolute",
@@ -75,6 +102,7 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
     height: "100%",
     objectFit: "cover",
     display: "block",
+    pointerEvents: "none",
   };
 
   return (
@@ -93,8 +121,8 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
     >
       {/* AFTER (variant) — bottom layer, fills entire box */}
       <video
@@ -104,6 +132,8 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         playsInline
         preload="metadata"
         loop
+        controls={false}
+        disablePictureInPicture
         onLoadedMetadata={() => paintVideoFrame(afterRef.current)}
         onLoadedData={() => paintVideoFrame(afterRef.current)}
         style={videoStyle}
@@ -117,6 +147,8 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         playsInline
         preload="metadata"
         loop
+        controls={false}
+        disablePictureInPicture
         onLoadedMetadata={() => paintVideoFrame(beforeRef.current)}
         onLoadedData={() => paintVideoFrame(beforeRef.current)}
         style={{
@@ -199,12 +231,17 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
             e.stopPropagation();
             dragging.current = true;
             start.current = { x: e.clientX, y: e.clientY };
-            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              /* iOS may refuse capture */
+            }
             updatePct(e.clientX);
           }}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onLostPointerCapture={() => endDrag()}
         >
           ⇄
         </div>
