@@ -81,8 +81,8 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is FFmpeg only. HQ runs Phase 8 AI upscale (sharper, more different,
-                slower — start with 1–2 variants on a 20–30s clip).
+                Fast is quick, non-AI. HQ runs AI upscale — sharper and more
+                different, a little slower.
               </span>
             </span>
             <select
