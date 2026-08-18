@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 from conftest import HAS_FFMPEG
 
 from variant_maker.normalize import (
+    _proxy_vf,
     is_hdr_or_10bit,
+    maybe_normalize_upload,
     needs_size_proxy,
     needs_upload_proxy,
     proxy_output_size,
@@ -44,7 +47,7 @@ def test_proxy_output_size_already_1080() -> None:
 def test_proxy_scale_filter_even_and_explicit() -> None:
     vf = proxy_scale_filter(2160, 3840)
     assert "scale=1080:1920" in vf
-    assert "flags=lanczos" in vf
+    assert "flags=fast_bilinear" in vf
 
 
 def test_is_hdr_or_10bit() -> None:
@@ -137,3 +140,38 @@ def test_proxy_upload_downscales_oversized(tmp_path: Path) -> None:
     assert got.width == w
     assert got.height == h
     assert dest.stat().st_size < src.stat().st_size
+
+
+def test_ingest_proxy_filter_never_uses_tonemap() -> None:
+    """Linear zscale/tonemap on 4K OOMs Railway and takes Studio down with it."""
+    vf = _proxy_vf(_sdr_4k(), hdr=True)
+    assert "tonemap" not in vf
+    assert "zscale" not in vf
+    assert "format=yuv420p" in vf
+    assert "scale=1080:1920" in vf
+
+
+def test_maybe_normalize_keeps_unreadable_file(tmp_path: Path) -> None:
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"not-a-video")
+    assert maybe_normalize_upload(str(src)) == str(src)
+    assert src.exists()
+
+
+def test_maybe_normalize_keeps_original_if_encode_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+
+    def fake_probe(path: str, **_kwargs):
+        return _sdr_4k()
+
+    def boom(*_a, **_k):
+        raise subprocess.CalledProcessError(1, ["ffmpeg"], stderr="hevc")
+
+    monkeypatch.setattr("variant_maker.normalize.probe", fake_probe)
+    monkeypatch.setattr("variant_maker.normalize._ffprobe_field", lambda *_a, **_k: "yuv420p")
+    monkeypatch.setattr("variant_maker.normalize.proxy_upload", boom)
+    assert maybe_normalize_upload(str(src)) == str(src)
+    assert src.exists()

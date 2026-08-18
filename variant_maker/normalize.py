@@ -2,8 +2,11 @@
 
 iPhone 4K/HEVC is the common Studio case. Platforms are 1080×1920, so a long-edge
 > 1920 source is proxied to ≤1920 in the same encode as any HDR/10-bit → 8-bit
-H.264 pass. That shrinks R2 + RunPod work. It does not shrink the phone→Studio
-upload — the file has already arrived.
+H.264 pass. That shrinks R2 + RunPod work.
+
+This pass must NEVER fail a job or take Studio down. A 4K linear tonemap on
+Railway OOMs the box (uploads then 502). If the proxy fails, keep the original
+and generate as before — slower, but it still works.
 """
 from __future__ import annotations
 
@@ -11,12 +14,18 @@ import os
 import subprocess
 from pathlib import Path
 
-from .color import BT709, output_color_args, resolve_output_color
+from .color import BT709, output_color_args
 from .probe import SourceInfo, probe
 
 # Matches reels/tiktok/shorts long edge. 1080×1920 and 1920×1080 stay as-is.
 MAX_LONG_EDGE = 1920
 _HDR_TRANSFERS = ("smpte2084", "arib-std-b67", "bt2020")
+# Fast enough that Railway CPU does not wedge; good enough as a generate source.
+_PROXY_PRESET = "veryfast"
+_PROXY_CRF = "20"
+_PROXY_THREADS = "2"
+_PROXY_TIMEOUT_S = 600
+_PROXY_FAIL = (OSError, subprocess.SubprocessError, ValueError)
 
 
 def _even(n: int) -> int:
@@ -79,7 +88,7 @@ def proxy_output_size(
 def proxy_scale_filter(width: int, height: int) -> str:
     """Explicit even scale. Geometry only — not a color conversion."""
     w, h = proxy_output_size(width, height)
-    return f"scale={w}:{h}:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    return f"scale={w}:{h}:flags=fast_bilinear,scale=trunc(iw/2)*2:trunc(ih/2)*2"
 
 
 def needs_upload_proxy(info: SourceInfo, *, pix_fmt: str = "") -> bool:
@@ -89,46 +98,54 @@ def needs_upload_proxy(info: SourceInfo, *, pix_fmt: str = "") -> bool:
 
 
 def _proxy_vf(info: SourceInfo, *, hdr: bool) -> str:
+    # No zscale/tonemap here. Linear 4K on Railway OOMs Studio (uploads 502).
+    # 10-bit/HDR just becomes 8-bit yuv420p; variant render still color-tags.
+    del hdr
     parts: list[str] = []
-    if hdr:
-        # Linearize + hable, then tag as HD. Same encode as the size proxy.
-        parts.append(
-            "zscale=t=linear:npl=100,tonemap=hable,"
-            "zscale=p=bt709:t=bt709:m=bt709:r=limited"
-        )
     if needs_size_proxy(info.width, info.height):
         parts.append(proxy_scale_filter(info.width, info.height))
     parts.append("format=yuv420p")
     return ",".join(parts)
 
 
+def _run_ffmpeg(cmd: list[str]) -> None:
+    subprocess.run(
+        cmd, check=True, capture_output=True, timeout=_PROXY_TIMEOUT_S,
+    )
+
+
 def proxy_upload(src: str | Path, dest: str | Path, info: SourceInfo | None = None) -> Path:
-    """One H.264 8-bit encode: optional HDR→SDR + optional long-edge ≤ 1920."""
+    """One cheap H.264 8-bit encode: optional long-edge ≤ 1920 + 8-bit.
+
+    Raises on encode failure. Callers that must not break upload/generate
+    (maybe_normalize_upload) catch and keep the original file.
+    """
     src_path = Path(src)
     dest_path = Path(dest)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    meta = info if info is not None else probe(str(src_path))
+    meta = info if info is not None else probe(str(src_path), hash_content=False)
     pix = ""
     try:
         pix = _ffprobe_field(str(src_path), "pix_fmt")
     except (OSError, subprocess.CalledProcessError):
         pix = ""
     hdr = is_hdr_or_10bit(pix, meta.color.transfer or "")
-    out_color = BT709 if hdr else resolve_output_color(meta.color)
-    cmd = [
+    base = [
         "ffmpeg", "-y", "-hide_banner", "-v", "error",
+        "-threads", _PROXY_THREADS,
         "-i", str(src_path),
         "-vf", _proxy_vf(meta, hdr=hdr),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+        "-c:v", "libx264", "-preset", _PROXY_PRESET, "-crf", _PROXY_CRF,
         "-pix_fmt", "yuv420p",
-        *output_color_args(out_color),
+        *output_color_args(BT709),
     ]
     if meta.has_audio:
-        cmd += ["-c:a", "aac", "-b:a", "192k"]
-    else:
-        cmd += ["-an"]
-    cmd.append(str(dest_path))
-    subprocess.run(cmd, check=True, capture_output=True)
+        try:
+            _run_ffmpeg(base + ["-c:a", "aac", "-b:a", "192k", str(dest_path)])
+            return dest_path
+        except _PROXY_FAIL:
+            pass
+    _run_ffmpeg(base + ["-an", str(dest_path)])
     return dest_path
 
 
@@ -138,9 +155,9 @@ def normalize_to_sdr(src_path: str, dst_path: str) -> str:
 
 
 def maybe_normalize_upload(path: str) -> str:
-    """If HDR/10-bit or oversized, replace with a 1080-class H.264 proxy."""
+    """Best-effort 1080/SDR proxy. On any failure, return the original path."""
     try:
-        info = probe(path)
+        info = probe(path, hash_content=False)
         pix = _ffprobe_field(path, "pix_fmt")
     except (OSError, subprocess.CalledProcessError, ValueError):
         return path
@@ -148,7 +165,19 @@ def maybe_normalize_upload(path: str) -> str:
         return path
     root, _ext = os.path.splitext(path)
     dst = f"{root}_proxy.mp4"
-    proxy_upload(path, dst, info)
+    try:
+        proxy_upload(path, dst, info)
+        got = probe(dst, hash_content=False)
+        if got.width < 2 or got.height < 2:
+            raise ValueError("proxy has no video")
+    except _PROXY_FAIL as exc:
+        print(f"upload proxy failed, using original: {type(exc).__name__}: {exc}", flush=True)
+        if os.path.abspath(dst) != os.path.abspath(path):
+            try:
+                os.remove(dst)
+            except OSError:
+                pass
+        return path
     if os.path.abspath(dst) != os.path.abspath(path):
         try:
             os.remove(path)

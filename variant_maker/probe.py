@@ -91,8 +91,12 @@ def _parse_ffprobe(data: dict, path: str, sha: str) -> SourceInfo:
     )
 
 
-def probe(path: str) -> SourceInfo:
-    """Run ffprobe and return SourceInfo. Requires ffprobe on PATH."""
+def probe(path: str, *, hash_content: bool = True) -> SourceInfo:
+    """Run ffprobe and return SourceInfo. Requires ffprobe on PATH.
+
+    Set hash_content=False for ingest decisions (width/HDR). Hashing a 4K
+    iPhone file just to see if it needs a 1080 proxy is wasted I/O.
+    """
     cmd = [
         "ffprobe", "-v", "error",
         "-print_format", "json",
@@ -101,4 +105,5 @@ def probe(path: str) -> SourceInfo:
     ]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
     data = json.loads(out.stdout)
-    return _parse_ffprobe(data, path, sha256_file(path))
+    sha = sha256_file(path) if hash_content else ""
+    return _parse_ffprobe(data, path, sha)
