@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { DropZone } from "@/components/studio/DropZone";
 import { FileList } from "@/components/studio/FileList";
 import { VariantStepper } from "@/components/studio/VariantStepper";
@@ -9,6 +9,7 @@ import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations } from "@/lib/files";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
+import { consumeSpoofHandoff, fetchHandoffFile } from "@/lib/spoofHandoff";
 
 export default function StudioPage() {
   const { start, jobId, complete } = useRun();
@@ -18,9 +19,26 @@ export default function StudioPage() {
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const handoffLoaded = useRef(false);
 
   // A run is "active" when there's a jobId and it's not yet complete
   const runActive = !!jobId && !complete;
+
+  // Create Gallery "Spoof this" → land here with handoff MP4 ready
+  useEffect(() => {
+    if (handoffLoaded.current) return;
+    handoffLoaded.current = true;
+    const pending = consumeSpoofHandoff();
+    if (!pending) return;
+    fetchHandoffFile(pending.url, pending.filename)
+      .then((file) => {
+        setFiles([file]);
+        readDurations([file]).then(setDurations);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Failed to load Create handoff");
+      });
+  }, []);
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     setFiles((prev) => {

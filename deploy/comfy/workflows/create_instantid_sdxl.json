@@ -1,0 +1,201 @@
+{
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd_xl_base_1.0.safetensors"
+    },
+    "_meta": {
+      "title": "Load SDXL Checkpoint"
+    }
+  },
+  "50": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "lora_name": "create_placeholder.safetensors",
+      "strength_model": 0.8,
+      "strength_clip": 0.8,
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Load Identity LoRA (inject when selected)"
+    }
+  },
+  "11": {
+    "class_type": "InstantIDModelLoader",
+    "inputs": {
+      "instantid_file": "ip-adapter.bin"
+    },
+    "_meta": {
+      "title": "Load InstantID"
+    }
+  },
+  "38": {
+    "class_type": "InstantIDFaceAnalysis",
+    "inputs": {
+      "provider": "CUDA"
+    },
+    "_meta": {
+      "title": "InstantID Face Analysis"
+    }
+  },
+  "16": {
+    "class_type": "ControlNetLoader",
+    "inputs": {
+      "control_net_name": "instantid/diffusion_pytorch_model.safetensors"
+    },
+    "_meta": {
+      "title": "Load InstantID ControlNet"
+    }
+  },
+  "13": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "face_ref.png"
+    },
+    "_meta": {
+      "title": "Face Reference (inject)"
+    }
+  },
+  "39": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "creator portrait, soft natural light, vertical phone selfie, sharp focus, detailed face",
+      "clip": [
+        "50",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Positive Prompt (inject)"
+    }
+  },
+  "40": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "deformed, glitch, noisy, low quality, blurry, watermark, text, logo, extra fingers, bad anatomy",
+      "clip": [
+        "50",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Negative Prompt (inject)"
+    }
+  },
+  "60": {
+    "class_type": "ApplyInstantID",
+    "inputs": {
+      "instantid": [
+        "11",
+        0
+      ],
+      "insightface": [
+        "38",
+        0
+      ],
+      "control_net": [
+        "16",
+        0
+      ],
+      "image": [
+        "13",
+        0
+      ],
+      "model": [
+        "50",
+        0
+      ],
+      "positive": [
+        "39",
+        0
+      ],
+      "negative": [
+        "40",
+        0
+      ],
+      "weight": 0.8,
+      "start_at": 0.0,
+      "end_at": 1.0
+    },
+    "_meta": {
+      "title": "Apply InstantID"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1080,
+      "height": 1920,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Latent Size (inject for aspect)"
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 30,
+      "cfg": 4.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "60",
+        0
+      ],
+      "positive": [
+        "60",
+        1
+      ],
+      "negative": [
+        "60",
+        2
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "KSampler (inject seed)"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "create_instantid",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}
