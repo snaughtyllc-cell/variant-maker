@@ -1,10 +1,10 @@
 import os
 
+from tests.server.fakes import FakeObjectStore, FakeRunPodClient
 from variant_maker.server.events import VariantEvent
 from variant_maker.server.runner import SourceResult, VariantResult
 from variant_maker.server.runpod_runner import RunPodServerlessRunner
 from variant_maker.uniqueness import DEFAULT_TARGET
-from tests.server.fakes import FakeObjectStore, FakeRunPodClient
 
 
 def test_runner_uploads_source_streams_events_downloads_variants(tmp_path):

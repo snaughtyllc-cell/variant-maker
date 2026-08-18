@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import queue
 import threading
-from typing import Iterator
+from collections.abc import Iterator
 
 from .. import pipeline
 from .runner import (
@@ -16,8 +16,8 @@ from .runner import (
     DEFAULT_PRESET,
     MAX_REGEN,
     MIN_BITS_VS_PEERS,
-    UNIQUENESS_TARGET,
     UNIQ_STRENGTHS,
+    UNIQUENESS_TARGET,
 )
 from .storage import ObjectStore
 

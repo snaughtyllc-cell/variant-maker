@@ -3,7 +3,7 @@ worker. Source/variants move through object storage; progress streams back as ch
 from __future__ import annotations
 
 import os
-from typing import Callable
+from collections.abc import Callable
 
 from .events import VariantEvent
 from .runner import (
@@ -11,8 +11,8 @@ from .runner import (
     DEFAULT_PRESET,
     MAX_REGEN,
     MIN_BITS_VS_PEERS,
-    UNIQUENESS_TARGET,
     UNIQ_STRENGTHS,
+    UNIQUENESS_TARGET,
     SourceResult,
     VariantResult,
 )
