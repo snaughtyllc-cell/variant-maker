@@ -163,7 +163,7 @@ function GalleryContent() {
             <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
               {filterMode === "shortfall"
                 ? "All sources have delivered their full requested count."
-                : "Start a run in the Studio — results appear here after each source completes."}
+                : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
             </div>
           </div>
         )}

@@ -16,16 +16,20 @@ export interface SourceProgress {
   };
   variants: VariantTile[];
 }
-export interface RunProgress { bySource: Record<string, SourceProgress>; complete: boolean; }
+export interface RunProgress {
+  bySource: Record<string, SourceProgress>;
+  complete: boolean;
+  failed?: string | null;
+}
 
 export function initRun(sources: { source_id: string; filename: string; requested: number }[]): RunProgress {
   const bySource: Record<string, SourceProgress> = {};
   for (const s of sources) bySource[s.source_id] = { ...s, delivered: 0, done: 0, variants: [] };
-  return { bySource, complete: false };
+  return { bySource, complete: false, failed: null };
 }
 
 export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-done" }): RunProgress {
-  if (ev.state === "job-done") return { ...run, complete: true };
+  if (ev.state === "job-done") return { ...run, complete: true, failed: run.failed ?? null };
   const e = ev as VariantEvent;
   const prev = run.bySource[e.source_id];
   if (!prev) return run; // unknown source (shouldn't happen — seeded from CreateJobResponse)
@@ -72,4 +76,11 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
     }
   }
   return { ...run, bySource: { ...run.bySource, [e.source_id]: next } };
+}
+
+export function runDeliveredNone(progress: RunProgress): boolean {
+  if (!progress.complete) return false;
+  const sources = Object.values(progress.bySource);
+  if (sources.length === 0) return true;
+  return sources.every((s) => s.delivered === 0);
 }

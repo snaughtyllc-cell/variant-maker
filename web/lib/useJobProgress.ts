@@ -92,8 +92,18 @@ export function useJobProgress(
         runRef.current = next;
         setRun(next);
         if (detail.state === "done") es.close();
-      } catch {
-        // ignore transient proxy errors
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.startsWith("404")) {
+          const next: RunProgress = {
+            ...runRef.current,
+            complete: true,
+            failed: "This run is gone (Studio restarted or the job never saved). Generate again.",
+          };
+          runRef.current = next;
+          setRun(next);
+          es.close();
+        }
       }
     };
     poll();

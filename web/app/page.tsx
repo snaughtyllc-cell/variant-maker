@@ -7,7 +7,7 @@ import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
-import { readDurations } from "@/lib/files";
+import { readDurations, tooLargeMessage } from "@/lib/files";
 import { createJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 
@@ -25,6 +25,12 @@ export default function StudioPage() {
   const runActive = !!jobId && !complete;
 
   const handleFiles = useCallback(async (incoming: File[]) => {
+    const blocked = incoming.map(tooLargeMessage).find(Boolean);
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
+    setError(null);
     setFiles((prev) => {
       const combined = [...prev, ...incoming];
       // fire-and-forget duration reads for the new batch

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initRun, reduceEvent } from "@/lib/progress";
+import { initRun, reduceEvent, runDeliveredNone } from "@/lib/progress";
 import { VariantEvent } from "@/lib/types";
 
 const q = { vmaf: 95, histogram_ok: true, regen_count: 0, passed: true, spatial_vmaf: null, spatial_ok: null };
@@ -92,5 +92,16 @@ describe("progress reducer", () => {
     const r1 = reduceEvent(r0, ev({ state: "rendering", index: 1 }));
     expect(r1).not.toBe(r0);
     expect(r0.bySource.s1.inFlight).toBeUndefined();
+  });
+
+  it("runDeliveredNone is true when complete with zero ok variants", () => {
+    let r = base();
+    r = reduceEvent(r, { state: "job-done" });
+    expect(runDeliveredNone(r)).toBe(true);
+    r = reduceEvent(base(), ev({
+      state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
+    }));
+    r = reduceEvent(r, { state: "job-done" });
+    expect(runDeliveredNone(r)).toBe(false);
   });
 });
