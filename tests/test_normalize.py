@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import HAS_FFMPEG
 
 from variant_maker.normalize import (
     is_hdr_or_10bit,
@@ -14,7 +15,6 @@ from variant_maker.normalize import (
     proxy_scale_filter,
 )
 from variant_maker.probe import ColorTags, SourceInfo, probe
-from conftest import HAS_FFMPEG
 
 
 def test_needs_size_proxy_skips_1080_reels() -> None:
