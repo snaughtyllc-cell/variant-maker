@@ -51,7 +51,7 @@ RUN mkdir -p /app/weights && \
 # The [serverless] extra adds boto3 for the control-plane worker's (cp_handler.py) object
 # storage (S3ObjectStore). Both extras are installed so one image serves both handlers.
 COPY . /app
-RUN pip install --no-cache-dir "/app[farm,serverless]"
+RUN pip install --no-cache-dir -c /app/deploy/runpod/constraints.txt "/app[farm,serverless]"
 
 # cuda backend + our name-preserving infer script + persistent ledger on the mounted volume.
 ENV VARIANT_MAKER_UPSCALE_BACKEND=cuda \
