@@ -1,5 +1,6 @@
 import pytest
 
+from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
     clamp_strength,
     clamp_trims,
@@ -7,7 +8,6 @@ from variant_maker.sampler import (
     sample,
     total_distortion,
 )
-from variant_maker.presets import SUBTLE, MEDIUM, STRONG
 
 # A deterministic spread of per-variant seeds for distribution tests.
 SEEDS = [derive_seed(20260627, i) for i in range(400)]
