@@ -14,11 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 # ffmpeg WITH libvmaf — the spatial-corruption guard needs the libvmaf filter, which the
-# distro ffmpeg lacks. The johnvansickle static build bundles it (verified on the GPU box).
-RUN cd /tmp && wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
-    tar xf ffmpeg-release-amd64-static.tar.xz && \
-    cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/ && \
-    rm -rf /tmp/ffmpeg-* && \
+# distro ffmpeg lacks. Use BtbN's GPL static build: it is reachable from CI, unlike the
+# John Van Sickle host, and bundles libvmaf.
+RUN cd /tmp && wget -q -O ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
+    tar xf ffmpeg.tar.xz && \
+    cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ && \
+    rm -rf /tmp/ffmpeg* && \
     test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
 
 # Real-ESRGAN stack. CRITICAL: pin numpy<2 — installing realesrgan/basicsr pulls numpy 2.x,
