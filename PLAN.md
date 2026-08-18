@@ -126,6 +126,16 @@ Status legend: ✅ done & verified · 🔨 to build
   EQ diversity — TikFusion-style “the soundtrack isn’t a byte-identical copy” without
   sounding like a chipmunk. After 9–12 unless a VA batch is failing on audio fingerprint alone.
 
+## Studio UX — current-run only (note, not blocking 9–11)
+- Studio’s right rail tracks **one job**. Clicking Generate replaces it; the previous
+  thumbs disappear from Studio even if that job finished. **Gallery** is where past
+  runs live (if they completed and weren’t wiped by a redeploy).
+- **Batch** = drop several files, one Generate: one job, several source cards at once,
+  they render in order on the same rail. That is *not* the same as Generate, then
+  Generate again — the second click is a new job and clears the first from Studio.
+- Later: keep a short “recent runs” list on Studio (or don’t clear the last complete
+  job until New run). Do not block two Generates at once until the runner is queued.
+
 ---
 
 ### Definition of done (every phase)
