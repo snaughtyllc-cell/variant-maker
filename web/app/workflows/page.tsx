@@ -1,4 +1,5 @@
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
+import { workflowPageBlurb } from "@/lib/workflowCopy";
 
 export default function WorkflowsPage() {
   return (
@@ -14,8 +15,7 @@ export default function WorkflowsPage() {
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Workflows</div>
           <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
-            Connect an inbox Drive folder to an output folder. New videos in the inbox automatically
-            generate a Fast variant pack and land in the output folder (one subfolder per clip).
+            {workflowPageBlurb()}
           </div>
         </div>
       </div>

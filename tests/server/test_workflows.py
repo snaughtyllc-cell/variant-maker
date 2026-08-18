@@ -72,6 +72,36 @@ def test_workflow_rejects_unknown_destination(tmp_path):
     assert resp.status_code == 400
 
 
+def test_workflow_rejects_same_inbox_and_output_destination(tmp_path):
+    drive = FakeDrive()
+    client, _, _ = _app(tmp_path, drive)
+    inbox, _ = _dest(client, drive, "Inbox")
+    resp = client.post("/api/workflows", json={
+        "name": "same",
+        "inbox_destination_id": inbox["id"],
+        "output_destination_id": inbox["id"],
+        "count": 2,
+    })
+    assert resp.status_code == 400
+    assert "different" in resp.json()["detail"].lower()
+
+
+def test_workflow_rejects_two_destinations_pointing_at_same_drive_folder(tmp_path):
+    drive = FakeDrive()
+    client, _, _ = _app(tmp_path, drive)
+    folder = drive.make_folder("Shared")
+    a = client.post("/api/drive/destinations", json={"name": "A", "folder_url": folder}).json()
+    b = client.post("/api/drive/destinations", json={"name": "B", "folder_url": folder}).json()
+    resp = client.post("/api/workflows", json={
+        "name": "alias",
+        "inbox_destination_id": a["id"],
+        "output_destination_id": b["id"],
+        "count": 2,
+    })
+    assert resp.status_code == 400
+    assert "different" in resp.json()["detail"].lower()
+
+
 def test_workflow_run_exports_new_inbox_video(tmp_path):
     drive = FakeDrive()
     client, store, _ = _app(tmp_path, drive)
@@ -115,3 +145,50 @@ def test_workflow_run_exports_new_inbox_video(tmp_path):
 def test_workflow_run_unknown_404(tmp_path):
     client, _, _ = _app(tmp_path)
     assert client.post("/api/workflows/wf_nope/run").status_code == 404
+
+
+def _sweep_until_subfolders(client, store, wf_id, drive, out, n: int, max_runs: int = 8):
+    summary = {}
+    for _ in range(max_runs):
+        summary = client.post(f"/api/workflows/{wf_id}/run").json()["last_summary"]
+        for jid in summary.get("job_ids") or []:
+            store.wait(jid, timeout=5)
+        folders = [c for c in drive.list_files(out) if c.is_folder]
+        if len(folders) >= n:
+            return summary
+    return summary
+
+
+def test_workflow_exports_each_inbox_video_into_its_own_subfolder(tmp_path):
+    """10 clips × 20 variants must be 10 folders, not 200 files in the parent."""
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    for name, payload in (("alpha.mp4", b"alpha-bytes"), ("beta.mp4", b"beta-bytes")):
+        clip = tmp_path / name
+        clip.write_bytes(payload)
+        drive.put_file(name, str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Pack",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 3,
+        "poll_seconds": 60,
+    }).json()
+
+    summary = _sweep_until_subfolders(client, store, wf["id"], drive, out, 2)
+    assert summary.get("failed", 0) == 0
+
+    children = drive.list_files(out)
+    folders = [c for c in children if c.is_folder]
+    loose_files = [c for c in children if not c.is_folder]
+    assert len(folders) == 2, [f.name for f in folders]
+    assert loose_files == []
+    names = sorted(f.name for f in folders)
+    assert names[0].startswith("alpha__")
+    assert names[1].startswith("beta__")
+    for folder in folders:
+        packed = {c.name for c in drive.list_files(folder.id)}
+        assert "manifest.json" in packed
+        assert {n for n in packed if n.endswith(".mp4")} == {"v01.mp4", "v02.mp4", "v03.mp4"}

@@ -796,12 +796,21 @@ def create_app(
     def list_workflows() -> list[WorkflowOut]:
         return [_workflow_out(w) for w in app.state.workflows.list()]
 
+    def _require_distinct_workflow_folders(inbox_dest_id: str, output_dest_id: str) -> None:
+        inbox = app.state.destinations.get(inbox_dest_id)
+        output = app.state.destinations.get(output_dest_id)
+        if inbox is None:
+            raise HTTPException(status_code=400, detail="unknown inbox destination")
+        if output is None:
+            raise HTTPException(status_code=400, detail="unknown output destination")
+        if inbox.id == output.id or inbox.folder_id == output.folder_id:
+            raise HTTPException(
+                status_code=400, detail="inbox and output folders must be different",
+            )
+
     @app.post("/api/workflows", status_code=201, response_model=WorkflowOut)
     def create_workflow(body: WorkflowCreateIn) -> WorkflowOut:
-        if app.state.destinations.get(body.inbox_destination_id) is None:
-            raise HTTPException(status_code=400, detail="unknown inbox destination")
-        if app.state.destinations.get(body.output_destination_id) is None:
-            raise HTTPException(status_code=400, detail="unknown output destination")
+        _require_distinct_workflow_folders(body.inbox_destination_id, body.output_destination_id)
         try:
             wf = app.state.workflows.create(
                 name=body.name,
@@ -822,10 +831,9 @@ def create_app(
         existing = app.state.workflows.get(workflow_id)
         if existing is None:
             raise HTTPException(status_code=404, detail="workflow not found")
-        if body.inbox_destination_id is not None and app.state.destinations.get(body.inbox_destination_id) is None:
-            raise HTTPException(status_code=400, detail="unknown inbox destination")
-        if body.output_destination_id is not None and app.state.destinations.get(body.output_destination_id) is None:
-            raise HTTPException(status_code=400, detail="unknown output destination")
+        inbox_id = existing.inbox_destination_id if body.inbox_destination_id is None else body.inbox_destination_id
+        output_id = existing.output_destination_id if body.output_destination_id is None else body.output_destination_id
+        _require_distinct_workflow_folders(inbox_id, output_id)
         try:
             updated = app.state.workflows.update(
                 workflow_id,

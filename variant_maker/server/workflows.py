@@ -53,6 +53,8 @@ def _validate(
         raise WorkflowError("inbox_destination_id is required")
     if not output:
         raise WorkflowError("output_destination_id is required")
+    if inbox == output:
+        raise WorkflowError("inbox and output folders must be different")
     if not isinstance(count, int) or count < 1 or count > MAX_COUNT:
         raise WorkflowError(f"count must be 1–{MAX_COUNT}")
     quality = normalize_quality_mode(quality_mode)

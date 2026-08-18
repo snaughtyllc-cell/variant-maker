@@ -12,6 +12,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 
 from variant_maker.farm.drive import DriveClient, is_video_file
+from variant_maker.farm.layout import source_output_subfolder
 from variant_maker.farm.ledger import Ledger
 from variant_maker.probe import sha256_file
 from variant_maker.server.jobs import Job, JobSource, JobStore
@@ -75,7 +76,10 @@ def _export_source(
     variants = _uploadable(source)
     if not variants:
         raise RuntimeError("no ok variants to export")
-    sub_id = drive.find_or_create_folder(f"{stem}__{sha[:8]}", output_folder_id)
+    sub_name = source_output_subfolder(stem, sha)
+    sub_id = drive.find_or_create_folder(sub_name, output_folder_id)
+    if not sub_id or sub_id == output_folder_id:
+        raise RuntimeError("refusing to dump variants into the parent output folder")
     for v in variants:
         path = job_store.find_variant(source.source_id, v.filename)
         if path is None:
@@ -213,6 +217,9 @@ def tick_workflow(
     max_inflight: int = 1,
 ) -> TickSummary:
     summary = TickSummary()
+    if inbox_folder_id == output_folder_id:
+        summary.error = "inbox and output folders must be different"
+        return summary
     still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts)
     _queue_new(
         workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,

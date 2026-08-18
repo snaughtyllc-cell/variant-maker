@@ -12,6 +12,13 @@ import {
 } from "@/lib/api";
 import type { Destination, DriveStatus, Workflow, WorkflowSummary } from "@/lib/types";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
+import {
+  workflowFoldersClash,
+  workflowFoldersMustDiffer,
+  workflowInboxHint,
+  workflowNeedTwoFolders,
+  workflowOutputHint,
+} from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
 const MAX_POLL_MINUTES = 60;
@@ -60,9 +67,12 @@ export function WorkflowsPanel() {
       setStatus(s);
       setDestinations(d);
       setWorkflows(w);
-      if (!inboxId && d[0]) setInboxId(d[0].id);
-      if (!outputId && d[1]) setOutputId(d[1].id);
-      else if (!outputId && d[0]) setOutputId(d[0].id);
+      const inboxDest = d.find((x) => x.id === inboxId) ?? d[0];
+      if (inboxDest && !inboxId) setInboxId(inboxDest.id);
+      if (!outputId && inboxDest) {
+        const other = d.find((x) => !workflowFoldersClash(inboxDest, x));
+        if (other) setOutputId(other.id);
+      }
     } catch (e) {
       console.error("Failed to load workflows", e);
     } finally {
@@ -77,13 +87,15 @@ export function WorkflowsPanel() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting || driveNotReady || destinations.length === 0) return;
+    if (submitting || driveNotReady || destinations.length < 2) return;
     if (!name.trim() || !inboxId || !outputId) {
       setFormError("Name, inbox folder, and output folder are required.");
       return;
     }
-    if (inboxId === outputId) {
-      setFormError("Inbox and output folders must be different.");
+    const inboxDest = destinations.find((d) => d.id === inboxId);
+    const outDest = destinations.find((d) => d.id === outputId);
+    if (!inboxDest || !outDest || workflowFoldersClash(inboxDest, outDest)) {
+      setFormError(workflowFoldersMustDiffer());
       return;
     }
     setFormError(null);
@@ -185,6 +197,25 @@ export function WorkflowsPanel() {
         </div>
       )}
 
+      {!loading && destinations.length === 1 && (
+        <div
+          style={{
+            padding: "14px 16px",
+            marginBottom: 18,
+            border: "1px dashed var(--color-line2)",
+            borderRadius: 12,
+            color: "var(--color-muted)",
+            fontSize: 12.5,
+            background: "#0d0d13",
+          }}
+        >
+          {workflowNeedTwoFolders()}{" "}
+          <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
+            Settings → Drive
+          </Link>
+        </div>
+      )}
+
       <form
         onSubmit={handleCreate}
         style={{
@@ -216,7 +247,16 @@ export function WorkflowsPanel() {
           <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Inbox folder</span>
           <select
             value={inboxId}
-            onChange={(e) => setInboxId(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setInboxId(next);
+              const inboxDest = destinations.find((d) => d.id === next);
+              const outDest = destinations.find((d) => d.id === outputId);
+              if (inboxDest && outDest && workflowFoldersClash(inboxDest, outDest)) {
+                const other = destinations.find((d) => !workflowFoldersClash(inboxDest, d));
+                setOutputId(other?.id ?? "");
+              }
+            }}
             disabled={destinations.length === 0 || driveNotReady}
             style={inputStyle(destinations.length === 0 || driveNotReady)}
           >
@@ -226,6 +266,7 @@ export function WorkflowsPanel() {
               </option>
             ))}
           </select>
+          <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowInboxHint()}</span>
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -242,6 +283,7 @@ export function WorkflowsPanel() {
               </option>
             ))}
           </select>
+          <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowOutputHint()}</span>
         </label>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -302,7 +344,7 @@ export function WorkflowsPanel() {
 
         <button
           type="submit"
-          disabled={submitting || destinations.length === 0 || driveNotReady}
+          disabled={submitting || destinations.length < 2 || driveNotReady}
           style={{
             alignSelf: "flex-start",
             fontSize: 12.5,
@@ -312,8 +354,8 @@ export function WorkflowsPanel() {
             border: "none",
             padding: "9px 16px",
             borderRadius: 9,
-            cursor: submitting || destinations.length === 0 || driveNotReady ? "not-allowed" : "pointer",
-            opacity: submitting || destinations.length === 0 || driveNotReady ? 0.7 : 1,
+            cursor: submitting || destinations.length < 2 || driveNotReady ? "not-allowed" : "pointer",
+            opacity: submitting || destinations.length < 2 || driveNotReady ? 0.7 : 1,
           }}
         >
           {submitting ? "Creating…" : "Create workflow"}
@@ -360,6 +402,7 @@ export function WorkflowsPanel() {
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
                   {destName(destinations, wf.inbox_destination_id)} →{" "}
                   {destName(destinations, wf.output_destination_id)}
+                  {" · "}one subfolder per source clip
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
                   {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
