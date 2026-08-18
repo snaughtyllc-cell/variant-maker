@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, useCallback } from "react";
-import { clipInset } from "@/lib/media";
+import { clipInset, paintVideoFrame, videoFrameSrc } from "@/lib/media";
 
 export interface CompareSliderVideoRefs {
   beforeRef: React.RefObject<HTMLVideoElement | null>;
@@ -17,6 +17,7 @@ interface CompareSliderProps {
 export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderProps) {
   const [pct, setPct] = useState(54);
   const dragging = useRef(false);
+  const start = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Internal refs — component works standalone without videoRefs
@@ -35,23 +36,51 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
   }, []);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
+    start.current = { x: e.clientX, y: e.clientY };
+    // Mouse / pen: slide immediately. Touch waits so a vertical flick can scroll.
+    if (e.pointerType !== "touch") {
+      dragging.current = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      updatePct(e.clientX);
+    }
+  }, [updatePct]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (dragging.current) {
+      updatePct(e.clientX);
+      return;
+    }
+    if (!start.current || e.pointerType !== "touch") return;
+    const dx = e.clientX - start.current.x;
+    const dy = e.clientY - start.current.y;
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      start.current = null;
+      return;
+    }
     dragging.current = true;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     updatePct(e.clientX);
   }, [updatePct]);
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    updatePct(e.clientX);
-  }, [updatePct]);
-
   const onPointerUp = useCallback(() => {
     dragging.current = false;
+    start.current = null;
   }, []);
+
+  const videoStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  };
 
   return (
     <div
       ref={containerRef}
+      className="compare-slider"
       style={{
         position: "relative",
         aspectRatio: "9 / 16",
@@ -60,7 +89,7 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         border: "1px solid var(--color-line)",
         cursor: "ew-resize",
         userSelect: "none",
-        touchAction: "none",
+        touchAction: "pan-y",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -70,36 +99,28 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       {/* AFTER (variant) — bottom layer, fills entire box */}
       <video
         ref={afterRef}
-        src={afterSrc}
+        src={videoFrameSrc(afterSrc)}
         muted
         playsInline
         preload="metadata"
         loop
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-        }}
+        onLoadedMetadata={() => paintVideoFrame(afterRef.current)}
+        onLoadedData={() => paintVideoFrame(afterRef.current)}
+        style={videoStyle}
       />
 
       {/* BEFORE (source) — top layer, clipped to reveal only left pct% */}
       <video
         ref={beforeRef}
-        src={beforeSrc}
+        src={videoFrameSrc(beforeSrc)}
         muted
         playsInline
         preload="metadata"
         loop
+        onLoadedMetadata={() => paintVideoFrame(beforeRef.current)}
+        onLoadedData={() => paintVideoFrame(beforeRef.current)}
         style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
+          ...videoStyle,
           clipPath: clipInset(pct),
         }}
       />
@@ -161,8 +182,8 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 30,
-            height: 30,
+            width: 44,
+            height: 44,
             borderRadius: "50%",
             background: "#fff",
             color: "#111",
@@ -171,7 +192,19 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
             justifyContent: "center",
             fontSize: 13,
             boxShadow: "0 2px 10px #000",
+            touchAction: "none",
+            pointerEvents: "auto",
           }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            dragging.current = true;
+            start.current = { x: e.clientX, y: e.clientY };
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            updatePct(e.clientX);
+          }}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
           ⇄
         </div>

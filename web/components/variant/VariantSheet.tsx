@@ -207,14 +207,8 @@ export function VariantSheet({
             </Dialog.Close>
           </div>
 
-          {/* Body — scrollable */}
-          <div
-            style={{
-              overflow: "auto",
-              padding: 16,
-              flex: 1,
-            }}
-          >
+          {/* Body — scrollable; minHeight 0 so iOS actually scrolls past the video */}
+          <div className="variant-sheet__body">
             {/* Compare slider — beforeRef/afterRef wired in from sheet */}
             <CompareSlider
               beforeSrc={sourceUrl(sourceId)}
