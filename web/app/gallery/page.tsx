@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
-import { filterSources, sortSources } from "@/lib/gallery";
+import { filterSources, sortSources, filesReadyCount } from "@/lib/gallery";
 import {
   okVariantKeys,
   okVariantRefs,
@@ -109,7 +109,7 @@ function GalleryContent() {
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
-  const totalVariants = allSources.reduce((acc, s) => acc + s.delivered, 0);
+  const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
   const okRefs = okVariantRefs(allSources, selected);
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);

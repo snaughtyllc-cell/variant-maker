@@ -47,7 +47,9 @@ from .drop_ledger import (
     write_sheet_id_file,
 )
 from .events import event_to_dict
-from .jobs import Job, JobSource, JobStore
+from .jobs import (
+    Job, JobSource, JobStore, source_copy_status, source_files_ready, variant_on_disk,
+)
 from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
                      DiagnosticsItem, DriveStatusOut, DriveVideoOut, DriveVideosOut,
                      DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
@@ -69,7 +71,7 @@ ExchangeFn = Callable[..., dict[str, Any]]
 FetchEmailFn = Callable[[dict[str, Any]], str | None]
 
 
-def _variant_out(source_id: str, v) -> VariantOut:
+def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
     return VariantOut(
         index=v.index, filename=v.filename, status=v.status, quality=v.quality,
         file_url=f"/api/variants/{source_id}/{v.filename}",
@@ -77,6 +79,7 @@ def _variant_out(source_id: str, v) -> VariantOut:
         uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
         preset_used=v.preset_used, strength_final=v.strength_final,
         escalated=v.escalated, platform_result=v.platform_result,
+        file_ready=file_ready,
     )
 
 
@@ -99,17 +102,37 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
     return None
 
 
-def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None) -> SourceOut:
+def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
+                ws: Workspace | None = None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
     failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt"))
+    job_id = job.job_id if job is not None else None
+    files_ready = (
+        source_files_ready(s, ws, job_id) if ws is not None and job_id else s.delivered
+    )
+    copy_status = (
+        source_copy_status(s, ws, job_id, job.state if job is not None else None)
+        if ws is not None and job_id else "ok"
+    )
     return SourceOut(
         source_id=s.source_id, filename=s.filename, requested=s.requested,
         delivered=s.delivered, shortfall=s.shortfall,
-        variants=[_variant_out(s.source_id, v) for v in variants],
+        variants=[
+            _variant_out(
+                s.source_id, v,
+                file_ready=(
+                    variant_on_disk(ws, job_id, s.source_id, v.filename)
+                    if ws is not None and job_id else True
+                ),
+            )
+            for v in variants
+        ],
         in_flight=_in_flight(job, s.source_id),
         job_state=job.state if job is not None else None,
         failed=failed,
         created_utc=job.created_utc if job is not None else None,
+        files_ready=files_ready,
+        copy_status=copy_status,
     )
 
 
@@ -372,7 +395,8 @@ def create_app(
             quality_mode=quality_mode,
         )
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True) for s in job.sources])
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                          for s in job.sources])
 
     @app.post("/api/uploads")
     def init_upload(filename: str = Form(...), size: int = Form(...)) -> dict:
@@ -426,7 +450,8 @@ def create_app(
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True) for s in job.sources])
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                          for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
     def create_job_from_drive(body: JobFromDriveIn) -> CreateJobResponse:
@@ -460,7 +485,8 @@ def create_app(
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True) for s in job.sources])
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                          for s in job.sources])
 
     @app.get("/api/jobs", response_model=list[JobSummary])
     def list_jobs() -> list[JobSummary]:
@@ -475,7 +501,8 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources],
+                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                  for s in job.sources],
                          error=job.error)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
@@ -485,7 +512,8 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources],
+                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                  for s in job.sources],
                          error=job.error)
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
@@ -525,7 +553,7 @@ def create_app(
         out = []
         for job in store.list():
             for s in job.sources:
-                out.append(_source_out(s, ok_only=True, job=job))
+                out.append(_source_out(s, ok_only=True, job=job, ws=store._ws))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
         return out
 
@@ -554,7 +582,18 @@ def create_app(
         source = store.regenerate(source_id, n)
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
-        return _source_out(source, ok_only=True)
+        loc = store._locate(source_id)
+        job = store.get(loc[0]) if loc else None
+        return _source_out(source, ok_only=True, job=job, ws=store._ws)
+
+    @app.post("/api/sources/{source_id}/retry-copy", response_model=SourceOut)
+    def retry_copy(source_id: str) -> SourceOut:
+        source = store.retry_copy(source_id)
+        if source is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        loc = store._locate(source_id)
+        job = store.get(loc[0]) if loc else None
+        return _source_out(source, ok_only=True, job=job, ws=store._ws)
 
     @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
     def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
@@ -562,7 +601,11 @@ def create_app(
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
         _sync_platform_result_to_sheet(source_id, index, body.result)
-        return _variant_out(source_id, variant)
+        loc = store._locate(source_id)
+        file_ready = True
+        if loc is not None:
+            file_ready = variant_on_disk(store._ws, loc[0], source_id, variant.filename)
+        return _variant_out(source_id, variant, file_ready=file_ready)
 
     @app.get("/api/drop-ledger/status", response_model=DropLedgerStatusOut)
     def drop_ledger_status() -> DropLedgerStatusOut:

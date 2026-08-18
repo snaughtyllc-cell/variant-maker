@@ -1,4 +1,5 @@
 import json
+import os
 
 from farm_fakes import FakeDrive
 from fastapi.testclient import TestClient
@@ -192,3 +193,41 @@ def test_workflow_exports_each_inbox_video_into_its_own_subfolder(tmp_path):
         packed = {c.name for c in drive.list_files(folder.id)}
         assert "manifest.json" in packed
         assert {n for n in packed if n.endswith(".mp4")} == {"v01.mp4", "v02.mp4", "v03.mp4"}
+
+
+def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path):
+    """Don't stamp the ledger done if GPU metadata is ok but Studio has no mp4s."""
+    from variant_maker.server.workflow_runner import _export_source
+
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "ghost.mp4"
+    clip.write_bytes(b"ghost-clip")
+    drive.put_file("ghost.mp4", str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Ghost",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+    }).json()
+    first = client.post(f"/api/workflows/{wf['id']}/run").json()["last_summary"]
+    for jid in first.get("job_ids") or []:
+        store.wait(jid, timeout=5)
+    job = store.get((first.get("job_ids") or [None])[0])
+    assert job is not None
+    source = job.sources[0]
+    out_dir = store._ws.source_out_dir(job.job_id, source.source_id)
+    for v in source.variants:
+        path = os.path.join(out_dir, v.filename)
+        if os.path.isfile(path):
+            os.remove(path)
+
+    import pytest
+    with pytest.raises(RuntimeError, match="didn't copy"):
+        _export_source(
+            drive, store, job, source,
+            stem="ghost", sha="abcd1234", output_folder_id=out_dest["folder_id"],
+        )

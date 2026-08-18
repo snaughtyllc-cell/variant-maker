@@ -20,6 +20,7 @@ class VariantOut(BaseModel):
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    file_ready: bool = True
 
 
 class PlatformResultIn(BaseModel):
@@ -45,6 +46,8 @@ class SourceOut(BaseModel):
     job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt count (Diagnostics population)
     created_utc: str | None = None
+    files_ready: int = 0          # ok variants whose mp4 is on Studio disk
+    copy_status: Literal["ok", "copying", "missing"] = "ok"
 
 
 class JobSummary(BaseModel):

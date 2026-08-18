@@ -7,7 +7,15 @@ from typing import Callable
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.events import VariantEvent
-from variant_maker.server.jobs import JobStore
+from variant_maker.server.jobs import (
+    COPY_FAILED_MSG,
+    JobSource,
+    JobStore,
+    VariantInfo,
+    source_copy_status,
+    source_files_ready,
+    variant_on_disk,
+)
 from variant_maker.server.runner import SourceResult, VariantResult
 from variant_maker.server.workspace import Workspace
 
@@ -239,3 +247,103 @@ def test_runner_crash_marks_done_with_gpu_timeout_copy(tmp_path):
     assert job.error is not None
     assert "20-minute" in job.error
     assert job.sources[0].delivered == 0
+
+
+def test_copy_status_is_disk_only(tmp_path):
+    """Metadata can say ok while the mp4 is gone — Gallery must not trust delivered."""
+    ws = Workspace(str(tmp_path))
+    source = JobSource(
+        source_id="src1", filename="a.mp4", requested=2,
+        variants=[
+            VariantInfo(source_id="src1", index=1, filename="v01.mp4",
+                        status="ok", quality={"vmaf": 95.0}),
+            VariantInfo(source_id="src1", index=2, filename="v02.mp4",
+                        status="ok", quality={"vmaf": 95.0}),
+        ],
+    )
+    assert source.delivered == 2
+    assert source_files_ready(source, ws, "job1") == 0
+    assert source_copy_status(source, ws, "job1", "done") == "missing"
+    assert source_copy_status(source, ws, "job1", "running") == "copying"
+
+    out = ws.source_out_dir("job1", "src1")
+    os.makedirs(out, exist_ok=True)
+    open(os.path.join(out, "v01.mp4"), "w").close()
+    open(os.path.join(out, "v02.mp4"), "w").close()
+    assert variant_on_disk(ws, "job1", "src1", "v01.mp4")
+    assert source_files_ready(source, ws, "job1") == 2
+    assert source_copy_status(source, ws, "job1", "done") == "ok"
+
+
+class _MetaOnlyRunner:
+    """GPU-style: events + result metadata, no files written (copy never landed)."""
+
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None):
+        os.makedirs(out_dir, exist_ok=True)
+        variants = []
+        for i in range(1, count + 1):
+            fname = f"v{i:02d}.mp4"
+            quality = {"vmaf": 95.0, "passed": True}
+            on_event(VariantEvent(
+                source_id=source_id, index=i, state="done",
+                status="ok", quality=quality, filename=fname,
+            ))
+            variants.append(VariantResult(
+                index=i, filename=fname, status="ok", quality=quality,
+                path=os.path.join(out_dir, fname),
+            ))
+        return SourceResult(variants=variants, manifest_path=os.path.join(out_dir, "manifest.json"))
+
+    def fetch_outputs(self, source_id, out_dir, filenames):
+        return 0
+
+
+def test_job_errors_when_ok_metadata_has_no_files(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), _MetaOnlyRunner())
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert job.sources[0].delivered == 2
+    assert job.error == COPY_FAILED_MSG
+    assert source_files_ready(job.sources[0], store._ws, job.job_id) == 0
+
+
+def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
+    from tests.server.fakes import FakeObjectStore
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+    from tests.server.fakes import FakeRunPodClient
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner)
+    job_id, source_id = "jobretry01", "srcretry01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    os.makedirs(out_dir, exist_ok=True)
+    staged = tmp_path / "staged.mp4"
+    staged.write_bytes(b"RETRY-COPY-BYTES")
+    blobstore.put(f"outputs/{source_id}/v01.mp4", str(staged))
+
+    from variant_maker.server.jobs import Job
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-08-18T00:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="clip.mp4", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="v01.mp4", status="ok",
+                quality={"vmaf": 99.0},
+            )],
+        )],
+        state="done", error=COPY_FAILED_MSG,
+    )
+    store._install_hydrated_job(job)
+    # hydrate already pulls — wipe the copy so retry-copy is the path under test
+    os.remove(os.path.join(out_dir, "v01.mp4"))
+    assert source_files_ready(job.sources[0], ws, job_id) == 0
+
+    out = store.retry_copy(source_id)
+    assert out is job.sources[0]
+    assert source_files_ready(job.sources[0], ws, job_id) == 1
+    assert job.error is None
+    assert store.retry_copy("nope") is None

@@ -10,6 +10,7 @@ export interface VariantOut {
   uniqueness_metric?: string | null; uniqueness_target?: number | null;
   preset_used?: string | null; strength_final?: number | null;
   escalated?: boolean; platform_result?: PlatformResult | null;
+  file_ready?: boolean;
 }
 export interface InFlightOut {
   index: number;
@@ -24,6 +25,8 @@ export interface SourceOut {
   job_state?: "running" | "done" | string | null;
   failed?: number;
   created_utc?: string | null;
+  files_ready?: number;
+  copy_status?: "ok" | "copying" | "missing";
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }

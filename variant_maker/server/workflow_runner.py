@@ -15,7 +15,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.layout import source_output_subfolder
 from variant_maker.farm.ledger import Ledger
 from variant_maker.probe import sha256_file
-from variant_maker.server.jobs import Job, JobSource, JobStore
+from variant_maker.server.jobs import COPY_FAILED_MSG, Job, JobSource, JobStore
 from variant_maker.server.workflows import Workflow
 
 
@@ -80,15 +80,19 @@ def _export_source(
     sub_id = drive.find_or_create_folder(sub_name, output_folder_id)
     if not sub_id or sub_id == output_folder_id:
         raise RuntimeError("refusing to dump variants into the parent output folder")
+    uploaded = 0
     for v in variants:
         path = job_store.find_variant(source.source_id, v.filename)
         if path is None:
             continue
         drive.upload(path, sub_id, name=v.filename)
+        uploaded += 1
+    if uploaded == 0:
+        raise RuntimeError(COPY_FAILED_MSG)
     manifest = os.path.join(job_store._ws.source_out_dir(job.job_id, source.source_id), "manifest.json")
     if os.path.isfile(manifest):
         drive.upload(manifest, sub_id, name="manifest.json")
-    return sub_id, len(variants)
+    return sub_id, uploaded
 
 
 def _harvest(

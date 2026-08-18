@@ -436,6 +436,90 @@ def test_zip_and_file_routes_pull_missing_outputs_from_object_store(tmp_path):
     assert zf.namelist() == ["v01.mp4"]
 
 
+class _CountingFetchRunner(FakeRunner):
+    def __init__(self):
+        super().__init__()
+        self.fetches = 0
+
+    def fetch_outputs(self, source_id, out_dir, filenames):
+        self.fetches += 1
+        return 0
+
+
+def test_gallery_reports_missing_files_without_pulling_object_store(tmp_path):
+    """Listing Gallery must not stall on R2; show files_ready from disk only."""
+    runner = _CountingFetchRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    client = TestClient(create_app(store))
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "2"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    assert src["files_ready"] == 2
+    assert src["copy_status"] == "ok"
+    assert all(v["file_ready"] is True for v in src["variants"])
+
+    loc = store._locate(src["source_id"])
+    assert loc is not None
+    out_dir = store._ws.source_out_dir(loc[0], src["source_id"])
+    for v in src["variants"]:
+        os.remove(os.path.join(out_dir, v["filename"]))
+    before = runner.fetches
+    gallery = client.get("/api/gallery").json()
+    assert runner.fetches == before
+    assert gallery[0]["delivered"] == 2
+    assert gallery[0]["files_ready"] == 0
+    assert gallery[0]["copy_status"] == "missing"
+    assert all(v["file_ready"] is False for v in gallery[0]["variants"])
+
+
+def test_retry_copy_endpoint_pulls_from_object_store(tmp_path):
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner)
+    client = TestClient(create_app(store))
+
+    job_id, source_id = "jobapi01", "srcapi01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    os.makedirs(out_dir, exist_ok=True)
+    payload = b"RETRY-COPY-API"
+    staged = tmp_path / "staged.mp4"
+    staged.write_bytes(payload)
+    blobstore.put(f"outputs/{source_id}/v01.mp4", str(staged))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-08-18T00:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="clip.mp4", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="v01.mp4", status="ok",
+                quality={"vmaf": 99.0},
+            )],
+        )],
+        state="done",
+    )
+    store._install_hydrated_job(job)
+    os.remove(os.path.join(out_dir, "v01.mp4"))
+
+    missing = client.get("/api/gallery").json()[0]
+    assert missing["copy_status"] == "missing"
+    assert missing["files_ready"] == 0
+
+    resp = client.post(f"/api/sources/{source_id}/retry-copy")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["copy_status"] == "ok"
+    assert body["files_ready"] == 1
+    assert body["variants"][0]["file_ready"] is True
+    assert client.get(f"/api/variants/{source_id}/v01.mp4").content == payload
+    assert client.post("/api/sources/nope/retry-copy").status_code == 404
+
+
 def test_cli_build_app_serves_health(tmp_path):
     from variant_maker.server.cli import build_app
     client = TestClient(build_app(str(tmp_path)))

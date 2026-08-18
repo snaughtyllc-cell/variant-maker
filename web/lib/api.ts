@@ -116,6 +116,10 @@ export function regenerate(sourceId: string, n: number): Promise<SourceOut> {
   return fetch(`/api/sources/${sourceId}/regenerate`, { method: "POST", body: fd }).then(json<SourceOut>);
 }
 
+export function retryCopy(sourceId: string): Promise<SourceOut> {
+  return fetch(`/api/sources/${sourceId}/retry-copy`, { method: "POST" }).then(json<SourceOut>);
+}
+
 export function setPlatformResult(sourceId: string, index: number, result: PlatformResult): Promise<VariantOut> {
   return fetch(`/api/variants/${sourceId}/${index}/platform-result`, {
     method: "POST",

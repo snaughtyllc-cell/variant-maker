@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import { SourceOut } from "@/lib/types";
-import { regenerate, sourceUrl, sourceZipUrl } from "@/lib/api";
-import { zipEmptyCopy } from "@/lib/gallery";
+import { regenerate, retryCopy, sourceUrl, sourceZipUrl } from "@/lib/api";
+import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
 import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
 import { VariantCard } from "./VariantCard";
@@ -21,11 +21,15 @@ export function SourceGroup({
 }: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
   const [zipMsg, setZipMsg] = useState<string | null>(null);
 
   const hasShortfall = source.shortfall > 0;
-  const fullDelivery = source.shortfall === 0;
+  const filesReady = filesReadyCount(source);
+  const fullDelivery = deliveryComplete(source);
   const stillRunning = source.job_state === "running" || !!source.in_flight;
+  const copyMissing = source.copy_status === "missing" && !stillRunning;
+  const copyLanding = source.copy_status === "copying";
   const shortfallMsg = shortfallCopy(source);
 
   // Compute avg VMAF
@@ -80,7 +84,21 @@ export function SourceGroup({
     }
   }
 
-  const thumbUrl = source.variants[0]?.file_url;
+  async function handleRetryCopy() {
+    if (copyLoading || stillRunning) return;
+    setCopyLoading(true);
+    try {
+      await retryCopy(source.source_id);
+      onRegenerate();
+    } catch (e) {
+      console.error("Retry copy failed", e);
+    } finally {
+      setCopyLoading(false);
+    }
+  }
+
+  const thumbReady = isFileReady(source.variants[0] ?? {});
+  const thumbUrl = thumbReady ? source.variants[0]?.file_url : undefined;
   const thumbSrc = thumbUrl ?? sourceUrl(source.source_id);
   const okCount = okVariantKeys([source]).length;
   const sourceAllSelected = selectionHasAllOk(selected, [source]);
@@ -182,7 +200,12 @@ export function SourceGroup({
                 : { color: "#ffd08a", background: "#2c2210", border: "1px solid #5a4416" }),
             }}
           >
-            {fullDelivery ? "✓ " : ""}{source.delivered} / {source.requested} delivered
+            {fullDelivery ? "✓ " : ""}
+            {copyMissing
+              ? `${filesReady} / ${source.requested} on Studio`
+              : copyLanding
+              ? `${filesReady} / ${source.requested} copying`
+              : `${filesReady} / ${source.requested} delivered`}
           </span>
           {okCount > 0 && (
             <button
@@ -206,7 +229,7 @@ export function SourceGroup({
               {sourceSelectLabel}
             </button>
           )}
-          {source.delivered > 0 && !stillRunning && (
+          {filesReady > 0 && !stillRunning && (
             <a
               href={sourceZipUrl(source.source_id)}
               download
@@ -237,6 +260,56 @@ export function SourceGroup({
           }}
         >
           ⚠ {zipMsg}
+        </div>
+      )}
+      {copyMissing && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 16px",
+            background: "#1c1608",
+            borderBottom: "1px solid #3a2c10",
+            fontSize: 12.5,
+            color: "#ffd08a",
+            flexWrap: "wrap",
+          }}
+        >
+          <span>⚠ {copyMissingCopy()}</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleRetryCopy(); }}
+            disabled={copyLoading}
+            style={{
+              marginLeft: "auto",
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: "#fff",
+              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+              border: "none",
+              padding: "7px 14px",
+              borderRadius: 9,
+              cursor: copyLoading ? "not-allowed" : "pointer",
+              boxShadow: "0 4px 14px #ff4d8d33",
+              opacity: copyLoading ? 0.7 : 1,
+            }}
+          >
+            {copyLoading ? "Copying…" : "↻ Retry copy"}
+          </button>
+        </div>
+      )}
+      {copyLanding && !copyMissing && (
+        <div
+          style={{
+            padding: "10px 16px",
+            background: "#1c1608",
+            borderBottom: "1px solid #3a2c10",
+            fontSize: 12.5,
+            color: "#ffd08a",
+          }}
+        >
+          Videos are still landing on Studio…
         </div>
       )}
       {open && hasShortfall && shortfallMsg && (

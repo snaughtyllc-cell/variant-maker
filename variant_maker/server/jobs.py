@@ -7,7 +7,7 @@ import os
 import threading
 import uuid
 import zipfile
-from dataclasses import dataclass, field
+from typing import Literal
 
 from variant_maker.normalize import maybe_normalize_upload
 
@@ -17,6 +17,44 @@ from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
+COPY_FAILED_MSG = (
+    "GPU finished, but videos didn't copy back to Studio. "
+    "Retry copy, or Regenerate if that still fails."
+)
+
+
+def variant_on_disk(ws: Workspace, job_id: str, source_id: str, filename: str) -> bool:
+    if not filename or filename != os.path.basename(filename) or filename in (".", ".."):
+        return False
+    return os.path.isfile(ws.variant_path(job_id, source_id, filename))
+
+
+def missing_ok_filenames(source: JobSource, ws: Workspace, job_id: str) -> list[str]:
+    missing: list[str] = []
+    for v in source.variants:
+        if v.status != "ok" or not v.filename:
+            continue
+        if not variant_on_disk(ws, job_id, source.source_id, v.filename):
+            missing.append(v.filename)
+    return missing
+
+
+def source_files_ready(source: JobSource, ws: Workspace, job_id: str) -> int:
+    return sum(
+        1 for v in source.variants
+        if v.status == "ok" and v.filename
+        and variant_on_disk(ws, job_id, source.source_id, v.filename)
+    )
+
+
+def source_copy_status(source: JobSource, ws: Workspace, job_id: str,
+                       job_state: str | None) -> Literal["ok", "copying", "missing"]:
+    """ok = files on disk; copying = job still running; missing = GPU done, files not here."""
+    if not missing_ok_filenames(source, ws, job_id):
+        return "ok"
+    if job_state == "running":
+        return "copying"
+    return "missing"
 
 
 @dataclass
@@ -203,13 +241,7 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
         return False
     if ws is None or not job_id:
         return True
-    for v in source.variants:
-        if v.status != "ok" or not v.filename:
-            continue
-        path = ws.variant_path(job_id, source.source_id, v.filename)
-        if not os.path.isfile(path):
-            return False
-    return True
+    return not missing_ok_filenames(source, ws, job_id)
 
 
 class JobStore:
@@ -388,6 +420,10 @@ class JobStore:
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
             job.state = "cancelled" if token.is_set() else "done"
+            if job.state == "done":
+                for source in job.sources:
+                    self._pull_missing_outputs(source.source_id)
+                self._refresh_copy_error(job)
             self._persist(job)
             self._done[job.job_id].set()
 
@@ -413,6 +449,9 @@ class JobStore:
                 self._done[job.job_id].set()
         for source in job.sources:
             self._pull_missing_outputs(source.source_id)
+        if not resume:
+            self._refresh_copy_error(job)
+            self._persist(job)
         if resume:
             threading.Thread(
                 target=self._run_job, args=(job, token),
@@ -564,6 +603,30 @@ class JobStore:
         if not names:
             return
         fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
+
+    def _refresh_copy_error(self, job: Job) -> None:
+        """Surface a VA-facing error when GPU metadata is ok but mp4s never landed."""
+        if job.state != "done":
+            return
+        if job.error and job.error != COPY_FAILED_MSG:
+            return
+        missing = any(
+            missing_ok_filenames(source, self._ws, job.job_id) for source in job.sources
+        )
+        job.error = COPY_FAILED_MSG if missing else None
+
+    def retry_copy(self, source_id: str) -> JobSource | None:
+        """Re-pull missing ok variants from object storage. Does not re-run the GPU."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        self._pull_missing_outputs(source_id)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._refresh_copy_error(job)
+            self._persist(job)
+        return source
 
     def source_file(self, source_id: str) -> str | None:
         loc = self._locate(source_id)

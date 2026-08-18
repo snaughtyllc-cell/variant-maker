@@ -1,6 +1,7 @@
 "use client";
 import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
+import { isFileReady } from "@/lib/gallery";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -11,6 +12,7 @@ interface VariantCardProps {
 }
 
 export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCardProps) {
+  const ready = isFileReady(variant);
   const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
   const spatialOk = variant.quality?.spatial_ok === true;
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
@@ -138,16 +140,17 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
 
   return (
     <div
-      onClick={onOpen}
+      onClick={ready ? onOpen : undefined}
       style={{
         aspectRatio: "9 / 16",
         borderRadius: 9,
         position: "relative",
         overflow: "hidden",
-        cursor: "pointer",
+        cursor: ready ? "pointer" : "default",
         border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
         boxShadow: selected ? "0 0 0 2px #7c5cff44" : undefined,
         transition: "transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease",
+        opacity: ready ? 1 : 0.7,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
@@ -163,10 +166,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       {/* Selection checkbox */}
       <input
         type="checkbox"
+        disabled={!ready}
         checked={selected}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => {
           e.stopPropagation();
+          if (!ready) return;
           onToggle();
         }}
         aria-label={`Select v${String(variant.index).padStart(2, "0")}`}
@@ -199,7 +204,26 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       >
         v{String(variant.index).padStart(2, "0")}
       </span>
-      <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
+      {ready ? (
+        <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "#14141d",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 8,
+            textAlign: "center",
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#ffd08a",
+          }}
+        >
+          Not on Studio
+        </div>
+      )}
       {/* Overlay with badges */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {topBadges}

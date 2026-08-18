@@ -29,8 +29,16 @@ describe("okVariantRefs", () => {
 });
 
 describe("select all ok variants", () => {
-  it("lists only ok keys", () => {
-    expect(okVariantKeys(sources)).toEqual(["s1:1"]);
+  it("skips ok variants whose files never copied back", () => {
+    const mixed: SourceOut[] = [{
+      source_id: "s1", filename: "a.mp4", requested: 2, delivered: 2, shortfall: 0,
+      variants: [
+        { index: 1, filename: "v01.mp4", status: "ok", quality: {}, file_url: "/x", file_ready: true },
+        { index: 2, filename: "v02.mp4", status: "ok", quality: {}, file_url: "/y", file_ready: false },
+      ],
+    }];
+    expect(okVariantKeys(mixed)).toEqual(["s1:1"]);
+    expect(okVariantRefs(mixed, new Set(["s1:1", "s1:2"]))).toEqual([{ source_id: "s1", index: 1 }]);
   });
 
   it("selects every ok variant and deselects them", () => {

@@ -70,6 +70,21 @@ describe("regenerate posts form n", () => {
   });
 });
 
+describe("retryCopy", () => {
+  it("POSTs /api/sources/:id/retry-copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        source_id: "s1", filename: "a.mp4", requested: 1, delivered: 1, shortfall: 0,
+        files_ready: 1, copy_status: "ok", variants: [],
+      }), { status: 200 }),
+    );
+    await api.retryCopy("s1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/sources/s1/retry-copy");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+});
+
 it("createDriveExport posts destination and variants", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ export_id: "exp_1", state: "pending", files: [] }), { status: 200 }),

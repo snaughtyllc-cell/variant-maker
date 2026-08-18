@@ -5,6 +5,7 @@ export function okVariantRefs(sources: SourceOut[], selected: Set<string>): Expo
   for (const source of sources) {
     for (const variant of source.variants) {
       if (variant.status !== "ok") continue;
+      if (variant.file_ready === false) continue;
       if (!selected.has(`${source.source_id}:${variant.index}`)) continue;
       refs.push({ source_id: source.source_id, index: variant.index });
     }
@@ -17,6 +18,7 @@ export function okVariantKeys(sources: SourceOut[]): string[] {
   for (const source of sources) {
     for (const variant of source.variants) {
       if (variant.status !== "ok") continue;
+      if (variant.file_ready === false) continue;
       keys.push(`${source.source_id}:${variant.index}`);
     }
   }
