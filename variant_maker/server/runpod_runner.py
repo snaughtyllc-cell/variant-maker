@@ -22,6 +22,12 @@ from .storage import ObjectStore
 DEFAULT_QUALITY_MODE = "hq"   # Tier-2 neural upscale on the GPU
 
 
+def _quality_mode() -> str:
+    """VARIANT_QUALITY_MODE=fast skips Real-ESRGAN (team speed); default hq."""
+    mode = os.environ.get("VARIANT_QUALITY_MODE", DEFAULT_QUALITY_MODE).strip().lower()
+    return mode if mode in ("fast", "hq") else DEFAULT_QUALITY_MODE
+
+
 class RunPodServerlessRunner:
     def __init__(self, store: ObjectStore, client: RunPodClient) -> None:
         self._store = store
@@ -37,7 +43,7 @@ class RunPodServerlessRunner:
         payload = {"input": {
             "source_key": source_key, "source_id": source_id, "count": count,
             "preset": DEFAULT_PRESET, "platform": DEFAULT_PLATFORM,
-            "quality_mode": DEFAULT_QUALITY_MODE, "max_regen": MAX_REGEN,
+            "quality_mode": _quality_mode(), "max_regen": MAX_REGEN,
             "allow_creative_escalate": allow_creative_escalate,
             "uniqueness_target": UNIQUENESS_TARGET,
             "uniq_strengths": list(UNIQ_STRENGTHS),

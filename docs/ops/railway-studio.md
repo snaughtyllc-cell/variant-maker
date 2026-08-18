@@ -13,8 +13,13 @@ Team browser
         → Railway downloads variants into the gallery
 ```
 
+Studio is live at https://varyforge-studio-production.up.railway.app
+
 Until RunPod + object-store env is set, Studio still works: the start script
-falls back to `--runner local` and renders on Railway CPU (Tier 1).
+falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
+too slow for VA in-and-out. Attach a **warm** serverless worker with
+[`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)
+(`min workers = 1`, `VARIANT_QUALITY_MODE=fast`).
 
 ## 1. Railway (Codex can do this)
 
@@ -70,7 +75,7 @@ gate + one creative escalate are forwarded in the job payload.
 Google Cloud → Web OAuth client → authorized redirect URI:
 
 ```
-https://<railway-domain>/api/drive/oauth/callback
+https://varyforge-studio-production.up.railway.app/api/drive/oauth/callback
 ```
 
 Set `VARIANT_DRIVE_OAUTH_*` on Railway (see `deploy/railway/studio.env.example`).
