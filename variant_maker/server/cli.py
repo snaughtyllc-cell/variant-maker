@@ -20,6 +20,15 @@ _RUNPOD_ENV = ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET
                "R2_ACCESS_KEY", "R2_SECRET_KEY")
 
 
+def resolve_runner(kind: str | None) -> str:
+    """Explicit --runner wins. Otherwise use RunPod when its env is complete."""
+    if kind:
+        return kind
+    if all(os.environ.get(k) for k in _RUNPOD_ENV):
+        return "runpod"
+    return "local"
+
+
 def make_runner(kind: str) -> Runner:
     if kind == "local":
         return LocalRunner()
@@ -50,9 +59,11 @@ def main() -> None:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--data-dir", default="./.vmdata")
-    p.add_argument("--runner", choices=("local", "runpod"), default="local")
+    p.add_argument("--runner", choices=("local", "runpod"), default=None,
+                    help="default: runpod when RUNPOD_* + R2_* env is set, else local")
     args = p.parse_args()
 
     import uvicorn
-    uvicorn.run(build_app(args.data_dir, args.runner), host=args.host, port=args.port)
+    uvicorn.run(build_app(args.data_dir, resolve_runner(args.runner)),
+                host=args.host, port=args.port)
     sys.exit(0)

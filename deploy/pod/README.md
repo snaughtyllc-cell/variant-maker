@@ -146,5 +146,6 @@ RunPod HTTP proxy may still buffer SSE; job-detail polling shows progress reliab
 
 ## Not this path
 
-- `deploy/runpod/` = serverless GPU farm (R2 + Drive). Heavier. Use later for scale.
+- `deploy/runpod/` = serverless GPU engine (R2 + `cp_handler.py`).
+- `deploy/railway/` = CPU Studio hosting for the team (see `docs/ops/railway-studio.md`).
 - `~/vidforge*.py` stubs = ignore.

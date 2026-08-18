@@ -11,7 +11,9 @@ class RunPodClient(Protocol):
 
 def _http():
     import httpx  # lazy: only the real client needs it
-    return httpx.Client(timeout=60.0)
+    # Generate jobs can sit in queue for minutes; each poll should still return quickly,
+    # but a 60s global timeout is too tight around GPU cold start.
+    return httpx.Client(timeout=httpx.Timeout(10.0, read=300.0))
 
 
 class HttpRunPodClient:

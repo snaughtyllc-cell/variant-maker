@@ -20,6 +20,8 @@ def test_process_job_streams_progress_then_uploads_and_results(monkeypatch, tmp_
             self.variants = variants
 
     def fake_run(config, *, on_event=None):
+        assert config["uniqueness_target"] == 0.5
+        assert config["allow_creative_escalate"] is False
         out = config["out"]
         recs = []
         for i, status in [(1, "ok"), (2, "corrupt")]:
@@ -34,7 +36,10 @@ def test_process_job_streams_progress_then_uploads_and_results(monkeypatch, tmp_
 
     monkeypatch.setattr(gpu_worker.pipeline, "run", fake_run)
 
-    job_input = {"source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2}
+    job_input = {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "uniqueness_target": 0.5, "allow_creative_escalate": False,
+    }
     chunks = list(gpu_worker.process_job(job_input, store, work_dir=str(tmp_path / "work")))
 
     progress = [c for c in chunks if c["type"] == "progress"]

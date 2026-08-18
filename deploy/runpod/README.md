@@ -92,12 +92,14 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
    Set these endpoint environment variables: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY`,
    `R2_SECRET_KEY`. Note the endpoint id.
 
-4. **Point the local backend at it:**
+4. **Point the control plane at it** (local or Railway):
    ```
    export RUNPOD_ENDPOINT_ID=<id> RUNPOD_API_KEY=<key>
    export R2_ENDPOINT=<url> R2_BUCKET=<bucket> R2_ACCESS_KEY=<ak> R2_SECRET_KEY=<sk>
+   export VARIANT_RUNNER=runpod
    variant-server --runner runpod
    ```
-   Submit a job; confirm SSE streams progress and variants are served from the gallery.
+   On Railway, set the same vars on the Studio service and restart. See
+   [`docs/ops/railway-studio.md`](../../docs/ops/railway-studio.md).
 
 5. **Rotate the RunPod API key** (it was pasted in chat early in the project).

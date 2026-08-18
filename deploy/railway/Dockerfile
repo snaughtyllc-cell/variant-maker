@@ -1,22 +1,23 @@
-# Always-on RunPod Pod image: Tier-1 FFmpeg variants + Gradio-free web UI.
-# Build (on amd64 / the Pod, NOT Apple Silicon by default):
-#   docker build -f deploy/pod/Dockerfile -t variant-maker-pod .
+# Railway CPU control plane: Next.js Studio + FastAPI.
+# Rendering can stay in-process (--runner local) or go to RunPod serverless
+# (--runner runpod) without rebuilding — flip env vars.
 #
-# Run:
-#   docker run --rm -p 3000:3000 -v /workspace/vmdata:/workspace/vmdata variant-maker-pod
+# Build context is the repo root:
+#   docker build -f deploy/railway/Dockerfile -t variant-maker-studio .
 FROM python:3.11-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     API_PROXY_TARGET=http://127.0.0.1:8000 \
-    DATA_DIR=/workspace/vmdata \
-    PYTHONUNBUFFERED=1
+    DATA_DIR=/data/vmdata \
+    PYTHONUNBUFFERED=1 \
+    HOSTNAME=0.0.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl wget xz-utils git \
     && rm -rf /var/lib/apt/lists/*
 
-# ffmpeg WITH libvmaf (quality guard). Distro ffmpeg often lacks it.
+# ffmpeg WITH libvmaf so VARIANT_RUNNER=local works before RunPod is wired.
 RUN cd /tmp \
  && wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
  && tar xf ffmpeg-release-amd64-static.tar.xz \
@@ -24,7 +25,6 @@ RUN cd /tmp \
  && rm -rf /tmp/ffmpeg-* \
  && test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
 
-# Node 20 for Next.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*
@@ -39,6 +39,7 @@ RUN pip install --no-cache-dir ".[server,farm,serverless]" \
  && chmod +x /app/deploy/pod/start.sh
 
 EXPOSE 3000
-VOLUME ["/workspace/vmdata"]
+VOLUME ["/data"]
 
+# Railway sets $PORT. start.sh maps WEB_PORT from PORT.
 CMD ["/app/deploy/pod/start.sh"]

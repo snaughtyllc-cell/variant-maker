@@ -294,3 +294,21 @@ def test_make_runner_runpod_missing_env_exits(monkeypatch):
     import pytest
     with pytest.raises(SystemExit):
         cli.make_runner("runpod")
+
+
+def test_resolve_runner_auto_runpod_when_env_complete(monkeypatch):
+    from variant_maker.server import cli
+    for k, v in {"RUNPOD_ENDPOINT_ID": "ep", "RUNPOD_API_KEY": "k",
+                 "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
+                 "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}.items():
+        monkeypatch.setenv(k, v)
+    assert cli.resolve_runner(None) == "runpod"
+
+
+def test_resolve_runner_auto_local_when_env_incomplete(monkeypatch):
+    from variant_maker.server import cli
+    for k in ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
+              "R2_ACCESS_KEY", "R2_SECRET_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    assert cli.resolve_runner(None) == "local"
+    assert cli.resolve_runner("runpod") == "runpod"
