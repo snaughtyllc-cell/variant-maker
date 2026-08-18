@@ -19,7 +19,7 @@ class FakeSrc:
 def _stub_common(monkeypatch):
     monkeypatch.setattr(pipeline, "probe", lambda p: FakeSrc())
     monkeypatch.setattr(pipeline, "_ffmpeg_version", lambda: "test")
-    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0: {
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0, rubberband=False: {
         "video": {"rotate_deg": 0.0}, "audio": {},
     })
 
@@ -133,9 +133,9 @@ def test_uniq_strengths_are_not_collapsed_to_the_same_effective_value(monkeypatc
     seen_strengths = []
     real_sample = pipeline.sample
 
-    def spy_sample(preset, seed, strength=1.0):
+    def spy_sample(preset, seed, strength=1.0, rubberband=False):
         seen_strengths.append(strength)
-        return real_sample(preset, seed, strength=strength)
+        return real_sample(preset, seed, strength=strength, rubberband=rubberband)
     monkeypatch.setattr(pipeline, "sample", spy_sample)
 
     monkeypatch.setattr(
@@ -165,9 +165,9 @@ def test_duplicate_effective_strength_rung_is_skipped(monkeypatch, tmp_path):
     seen_strengths = []
     real_sample = pipeline.sample
 
-    def spy_sample(preset, seed, strength=1.0):
+    def spy_sample(preset, seed, strength=1.0, rubberband=False):
         seen_strengths.append(strength)
-        return real_sample(preset, seed, strength=strength)
+        return real_sample(preset, seed, strength=strength, rubberband=rubberband)
     monkeypatch.setattr(pipeline, "sample", spy_sample)
 
     monkeypatch.setattr(
@@ -251,3 +251,27 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
     # Two peer comparisons for v2 (failed then passed); v1 had none.
     assert peer_calls["n"] == 2
     assert v2.strength_final == 1.4
+
+
+def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch, tmp_path):
+    """Opt-in bisection: uniqueness starts below target then clears; Fast ladder unused."""
+    _stub_common(monkeypatch)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(0.1, bits=6, status="below_target")
+        return _ok_score(0.5, bits=32, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+
+    cfg = _cfg(tmp_path, auto_tune=True, allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.uniqueness_status == "ok"
+    assert 0.5 <= record.strength_final <= 1.8
+    assert n["scores"] > 1

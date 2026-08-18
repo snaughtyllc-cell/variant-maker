@@ -112,10 +112,10 @@ Status legend: ✅ done & verified · 🔨 to build
   `$VARIANT_MAKER_PROTECT_BACKEND`); `build_protection_mask` returns None (no weight download).
   Pure `mask_blocks_crop` / `clamp_crop_keep` unit-tested. Pipeline gating is later.
 
-## Phase 11 — Auto-tune controller  🔨  ← the "B" payoff
-- Bisection on `sample(..., strength=…)` → the strength that hits the **similarity target**
-  (difference target, ~35% anchor — our own metric, calibrated; not TikFusion's number) while
-  staying above the quality floor. This is where the AI owns per-variant intensity, not the user.
+## Phase 11 — Auto-tune controller  ✅
+- Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default
+  `uniqueness.DEFAULT_TARGET` 0.375). Opt-in: `config["auto_tune"]` default **False** so Fast
+  20-packs keep the 3-rung uniqueness ladder. Path-B 35% similarity is later calibration.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
 ## Phase 12 — Platform outcome tracking (learning loop)  ⏸ skipped for now
@@ -124,13 +124,13 @@ Status legend: ✅ done & verified · 🔨 to build
   bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
 - After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12.
 
-## Phase 13 — Stronger audio uniqueness  🔨
+## Phase 13 — Stronger audio uniqueness  ✅
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
-  Pitch is specified in presets but **off in production** until `rubberband=True` and ffmpeg
-  has the `rubberband` filter (never asynchs: one speed on both streams).
-- Later pass: enable rubberband on the worker, tiny pitch (±2–4% by preset), maybe light
-  EQ diversity — TikFusion-style “the soundtrack isn’t a byte-identical copy” without
-  sounding like a chipmunk. After 9–12 unless a VA batch is failing on audio fingerprint alone.
+  Pitch is **on** when ffmpeg lists the `rubberband` filter (`has_rubberband()`, cached);
+  omitted when the filter is absent so encodes never fail. One speed still: `atempo` =
+  video speed; pitch is rubberband only (never a second speed factor / asynchs).
+- Fast path: `pipeline.run` auto-detects after reading `jobs` and sets `config["rubberband"]`.
+  Preset ranges remain tiny (±2% medium, ±4% strong).
 
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate replaces it; the previous

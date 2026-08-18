@@ -14,6 +14,36 @@ from .filtergraph import build_audio_filters, build_video_filters
 from .platforms import Platform
 from .probe import SourceInfo
 
+# None = not probed yet. Cached so has_rubberband() does not spawn ffmpeg per variant.
+_rubberband_cached: bool | None = None
+
+
+def has_rubberband() -> bool:
+    """True when this ffmpeg build exposes the rubberband audio filter.
+
+    Never raises: missing ffmpeg, a failed listing, or a listing without the
+    filter all return False. Result is cached at module level.
+    """
+    global _rubberband_cached
+    if _rubberband_cached is not None:
+        return _rubberband_cached
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-filters"],
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        _rubberband_cached = False
+        return False
+    if result.returncode != 0:
+        _rubberband_cached = False
+        return False
+    listing = result.stdout or ""
+    _rubberband_cached = any(
+        "rubberband" in line.split() for line in listing.splitlines()
+    )
+    return _rubberband_cached
+
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)

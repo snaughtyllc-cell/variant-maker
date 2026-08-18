@@ -63,6 +63,61 @@ def test_cmd_drops_audio_when_absent():
     assert "-af" not in cmd and "-c:a" not in cmd
 
 
+def test_has_rubberband_true_when_filter_listed(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        listing = (
+            "Filters:\n"
+            " ..C atempo            A->A       Adjust audio tempo.\n"
+            " ..C rubberband        A->A       Time-stretch and pitch-shift audio.\n"
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=listing, stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is True
+    assert ffmpeg._rubberband_cached is True
+
+
+def test_has_rubberband_false_when_filter_absent(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        listing = (
+            "Filters:\n"
+            " ..C atempo            A->A       Adjust audio tempo.\n"
+            " ..C loudnorm          A->A       EBU R128 loudness normalization.\n"
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=listing, stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is False
+    assert ffmpeg._rubberband_cached is False
+
+
+def test_has_rubberband_false_when_ffmpeg_missing(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is False
+
+
+def test_has_rubberband_uses_cached_result(monkeypatch):
+    ffmpeg._rubberband_cached = True
+    calls = {"n": 0}
+
+    def fake_run(cmd, **kwargs):
+        calls["n"] += 1
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is True
+    assert calls["n"] == 0
+
+
 def test_render_variant_dry_run_returns_cmd_without_running():
     out, cmd_str = ffmpeg.render_variant(make_src(), make_params(), REELS, "out.mp4", dry_run=True)
     assert out == "out.mp4"

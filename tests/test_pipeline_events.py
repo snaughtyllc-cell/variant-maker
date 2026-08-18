@@ -16,7 +16,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline, "probe", lambda p: FakeSrc())
     monkeypatch.setattr(pipeline, "_ffmpeg_version", lambda: "test")
-    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0: {
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0, rubberband=False: {
         "video": {"rotate_deg": 0.0}, "audio": {},
     })
 
