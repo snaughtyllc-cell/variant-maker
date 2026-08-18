@@ -118,6 +118,14 @@ Status legend: ✅ done & verified · 🔨 to build
   Phase 11. Auto-checking a live account is optional automation — not a detector.
 - Design: `docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`.
 
+## Phase 13 — Stronger audio uniqueness  🔨
+- Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
+  Pitch is specified in presets but **off in production** until `rubberband=True` and ffmpeg
+  has the `rubberband` filter (never asynchs: one speed on both streams).
+- Later pass: enable rubberband on the worker, tiny pitch (±2–4% by preset), maybe light
+  EQ diversity — TikFusion-style “the soundtrack isn’t a byte-identical copy” without
+  sounding like a chipmunk. After 9–12 unless a VA batch is failing on audio fingerprint alone.
+
 ---
 
 ### Definition of done (every phase)
