@@ -17,9 +17,11 @@ Studio is live at https://varyforge-studio-production.up.railway.app
 
 Until RunPod + object-store env is set, Studio still works: the start script
 falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
-too slow for VA in-and-out. Attach a **warm** serverless worker with
-[`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)
-(`min workers = 1`, `VARIANT_QUALITY_MODE=fast`).
+too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,
+**idle timeout ~10 min**, `VARIANT_QUALITY_MODE=fast` (see
+[`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)).
+Overnight GPU is $0; a warm window after the last job costs ~$0.69/hr only while
+that worker is still up.
 
 ## 1. Railway (Codex can do this)
 

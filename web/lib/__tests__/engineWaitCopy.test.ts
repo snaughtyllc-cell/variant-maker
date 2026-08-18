@@ -7,7 +7,7 @@ describe("engineWaitCopy", () => {
     const blob = ENGINE_WAIT_LINES.join(" ");
     expect(blob).toMatch(/30 seconds|couple of minutes/i);
     expect(blob).toMatch(/not stuck/i);
-    expect(blob).toMatch(/one minute/i);
-    expect(blob).not.toMatch(/10-minute|10 min/i);
+    expect(blob).toMatch(/10 minutes/i);
+    expect(blob).not.toMatch(/one minute/i);
   });
 });
