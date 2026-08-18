@@ -6,7 +6,7 @@ from typing import Iterator, Protocol
 
 
 class RunPodClient(Protocol):
-    def stream_run(self, payload: dict) -> Iterator[dict]: ...
+    def stream_run(self, payload: dict, cancel_token=None) -> Iterator[dict]: ...
 
 
 def _http():
@@ -23,12 +23,23 @@ class HttpRunPodClient:
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._poll = poll_interval
 
-    def stream_run(self, payload: dict) -> Iterator[dict]:
+    def stream_run(self, payload: dict, cancel_token=None) -> Iterator[dict]:
+        from .cancel import JobCancelled
+
         with _http() as http:
+            if cancel_token is not None and cancel_token.is_set():
+                raise JobCancelled()
             resp = http.post(f"{self._base}/run", json=payload, headers=self._headers)
             resp.raise_for_status()
             job_id = resp.json()["id"]
+            if cancel_token is not None:
+                cancel_token.bind_runpod(job_id, self._base, self._headers)
+                if cancel_token.is_set():
+                    raise JobCancelled()
             while True:
+                if cancel_token is not None and cancel_token.is_set():
+                    cancel_token.cancel()
+                    raise JobCancelled()
                 r = http.get(f"{self._base}/stream/{job_id}", headers=self._headers)
                 r.raise_for_status()
                 body = r.json()
@@ -36,6 +47,8 @@ class HttpRunPodClient:
                     yield item["output"]
                 status = body.get("status")
                 if status in ("COMPLETED", "FAILED", "CANCELLED"):
+                    if status == "CANCELLED":
+                        raise JobCancelled()
                     if status != "COMPLETED":
                         raise RuntimeError(f"RunPod job {job_id} ended: {status}")
                     return

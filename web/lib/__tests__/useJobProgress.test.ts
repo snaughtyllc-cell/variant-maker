@@ -53,4 +53,24 @@ describe("useJobProgress", () => {
     expect(result.current.bySource.s1.inFlight).toBeUndefined();
     expect(result.current.failed).toMatch(/20-minute/);
   });
+
+  it("clears v01 rendering when poll says the job was cancelled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 1, created_utc: "", state: "cancelled",
+        error: "Cancelled — New run when you want another pack.",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 1, delivered: 0, shortfall: 1,
+          variants: [],
+          in_flight: { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() => useJobProgress("j1", sources));
+    await waitFor(() => {
+      expect(result.current.complete).toBe(true);
+    });
+    expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.failed).toMatch(/Cancelled/);
+  });
 });

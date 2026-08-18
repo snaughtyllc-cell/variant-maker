@@ -36,6 +36,8 @@ export const getHealth = () => fetch("/api/health").then(json<{ status: string }
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
 export const getJob = (id: string) =>
   fetch(`/api/jobs/${id}`, { cache: "no-store" }).then(json<JobDetail>);
+export const cancelJob = (id: string) =>
+  fetch(`/api/jobs/${id}/cancel`, { method: "POST" }).then(json<JobDetail>);
 export const getGallery = () => fetch("/api/gallery").then(json<SourceOut[]>);
 export const getDiagnostics = () => fetch("/api/diagnostics").then(json<DiagnosticsItem[]>);
 

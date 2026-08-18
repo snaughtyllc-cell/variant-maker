@@ -42,7 +42,7 @@ class SourceOut(BaseModel):
     shortfall: int
     variants: list[VariantOut] = []
     in_flight: InFlightOut | None = None
-    job_state: str | None = None  # "running" | "done" — drives shortfall copy
+    job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt count (Diagnostics population)
 
 

@@ -24,10 +24,14 @@ class _PausingRunner:
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
-            allow_creative_escalate: bool = True, quality_mode: str = "fast") -> SourceResult:
+            allow_creative_escalate: bool = True, quality_mode: str = "fast",
+            cancel_token=None) -> SourceResult:
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):
+            if cancel_token is not None and cancel_token.is_set():
+                from variant_maker.server.cancel import JobCancelled
+                raise JobCancelled()
             fname = f"v{i:02d}.mp4"
             quality = {"vmaf": 95.0, "bits": 27, "passed": True}
             on_event(VariantEvent(source_id=source_id, index=i, state="rendering"))
@@ -48,7 +52,10 @@ class _PausingRunner:
             ))
             if i == 1:
                 self.v1_done.set()
-                self.gate.wait(timeout=5)
+                while not self.gate.wait(timeout=0.05):
+                    if cancel_token is not None and cancel_token.is_set():
+                        from variant_maker.server.cancel import JobCancelled
+                        raise JobCancelled()
         mpath = os.path.join(out_dir, "manifest.json")
         open(mpath, "w").close()
         return SourceResult(variants=variants, manifest_path=mpath)
@@ -176,9 +183,27 @@ def test_regenerate_keeps_job_quality_mode(tmp_path):
 
 class _BoomRunner:
     def run(self, source_path, *, count, out_dir, source_id, on_event,
-            allow_creative_escalate=True, quality_mode="fast"):
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None):
         on_event(VariantEvent(source_id=source_id, index=1, state="rendering"))
         raise RuntimeError("RunPod job abc ended: FAILED")
+
+
+def test_cancel_stops_after_first_variant(tmp_path):
+    runner = _PausingRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    assert runner.v1_done.wait(timeout=5)
+    out = store.cancel(job.job_id)
+    assert out is job
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "cancelled"
+    assert "Cancelled" in (job.error or "")
+    assert len(job.sources[0].variants) == 1
+
+
+def test_cancel_unknown_job_is_none(tmp_path):
+    store = _store(tmp_path)
+    assert store.cancel("nope") is None
 
 
 def test_runner_crash_marks_done_with_gpu_timeout_copy(tmp_path):

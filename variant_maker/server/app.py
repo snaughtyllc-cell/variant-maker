@@ -78,7 +78,7 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
         return None
     # A finished job must not keep "v01 rendering" — last event is often rendering
     # when RunPod kills HQ at the 20-minute cap.
-    if job.state == "done":
+    if job.state in ("done", "cancelled"):
         return None
     for e in reversed(job.events):
         if e.source_id != source_id:
@@ -366,6 +366,16 @@ def create_app(
                          sources=[_source_out(s, ok_only=True, job=job) for s in job.sources],
                          error=job.error)
 
+    @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
+    def cancel_job(job_id: str) -> JobDetail:
+        job = store.cancel(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
+                         state=job.state,
+                         sources=[_source_out(s, ok_only=True, job=job) for s in job.sources],
+                         error=job.error)
+
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:
         """Non-streaming event log for proxies that buffer SSE (e.g. RunPod HTTP)."""
@@ -391,7 +401,7 @@ def create_app(
                 while sent < len(job.events):
                     yield {"data": json.dumps(event_to_dict(job.events[sent]))}
                     sent += 1
-                if job.state == "done" and sent >= len(job.events):
+                if job.state in ("done", "cancelled") and sent >= len(job.events):
                     yield {"data": json.dumps({"state": "job-done"})}
                     return
                 await asyncio.sleep(0.1)

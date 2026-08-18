@@ -58,7 +58,7 @@ def test_runner_sends_hq_defaults_in_payload(tmp_path):
     captured = {}
 
     class CapturingClient:
-        def stream_run(self, payload):
+        def stream_run(self, payload, cancel_token=None):
             captured.update(payload["input"])
             return iter([{"type": "result", "variants": [], "manifest_key": None}])
 
@@ -83,7 +83,7 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
     captured = {}
 
     class CapturingClient:
-        def stream_run(self, payload):
+        def stream_run(self, payload, cancel_token=None):
             captured.update(payload["input"])
             return iter([{"type": "result", "variants": [], "manifest_key": None}])
 
@@ -102,7 +102,7 @@ def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
     captured = {}
 
     class CapturingClient:
-        def stream_run(self, payload):
+        def stream_run(self, payload, cancel_token=None):
             captured.update(payload["input"])
             return iter([{"type": "result", "variants": [], "manifest_key": None}])
 
@@ -121,7 +121,7 @@ def test_runner_accepts_allow_creative_escalate(tmp_path):
     captured = {}
 
     class CapturingClient:
-        def stream_run(self, payload):
+        def stream_run(self, payload, cancel_token=None):
             captured.update(payload["input"])
             return iter([{"type": "result", "variants": [], "manifest_key": None}])
 

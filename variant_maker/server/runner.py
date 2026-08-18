@@ -72,7 +72,8 @@ class Runner(Protocol):
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
-            quality_mode: str = DEFAULT_QUALITY_MODE) -> SourceResult:
+            quality_mode: str = DEFAULT_QUALITY_MODE,
+            cancel_token=None) -> SourceResult:
         ...
 
 
@@ -82,7 +83,8 @@ class LocalRunner:
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
-            quality_mode: str = DEFAULT_QUALITY_MODE) -> SourceResult:
+            quality_mode: str = DEFAULT_QUALITY_MODE,
+            cancel_token=None) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -121,6 +123,7 @@ class LocalRunner:
                 "allow_creative_escalate", allow_creative_escalate,
             ),
             "auto_tune": limits.get("auto_tune", True),
+            "cancel_token": cancel_token,
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

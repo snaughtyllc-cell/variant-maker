@@ -42,3 +42,40 @@ def test_http_client_posts_run_then_streams(monkeypatch):
     assert posted["run"][2]["Authorization"] == "Bearer k"
     assert out[0] == {"type": "progress", "event": {"index": 1, "state": "rendering"}}
     assert out[-1] == {"type": "result", "variants": [], "manifest_key": "m"}
+
+
+def test_http_client_cancel_posts_runpod_cancel(monkeypatch):
+    import httpx
+    import variant_maker.server.runpod_client as rc
+    from variant_maker.server.cancel import CancelToken, JobCancelled
+
+    posted = []
+    token = CancelToken()
+
+    class FakeResp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    class FakeHttp:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def post(self, url, json=None, headers=None):
+            posted.append(url)
+            if str(url).endswith("/run"):
+                return FakeResp({"id": "job123"})
+            return FakeResp({})
+        def get(self, url, headers):
+            token.cancel()
+            return FakeResp({"status": "IN_PROGRESS", "stream": []})
+
+    monkeypatch.setattr(rc, "_http", lambda: FakeHttp())
+    monkeypatch.setattr(httpx, "Client", FakeHttp)
+    client = rc.HttpRunPodClient(endpoint_id="ep", api_key="k", poll_interval=0)
+    try:
+        list(client.stream_run({"input": {}}, cancel_token=token))
+        raise AssertionError("expected JobCancelled")
+    except JobCancelled:
+        pass
+    assert any(str(u).endswith("/cancel/job123") for u in posted)

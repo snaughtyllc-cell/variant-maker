@@ -7,6 +7,8 @@ interface GenerateButtonProps {
   onClick: () => void;
   disabled?: boolean;
   busy?: boolean;
+  jobId?: string | null;
+  complete?: boolean;
 }
 
 export function GenerateButton({
@@ -15,6 +17,8 @@ export function GenerateButton({
   onClick,
   disabled,
   busy,
+  jobId,
+  complete,
 }: GenerateButtonProps) {
   const total = totalVariants(fileCount, perVideo);
   const isDisabled = disabled || busy || fileCount === 0;
@@ -47,9 +51,13 @@ export function GenerateButton({
         transition: "opacity 0.15s, background 0.15s, box-shadow 0.15s",
       }}
     >
-      {busy ? "Generating…" : "Generate"}
+      {busy ? "Generating…" : jobId ? (complete ? "New run first" : "Generating…") : "Generate"}
       <small style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85 }}>
-        {busy ? "in progress" : `${total} variant${total !== 1 ? "s" : ""}`}
+        {busy || (jobId && !complete)
+          ? "in progress — Cancel on the right if this was a mistake"
+          : jobId && complete
+            ? "New run clears this pack"
+            : `${total} variant${total !== 1 ? "s" : ""}`}
       </small>
     </button>
   );

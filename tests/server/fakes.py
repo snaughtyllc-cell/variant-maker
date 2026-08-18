@@ -23,12 +23,16 @@ class FakeRunner:
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
-            quality_mode: str = "fast") -> SourceResult:
+            quality_mode: str = "fast",
+            cancel_token=None) -> SourceResult:
         self.last_quality_mode = quality_mode
         self.last_allow_creative_escalate = allow_creative_escalate
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):
+            if cancel_token is not None and cancel_token.is_set():
+                from variant_maker.server.cancel import JobCancelled
+                raise JobCancelled()
             status = self._status(i)
             fname = f"v{i:02d}.mp4"
             on_event(VariantEvent(source_id=source_id, index=i, state="rendering"))
@@ -90,7 +94,7 @@ class FakeRunPodClient:
     def __init__(self, chunks: list[dict]) -> None:
         self._chunks = chunks
 
-    def stream_run(self, payload: dict):
+    def stream_run(self, payload: dict, cancel_token=None):
         yield from self._chunks
 
 
@@ -102,7 +106,7 @@ class LoopbackRunPodClient:
         self._store = store
         self._work_dir = work_dir
 
-    def stream_run(self, payload: dict):
+    def stream_run(self, payload: dict, cancel_token=None):
         yield from process_job(payload["input"], self._store, work_dir=self._work_dir)
 
 

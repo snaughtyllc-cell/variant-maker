@@ -38,7 +38,8 @@ class RunPodServerlessRunner:
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
-            quality_mode: str | None = None) -> SourceResult:
+            quality_mode: str | None = None,
+            cancel_token=None) -> SourceResult:
         basename = os.path.basename(source_path)
         source_key = f"inputs/{source_id}/{basename}"
         self._store.put(source_key, source_path)
@@ -61,7 +62,7 @@ class RunPodServerlessRunner:
 
         variants_meta: list[dict] = []
         manifest_key = None
-        for chunk in self._client.stream_run(payload):
+        for chunk in self._client.stream_run(payload, cancel_token=cancel_token):
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 on_event(VariantEvent(

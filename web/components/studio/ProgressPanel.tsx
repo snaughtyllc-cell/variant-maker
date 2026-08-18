@@ -1,11 +1,24 @@
 "use client";
+import { useState } from "react";
 import { useRun } from "@/lib/runStore";
+import { cancelJob } from "@/lib/api";
 import { runDeliveredNone } from "@/lib/progress";
 import { liveRunSubcopy } from "@/lib/hqWaitCopy";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
   const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const [cancelling, setCancelling] = useState(false);
+
+  async function handleCancel() {
+    if (!jobId || complete || cancelling) return;
+    setCancelling(true);
+    try {
+      await cancelJob(jobId);
+    } catch {
+      // Poll will still close the job; keep the button from double-firing.
+    }
+  }
 
   // Empty state — no job running
   if (!jobId) {
@@ -66,8 +79,11 @@ export function ProgressPanel() {
   const sources = Object.values(progress.bySource);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
+  const cancelled = Boolean(failed && /cancelled/i.test(failed));
   const headline = failed
-    ? "Run lost"
+    ? cancelled
+      ? "Cancelled"
+      : "Run lost"
     : complete
       ? emptyFail
         ? "No variants"
@@ -78,7 +94,7 @@ export function ProgressPanel() {
     : complete
       ? emptyFail
         ? "The job ended without any playable variants. Try Fast (not HQ) and a smaller 1080p file."
-        : "All variants done — open Gallery"
+        : "All variants done — open Gallery, or New run for another pack"
       : liveRunSubcopy(qualityMode);
 
   return (
@@ -103,6 +119,24 @@ export function ProgressPanel() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {jobId && !complete && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelling}
+              style={{
+                background: "#2a0e0e",
+                border: "1px solid #5a1a1a",
+                color: "var(--color-red)",
+                borderRadius: 8,
+                padding: "6px 10px",
+                fontSize: 12,
+                cursor: cancelling ? "wait" : "pointer",
+              }}
+            >
+              {cancelling ? "Stopping…" : "Cancel"}
+            </button>
+          )}
           {jobId && (
             <button
               type="button"

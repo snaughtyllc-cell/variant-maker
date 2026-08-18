@@ -11,6 +11,23 @@ describe("url builders use relative /api", () => {
   });
 });
 
+describe("cancelJob", () => {
+  it("POSTs /api/jobs/:id/cancel", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 1, created_utc: "", state: "cancelled",
+        error: "Cancelled — New run when you want another pack.",
+        sources: [],
+      }), { status: 200 }),
+    );
+    const out = await api.cancelJob("j1");
+    expect(out.state).toBe("cancelled");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/jobs/j1/cancel");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+});
+
 describe("createJob posts multipart with files + count", () => {
   it("sends FormData to /api/jobs", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

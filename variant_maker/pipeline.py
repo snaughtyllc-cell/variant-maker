@@ -127,6 +127,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
     os.makedirs(out_dir, exist_ok=True)
 
     def _render_one(i: int) -> VariantRecord:
+        token = config.get("cancel_token")
+        if token is not None and token.is_set():
+            from .server.cancel import JobCancelled
+            raise JobCancelled()
         vseed, fname, path = _prep(i)
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)

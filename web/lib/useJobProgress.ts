@@ -50,7 +50,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       }
     }
   }
-  if (detail.state === "done") {
+  if (detail.state === "done" || detail.state === "cancelled") {
     const cleared: RunProgress = {
       ...next,
       complete: true,
@@ -101,7 +101,7 @@ export function useJobProgress(
         const next = applyJobDetail(runRef.current, detail);
         runRef.current = next;
         setRun(next);
-        if (detail.state === "done") es.close();
+        if (detail.state === "done" || detail.state === "cancelled") es.close();
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
         if (msg.startsWith("404")) {

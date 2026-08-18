@@ -6,15 +6,14 @@ import {
 } from "@/lib/variantStepperCopy";
 
 describe("variantStepperCopy", () => {
-  it("defaults Fast packs to 10, with room to reach the usual ~20", () => {
-    expect(DEFAULT_PER_VIDEO).toBe(10);
+  it("defaults Fast packs to 20", () => {
+    expect(DEFAULT_PER_VIDEO).toBe(20);
     expect(MAX_PER_VIDEO).toBeGreaterThanOrEqual(20);
   });
 
-  it("on Fast, mentions the usual ~20 pack and tapping up", () => {
+  it("on Fast, says this is the usual pack", () => {
     const hint = variantStepperHint("fast");
-    expect(hint).toMatch(/~20/);
-    expect(hint).toMatch(/tap/i);
+    expect(hint).toMatch(/usual pack/i);
     expect(hint).not.toMatch(/long|slow|wait|kill|minute/i);
   });
 

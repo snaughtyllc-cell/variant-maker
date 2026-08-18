@@ -65,6 +65,31 @@ def test_get_unknown_job_404(tmp_path):
     assert client.get("/api/jobs/nope").status_code == 404
 
 
+def test_cancel_job_stops_running_pack(tmp_path):
+    from tests.server.test_jobs import _PausingRunner
+
+    runner = _PausingRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    client = TestClient(create_app(store))
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "2"},
+    ).json()["job_id"]
+    assert runner.v1_done.wait(timeout=5)
+    resp = client.post(f"/api/jobs/{job_id}/cancel")
+    assert resp.status_code == 200
+    store.wait(job_id, timeout=5)
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["state"] == "cancelled"
+    assert "Cancelled" in (detail["error"] or "")
+
+
+def test_cancel_unknown_job_404(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.post("/api/jobs/nope/cancel").status_code == 404
+
+
 def test_sse_events_stream_until_job_done(tmp_path):
     client, store = _client(tmp_path)
     job_id = client.post("/api/jobs",

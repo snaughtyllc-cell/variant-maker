@@ -22,9 +22,6 @@ export default function StudioPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A run is "active" when there's a jobId and it's not yet complete
-  const runActive = !!jobId && !complete;
-
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
     if (blocked) {
@@ -49,7 +46,7 @@ export default function StudioPage() {
   }
 
   async function handleGenerate() {
-    if (busy || runActive || files.length === 0) return;
+    if (busy || jobId || files.length === 0) return;
     setError(null);
     setBusy(true);
     try {
@@ -110,8 +107,10 @@ export default function StudioPage() {
             fileCount={files.length}
             perVideo={perVideo}
             onClick={handleGenerate}
-            disabled={runActive}
+            disabled={!!jobId}
             busy={busy}
+            jobId={jobId}
+            complete={complete}
           />
         </div>
 

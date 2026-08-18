@@ -9,6 +9,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 
+from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .events import VariantEvent
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
@@ -66,7 +67,9 @@ class Job:
 def _public_job_error(exc: BaseException) -> str:
     """Short UI string. RunPod FAILED after ~20 min is the HQ hang, not a mystery freeze."""
     raw = str(exc)
-    if "ended: FAILED" in raw or "ended: CANCELLED" in raw or "TIMED_OUT" in raw.upper():
+    if "ended: CANCELLED" in raw:
+        return USER_CANCEL_MSG
+    if "ended: FAILED" in raw or "TIMED_OUT" in raw.upper():
         return (
             "GPU job failed or hit the 20-minute limit. That HQ run is over — "
             "New run, then Fast for the usual pack."
@@ -87,6 +90,7 @@ class JobStore:
         self._lock = threading.Lock()
         self._done: dict[str, threading.Event] = {}
         self._source_index: dict[str, tuple[str, JobSource]] = {}
+        self._cancel: dict[str, CancelToken] = {}
 
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
@@ -120,15 +124,29 @@ class JobStore:
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
                    quality_mode=normalize_quality_mode(quality_mode))
+        token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
             self._done[job_id] = threading.Event()
+            self._cancel[job_id] = token
             for source in sources:
                 self._source_index[source.source_id] = (job_id, source)
-        threading.Thread(target=self._run_job, args=(job,), daemon=True).start()
+        threading.Thread(target=self._run_job, args=(job, token), daemon=True).start()
         return job
 
-    def _run_job(self, job: Job) -> None:
+    def cancel(self, job_id: str) -> Job | None:
+        """Stop a running job. Finished jobs are returned unchanged (204-style no-op)."""
+        job = self.get(job_id)
+        if job is None:
+            return None
+        token = self._cancel.get(job_id)
+        if token is not None:
+            token.cancel()
+        if job.state == "running":
+            job.error = USER_CANCEL_MSG
+        return job
+
+    def _run_job(self, job: Job, token: CancelToken) -> None:
         try:
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
@@ -152,6 +170,8 @@ class JobStore:
                         break
 
             for source in job.sources:
+                if token.is_set():
+                    raise JobCancelled()
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
                 in_path = maybe_normalize_upload(in_path)
                 source.filename = os.path.basename(in_path)
@@ -161,6 +181,7 @@ class JobStore:
                     source_id=source.source_id, on_event=on_event,
                     allow_creative_escalate=job.allow_creative_escalate,
                     quality_mode=job.quality_mode,
+                    cancel_token=token,
                 )
                 source.variants = [
                     VariantInfo(
@@ -173,14 +194,19 @@ class JobStore:
                     )
                     for v in result.variants
                 ]
+        except JobCancelled:
+            job.error = USER_CANCEL_MSG
         except Exception as exc:
             # Uncaught pipeline/ffmpeg/RunPod errors previously killed the worker thread
             # while finally still marked the job "done" with 0 variants — UI looked
             # like a silent failure. Log clearly; job still closes in finally.
-            job.error = _public_job_error(exc)
-            print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
+            if token.is_set():
+                job.error = USER_CANCEL_MSG
+            else:
+                job.error = _public_job_error(exc)
+                print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
-            job.state = "done"
+            job.state = "cancelled" if token.is_set() else "done"
             self._done[job.job_id].set()
 
     def get(self, job_id: str) -> Job | None:
