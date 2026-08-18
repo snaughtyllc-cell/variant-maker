@@ -13,9 +13,14 @@ class ObjectStore(Protocol):
 
 def _make_client(*, endpoint_url: str, access_key: str, secret_key: str, region: str):
     import boto3  # lazy: only needed when a real S3 store is constructed
+    from botocore.config import Config
+    extra = {}
+    style = os.environ.get("R2_ADDRESSING_STYLE", "").strip().lower()
+    if style in ("virtual", "path"):
+        extra["config"] = Config(s3={"addressing_style": style})
     return boto3.client(
         "s3", endpoint_url=endpoint_url, aws_access_key_id=access_key,
-        aws_secret_access_key=secret_key, region_name=region,
+        aws_secret_access_key=secret_key, region_name=region, **extra,
     )
 
 
