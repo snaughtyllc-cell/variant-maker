@@ -67,3 +67,30 @@ def clamp_crop_keep(crop_keep: float, mask_edge_frac: float) -> float:
     if edge >= 1.0:
         return 1.0
     return min(1.0, max(keep, 1.0 - edge))
+
+
+def apply_to_params(
+    params: dict,
+    *,
+    mask_edge_frac: float | None = None,
+    mask_coverage: float | None = None,
+) -> dict:
+    """Clamp crop against a protection mask. Identity when no mask is available.
+
+    Does not mutate ``params`` (copies the video dict when applying). Without an
+    explicit ``mask_edge_frac``, calls ``build_protection_mask()``; None → skip.
+    ``mask_coverage`` is optional: when given and ``mask_blocks_crop``, crop is
+    disabled (keep=1.0); otherwise coverage gating is skipped.
+    """
+    if mask_edge_frac is None:
+        if build_protection_mask() is None:
+            return params
+        return params
+
+    video = dict(params.get("video") or {})
+    keep = video.get("crop_keep", 1.0)
+    if mask_coverage is not None and mask_blocks_crop(mask_coverage):
+        video["crop_keep"] = 1.0
+    else:
+        video["crop_keep"] = clamp_crop_keep(keep, mask_edge_frac)
+    return {**params, "video": video}

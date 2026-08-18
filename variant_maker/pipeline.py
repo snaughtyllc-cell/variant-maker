@@ -104,10 +104,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
     # --dry-run: print the plan + commands, render nothing, write nothing.
     if dry_run:
+        from .neural import protect
         records = []
         for i in range(1, count + 1):
             vseed, fname, path = _prep(i)
             params = sample(preset, vseed, rubberband=rubberband)
+            params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             _, cmd = render_variant(src, params, platform, path, dry_run=True)
@@ -124,6 +126,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
 
         def attempt(strength: float, use_preset) -> dict:
+            from .neural import protect
             nonlocal attempt_no, last_strength
             attempt_no += 1
             # Record the EFFECTIVE strength (post-clamp) — the value `sample` actually
@@ -134,6 +137,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
             )
+            params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:

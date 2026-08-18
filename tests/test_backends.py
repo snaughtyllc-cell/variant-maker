@@ -52,6 +52,18 @@ def test_cuda_argv_carries_io_and_scale():
     assert argv[argv.index("-s") + 1] == "4"
 
 
+def test_cuda_argv_omits_fp32_by_default(monkeypatch):
+    monkeypatch.delenv("VARIANT_MAKER_ESRGAN_FP32", raising=False)
+    argv = backends.CudaRealEsrganBackend().argv("in/", "out/", scale=4, model="realesrgan-x4plus")
+    assert "--fp32" not in argv
+
+
+def test_cuda_argv_includes_fp32_when_env_set(monkeypatch):
+    monkeypatch.setenv("VARIANT_MAKER_ESRGAN_FP32", "1")
+    argv = backends.CudaRealEsrganBackend().argv("in/", "out/", scale=4, model="realesrgan-x4plus")
+    assert "--fp32" in argv
+
+
 def test_cuda_unmapped_model_passes_through():
     b = backends.CudaRealEsrganBackend()
     argv = b.argv("in/", "out/", scale=4, model="some-custom-x4")

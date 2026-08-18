@@ -73,6 +73,7 @@ Repo: `snaughtyllc-cell/variant-maker`, branch `cursor/railway-runpod-split-c975
 
 1. `docker build -f deploy/runpod/Dockerfile -t <registry>/variant-cp:latest .`
    Build context = repo root. This image is large (CUDA + Real-ESRGAN weights).
+   After rebuild, confirm `ffmpeg -filters | grep rubberband` (Phase 13 pitch).
 2. `docker push <registry>/variant-cp:latest`
    Use RunPod’s container registry, GHCR, or Docker Hub — whatever this account already uses.
 3. Create a RunPod **Serverless** endpoint from that image:
@@ -80,15 +81,14 @@ Repo: `snaughtyllc-cell/variant-maker`, branch `cursor/railway-runpod-split-c975
      `python -u /app/deploy/runpod/cp_handler.py`
    - GPU: **RTX 4090 / L40S** (~$1–2/hr while running). Proven path is 4090.
      Skip L4 if HQ should feel faster. **Do not** pin Blackwell PRO 6000 MIG (`sm_120`).
-     Min/active workers stay **0** (or 1 only during a work session). A $2 card does
-     not 20× a serial HQ batch; raise **execution timeout** (e.g. 3600s) only for
-     HQ experiments, not as the way to ship 20 HQ variants.
+     A $2 card does not 20× a serial HQ batch; raise **execution timeout to 3600s**
+     for HQ experiments, not as the way to ship 20 HQ variants.
    - **FlashBoot: on**
-   - **Active / min workers: 1** for VA hours (0 boot). Use 0 only if you accept a
-     first-job wait after idle.
+   - **Active / min workers: 0** (accept a first-job wait after idle). Do not keep
+     a billed GPU warm overnight.
    - **Max workers: 2**
    - **Idle timeout: 600 seconds** (10 min). Default 5s will cold-start every clip.
-   - **Execution timeout: 1200 seconds** (a batch can exceed 10 min).
+   - **Execution timeout: 3600 seconds** for HQ experiments (a batch can exceed 10 min).
    - Endpoint env (same R2_* as Railway):
      `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`
 4. Reply with: image tag, endpoint **id**, GPU type, min workers, idle timeout.

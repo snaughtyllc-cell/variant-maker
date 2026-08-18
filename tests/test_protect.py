@@ -84,3 +84,21 @@ def test_clamp_crop_keep_does_not_punch_into_protected_edge():
 
 def test_clamp_crop_keep_full_edge_mask_disables_crop():
     assert protect.clamp_crop_keep(0.88, 1.0) == 1.0
+
+
+def test_apply_to_params_identity_when_mask_is_none(monkeypatch):
+    monkeypatch.setattr(protect, "build_protection_mask", lambda *a, **k: None)
+    params = {"video": {"crop_keep": 0.90}, "audio": {}}
+    out = protect.apply_to_params(params)
+    assert out is params
+    assert out["video"]["crop_keep"] == 0.90
+
+
+def test_apply_to_params_raises_crop_keep_with_mask_edge_frac():
+    params = {"video": {"crop_keep": 0.90}, "audio": {}}
+    out = protect.apply_to_params(params, mask_edge_frac=0.05)
+    assert out["video"]["crop_keep"] >= 0.95
+    assert out["video"]["crop_keep"] <= 1.0
+    assert params["video"]["crop_keep"] == 0.90
+    assert out is not params
+    assert out["video"] is not params["video"]

@@ -127,7 +127,12 @@ class CudaRealEsrganBackend(UpscaleBackend):
              fmt: str = "png") -> list[str]:
         weight = _PYTORCH_MODEL.get(model, model)
         cmd = [self.python, self.script, "-n", weight, "-i", in_dir, "-o", out_dir,
-               "-s", str(scale), "--fp32"]
+               "-s", str(scale)]
+        # Half precision by default (faster HQ). Opt into --fp32 via env once needed.
+        if os.environ.get("VARIANT_MAKER_ESRGAN_FP32", "").strip().lower() in {
+            "1", "true", "yes",
+        }:
+            cmd.append("--fp32")
         if self.weights_dir:
             cmd += ["--model_path", os.path.join(self.weights_dir, weight + ".pth")]
         return cmd

@@ -60,6 +60,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "uniq_strengths": job_input.get("uniq_strengths", list(UNIQ_STRENGTHS)),
         "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),
         "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
+        "auto_tune": job_input.get("auto_tune", False),
+        "rubberband": job_input.get("rubberband"),
     }
 
     q: queue.Queue = queue.Queue()

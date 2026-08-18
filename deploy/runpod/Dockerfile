@@ -15,13 +15,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ffmpeg WITH libvmaf — the spatial-corruption guard needs the libvmaf filter, which the
 # distro ffmpeg lacks. Use BtbN's GPL static build: it is reachable from CI, unlike the
-# John Van Sickle host, and bundles libvmaf.
+# John Van Sickle host, and bundles libvmaf. BtbN GPL is expected to include rubberband
+# (Phase 13 pitch); do not hard-fail the image if that filter is missing.
 RUN cd /tmp && wget -q -O ffmpeg.tar.xz \
       https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
     tar xf ffmpeg.tar.xz && \
     cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ && \
     rm -rf /tmp/ffmpeg* && \
     test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
+RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband || echo "WARN: no rubberband filter"
+
+# RIFE path only — do not wget the ~411MB ubuntu zip. Bake rife-ncnn-vulkan + rife-v4.6
+# models here later; until then interpolate.available() is False and HQ uses ffmpeg tempo.
+RUN mkdir -p /opt/rife
+ENV VARIANT_MAKER_RIFE_DIR=/opt/rife
 
 # Real-ESRGAN stack. CRITICAL: pin numpy<2 — installing realesrgan/basicsr pulls numpy 2.x,
 # which torch 2.1 (built against numpy 1.x) cannot use ("Numpy is not available"). Then patch
