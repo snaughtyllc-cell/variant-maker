@@ -9,9 +9,28 @@ secrets (no RunPod key, no Railway token, no Docker). Paste these in order into
 **Codex** (Railway + the GPU pod). Reply here with the endpoint id when Prompt A
 and B are done — do not paste API keys.
 
-Team UX: keep **one warm worker** (`min workers = 1`) so Generate is not a cold
-start, and `VARIANT_QUALITY_MODE=fast` so the worker matches today’s pod speed
-(FFmpeg + uniqueness, not Real-ESRGAN on every clip). HQ is a later flip.
+Team UX: Telegram-style “upload → start → done” is a **warm GPU**, not scale-to-zero
+magic. Endpoint settings below copy that: FlashBoot on, **idle timeout 10 min**
+(so the next clip does not cold-start), active workers 0 overnight / 1 if you
+want zero wait, `VARIANT_QUALITY_MODE=fast`.
+
+## How long a boot actually takes
+
+| Situation | What you feel |
+|---|---|
+| **True cold start** (image pull, CUDA, our fat Real-ESRGAN image, min workers = 0, no FlashBoot snapshot) | **~30s–2+ min** before the first frame encodes. Our worker image is large. |
+| **FlashBoot restore** (same host still has a snapshot) | **~0.2–8s** in RunPod’s published numbers. Not guaranteed if they schedule a new host. |
+| **Active workers = 1** (GPU already up) | **0 boot.** Generate time is only encode + uniqueness (seconds to a couple minutes per batch). |
+| Default **idle timeout = 5s** | Worker dies between clips. Every VA job looks “slow” even after the first. **Do not ship this.** |
+
+Those Telegram bots are not running one GPU that sleeps. They keep a **pool of warm workers** (or idle timeout long enough that the next upload hits a live box). We do the same at team scale: one worker that stays up while people are dropping files.
+
+**Do not build a “Turn GPU on + countdown” as the main path.** Extra click, people forget, first Generate still waits. Better:
+
+1. **Open Studio / drop a file** → we ping the endpoint (warmup overlaps with picking files). Later UI work; not required if idle timeout is 10 min and someone already generated once.
+2. Optional night switch: active workers **0** after hours, **1** during the workday (or a Start GPU control for that). First person in the morning waits one cold start; everyone after is instant.
+
+Overnight with active workers = 0 you pay **$0 GPU**. Daytime with 1 warm worker you pay GPU-hours, but **not** a Studio-on-GPU pod, and VAs get the Telegram feel.
 
 ---
 
@@ -60,11 +79,16 @@ Repo: `snaughtyllc-cell/variant-maker`, branch `cursor/railway-runpod-split-c975
    - **Start command (required — override image CMD):**
      `python -u /app/deploy/runpod/cp_handler.py`
    - GPU: RTX 4090 or similar (proven path).
-   - **Min workers = 1** (warm GPU so VAs are not waiting on cold start).
-   - Max workers: 1–2 for now.
+   - **FlashBoot: on**
+   - **Active / min workers: 1** for VA hours (0 boot). Use 0 only if you accept a
+     first-job wait after idle.
+   - **Max workers: 2**
+   - **Idle timeout: 600 seconds** (10 min). Default 5s will cold-start every clip.
+   - **Execution timeout: 1200 seconds** (a batch can exceed 10 min).
    - Endpoint env (same R2_* as Railway):
      `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`
-4. Reply with: image tag, endpoint **id**, GPU type, min workers. **Do not paste the API key.**
+4. Reply with: image tag, endpoint **id**, GPU type, min workers, idle timeout.
+   **Do not paste the API key.**
 
 ---
 
