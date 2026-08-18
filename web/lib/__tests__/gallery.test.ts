@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterSources, sortSources } from "@/lib/gallery";
+import { filterSources, sortSources, zipEmptyCopy } from "@/lib/gallery";
 const mk = (id: string, shortfall: number, created_utc = "") => ({
   source_id: id, filename: id, requested: 5, delivered: 5 - shortfall, shortfall,
   variants: [], created_utc,
@@ -16,5 +16,8 @@ describe("gallery helpers", () => {
       { ...mk("zebra", 0), created_utc: "2026-08-18T12:00:00Z" },
     ];
     expect(sortSources(all, "newest").map(s => s.source_id)).toEqual(["zebra", "apple"]);
+  });
+  it("explains an empty zip as missing GPU copies, not a Files app glitch", () => {
+    expect(zipEmptyCopy()).toMatch(/copied back from the GPU/i);
   });
 });

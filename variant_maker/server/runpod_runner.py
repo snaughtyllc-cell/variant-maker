@@ -125,3 +125,23 @@ class RunPodServerlessRunner:
         if manifest_key:
             self._store.get(manifest_key, manifest_path)
         return SourceResult(variants=variants, manifest_path=manifest_path)
+
+    def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str]) -> int:
+        """Pull variant files already in object storage (GPU finished, Studio missed the copy)."""
+        os.makedirs(out_dir, exist_ok=True)
+        got = 0
+        for raw in filenames:
+            name = os.path.basename(raw)
+            if not name or name in (".", ".."):
+                continue
+            dest = os.path.join(out_dir, name)
+            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+                got += 1
+                continue
+            try:
+                self._store.get(f"outputs/{source_id}/{name}", dest)
+            except Exception:
+                continue
+            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+                got += 1
+        return got

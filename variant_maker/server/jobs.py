@@ -191,8 +191,25 @@ def _job_from_dict(data: dict) -> Job:
     )
 
 
-def _source_finished(source: JobSource) -> bool:
-    return len(source.variants) >= source.requested > 0
+def _source_finished(source: JobSource, *, ws: Workspace | None = None,
+                     job_id: str | None = None) -> bool:
+    """Done only when we have the requested slots AND ok files are on disk.
+
+    Progress events can fill `source.variants` before RunPod copies mp4s back.
+    Treating that as finished skipped the copy on Studio restart — Gallery
+    showed 5/5 with black thumbs and a 22-byte zip.
+    """
+    if len(source.variants) < source.requested or source.requested <= 0:
+        return False
+    if ws is None or not job_id:
+        return True
+    for v in source.variants:
+        if v.status != "ok" or not v.filename:
+            continue
+        path = ws.variant_path(job_id, source.source_id, v.filename)
+        if not os.path.isfile(path):
+            return False
+    return True
 
 
 class JobStore:
@@ -303,7 +320,11 @@ class JobStore:
             for source in job.sources:
                 if token.is_set():
                     raise JobCancelled()
-                if skip_finished and _source_finished(source):
+                if skip_finished:
+                    self._pull_missing_outputs(source.source_id)
+                if skip_finished and _source_finished(
+                    source, ws=self._ws, job_id=job.job_id,
+                ):
                     continue
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
                 in_path = maybe_normalize_upload(in_path)
@@ -390,6 +411,8 @@ class JobStore:
                 self._cancel[job.job_id] = token
             else:
                 self._done[job.job_id].set()
+        for source in job.sources:
+            self._pull_missing_outputs(source.source_id)
         if resume:
             threading.Thread(
                 target=self._run_job, args=(job, token),
@@ -523,7 +546,24 @@ class JobStore:
             return None
         job_id, _ = loc
         path = self._ws.variant_path(job_id, source_id, filename)
-        return path if os.path.exists(path) else None
+        if os.path.isfile(path):
+            return path
+        self._pull_missing_outputs(source_id)
+        return path if os.path.isfile(path) else None
+
+    def _pull_missing_outputs(self, source_id: str) -> None:
+        """Copy variant mp4s from object storage when job.json has them but disk doesn't."""
+        fetch = getattr(self._runner, "fetch_outputs", None)
+        if not callable(fetch):
+            return
+        loc = self._locate(source_id)
+        if loc is None:
+            return
+        job_id, source = loc
+        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
+        if not names:
+            return
+        fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
 
     def source_file(self, source_id: str) -> str | None:
         loc = self._locate(source_id)
@@ -603,14 +643,23 @@ class JobStore:
         if loc is None:
             return None
         job_id, source = loc
-        ok_variants = [v for v in source.variants if v.status == "ok"]
-        if not ok_variants:
+        self._pull_missing_outputs(source_id)
+        members: list[tuple[str, str]] = []
+        for v in source.variants:
+            if v.status != "ok" or not v.filename:
+                continue
+            fpath = self.find_variant(source_id, v.filename)
+            if fpath:
+                members.append((fpath, os.path.basename(v.filename)))
+        if not members:
             return None
         out_dir = self._ws.source_out_dir(job_id, source_id)
+        os.makedirs(out_dir, exist_ok=True)
         zip_path = os.path.join(out_dir, f"{source_id}_variants.zip")
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for v in ok_variants:
-                fpath = os.path.join(out_dir, v.filename)
-                if os.path.exists(fpath):
-                    zf.write(fpath, arcname=v.filename)
+        tmp_path = zip_path + ".tmp"
+        # STORED: mp4s are already compressed; iOS Files is picky about deflate-empty archives.
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_STORED) as zf:
+            for fpath, name in members:
+                zf.write(fpath, arcname=name)
+        os.replace(tmp_path, zip_path)
         return zip_path

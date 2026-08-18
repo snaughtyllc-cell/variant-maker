@@ -1,10 +1,12 @@
+import io
 import json
+import os
 import zipfile
 
 from fastapi.testclient import TestClient
 
 from variant_maker.server.app import create_app
-from variant_maker.server.jobs import JobStore
+from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
 from variant_maker.server.workspace import Workspace
 from tests.server.fakes import FakeRunner
 
@@ -366,6 +368,72 @@ def test_zip_contains_ok_variants(tmp_path):
     assert set(zf.namelist()) == ok_filenames
 
     assert client.get("/api/sources/nope/zip").status_code == 404
+
+
+def test_zip_404_when_ok_variants_are_missing_from_disk(tmp_path):
+    """Don't ship a 22-byte empty zip when Gallery metadata exists but files never landed."""
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "2"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    loc = store._locate(sid)
+    assert loc is not None
+    job_id, source = loc
+    out_dir = store._ws.source_out_dir(job_id, sid)
+    for v in source.variants:
+        path = os.path.join(out_dir, v.filename)
+        if os.path.isfile(path):
+            os.remove(path)
+    resp = client.get(f"/api/sources/{sid}/zip")
+    assert resp.status_code == 404
+    assert len(resp.content) != 22
+
+
+def test_zip_and_file_routes_pull_missing_outputs_from_object_store(tmp_path):
+    """GPU finished (job.json has variants) but Railway never copied mp4s — fetch from R2."""
+    from tests.server.fakes import FakeObjectStore
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+    from tests.server.fakes import FakeRunPodClient
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner)
+    client = TestClient(create_app(store))
+
+    job_id = "jobpull01"
+    source_id = "srcpull01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    os.makedirs(out_dir, exist_ok=True)
+    payload = b"FAKE-MP4-BYTES-NOT-EMPTY"
+    staged = tmp_path / "staged.mp4"
+    staged.write_bytes(payload)
+    blobstore.put(f"outputs/{source_id}/v01.mp4", str(staged))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-08-18T00:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="clip.mp4", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="v01.mp4", status="ok",
+                quality={"vmaf": 99.0},
+            )],
+        )],
+        state="done",
+    )
+    store._install_hydrated_job(job)
+
+    file_resp = client.get(f"/api/variants/{source_id}/v01.mp4")
+    assert file_resp.status_code == 200
+    assert file_resp.content == payload
+    zip_resp = client.get(f"/api/sources/{source_id}/zip")
+    assert zip_resp.status_code == 200
+    assert len(zip_resp.content) > 22
+    zf = zipfile.ZipFile(io.BytesIO(zip_resp.content))
+    assert zf.namelist() == ["v01.mp4"]
 
 
 def test_cli_build_app_serves_health(tmp_path):

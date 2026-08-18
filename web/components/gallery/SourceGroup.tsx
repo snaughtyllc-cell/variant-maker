@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, sourceUrl, sourceZipUrl } from "@/lib/api";
+import { zipEmptyCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
 import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
 import { VariantCard } from "./VariantCard";
@@ -20,6 +21,7 @@ export function SourceGroup({
 }: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
+  const [zipMsg, setZipMsg] = useState<string | null>(null);
 
   const hasShortfall = source.shortfall > 0;
   const fullDelivery = source.shortfall === 0;
@@ -35,6 +37,35 @@ export function SourceGroup({
   // Spatial checks summary
   const spatialCount = source.variants.filter(v => v.quality.spatial_ok === true).length;
   const allSpatial = spatialCount === source.variants.length && source.variants.length > 0;
+
+  async function handleZip(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (stillRunning) return;
+    setZipMsg(null);
+    try {
+      const res = await fetch(sourceZipUrl(source.source_id));
+      if (!res.ok) {
+        setZipMsg(zipEmptyCopy());
+        return;
+      }
+      const blob = await res.blob();
+      if (blob.size < 64) {
+        setZipMsg(zipEmptyCopy());
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${source.source_id}_variants.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch {
+      setZipMsg(zipEmptyCopy());
+    }
+  }
 
   async function handleRegenerate() {
     if (regenLoading || stillRunning) return;
@@ -175,11 +206,11 @@ export function SourceGroup({
               {sourceSelectLabel}
             </button>
           )}
-          {source.delivered > 0 && (
+          {source.delivered > 0 && !stillRunning && (
             <a
               href={sourceZipUrl(source.source_id)}
               download
-              onClick={(e) => e.stopPropagation()}
+              onClick={handleZip}
               style={{ fontSize: 12, color: "var(--color-violet-l)", textDecoration: "none" }}
             >
               ⬇ Download ZIP
@@ -195,6 +226,19 @@ export function SourceGroup({
       </div>
 
       {/* Shortfall bar — ONLY when shortfall > 0 */}
+      {zipMsg && (
+        <div
+          style={{
+            padding: "10px 16px",
+            background: "#1c1608",
+            borderBottom: "1px solid #3a2c10",
+            fontSize: 12.5,
+            color: "#ffd08a",
+          }}
+        >
+          ⚠ {zipMsg}
+        </div>
+      )}
       {open && hasShortfall && shortfallMsg && (
         <div
           style={{
