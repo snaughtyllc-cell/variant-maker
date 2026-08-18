@@ -5,6 +5,7 @@ import { FileList } from "@/components/studio/FileList";
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
+import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations } from "@/lib/files";
 import { createJob } from "@/lib/api";
@@ -81,6 +82,8 @@ export default function StudioPage() {
         >
           1 · Source videos
         </p>
+
+        <EngineWaitNote />
 
         <DropZone onFiles={handleFiles} />
 

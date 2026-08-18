@@ -51,6 +51,27 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 4. Optional: “mark from folder” — pick a Drive file name, set `flagged`.
 5. Export or query: flagged rows → JSON/CSV for later tuner work. Promote to a small DB only if Sheets becomes the bottleneck.
 
+## Filename / Repurpose.io
+
+There is **no Repurpose.io API**. After Send to Drive, VAs (or Repurpose) **rename
+the file to the caption text**. Matching on VaryForge’s original filename will fail.
+
+Do **not** key learning on the Drive display name after captioning.
+
+Stable identity (use these, in order):
+
+1. **Drive file id** captured at upload (`drop_url` / file id on the ledger row).
+   Survives rename if they keep the same file.
+2. **VaryForge variant id** (`job_id` + `source_id` + index) in the sheet and,
+   if we need a human handle in the folder, a **short id in the filename prefix**
+   (e.g. `v01_8a3f1c2d__`) that they can leave on or we strip into caption metadata
+   before Repurpose — never rely on the caption becoming the only name.
+3. Content hash of the bytes we uploaded (if the file is replaced, hash changes).
+
+Auto-checking Instagram remains optional later (no official “was this flagged”
+API we own). Until then: unlabeled = pass; someone marks **flagged** on the
+ledger row (by Drive file id, not by caption title).
+
 ## Invariants
 
 - Color / quality / uniqueness pipelines stay the source of **what we rendered**. Outcomes are labels on those rows.
