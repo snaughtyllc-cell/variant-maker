@@ -59,10 +59,31 @@ class RunPodServerlessRunner:
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "auto_tune": limits.get("auto_tune", True),
         }}
+        return self._consume_stream(
+            self._client.stream_run(payload, cancel_token=cancel_token),
+            out_dir=out_dir, source_id=source_id, on_event=on_event,
+        )
 
+    def resume_run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+                   on_event: Callable[[VariantEvent], None],
+                   allow_creative_escalate: bool = True,
+                   quality_mode: str | None = None,
+                   cancel_token=None, runpod_job_id: str) -> SourceResult:
+        """Reconnect to an in-flight RunPod job after Studio restart (no new /run)."""
+        del source_path, count, allow_creative_escalate, quality_mode
+        resume = getattr(self._client, "stream_resume", None)
+        if not callable(resume):
+            raise TypeError("RunPod client cannot resume a cloud job")
+        return self._consume_stream(
+            resume(runpod_job_id, cancel_token=cancel_token),
+            out_dir=out_dir, source_id=source_id, on_event=on_event,
+        )
+
+    def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
+                        on_event: Callable[[VariantEvent], None]) -> SourceResult:
         variants_meta: list[dict] = []
         manifest_key = None
-        for chunk in self._client.stream_run(payload, cancel_token=cancel_token):
+        for chunk in chunks:
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 on_event(VariantEvent(

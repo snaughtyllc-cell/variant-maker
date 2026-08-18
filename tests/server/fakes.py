@@ -97,6 +97,9 @@ class FakeRunPodClient:
     def stream_run(self, payload: dict, cancel_token=None):
         yield from self._chunks
 
+    def stream_resume(self, job_id: str, cancel_token=None):
+        yield from self._chunks
+
 
 class LoopbackRunPodClient:
     """Drives the REAL gpu_worker.process_job against a shared store — no network, no cloud.

@@ -1,14 +1,15 @@
 # tests/server/test_jobs.py
+import json
 import os
 import threading
 import time
 from typing import Callable
 
+from tests.server.fakes import FakeRunner
 from variant_maker.server.events import VariantEvent
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.runner import SourceResult, VariantResult
 from variant_maker.server.workspace import Workspace
-from tests.server.fakes import FakeRunner
 
 
 def _store(tmp_path, plan=None):
@@ -78,6 +79,30 @@ def test_progressive_done_carries_uniqueness_before_job_finishes(tmp_path):
     assert v.uniqueness_target == 24 / 64
     runner.gate.set()
     store.wait(job.job_id, timeout=5)
+
+
+def test_hydrate_from_disk_resumes_in_flight_job(tmp_path):
+    """Studio restart must keep the job id + already-done variants, then finish the pack."""
+    store = _store(tmp_path)
+    job = store.create_job([("clip.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    meta = os.path.join(str(tmp_path), "jobs", job.job_id, "job.json")
+    with open(meta, encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["state"] == "done"
+    data["state"] = "running"
+    data["sources"][0]["variants"] = data["sources"][0]["variants"][:1]
+    with open(meta, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    restored = store2.get(job.job_id)
+    assert restored is not None
+    assert restored.sources[0].variants[0].index == 1
+    assert store2.wait(job.job_id, timeout=5)
+    assert restored.state == "done"
+    assert len(restored.sources[0].variants) == 2
 
 
 def test_create_job_runs_in_background_and_completes(tmp_path):

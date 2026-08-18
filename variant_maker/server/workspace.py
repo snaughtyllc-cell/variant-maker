@@ -19,6 +19,9 @@ class Workspace:
         os.makedirs(out, exist_ok=True)
         return out
 
+    def job_meta_path(self, job_id: str) -> str:
+        return os.path.join(self.root, "jobs", job_id, "job.json")
+
     def variant_path(self, job_id: str, source_id: str, filename: str) -> str:
         return os.path.join(self.source_out_dir(job_id, source_id), filename)
 

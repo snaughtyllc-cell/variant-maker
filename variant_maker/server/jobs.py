@@ -9,11 +9,12 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 
+from variant_maker.normalize import maybe_normalize_upload
+
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
-from .events import VariantEvent
+from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
-from variant_maker.normalize import maybe_normalize_upload
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
 
@@ -41,6 +42,7 @@ class JobSource:
     filename: str
     requested: int
     variants: list[VariantInfo] = field(default_factory=list)
+    runpod_job_id: str | None = None
 
     @property
     def delivered(self) -> int:
@@ -80,6 +82,117 @@ def _public_job_error(exc: BaseException) -> str:
 def _now() -> str:
     return (_dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
             .isoformat().replace("+00:00", "Z"))
+
+
+def _variant_to_dict(v: VariantInfo) -> dict:
+    return {
+        "source_id": v.source_id, "index": v.index, "filename": v.filename,
+        "status": v.status, "quality": v.quality, "uniqueness": v.uniqueness,
+        "uniqueness_status": v.uniqueness_status, "uniqueness_metric": v.uniqueness_metric,
+        "uniqueness_target": v.uniqueness_target, "preset_used": v.preset_used,
+        "strength_final": v.strength_final, "escalated": v.escalated,
+        "platform_result": v.platform_result,
+    }
+
+
+def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
+    quality = data.get("quality") if isinstance(data.get("quality"), dict) else {}
+    return VariantInfo(
+        source_id=str(data.get("source_id") or source_id),
+        index=int(data.get("index") or 0),
+        filename=str(data.get("filename") or ""),
+        status=str(data.get("status") or "ok"),
+        quality=quality,
+        uniqueness=data.get("uniqueness"),
+        uniqueness_status=data.get("uniqueness_status"),
+        uniqueness_metric=data.get("uniqueness_metric"),
+        uniqueness_target=data.get("uniqueness_target"),
+        preset_used=data.get("preset_used"),
+        strength_final=data.get("strength_final"),
+        escalated=bool(data.get("escalated") or False),
+        platform_result=data.get("platform_result"),
+    )
+
+
+def _event_from_dict(data: dict) -> VariantEvent:
+    return VariantEvent(
+        source_id=str(data.get("source_id") or ""),
+        index=int(data.get("index") or 0),
+        state=str(data.get("state") or "done"),
+        attempt=int(data.get("attempt") or 0),
+        max_attempts=int(data.get("max_attempts") or 0),
+        status=data.get("status"),
+        quality=data.get("quality") if isinstance(data.get("quality"), dict) else None,
+        filename=data.get("filename"),
+        uniqueness=data.get("uniqueness"),
+        uniqueness_status=data.get("uniqueness_status"),
+        uniqueness_metric=data.get("uniqueness_metric"),
+        uniqueness_target=data.get("uniqueness_target"),
+        escalated=bool(data.get("escalated") or False),
+        preset_used=data.get("preset_used"),
+        strength_final=data.get("strength_final"),
+        platform_result=data.get("platform_result"),
+    )
+
+
+def _job_to_dict(job: Job) -> dict:
+    return {
+        "job_id": job.job_id,
+        "count": job.count,
+        "created_utc": job.created_utc,
+        "state": job.state,
+        "quality_mode": job.quality_mode,
+        "allow_creative_escalate": job.allow_creative_escalate,
+        "error": job.error,
+        "sources": [
+            {
+                "source_id": s.source_id,
+                "filename": s.filename,
+                "requested": s.requested,
+                "runpod_job_id": s.runpod_job_id,
+                "variants": [_variant_to_dict(v) for v in s.variants],
+            }
+            for s in job.sources
+        ],
+        "events": [event_to_dict(e) for e in job.events],
+    }
+
+
+def _job_from_dict(data: dict) -> Job:
+    sources = []
+    for raw in data.get("sources") or []:
+        if not isinstance(raw, dict):
+            continue
+        sid = str(raw.get("source_id") or "")
+        source = JobSource(
+            source_id=sid,
+            filename=str(raw.get("filename") or sid),
+            requested=int(raw.get("requested") or 0),
+            runpod_job_id=raw.get("runpod_job_id"),
+        )
+        for v in raw.get("variants") or []:
+            if isinstance(v, dict):
+                source.variants.append(_variant_from_dict(v, sid))
+        sources.append(source)
+    events = []
+    for raw in data.get("events") or []:
+        if isinstance(raw, dict):
+            events.append(_event_from_dict(raw))
+    return Job(
+        job_id=str(data.get("job_id") or ""),
+        count=int(data.get("count") or max((s.requested for s in sources), default=0)),
+        created_utc=str(data.get("created_utc") or _now()),
+        sources=sources,
+        state=str(data.get("state") or "done"),
+        events=events,
+        allow_creative_escalate=bool(data.get("allow_creative_escalate", True)),
+        quality_mode=normalize_quality_mode(data.get("quality_mode")),
+        error=data.get("error"),
+    )
+
+
+def _source_finished(source: JobSource) -> bool:
+    return len(source.variants) >= source.requested > 0
 
 
 class JobStore:
@@ -131,6 +244,7 @@ class JobStore:
             self._cancel[job_id] = token
             for source in sources:
                 self._source_index[source.source_id] = (job_id, source)
+        self._persist(job)
         threading.Thread(target=self._run_job, args=(job, token), daemon=True).start()
         return job
 
@@ -144,12 +258,27 @@ class JobStore:
             token.cancel()
         if job.state == "running":
             job.error = USER_CANCEL_MSG
+            self._persist(job)
         return job
 
-    def _run_job(self, job: Job, token: CancelToken) -> None:
+    def _persist(self, job: Job) -> None:
+        """Write job.json so a Studio restart can restore Gallery + resume a live run."""
+        path = self._ws.job_meta_path(job.job_id)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_job_to_dict(job), f)
+        os.replace(tmp, path)
+
+    def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
         try:
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
+                if token.runpod_job_id:
+                    for source in job.sources:
+                        if source.source_id == e.source_id:
+                            source.runpod_job_id = token.runpod_job_id
+                            break
                 # Record finished variants immediately so polling clients (and
                 # proxies that buffer SSE) can see progress before the source ends.
                 if e.state == "done" and e.filename and e.status and e.quality is not None:
@@ -168,21 +297,50 @@ class JobStore:
                             escalated=e.escalated, platform_result=e.platform_result,
                         ))
                         break
+                if e.state == "done" or token.runpod_job_id:
+                    self._persist(job)
 
             for source in job.sources:
                 if token.is_set():
                     raise JobCancelled()
+                if skip_finished and _source_finished(source):
+                    continue
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
                 in_path = maybe_normalize_upload(in_path)
                 source.filename = os.path.basename(in_path)
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
-                result = self._runner.run(
-                    in_path, count=job.count, out_dir=out_dir,
-                    source_id=source.source_id, on_event=on_event,
-                    allow_creative_escalate=job.allow_creative_escalate,
-                    quality_mode=job.quality_mode,
-                    cancel_token=token,
-                )
+                resume = getattr(self._runner, "resume_run", None)
+                if skip_finished and callable(resume) and source.runpod_job_id:
+                    try:
+                        result = resume(
+                            in_path, count=job.count, out_dir=out_dir,
+                            source_id=source.source_id, on_event=on_event,
+                            allow_creative_escalate=job.allow_creative_escalate,
+                            quality_mode=job.quality_mode,
+                            cancel_token=token,
+                            runpod_job_id=source.runpod_job_id,
+                        )
+                    except Exception as exc:
+                        print(
+                            f"job {job.job_id} resume {source.runpod_job_id} failed "
+                            f"({type(exc).__name__}: {exc}); re-running source",
+                            flush=True,
+                        )
+                        result = self._runner.run(
+                            in_path, count=job.count, out_dir=out_dir,
+                            source_id=source.source_id, on_event=on_event,
+                            allow_creative_escalate=job.allow_creative_escalate,
+                            quality_mode=job.quality_mode,
+                            cancel_token=token,
+                        )
+                else:
+                    result = self._runner.run(
+                        in_path, count=job.count, out_dir=out_dir,
+                        source_id=source.source_id, on_event=on_event,
+                        allow_creative_escalate=job.allow_creative_escalate,
+                        quality_mode=job.quality_mode,
+                        cancel_token=token,
+                    )
                 source.variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,
@@ -194,6 +352,8 @@ class JobStore:
                     )
                     for v in result.variants
                 ]
+                source.runpod_job_id = None
+                self._persist(job)
         except JobCancelled:
             job.error = USER_CANCEL_MSG
         except Exception as exc:
@@ -208,6 +368,7 @@ class JobStore:
         finally:
             job.state = "cancelled" if token.is_set() else "done"
             self._done[job.job_id].set()
+            self._persist(job)
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
@@ -215,11 +376,31 @@ class JobStore:
     def list(self) -> list[Job]:
         return list(self._jobs.values())
 
-    def hydrate_from_disk(self) -> int:
-        """Rebuild in-memory jobs from ``jobs/*/…/out/manifest.json`` after restart.
+    def _install_hydrated_job(self, job: Job) -> None:
+        token = CancelToken()
+        resume = job.state == "running"
+        if resume:
+            job.state = "running"
+        with self._lock:
+            self._jobs[job.job_id] = job
+            self._done[job.job_id] = threading.Event()
+            for source in job.sources:
+                self._source_index[source.source_id] = (job.job_id, source)
+            if resume:
+                self._cancel[job.job_id] = token
+            else:
+                self._done[job.job_id].set()
+        if resume:
+            threading.Thread(
+                target=self._run_job, args=(job, token),
+                kwargs={"skip_finished": True}, daemon=True,
+            ).start()
 
-        Does not re-run pipelines. Returns how many jobs were loaded (skips ids
-        already present). Enables Gallery + platform_result after server restart.
+    def hydrate_from_disk(self) -> int:
+        """Rebuild in-memory jobs from job.json (preferred) or manifests after restart.
+
+        Running snapshots are resumed (skip sources that already finished). Returns how
+        many jobs were loaded (skips ids already present).
         """
         jobs_root = os.path.join(self._ws.root, "jobs")
         if not os.path.isdir(jobs_root):
@@ -229,6 +410,18 @@ class JobStore:
             job_dir = os.path.join(jobs_root, job_id)
             if not os.path.isdir(job_dir) or job_id in self._jobs:
                 continue
+            meta_path = self._ws.job_meta_path(job_id)
+            if os.path.isfile(meta_path):
+                try:
+                    with open(meta_path, encoding="utf-8") as f:
+                        data = json.load(f)
+                except (OSError, json.JSONDecodeError):
+                    data = None
+                if isinstance(data, dict) and data.get("job_id"):
+                    job = _job_from_dict(data)
+                    self._install_hydrated_job(job)
+                    loaded += 1
+                    continue
             sources: list[JobSource] = []
             created_utc = None
             count = 0
@@ -290,12 +483,7 @@ class JobStore:
                 state="done",
                 quality_mode=quality_mode,
             )
-            with self._lock:
-                self._jobs[job_id] = job
-                self._done[job_id] = threading.Event()
-                self._done[job_id].set()
-                for source in sources:
-                    self._source_index[source.source_id] = (job_id, source)
+            self._install_hydrated_job(job)
             loaded += 1
         return loaded
 
