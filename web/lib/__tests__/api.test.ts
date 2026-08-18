@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as api from "@/lib/api";
 
-beforeEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("url builders use relative /api", () => {
   it("variantUrl / sourceUrl / eventsUrl", () => {
@@ -68,16 +71,117 @@ describe("regenerate posts form n", () => {
 });
 
 it("createDriveExport posts destination and variants", async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ export_id: "exp_1", state: "pending", files: [] }),
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  const { createDriveExport } = await import("@/lib/api");
-  await createDriveExport("dst_1", [{ source_id: "s1", index: 1 }]);
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ export_id: "exp_1", state: "pending", files: [] }), { status: 200 }),
+  );
+  await api.createDriveExport("dst_1", [{ source_id: "s1", index: 1 }]);
   expect(fetchMock).toHaveBeenCalledWith("/api/drive/exports", expect.objectContaining({
     method: "POST",
   }));
+});
+
+describe("listDestinationVideos", () => {
+  it("GETs /api/drive/destinations/:id/videos", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ videos: [{ id: "f1", name: "clip.mp4", mime_type: "video/mp4", md5: null }] }), { status: 200 }),
+    );
+    const out = await api.listDestinationVideos("dst_1");
+    expect(out.videos).toHaveLength(1);
+    expect(out.videos[0].name).toBe("clip.mp4");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/drive/destinations/dst_1/videos");
+  });
+});
+
+describe("createJobFromDrive", () => {
+  it("POSTs JSON to /api/jobs/from-drive", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1", "f2"],
+      count: 20,
+      qualityMode: "hq",
+      allowCreativeEscalate: false,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/jobs/from-drive");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1", "f2"],
+      count: 20,
+      quality_mode: "hq",
+      allow_creative_escalate: false,
+    });
+  });
+});
+
+describe("workflows API", () => {
+  const sampleWorkflow = {
+    id: "wf_1",
+    name: "Inbox → Out",
+    inbox_destination_id: "dst_in",
+    output_destination_id: "dst_out",
+    count: 20,
+    quality_mode: "fast" as const,
+    allow_creative_escalate: true,
+    enabled: true,
+    poll_seconds: 120,
+    last_sweep_at: null,
+    last_summary: null,
+  };
+
+  it("listWorkflows GETs /api/workflows", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([sampleWorkflow]), { status: 200 }),
+    );
+    const out = await api.listWorkflows();
+    expect(out).toHaveLength(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/workflows");
+  });
+
+  it("createWorkflow POSTs JSON", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(sampleWorkflow), { status: 201 }),
+    );
+    await api.createWorkflow({
+      name: "Inbox → Out",
+      inbox_destination_id: "dst_in",
+      output_destination_id: "dst_out",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workflows");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  it("updateWorkflow PATCHes /api/workflows/:id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...sampleWorkflow, enabled: false }), { status: 200 }),
+    );
+    await api.updateWorkflow("wf_1", { enabled: false });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workflows/wf_1");
+    expect((init as RequestInit).method).toBe("PATCH");
+  });
+
+  it("deleteWorkflow DELETEs /api/workflows/:id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteWorkflow("wf_1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workflows/wf_1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+
+  it("runWorkflow POSTs /api/workflows/:id/run", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(sampleWorkflow), { status: 200 }),
+    );
+    await api.runWorkflow("wf_1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workflows/wf_1/run");
+    expect((init as RequestInit).method).toBe("POST");
+  });
 });
 
 describe("error responses surface FastAPI `detail`", () => {

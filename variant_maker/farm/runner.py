@@ -19,10 +19,8 @@ from dataclasses import dataclass
 from .. import pipeline
 from ..probe import sha256_file
 from .config import ClientConfig, FarmConfig
-from .drive import DriveClient, DriveFile
+from .drive import DriveClient, DriveFile, is_video_file
 from .ledger import Ledger
-
-VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 
 
 @dataclass
@@ -39,11 +37,7 @@ class SweepSummary:
 
 
 def _is_video(f: DriveFile) -> bool:
-    if f.is_folder:
-        return False
-    if f.mime_type.startswith("video/"):
-        return True
-    return os.path.splitext(f.name)[1].lower() in VIDEO_EXTS
+    return is_video_file(f)
 
 
 def _pipeline_config(client: ClientConfig, in_path: str, out_dir: str) -> dict:

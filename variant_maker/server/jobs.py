@@ -367,8 +367,8 @@ class JobStore:
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
             job.state = "cancelled" if token.is_set() else "done"
-            self._done[job.job_id].set()
             self._persist(job)
+            self._done[job.job_id].set()
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)

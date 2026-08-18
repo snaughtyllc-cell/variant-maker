@@ -164,3 +164,68 @@ class DropLedgerEnsureOut(BaseModel):
     spreadsheet_id: str
     spreadsheet_url: str
     created: bool
+
+
+class DriveVideoOut(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    md5: str | None = None
+
+
+class DriveVideosOut(BaseModel):
+    videos: list[DriveVideoOut] = []
+
+
+class JobFromDriveIn(BaseModel):
+    destination_id: str
+    file_ids: list[str]
+    count: int
+    quality_mode: str = "fast"
+    allow_creative_escalate: bool = True
+
+
+class WorkflowSummaryOut(BaseModel):
+    queued: int = 0
+    exported: int = 0
+    skipped: int = 0
+    failed: int = 0
+    running: int = 0
+    job_ids: list[str] = []
+    error: str | None = None
+
+
+class WorkflowOut(BaseModel):
+    id: str
+    name: str
+    inbox_destination_id: str
+    output_destination_id: str
+    count: int
+    quality_mode: str
+    allow_creative_escalate: bool
+    enabled: bool
+    poll_seconds: int
+    last_sweep_at: str | None = None
+    last_summary: WorkflowSummaryOut | None = None
+
+
+class WorkflowCreateIn(BaseModel):
+    name: str
+    inbox_destination_id: str
+    output_destination_id: str
+    count: int = 20
+    quality_mode: str = "fast"
+    allow_creative_escalate: bool = True
+    enabled: bool = False
+    poll_seconds: int = 120
+
+
+class WorkflowUpdateIn(BaseModel):
+    name: str | None = None
+    inbox_destination_id: str | None = None
+    output_destination_id: str | None = None
+    count: int | None = None
+    quality_mode: str | None = None
+    allow_creative_escalate: bool | None = None
+    enabled: bool | None = None
+    poll_seconds: int | None = None

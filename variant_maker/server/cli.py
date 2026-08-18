@@ -51,6 +51,7 @@ def build_app(data_dir: str, runner_kind: str = "local") -> FastAPI:
         JobStore(ws, make_runner(runner_kind)),
         sa_json_path=os.environ.get(ENV_SA_JSON),
         oauth_token_path=ws.oauth_token_path(),
+        enable_workflow_poller=True,
     )
 
 

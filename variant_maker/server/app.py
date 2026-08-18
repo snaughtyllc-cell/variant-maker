@@ -4,6 +4,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
+import tempfile
+import threading
 import traceback
 import uuid
 from typing import Any, Callable, Mapping
@@ -46,14 +49,18 @@ from .drop_ledger import (
 from .events import event_to_dict
 from .jobs import Job, JobSource, JobStore
 from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
-                     DiagnosticsItem, DriveStatusOut, DropLedgerEnsureOut, DropLedgerStatusOut,
-                     DropLedgerSyncIn, DropLedgerSyncOut, ExportCreateIn, ExportFileOut, ExportJobOut,
-                     InFlightOut, JobDetail, JobEventsSnapshot, JobSummary, PlatformResultIn,
-                     SourceOut, VariantOut)
+                     DiagnosticsItem, DriveStatusOut, DriveVideoOut, DriveVideosOut,
+                     DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
+                     ExportCreateIn, ExportFileOut, ExportJobOut, InFlightOut, JobDetail,
+                     JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
+                     VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn)
 from .runner import LocalRunner
 from .sheets import GoogleSheets, SheetsClient
+from .workflow_runner import tick_workflow
+from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
-from variant_maker.farm.drive import DriveClient
+from variant_maker.farm.drive import DriveClient, is_video_file
+from variant_maker.farm.ledger import Ledger
 
 _IN_FLIGHT_STATES = frozenset({"rendering", "checking", "rerolling", "uniqueness", "escalating"})
 _UPLOAD_META: dict[str, dict] = {}
@@ -108,6 +115,36 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None) -> Sourc
 
 def _destination_out(d: Destination) -> DestinationOut:
     return DestinationOut(id=d.id, name=d.name, folder_id=d.folder_id, auth_mode=d.auth_mode)
+
+
+def _workflow_summary_out(raw: dict | None) -> WorkflowSummaryOut | None:
+    if not raw:
+        return None
+    return WorkflowSummaryOut(
+        queued=int(raw.get("queued") or 0),
+        exported=int(raw.get("exported") or 0),
+        skipped=int(raw.get("skipped") or 0),
+        failed=int(raw.get("failed") or 0),
+        running=int(raw.get("running") or 0),
+        job_ids=list(raw.get("job_ids") or []),
+        error=raw.get("error"),
+    )
+
+
+def _workflow_out(w: Workflow) -> WorkflowOut:
+    return WorkflowOut(
+        id=w.id,
+        name=w.name,
+        inbox_destination_id=w.inbox_destination_id,
+        output_destination_id=w.output_destination_id,
+        count=w.count,
+        quality_mode=w.quality_mode,
+        allow_creative_escalate=w.allow_creative_escalate,
+        enabled=w.enabled,
+        poll_seconds=w.poll_seconds,
+        last_sweep_at=w.last_sweep_at,
+        last_summary=_workflow_summary_out(w.last_summary),
+    )
 
 
 def _export_job_out(job: ExportJob) -> ExportJobOut:
@@ -165,6 +202,7 @@ def create_app(
     oauth_exchange: ExchangeFn | None = None,
     oauth_fetch_email: FetchEmailFn | None = None,
     hydrate: bool = True,
+    enable_workflow_poller: bool = False,
 ) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
@@ -219,6 +257,8 @@ def create_app(
     app.state.drive_info = drive_info
     app.state.destinations = DestinationStore(store._ws.destinations_path())
     app.state.exports = ExportStore(store._ws.exports_dir())
+    app.state.workflows = WorkflowStore(store._ws.workflows_path())
+    app.state.workflow_tick_lock = threading.Lock()
 
     def _refresh_drive_info() -> None:
         app.state.drive_info = resolve_drive_status(
@@ -280,6 +320,43 @@ def create_app(
             public_request_base(request.headers, fallback),
         )
         return f"{origin}/settings/drive?{query}"
+
+    def _run_workflow_tick(wf: Workflow) -> Workflow:
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        inbox = app.state.destinations.get(wf.inbox_destination_id)
+        output = app.state.destinations.get(wf.output_destination_id)
+        if inbox is None or output is None:
+            summary = {
+                "queued": 0, "exported": 0, "skipped": 0, "failed": 0,
+                "running": 0, "job_ids": [], "error": "destination missing",
+            }
+            return app.state.workflows.update(
+                wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
+            ) or wf
+        if app.state.drive is None or app.state.drive_info.status != "ready":
+            summary = {
+                "queued": 0, "exported": 0, "skipped": 0, "failed": 0,
+                "running": 0, "job_ids": [],
+                "error": app.state.drive_info.message,
+            }
+            return app.state.workflows.update(
+                wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
+            ) or wf
+        ledger = Ledger(store._ws.workflow_ledger_path(wf.id))
+        with app.state.workflow_tick_lock:
+            result = tick_workflow(
+                wf,
+                drive=app.state.drive,
+                inbox_folder_id=inbox.folder_id,
+                output_folder_id=output.folder_id,
+                job_store=store,
+                ledger=ledger,
+                work_dir=store._ws.workflow_work_dir(),
+            )
+        return app.state.workflows.update(
+            wf.id, last_sweep_at=ts, last_summary=result.as_dict(), touch_sweep=True,
+        ) or wf
 
     @app.get("/api/health")
     def health() -> dict:
@@ -348,6 +425,40 @@ def create_app(
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
+        return CreateJobResponse(job_id=job.job_id,
+                                 sources=[_source_out(s, ok_only=True) for s in job.sources])
+
+    @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
+    def create_job_from_drive(body: JobFromDriveIn) -> CreateJobResponse:
+        _require_drive()
+        dest = app.state.destinations.get(body.destination_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        file_ids = [fid.strip() for fid in body.file_ids if str(fid).strip()]
+        if not file_ids:
+            raise HTTPException(status_code=400, detail="file_ids required")
+        children = {
+            f.id: f for f in app.state.drive.list_files(dest.folder_id) if is_video_file(f)
+        }
+        missing = [fid for fid in file_ids if fid not in children]
+        if missing:
+            raise HTTPException(status_code=400, detail="file is not a video in that folder")
+        stage = tempfile.mkdtemp(prefix="vm_drive_in_", dir=store._ws.root)
+        paths: list[tuple[str, str]] = []
+        try:
+            for i, fid in enumerate(file_ids):
+                f = children[fid]
+                name = os.path.basename(f.name) or "clip.mp4"
+                local = os.path.join(stage, f"{i}_{name}")
+                app.state.drive.download(fid, local)
+                paths.append((name, local))
+            job = store.create_job_from_paths(
+                paths, count=body.count,
+                allow_creative_escalate=body.allow_creative_escalate,
+                quality_mode=body.quality_mode,
+            )
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True) for s in job.sources])
 
@@ -668,6 +779,89 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e)) from e
         return {"ok": True}
 
+    @app.get("/api/drive/destinations/{dest_id}/videos", response_model=DriveVideosOut)
+    def list_destination_videos(dest_id: str) -> DriveVideosOut:
+        _require_drive()
+        dest = app.state.destinations.get(dest_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        videos = [
+            DriveVideoOut(id=f.id, name=f.name, mime_type=f.mime_type, md5=f.md5)
+            for f in app.state.drive.list_files(dest.folder_id)
+            if is_video_file(f)
+        ]
+        return DriveVideosOut(videos=videos)
+
+    @app.get("/api/workflows", response_model=list[WorkflowOut])
+    def list_workflows() -> list[WorkflowOut]:
+        return [_workflow_out(w) for w in app.state.workflows.list()]
+
+    @app.post("/api/workflows", status_code=201, response_model=WorkflowOut)
+    def create_workflow(body: WorkflowCreateIn) -> WorkflowOut:
+        if app.state.destinations.get(body.inbox_destination_id) is None:
+            raise HTTPException(status_code=400, detail="unknown inbox destination")
+        if app.state.destinations.get(body.output_destination_id) is None:
+            raise HTTPException(status_code=400, detail="unknown output destination")
+        try:
+            wf = app.state.workflows.create(
+                name=body.name,
+                inbox_destination_id=body.inbox_destination_id,
+                output_destination_id=body.output_destination_id,
+                count=body.count,
+                quality_mode=body.quality_mode,
+                allow_creative_escalate=body.allow_creative_escalate,
+                enabled=body.enabled,
+                poll_seconds=body.poll_seconds,
+            )
+        except WorkflowError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return _workflow_out(wf)
+
+    @app.patch("/api/workflows/{workflow_id}", response_model=WorkflowOut)
+    def update_workflow(workflow_id: str, body: WorkflowUpdateIn) -> WorkflowOut:
+        existing = app.state.workflows.get(workflow_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="workflow not found")
+        if body.inbox_destination_id is not None and app.state.destinations.get(body.inbox_destination_id) is None:
+            raise HTTPException(status_code=400, detail="unknown inbox destination")
+        if body.output_destination_id is not None and app.state.destinations.get(body.output_destination_id) is None:
+            raise HTTPException(status_code=400, detail="unknown output destination")
+        try:
+            updated = app.state.workflows.update(
+                workflow_id,
+                name=body.name,
+                inbox_destination_id=body.inbox_destination_id,
+                output_destination_id=body.output_destination_id,
+                count=body.count,
+                quality_mode=body.quality_mode,
+                allow_creative_escalate=body.allow_creative_escalate,
+                enabled=body.enabled,
+                poll_seconds=body.poll_seconds,
+            )
+        except WorkflowError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if updated is None:
+            raise HTTPException(status_code=404, detail="workflow not found")
+        return _workflow_out(updated)
+
+    @app.delete("/api/workflows/{workflow_id}", status_code=204)
+    def delete_workflow(workflow_id: str) -> None:
+        if not app.state.workflows.delete(workflow_id):
+            raise HTTPException(status_code=404, detail="workflow not found")
+        ledger_path = store._ws.workflow_ledger_path(workflow_id)
+        try:
+            os.remove(ledger_path)
+        except OSError:
+            pass
+
+    @app.post("/api/workflows/{workflow_id}/run", response_model=WorkflowOut)
+    def run_workflow(workflow_id: str) -> WorkflowOut:
+        _require_drive()
+        wf = app.state.workflows.get(workflow_id)
+        if wf is None:
+            raise HTTPException(status_code=404, detail="workflow not found")
+        return _workflow_out(_run_workflow_tick(wf))
+
     @app.post("/api/drive/exports", status_code=201, response_model=ExportJobOut)
     def create_export(body: ExportCreateIn) -> ExportJobOut:
         _require_drive()
@@ -698,5 +892,24 @@ def create_app(
         except ExportError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return _export_job_out(job)
+
+    if enable_workflow_poller:
+        stop = threading.Event()
+        app.state.workflow_poller_stop = stop
+
+        def _workflow_poll_delay() -> float:
+            enabled = [w.poll_seconds for w in app.state.workflows.list() if w.enabled]
+            return float(min(enabled)) if enabled else 30.0
+
+        def _poll_loop() -> None:
+            while not stop.wait(timeout=_workflow_poll_delay()):
+                try:
+                    for wf in app.state.workflows.list():
+                        if wf.enabled:
+                            _run_workflow_tick(wf)
+                except Exception as exc:  # noqa: BLE001 — poller must not die on one sweep
+                    print(f"workflow poller: {type(exc).__name__}: {exc}", flush=True)
+
+        threading.Thread(target=_poll_loop, name="workflow-poller", daemon=True).start()
 
     return app

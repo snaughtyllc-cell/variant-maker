@@ -4,7 +4,7 @@ export function dropZoneTitle(): string {
 }
 
 export function dropZoneSubcopy(): string {
-  return "MP4 / MOV — tap to pick from this phone, or drop files";
+  return "MP4 / MOV — tap to pick from this phone, or drop files. Google Drive is a separate button below.";
 }
 
 export function dropZoneBrowse(): string {

@@ -61,3 +61,16 @@ class Workspace:
         d = os.path.join(self.drive_dir(), "exports")
         os.makedirs(d, exist_ok=True)
         return d
+
+    def workflows_path(self) -> str:
+        return os.path.join(self.drive_dir(), "workflows.json")
+
+    def workflow_ledger_path(self, workflow_id: str) -> str:
+        d = os.path.join(self.drive_dir(), "workflow-ledgers")
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, f"{workflow_id}.json")
+
+    def workflow_work_dir(self) -> str:
+        d = os.path.join(self.root, "workflow-work")
+        os.makedirs(d, exist_ok=True)
+        return d

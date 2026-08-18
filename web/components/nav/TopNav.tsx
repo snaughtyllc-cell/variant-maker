@@ -6,6 +6,7 @@ import { StatusStrip } from "./StatusStrip";
 const NAV_LINKS = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
+  { href: "/workflows", label: "Workflows" },
   { href: "/diagnostics", label: "Diagnostics" },
   { href: "/settings/drive", label: "Drive" },
 ] as const;

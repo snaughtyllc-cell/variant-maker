@@ -26,6 +26,24 @@ def test_drivefile_is_folder_by_mime():
     assert folder.is_folder is True
 
 
+def test_is_video_file_skips_folders_and_docs():
+    folder = d.DriveFile(id="y", name="out", mime_type=d.FOLDER_MIME)
+    doc = d.DriveFile(id="d", name="notes.txt", mime_type="text/plain")
+    pdf = d.DriveFile(id="p", name="brief.pdf", mime_type="application/pdf")
+    assert d.is_video_file(folder) is False
+    assert d.is_video_file(doc) is False
+    assert d.is_video_file(pdf) is False
+
+
+def test_is_video_file_accepts_mime_or_extension():
+    mp4 = d.DriveFile(id="a", name="clip.mp4", mime_type="video/mp4")
+    mov = d.DriveFile(id="b", name="clip.mov", mime_type="application/octet-stream")
+    named = d.DriveFile(id="c", name="reel.webm", mime_type="")
+    assert d.is_video_file(mp4) is True
+    assert d.is_video_file(mov) is True
+    assert d.is_video_file(named) is True
+
+
 # ---- FakeDrive behaves like Drive ------------------------------------------
 
 def test_list_files_returns_children_of_folder(tmp_path):

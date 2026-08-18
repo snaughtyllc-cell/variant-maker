@@ -78,3 +78,34 @@ export interface ExportJob {
   created_utc: string;
   files: ExportFile[];
 }
+
+export interface DriveVideo {
+  id: string;
+  name: string;
+  mime_type: string;
+  md5: string | null;
+}
+
+export interface WorkflowSummary {
+  queued: number;
+  exported: number;
+  skipped: number;
+  failed: number;
+  running: number;
+  job_ids: string[];
+  error?: string | null;
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  inbox_destination_id: string;
+  output_destination_id: string;
+  count: number;
+  quality_mode: "fast" | "hq";
+  allow_creative_escalate: boolean;
+  enabled: boolean;
+  poll_seconds: number;
+  last_sweep_at: string | null;
+  last_summary: WorkflowSummary | null;
+}

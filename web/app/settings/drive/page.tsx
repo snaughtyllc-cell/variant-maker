@@ -29,7 +29,7 @@ export default function DriveSettingsPage() {
               marginTop: 2,
             }}
           >
-            Manage the Google Drive folders variants can be exported to.
+            Manage the Google Drive folders variants can be exported to. Studio import and Workflows use the same saved folders.
           </div>
         </div>
       </div>

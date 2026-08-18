@@ -6,10 +6,12 @@ adapter lazy-imports the google libs (the optional [farm] extra) so the engine s
 """
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,15 @@ class DriveFile:
     @property
     def is_folder(self) -> bool:
         return self.mime_type == FOLDER_MIME
+
+
+def is_video_file(f: DriveFile) -> bool:
+    """Direct-child video? Folders never; video/* mime or a known video extension."""
+    if f.is_folder:
+        return False
+    if (f.mime_type or "").startswith("video/"):
+        return True
+    return os.path.splitext(f.name)[1].lower() in VIDEO_EXTS
 
 
 class DriveClient(ABC):

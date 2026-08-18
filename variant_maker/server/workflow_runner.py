@@ -1,0 +1,233 @@
+"""One Studio workflow tick: harvest finished jobs, then queue new inbox videos.
+
+Uses JobStore (so Fast/HQ go through the same RunPod path as Generate) and the farm
+ledger (sha256 idempotency). Output layout matches the farm runner: one Drive
+subfolder `<stem>__<sha8>/` per source with ok variants + manifest.json.
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import tempfile
+from dataclasses import asdict, dataclass, field
+
+from variant_maker.farm.drive import DriveClient, is_video_file
+from variant_maker.farm.ledger import Ledger
+from variant_maker.probe import sha256_file
+from variant_maker.server.jobs import Job, JobSource, JobStore
+from variant_maker.server.workflows import Workflow
+
+
+@dataclass
+class TickSummary:
+    queued: int = 0
+    exported: int = 0
+    skipped: int = 0
+    failed: int = 0
+    running: int = 0
+    job_ids: list[str] = field(default_factory=list)
+    error: str | None = None
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+def _exhausted(ledger: Ledger, sha: str, max_attempts: int) -> bool:
+    rec = ledger.get(sha)
+    return bool(rec and rec["status"] == "failed" and rec["attempts"] >= max_attempts)
+
+
+def _settled(ledger: Ledger, sha: str, max_attempts: int) -> bool:
+    return ledger.is_done(sha) or ledger.is_running(sha) or _exhausted(ledger, sha, max_attempts)
+
+
+def _uploadable(source: JobSource) -> list:
+    return [
+        v for v in source.variants
+        if v.status == "ok" and (not v.quality or v.quality.get("spatial_ok") is not False)
+    ]
+
+
+def _file_id_for_sha(ledger: Ledger, sha: str) -> str | None:
+    for fid, entry in ledger._by_file_id.items():
+        if entry.get("sha") == sha:
+            return fid
+    return None
+
+
+def _md5_for_file(ledger: Ledger, file_id: str | None) -> str | None:
+    if not file_id:
+        return None
+    entry = ledger._by_file_id.get(file_id)
+    return entry.get("md5") if entry else None
+
+
+def _export_source(
+    drive: DriveClient,
+    job_store: JobStore,
+    job: Job,
+    source: JobSource,
+    *,
+    stem: str,
+    sha: str,
+    output_folder_id: str,
+) -> tuple[str, int]:
+    variants = _uploadable(source)
+    if not variants:
+        raise RuntimeError("no ok variants to export")
+    sub_id = drive.find_or_create_folder(f"{stem}__{sha[:8]}", output_folder_id)
+    for v in variants:
+        path = job_store.find_variant(source.source_id, v.filename)
+        if path is None:
+            continue
+        drive.upload(path, sub_id, name=v.filename)
+    manifest = os.path.join(job_store._ws.source_out_dir(job.job_id, source.source_id), "manifest.json")
+    if os.path.isfile(manifest):
+        drive.upload(manifest, sub_id, name="manifest.json")
+    return sub_id, len(variants)
+
+
+def _harvest(
+    ledger: Ledger,
+    job_store: JobStore,
+    drive: DriveClient,
+    output_folder_id: str,
+    summary: TickSummary,
+    max_attempts: int,
+) -> int:
+    """Finish exports for jobs that left `running`. Returns how many are still in flight."""
+    still = 0
+    for sha, rec in list(ledger.running_records()):
+        job_id = rec.get("job_id")
+        job = job_store.get(job_id) if job_id else None
+        file_id = _file_id_for_sha(ledger, sha)
+        md5 = _md5_for_file(ledger, file_id)
+        if job is None:
+            ledger.mark_failed(sha, error="job missing", file_id=file_id, md5=md5)
+            summary.failed += 1
+            continue
+        if job.state == "running":
+            still += 1
+            summary.running += 1
+            if job_id and job_id not in summary.job_ids:
+                summary.job_ids.append(job_id)
+            continue
+        filename = rec.get("filename") or (job.sources[0].filename if job.sources else "source")
+        stem = os.path.splitext(str(filename))[0]
+        if job.state == "cancelled":
+            ledger.mark_failed(sha, error=job.error or "cancelled", file_id=file_id, md5=md5)
+            summary.failed += 1
+            continue
+        try:
+            if not job.sources:
+                raise RuntimeError("job has no sources")
+            source = job.sources[0]
+            sub_id, n = _export_source(
+                drive, job_store, job, source,
+                stem=stem, sha=sha, output_folder_id=output_folder_id,
+            )
+        except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
+            ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=file_id, md5=md5)
+            summary.failed += 1
+            continue
+        ledger.mark_done(
+            sha, output_folder_id=sub_id, variant_count=n, file_id=file_id, md5=md5,
+        )
+        summary.exported += 1
+    return still
+
+
+def _queue_new(
+    workflow: Workflow,
+    drive: DriveClient,
+    inbox_folder_id: str,
+    job_store: JobStore,
+    ledger: Ledger,
+    work_dir: str,
+    summary: TickSummary,
+    *,
+    max_attempts: int,
+    slots: int,
+) -> None:
+    if slots <= 0:
+        return
+    os.makedirs(work_dir, exist_ok=True)
+    videos = [f for f in drive.list_files(inbox_folder_id) if is_video_file(f)]
+    for f in videos:
+        if slots <= 0:
+            break
+        seen = ledger.seen_file(f.id, f.md5)
+        if seen and _settled(ledger, seen, max_attempts):
+            summary.skipped += 1
+            continue
+
+        job_dir = tempfile.mkdtemp(prefix="vm_wf_", dir=work_dir)
+        local = os.path.join(job_dir, os.path.basename(f.name) or "clip.mp4")
+        try:
+            drive.download(f.id, local)
+            sha = sha256_file(local)
+            if ledger.is_done(sha):
+                ledger.note_file_id(f.id, sha, f.md5)
+                summary.skipped += 1
+                shutil.rmtree(job_dir, ignore_errors=True)
+                continue
+            if ledger.is_running(sha) or _exhausted(ledger, sha, max_attempts):
+                summary.skipped += 1
+                shutil.rmtree(job_dir, ignore_errors=True)
+                continue
+            job = job_store.create_job_from_paths(
+                [(os.path.basename(f.name) or "clip.mp4", local)],
+                count=workflow.count,
+                allow_creative_escalate=workflow.allow_creative_escalate,
+                quality_mode=workflow.quality_mode,
+            )
+            ledger.mark_running(
+                sha, job_id=job.job_id, file_id=f.id, md5=f.md5, filename=f.name,
+            )
+            summary.queued += 1
+            summary.running += 1
+            if job.job_id not in summary.job_ids:
+                summary.job_ids.append(job.job_id)
+            slots -= 1
+        except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
+            try:
+                sha = sha256_file(local) if os.path.isfile(local) else f.id
+            except Exception:  # noqa: BLE001
+                sha = f.id
+            ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=f.id, md5=f.md5)
+            summary.failed += 1
+        finally:
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+
+def tick_workflow(
+    workflow: Workflow,
+    *,
+    drive: DriveClient,
+    inbox_folder_id: str,
+    output_folder_id: str,
+    job_store: JobStore,
+    ledger: Ledger,
+    work_dir: str,
+    max_attempts: int = 3,
+    max_inflight: int = 1,
+) -> TickSummary:
+    summary = TickSummary()
+    still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts)
+    _queue_new(
+        workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
+        max_attempts=max_attempts, slots=max(0, max_inflight - still),
+    )
+    # FakeRunner (and very short Fast jobs) may already be done — export in this tick.
+    done_already = False
+    for jid in list(summary.job_ids):
+        ev = job_store._done.get(jid)
+        if ev is not None and ev.is_set():
+            done_already = True
+            break
+    if done_already:
+        # Don't double-count running from the first harvest; reset running then re-harvest.
+        summary.running = 0
+        still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts)
+        summary.running = still
+    return summary

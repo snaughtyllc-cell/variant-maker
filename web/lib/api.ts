@@ -1,4 +1,18 @@
-import { CreateJobResponse, Destination, DiagnosticsItem, DriveStatus, ExportJob, ExportVariantRef, JobDetail, JobSummary, PlatformResult, SourceOut, VariantOut } from "./types";
+import {
+  CreateJobResponse,
+  Destination,
+  DiagnosticsItem,
+  DriveStatus,
+  DriveVideo,
+  ExportJob,
+  ExportVariantRef,
+  JobDetail,
+  JobSummary,
+  PlatformResult,
+  SourceOut,
+  VariantOut,
+  Workflow,
+} from "./types";
 
 /**
  * FastAPI error bodies are `{"detail": string | Array<{msg: string, ...}>}`.
@@ -159,3 +173,73 @@ export const getDriveExport = (exportId: string) =>
 
 export const retryDriveExport = (exportId: string) =>
   fetch(`/api/drive/exports/${exportId}/retry`, { method: "POST" }).then(json<ExportJob>);
+
+export const listDestinationVideos = (destinationId: string) =>
+  fetch(`/api/drive/destinations/${destinationId}/videos`).then(json<{ videos: DriveVideo[] }>);
+
+export function createJobFromDrive(opts: {
+  destinationId: string;
+  fileIds: string[];
+  count: number;
+  qualityMode?: "fast" | "hq";
+  allowCreativeEscalate?: boolean;
+}): Promise<CreateJobResponse> {
+  return fetch("/api/jobs/from-drive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      destination_id: opts.destinationId,
+      file_ids: opts.fileIds,
+      count: opts.count,
+      quality_mode: opts.qualityMode ?? "fast",
+      allow_creative_escalate: opts.allowCreativeEscalate ?? true,
+    }),
+  }).then(json<CreateJobResponse>);
+}
+
+export const listWorkflows = () => fetch("/api/workflows").then(json<Workflow[]>);
+
+export function createWorkflow(body: {
+  name: string;
+  inbox_destination_id: string;
+  output_destination_id: string;
+  count?: number;
+  quality_mode?: "fast" | "hq";
+  allow_creative_escalate?: boolean;
+  enabled?: boolean;
+  poll_seconds?: number;
+}): Promise<Workflow> {
+  return fetch("/api/workflows", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<Workflow>);
+}
+
+export function updateWorkflow(
+  id: string,
+  patch: Partial<{
+    name: string;
+    inbox_destination_id: string;
+    output_destination_id: string;
+    count: number;
+    quality_mode: "fast" | "hq";
+    allow_creative_escalate: boolean;
+    enabled: boolean;
+    poll_seconds: number;
+  }>,
+): Promise<Workflow> {
+  return fetch(`/api/workflows/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  }).then(json<Workflow>);
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  const res = await fetch(`/api/workflows/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const runWorkflow = (id: string) =>
+  fetch(`/api/workflows/${id}/run`, { method: "POST" }).then(json<Workflow>);
