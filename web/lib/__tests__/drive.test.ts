@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { exportProgressLabel, okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
+import { exportProgressLabel, oauthErrorMessage, okVariantRefs, sendDisabledReason, truncateFolderId } from "@/lib/drive";
 import type { SourceOut } from "@/lib/types";
 
 const sources: SourceOut[] = [{
@@ -52,6 +52,18 @@ describe("sendDisabledReason", () => {
       [{ id: "dst_1", name: "R", folder_id: "f", auth_mode: "service_account" }],
       [{ source_id: "s1", index: 1 }],
     )).toBeNull();
+  });
+});
+
+describe("oauthErrorMessage", () => {
+  it("explains exchange_failed", () => {
+    expect(oauthErrorMessage("exchange_failed")).toMatch(/could not finish|token/i);
+  });
+  it("explains bad_state", () => {
+    expect(oauthErrorMessage("bad_state")).toMatch(/try Connect Google again/i);
+  });
+  it("explains missing_code", () => {
+    expect(oauthErrorMessage("missing_code")).toMatch(/callback|code/i);
   });
 });
 

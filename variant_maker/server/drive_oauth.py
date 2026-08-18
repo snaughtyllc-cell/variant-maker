@@ -9,8 +9,10 @@ import json
 import os
 import secrets
 import tempfile
-from typing import Any, Callable, Mapping
-from urllib.parse import urlencode
+import time
+from collections.abc import Callable, Mapping
+from typing import Any
+from urllib.parse import urlencode, urlparse
 
 # Enough to upload into folders the signed-in user can already access (paste-folder flow).
 # drive.file alone cannot write to arbitrary folder IDs the app did not create.
@@ -106,6 +108,74 @@ def new_oauth_state() -> str:
     return secrets.token_urlsafe(24)
 
 
+_PENDING_TTL_S = 15 * 60
+
+
+class OAuthPendingStore:
+    """CSRF states on disk so Connect Google survives a new API process / replica."""
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def add(self, state: str) -> None:
+        data = self._load()
+        now = time.time()
+        data = {k: ts for k, ts in data.items() if now - ts < _PENDING_TTL_S}
+        data[state] = now
+        self._save(data)
+
+    def consume(self, state: str) -> bool:
+        data = self._load()
+        now = time.time()
+        data = {k: ts for k, ts in data.items() if now - ts < _PENDING_TTL_S}
+        if state not in data:
+            self._save(data)
+            return False
+        del data[state]
+        self._save(data)
+        return True
+
+    def _load(self) -> dict[str, float]:
+        if not os.path.isfile(self._path):
+            return {}
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, float] = {}
+        for k, v in raw.items():
+            if isinstance(k, str) and isinstance(v, (int, float)):
+                out[k] = float(v)
+        return out
+
+    def _save(self, data: Mapping[str, float]) -> None:
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".oauth-pending-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(dict(data), f)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+
+def studio_origin_from_redirect_uri(redirect_uri: str, fallback: str) -> str:
+    """Public Studio origin for post-OAuth redirects (not the FastAPI bind host)."""
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return fallback.rstrip("/")
+
+
 def resolve_redirect_uri(
     environ: Mapping[str, str],
     *,
@@ -159,6 +229,11 @@ def exchange_code_for_token(
         scopes=OAUTH_SCOPES,
         redirect_uri=redirect_uri,
     )
+    # Google often returns a slightly different granted-scope set than we asked
+    # for (drive + drive.file + sheets). Default oauthlib then raises and Studio
+    # looks like Connect never happened.
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+    os.environ.setdefault("OAUTHLIB_IGNORE_SCOPE_CHANGE", "1")
     flow.fetch_token(code=code)
     creds = flow.credentials
     data = json.loads(creds.to_json())

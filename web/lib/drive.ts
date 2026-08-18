@@ -12,6 +12,21 @@ export function okVariantRefs(sources: SourceOut[], selected: Set<string>): Expo
   return refs;
 }
 
+export function oauthErrorMessage(reason: string | null | undefined): string {
+  switch (reason) {
+    case "exchange_failed":
+      return "Google signed you in, but Studio could not finish the token exchange. Try Connect Google again.";
+    case "bad_state":
+      return "Sign-in expired or was interrupted. Try Connect Google again.";
+    case "missing_code":
+      return "Google came back without an auth code. Check the OAuth callback URL, then try Connect Google again.";
+    default:
+      return reason
+        ? `Google sign-in failed (${reason}). Try Connect Google again.`
+        : "Google sign-in failed. Try Connect Google again.";
+  }
+}
+
 export function truncateFolderId(id: string, keep = 8): string {
   if (id.length <= keep * 2 + 1) return id;
   return `${id.slice(0, keep)}…${id.slice(-keep)}`;

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import traceback
 import uuid
 from typing import Any, Callable, Mapping
 
@@ -21,6 +22,7 @@ from .drive_config import (
 from .drive_exports import (ExportError, ExportJob, ExportRunner, ExportStore, VariantRef,
                             build_export_files)
 from .drive_oauth import (
+    OAuthPendingStore,
     OAuthTokenStore,
     build_authorization_url,
     exchange_code_for_token,
@@ -28,6 +30,7 @@ from .drive_oauth import (
     new_oauth_state,
     public_request_base,
     resolve_redirect_uri,
+    studio_origin_from_redirect_uri,
 )
 from .drive_urls import DriveUrlError, parse_folder_id
 from .drop_ledger import (
@@ -169,9 +172,10 @@ def create_app(
     if oauth_token_path is None:
         oauth_token_path = store._ws.oauth_token_path()
     token_store = OAuthTokenStore(oauth_token_path)
+    pending_store = OAuthPendingStore(store._ws.oauth_pending_path())
     app.state.oauth_token_store = token_store
+    app.state.oauth_pending = pending_store
     app.state.oauth_environ = oauth_env
-    app.state.oauth_pending_states = set()
     app.state.oauth_exchange = oauth_exchange or exchange_code_for_token
     app.state.oauth_fetch_email = oauth_fetch_email or fetch_connected_email
     drop_sheet_path = store._ws.drop_sheet_config_path()
@@ -263,6 +267,14 @@ def create_app(
         fallback = str(request.base_url).rstrip("/")
         base = public_request_base(request.headers, fallback)
         return resolve_redirect_uri(oauth_env, request_base=base, explicit=explicit)
+
+    def _settings_url(request: Request, query: str) -> str:
+        fallback = str(request.base_url).rstrip("/")
+        origin = studio_origin_from_redirect_uri(
+            _redirect_uri_for(request),
+            public_request_base(request.headers, fallback),
+        )
+        return f"{origin}/settings/drive?{query}"
 
     @app.get("/api/health")
     def health() -> dict:
@@ -494,7 +506,7 @@ def create_app(
                        "VARIANT_DRIVE_OAUTH_CLIENT_SECRET",
             )
         state = new_oauth_state()
-        app.state.oauth_pending_states.add(state)
+        pending_store.add(state)
         redirect_uri = _redirect_uri_for(request)
         url = build_authorization_url(
             client_id=oauth_env[ENV_OAUTH_CLIENT_ID],
@@ -506,15 +518,15 @@ def create_app(
     @app.get("/api/drive/oauth/callback")
     def drive_oauth_callback(request: Request, code: str | None = None, state: str | None = None,
                              error: str | None = None):
-        settings_ok = "/settings/drive?oauth=connected"
-        settings_err = "/settings/drive?oauth=error"
         if error:
-            return RedirectResponse(url=f"{settings_err}&reason={error}", status_code=302)
+            return RedirectResponse(url=_settings_url(request, f"oauth=error&reason={error}"),
+                                    status_code=302)
         if not code or not state:
-            return RedirectResponse(url=f"{settings_err}&reason=missing_code", status_code=302)
-        if state not in app.state.oauth_pending_states:
-            return RedirectResponse(url=f"{settings_err}&reason=bad_state", status_code=302)
-        app.state.oauth_pending_states.discard(state)
+            return RedirectResponse(url=_settings_url(request, "oauth=error&reason=missing_code"),
+                                    status_code=302)
+        if not pending_store.consume(state):
+            return RedirectResponse(url=_settings_url(request, "oauth=error&reason=bad_state"),
+                                    status_code=302)
 
         client_id = oauth_env.get(ENV_OAUTH_CLIENT_ID, "")
         client_secret = oauth_env.get(ENV_OAUTH_CLIENT_SECRET, "")
@@ -533,8 +545,11 @@ def create_app(
             token_data.setdefault("client_id", client_id)
             token_data.setdefault("client_secret", client_secret)
             token_store.save(token_data)
-        except Exception:
-            return RedirectResponse(url=f"{settings_err}&reason=exchange_failed", status_code=302)
+        except Exception as exc:
+            print(f"oauth exchange failed: {exc}", flush=True)
+            traceback.print_exc()
+            return RedirectResponse(url=_settings_url(request, "oauth=error&reason=exchange_failed"),
+                                    status_code=302)
 
         try:
             app.state.drive = _build_drive_client(oauth_token_path=oauth_token_path)
@@ -545,7 +560,7 @@ def create_app(
         except Exception:
             pass
         _refresh_drive_info()
-        return RedirectResponse(url=settings_ok, status_code=302)
+        return RedirectResponse(url=_settings_url(request, "oauth=connected"), status_code=302)
 
     @app.post("/api/drive/oauth/disconnect")
     def drive_oauth_disconnect() -> dict:

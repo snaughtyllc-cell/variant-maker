@@ -48,6 +48,9 @@ class Workspace:
     def oauth_token_path(self) -> str:
         return os.path.join(self.drive_dir(), "oauth_token.json")
 
+    def oauth_pending_path(self) -> str:
+        return os.path.join(self.drive_dir(), "oauth_pending.json")
+
     def drop_sheet_config_path(self) -> str:
         return os.path.join(self.drive_dir(), "drop_sheet.json")
 
