@@ -5,7 +5,12 @@ on:
     branches:
       - cursor/railway-runpod-split-c975
     paths:
+      # Image copies the Python engine in. Protect / trim / uniqueness live
+      # in variant_maker/*.py + neural/, not only deploy/runpod/.
       - deploy/runpod/**
+      - variant_maker/*.py
+      - variant_maker/neural/**
+      - pyproject.toml
       - .github/workflows/build-variant-cp.yml
   workflow_dispatch:
 
