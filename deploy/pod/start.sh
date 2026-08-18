@@ -37,7 +37,9 @@ if [[ "$RUNNER" == "local" ]]; then
     echo "ERROR: ffmpeg not found on PATH (required for --runner local)" >&2
     exit 1
   fi
-  if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q libvmaf; then
+  # Do not use grep -q here: with pipefail, it may close early and leave
+  # ffmpeg with SIGPIPE even though the filter is present.
+  if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -F libvmaf >/dev/null; then
     echo "ERROR: ffmpeg is missing libvmaf (quality guard will fail)" >&2
     exit 1
   fi
