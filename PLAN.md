@@ -130,6 +130,14 @@ Status legend: ✅ done & verified · 🔨 to build
 - Until then: generate once, Gallery Send to Drive in slices. Do **not** point three
   workflows at the same inbox (that re-renders 3×).
 
+## Phase 15 — Fast parallel / slim CPU worker  ⏸ noted (before a worker split)
+- Fast is CPU x264; HQ is GPU. Today both use `jobs: 1`. Pipeline already can
+  parallelize Fast. Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
+- **Do first (no new image):** Fast `jobs` 4–8 on the current GPU box; HQ stays 1.
+- **Do not:** split one 20-pack across CPU+GPU (uniqueness / cancel / two encodes).
+- **Later:** slim ffmpeg CPU worker for all Fast if CUDA boot is still the daily pain.
+  Optional: `count <= 3` Fast on CPU so a try-out never waits on GPU wake.
+
 ## Phase 13 — Stronger audio uniqueness  ✅
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
   Pitch is **on** when ffmpeg lists the `rubberband` filter (`has_rubberband()`, cached);
