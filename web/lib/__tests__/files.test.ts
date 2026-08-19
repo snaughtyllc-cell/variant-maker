@@ -12,14 +12,18 @@ describe("files helpers", () => {
     expect(totalVariants(0, 20)).toBe(0);
   });
 
-  it("allows iPhone 4K under 512 MB and rejects bigger dumps", () => {
+  it("allows iPhone Camera Roll 4K and only rejects over 1 GB", () => {
     const reel = new File([new Uint8Array(1)], "IMG_0683.MOV", { type: "video/quicktime" });
     Object.defineProperty(reel, "size", { value: 204 * 1024 * 1024 });
     expect(tooLargeMessage(reel)).toBeNull();
 
+    const minute = new File([new Uint8Array(1)], "IMG_0700.MOV", { type: "video/quicktime" });
+    Object.defineProperty(minute, "size", { value: 600 * 1024 * 1024 });
+    expect(tooLargeMessage(minute)).toBeNull();
+
     const dump = new File([new Uint8Array(1)], "long.mov", { type: "video/quicktime" });
-    Object.defineProperty(dump, "size", { value: 600 * 1024 * 1024 });
-    expect(tooLargeMessage(dump)).toMatch(/600 MB/);
-    expect(tooLargeMessage(dump)).toMatch(/512 MB/);
+    Object.defineProperty(dump, "size", { value: 1200 * 1024 * 1024 });
+    expect(tooLargeMessage(dump)).toMatch(/1200 MB/);
+    expect(tooLargeMessage(dump)).toMatch(/1 GB/);
   });
 });

@@ -7,7 +7,7 @@ describe("drop zone copy", () => {
     expect(dropZoneTitle()).toBe("Add videos");
     expect(dropZoneSubcopy()).toMatch(/tap/i);
     expect(dropZoneBrowse()).toMatch(/camera roll|files/i);
-    expect(dropZoneHint()).toMatch(/1080/i);
+    expect(dropZoneHint()).toMatch(/camera roll|4k|\.mov/i);
   });
 });
 

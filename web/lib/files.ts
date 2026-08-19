@@ -1,4 +1,4 @@
-export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024; // 512 MB — iPhone 4K HEVC shorts
+export const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024; // 1 GB — iPhone 4K HEVC from Camera Roll
 
 export function accepts(file: File): boolean {
   if (file.type.startsWith("video/")) return true;
@@ -9,9 +9,8 @@ export function tooLargeMessage(file: File): string | null {
   if (file.size <= MAX_UPLOAD_BYTES) return null;
   const mb = (file.size / (1024 * 1024)).toFixed(0);
   return (
-    `${file.name} is ${mb} MB — over the 512 MB drop limit. ` +
-    "Trim the clip or export 1080p H.264, then drop that file. " +
-    "4K under 512 MB is fine; we shrink it after upload."
+    `${file.name} is ${mb} MB — over the 1 GB iPhone drop limit. ` +
+    "Trim it in Photos, then pick it from Camera Roll again."
   );
 }
 

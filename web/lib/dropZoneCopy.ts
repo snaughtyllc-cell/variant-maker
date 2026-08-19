@@ -8,7 +8,7 @@ export function dropZoneSubcopy(): string {
 }
 
 export function dropZoneHint(): string {
-  return "iPhone 4K is fine up to 512 MB (slow upload). We shrink it after it lands. 1080p is faster.";
+  return "Camera Roll 4K .MOV is fine (up to 1 GB). Upload is slow; we shrink it after it lands.";
 }
 
 export function dropZoneBrowse(): string {
