@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import { SourceOut } from "@/lib/types";
-import { regenerate, retryCopy, sourceUrl, sourceZipUrl } from "@/lib/api";
-import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy } from "@/lib/gallery";
+import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
+import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
 import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
 import { VariantCard } from "./VariantCard";
@@ -14,14 +14,17 @@ interface SourceGroupProps {
   selected: Set<string>;
   onToggleVariant: (key: string) => void;
   onToggleSelectSource: (source: SourceOut, select: boolean) => void;
+  onRemove: () => void;
 }
 
 export function SourceGroup({
-  source, onOpenVariant, onRegenerate, selected, onToggleVariant, onToggleSelectSource,
+  source, onOpenVariant, onRegenerate, selected, onToggleVariant,   onToggleSelectSource,
+  onRemove,
 }: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [zipMsg, setZipMsg] = useState<string | null>(null);
 
   const hasShortfall = source.shortfall > 0;
@@ -94,6 +97,20 @@ export function SourceGroup({
       console.error("Retry copy failed", e);
     } finally {
       setCopyLoading(false);
+    }
+  }
+
+  async function handleRemove(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (removing) return;
+    if (!window.confirm(removePackCopy(stillRunning))) return;
+    setRemoving(true);
+    try {
+      await removeSource(source.source_id);
+      onRemove();
+    } catch (err) {
+      console.error("Remove failed", err);
+      setRemoving(false);
     }
   }
 
@@ -245,6 +262,33 @@ export function SourceGroup({
           >
             ⌅ Open source folder
           </span>
+          <button
+            type="button"
+            aria-label="Remove pack from Gallery"
+            title="Remove from Gallery"
+            onClick={handleRemove}
+            disabled={removing}
+            className="touch-hit"
+            style={{
+              width: 44,
+              height: 44,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 22,
+              lineHeight: 1,
+              fontWeight: 700,
+              color: "var(--color-muted)",
+              background: "transparent",
+              border: "1px solid var(--color-line)",
+              borderRadius: 8,
+              cursor: removing ? "wait" : "pointer",
+              opacity: removing ? 0.6 : 1,
+              flexShrink: 0,
+            }}
+          >
+            ×
+          </button>
         </div>
       </div>
 

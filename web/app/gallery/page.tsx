@@ -124,6 +124,18 @@ function GalleryContent() {
     setSelected((prev) => withOkSelection(prev, [source], select));
   }
 
+  function handleRemoveSource(source: SourceOut) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const prefix = `${source.source_id}:`;
+      for (const key of [...next]) {
+        if (key.startsWith(prefix)) next.delete(key);
+      }
+      return next;
+    });
+    mutate();
+  }
+
   function handleSendModalClose() {
     setSendModalOpen(false);
     setSelected(new Set());
@@ -197,6 +209,7 @@ function GalleryContent() {
             selected={selected}
             onToggleVariant={handleToggleVariant}
             onToggleSelectSource={handleToggleSelectSource}
+            onRemove={() => handleRemoveSource(source)}
           />
         ))}
       </div>

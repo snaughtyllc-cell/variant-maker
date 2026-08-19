@@ -347,3 +347,45 @@ def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
     assert source_files_ready(job.sources[0], ws, job_id) == 1
     assert job.error is None
     assert store.retry_copy("nope") is None
+
+
+def test_delete_source_drops_pack_from_gallery_and_disk(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    sid = job.sources[0].source_id
+    job_dir = os.path.join(str(tmp_path), "jobs", job.job_id)
+    assert os.path.isdir(job_dir)
+    assert store.delete_source(sid) is True
+    assert store.gallery() == []
+    assert store.get(job.job_id) is None
+    assert not os.path.isdir(job_dir)
+    assert store.delete_source(sid) is False
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 0
+
+
+def test_delete_one_source_keeps_sibling(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x"), ("b.mp4", b"y")], count=1)
+    store.wait(job.job_id, timeout=5)
+    first, second = job.sources[0].source_id, job.sources[1].source_id
+    assert store.delete_source(first) is True
+    assert [s.source_id for s in store.gallery()] == [second]
+    assert store.get(job.job_id) is not None
+    assert os.path.isfile(os.path.join(str(tmp_path), "jobs", job.job_id, "job.json"))
+
+
+def test_delete_running_source_cancels_and_does_not_resurrect(tmp_path):
+    runner = _PausingRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    assert runner.v1_done.wait(timeout=5)
+    sid = job.sources[0].source_id
+    job_id = job.job_id
+    assert store.delete_source(sid) is True
+    store.wait(job_id, timeout=5)
+    time.sleep(0.15)
+    assert store.get(job_id) is None
+    assert store.gallery() == []
+    assert not os.path.isdir(os.path.join(str(tmp_path), "jobs", job_id))

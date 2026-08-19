@@ -25,6 +25,17 @@ class Workspace:
     def variant_path(self, job_id: str, source_id: str, filename: str) -> str:
         return os.path.join(self.source_out_dir(job_id, source_id), filename)
 
+    def job_dir(self, job_id: str) -> str:
+        return os.path.join(self.root, "jobs", job_id)
+
+    def remove_source(self, job_id: str, source_id: str) -> None:
+        import shutil
+        shutil.rmtree(self._source_dir(job_id, source_id), ignore_errors=True)
+
+    def remove_job(self, job_id: str) -> None:
+        import shutil
+        shutil.rmtree(self.job_dir(job_id), ignore_errors=True)
+
     def save_upload(self, job_id: str, source_id: str, filename: str, data: bytes) -> str:
         path = self.source_in_path(job_id, source_id, filename)
         os.makedirs(os.path.dirname(path), exist_ok=True)

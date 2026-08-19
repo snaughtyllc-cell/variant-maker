@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import shutil
 import threading
 import uuid
 import zipfile
@@ -313,6 +314,43 @@ class JobStore:
             self._persist(job)
         return job
 
+    def delete_source(self, source_id: str) -> bool:
+        """Remove a pack from Gallery. Cancels a live job first. Deletes Studio files."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return False
+        job_id, _source = loc
+        job = self._jobs.get(job_id)
+        if job is not None and job.state == "running":
+            self.cancel(job_id)
+        self._ws.remove_source(job_id, source_id)
+        with self._lock:
+            self._source_index.pop(source_id, None)
+            if job is not None:
+                job.sources = [s for s in job.sources if s.source_id != source_id]
+        if job is None or not job.sources:
+            return self.delete_job(job_id)
+        self._persist(job)
+        return True
+
+    def delete_job(self, job_id: str) -> bool:
+        """Drop a job from memory and disk. Cancels if still running."""
+        job = self.get(job_id)
+        if job is None:
+            return False
+        if job.state == "running":
+            self.cancel(job_id)
+        with self._lock:
+            self._jobs.pop(job_id, None)
+            self._cancel.pop(job_id, None)
+            for source in job.sources:
+                self._source_index.pop(source.source_id, None)
+            ev = self._done.get(job_id)
+            if ev is not None:
+                ev.set()
+            self._ws.remove_job(job_id)
+        return True
+
     def _persist(self, job: Job) -> None:
         """Write job.json so a Studio restart can restore Gallery + resume a live run."""
         path = self._ws.job_meta_path(job.job_id)
@@ -320,7 +358,14 @@ class JobStore:
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(_job_to_dict(job), f)
-        os.replace(tmp, path)
+        with self._lock:
+            if job.job_id not in self._jobs:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                return
+            os.replace(tmp, path)
 
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
         try:
@@ -426,6 +471,8 @@ class JobStore:
                 job.error = _public_job_error(exc)
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
+            if job.job_id not in self._jobs:
+                return
             job.state = "cancelled" if token.is_set() else "done"
             if job.state == "done":
                 for source in job.sources:

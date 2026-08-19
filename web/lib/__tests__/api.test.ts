@@ -85,6 +85,18 @@ describe("retryCopy", () => {
   });
 });
 
+describe("removeSource", () => {
+  it("DELETEs /api/sources/:id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    await api.removeSource("s1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/sources/s1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
 it("createDriveExport posts destination, variants, consume_bank, and caption folder", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ export_id: "exp_1", state: "pending", files: [] }), { status: 200 }),

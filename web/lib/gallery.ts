@@ -14,6 +14,12 @@ export function copyMissingCopy(): string {
   return "GPU finished, but videos didn't copy back to Studio. Retry copy, or Regenerate if that still fails.";
 }
 
+export function removePackCopy(running: boolean): string {
+  return running
+    ? "This pack is still generating. Stop it and remove it from Gallery? Files on Studio are deleted."
+    : "Remove this pack from Gallery? Files on Studio are deleted. Drive uploads are not touched.";
+}
+
 export function filesReadyCount(source: SourceOut): number {
   return source.files_ready ?? source.delivered;
 }

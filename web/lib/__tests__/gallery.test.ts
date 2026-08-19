@@ -7,6 +7,7 @@ import {
   isFileReady,
   sortSources,
   zipEmptyCopy,
+  removePackCopy,
 } from "@/lib/gallery";
 const mk = (id: string, shortfall: number, created_utc = "") => ({
   source_id: id, filename: id, requested: 5, delivered: 5 - shortfall, shortfall,
@@ -47,6 +48,11 @@ describe("gallery helpers", () => {
     expect(filesReadyCount(missing)).toBe(0);
     expect(deliveryComplete(missing)).toBe(false);
     expect(copyMissingCopy()).toMatch(/Retry copy/i);
+  });
+
+  it("explains removing a pack, including a live one", () => {
+    expect(removePackCopy(false)).toMatch(/Gallery/i);
+    expect(removePackCopy(true)).toMatch(/still generating/i);
   });
 
   it("treats omitted file_ready as present (older Studio payloads)", () => {

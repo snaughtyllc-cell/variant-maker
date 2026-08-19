@@ -119,6 +119,11 @@ export function regenerate(sourceId: string, n: number): Promise<SourceOut> {
   return fetch(`/api/sources/${sourceId}/regenerate`, { method: "POST", body: fd }).then(json<SourceOut>);
 }
 
+export async function removeSource(sourceId: string): Promise<void> {
+  const res = await fetch(`/api/sources/${sourceId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 export function retryCopy(sourceId: string): Promise<SourceOut> {
   return fetch(`/api/sources/${sourceId}/retry-copy`, { method: "POST" }).then(json<SourceOut>);
 }

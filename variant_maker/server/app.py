@@ -628,6 +628,11 @@ def create_app(
         job = store.get(loc[0]) if loc else None
         return _source_out(source, ok_only=True, job=job, ws=store._ws)
 
+    @app.delete("/api/sources/{source_id}", status_code=204)
+    def delete_source(source_id: str) -> None:
+        if not store.delete_source(source_id):
+            raise HTTPException(status_code=404, detail="source not found")
+
     @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
     def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
         variant = store.set_platform_result(source_id, index, body.result)

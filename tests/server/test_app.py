@@ -519,6 +519,23 @@ def test_retry_copy_endpoint_pulls_from_object_store(tmp_path):
     assert client.post("/api/sources/nope/retry-copy").status_code == 404
 
 
+def test_delete_source_endpoint_removes_gallery_card(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    sid = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["source_id"]
+    assert client.get("/api/gallery").json()[0]["source_id"] == sid
+    resp = client.delete(f"/api/sources/{sid}")
+    assert resp.status_code == 204
+    assert client.get("/api/gallery").json() == []
+    assert client.get(f"/api/jobs/{job_id}").status_code == 404
+    assert client.delete("/api/sources/nope").status_code == 404
+
+
 def test_cli_build_app_serves_health(tmp_path):
     from variant_maker.server.cli import build_app
     client = TestClient(build_app(str(tmp_path)))
