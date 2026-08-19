@@ -14,6 +14,19 @@ def test_split_caption_bank_on_dash_lines():
     ]
 
 
+def test_split_caption_bank_blank_lines_and_numbers():
+    raw = "1. POV: she looked back\n#reels\n\n2. Wait for it\n#fyp"
+    assert split_caption_bank(raw) == [
+        "POV: she looked back\n#reels",
+        "Wait for it\n#fyp",
+    ]
+
+
+def test_split_caption_bank_strips_code_fence():
+    raw = "```\nFirst #reels\n---\nSecond #fyp\n```"
+    assert split_caption_bank(raw) == ["First #reels", "Second #fyp"]
+
+
 def test_sanitize_keeps_hashtags_and_emoji():
     assert sanitize_caption_stem("Wait for it 💕\n#reels #fyp") == "Wait for it 💕 #reels #fyp"
 

@@ -25,9 +25,22 @@ class Caption:
 
 
 def split_caption_bank(raw: str) -> list[str]:
-    """One caption per block, separated by a line that is only ---."""
-    parts = _DASH_SPLIT.split(raw or "")
-    return [p.strip() for p in parts if p.strip()]
+    """One caption per block. Prefers a --- line; else blank lines (ChatGPT paste)."""
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[^\n]*\n", "", text)
+        text = re.sub(r"\n```\s*$", "", text)
+    if _DASH_SPLIT.search(text):
+        parts = _DASH_SPLIT.split(text)
+    else:
+        parts = re.split(r"\n\s*\n", text)
+    out: list[str] = []
+    for part in parts:
+        block = part.strip()
+        block = re.sub(r"^(?:\d+[.)]\s+|[-*]\s+)", "", block)
+        if block:
+            out.append(block)
+    return out
 
 
 def sanitize_caption_stem(text: str) -> str:

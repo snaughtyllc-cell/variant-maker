@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { captionFilenamePreview, splitCaptionBank } from "@/lib/captions";
+import { captionBankChatPrompt, captionFilenamePreview, splitCaptionBank } from "@/lib/captions";
 
 describe("caption bank paste", () => {
   it("splits blocks on a --- line", () => {
@@ -7,6 +7,30 @@ describe("caption bank paste", () => {
       "POV one\n#reels",
       "Second\n#fyp",
     ]);
+  });
+
+  it("splits ChatGPT numbered blocks when there is no ---", () => {
+    expect(splitCaptionBank("1. POV: she looked back\n#reels\n\n2. Wait for it\n#fyp")).toEqual([
+      "POV: she looked back\n#reels",
+      "Wait for it\n#fyp",
+    ]);
+  });
+
+  it("strips a markdown code fence", () => {
+    expect(splitCaptionBank("```\nFirst #reels\n---\nSecond #fyp\n```")).toEqual([
+      "First #reels",
+      "Second #fyp",
+    ]);
+  });
+});
+
+describe("captionBankChatPrompt", () => {
+  it("asks for --- separated captions and the topic", () => {
+    const prompt = captionBankChatPrompt({ count: 20, topic: "dating POV Reels" });
+    expect(prompt).toMatch(/exactly:\n---/);
+    expect(prompt).toMatch(/20 captions/);
+    expect(prompt).toMatch(/dating POV Reels/);
+    expect(prompt).not.toMatch(/numbered list/i);
   });
 });
 
