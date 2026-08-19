@@ -20,5 +20,8 @@ export function liveRunSubcopy(qualityMode: QualityMode = "fast"): string {
   if (qualityMode === "hq") {
     return `${HQ_RENDERING_HINT} Gallery stays empty until a variant finishes.`;
   }
-  return "Live status updates every second. Stay here until tiles appear; Gallery stays empty until a variant finishes.";
+  return (
+    "This is one encode per variant (default 20 for one clip). Live status updates every " +
+    "second. Stay here until tiles appear; Gallery stays empty until a variant finishes."
+  );
 }

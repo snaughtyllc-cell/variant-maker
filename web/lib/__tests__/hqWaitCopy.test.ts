@@ -12,5 +12,6 @@ describe("hqWaitCopy", () => {
     expect(liveRunSubcopy("hq")).toContain(HQ_RENDERING_HINT);
     expect(liveRunSubcopy("hq")).toMatch(/several minutes/i);
     expect(liveRunSubcopy("fast")).not.toMatch(/HQ upscale/i);
+    expect(liveRunSubcopy("fast")).toMatch(/20 for one clip/i);
   });
 });

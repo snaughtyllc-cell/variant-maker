@@ -3,8 +3,16 @@
 export const DEFAULT_PER_VIDEO = 20;
 /** Stepper ceiling — usual Fast pack is ~20; leave room to tap up. */
 export const MAX_PER_VIDEO = 40;
+/** Suggested count when someone is timing a first Generate. */
+export const SPEED_TEST_PER_VIDEO = 3;
 
 export function variantStepperHint(qualityMode: "fast" | "hq"): string | null {
   if (qualityMode !== "fast") return null;
-  return "Usual pack — tap − if you want fewer.";
+  return "Usual pack is 20 encodes of this clip. Tap − to 3 for a speed test.";
+}
+
+export function generatePackLabel(fileCount: number, perVideo: number): string {
+  if (fileCount <= 0) return `${perVideo} variants each`;
+  if (fileCount === 1) return `1 clip → ${perVideo} variants`;
+  return `${fileCount} clips → ${fileCount * perVideo} variants`;
 }

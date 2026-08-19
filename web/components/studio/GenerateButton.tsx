@@ -1,5 +1,5 @@
 "use client";
-import { totalVariants } from "@/lib/files";
+import { generatePackLabel } from "@/lib/variantStepperCopy";
 
 interface GenerateButtonProps {
   fileCount: number;
@@ -20,7 +20,6 @@ export function GenerateButton({
   jobId,
   complete,
 }: GenerateButtonProps) {
-  const total = totalVariants(fileCount, perVideo);
   const isDisabled = disabled || busy || fileCount === 0;
 
   return (
@@ -57,7 +56,7 @@ export function GenerateButton({
           ? "in progress — Cancel on the live run if this was a mistake"
           : jobId && complete
             ? "New run clears this pack"
-            : `${total} variant${total !== 1 ? "s" : ""}`}
+            : generatePackLabel(fileCount, perVideo)}
       </small>
     </button>
   );
