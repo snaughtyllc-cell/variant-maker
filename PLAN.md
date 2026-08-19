@@ -123,6 +123,13 @@ Status legend: ✅ done & verified · 🔨 to build
   bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
 - After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12.
 
+## Phase 14 — Split pack across creator destinations  ⏸ noted (build shortly)
+- One generate → partition variants into **main / trial / growth** Drive folders
+  (one Repurpose queue each). Same niche caption folder; different files per account.
+- Spec: `docs/superpowers/specs/2026-08-19-creator-pack-split.md`.
+- Until then: generate once, Gallery Send to Drive in slices. Do **not** point three
+  workflows at the same inbox (that re-renders 3×).
+
 ## Phase 13 — Stronger audio uniqueness  ✅
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).
   Pitch is **on** when ffmpeg lists the `rubberband` filter (`has_rubberband()`, cached);
