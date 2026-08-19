@@ -56,6 +56,35 @@ describe("createJob posts multipart with files + count", () => {
     const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
     expect(body.get("quality_mode")).toBe("hq");
   });
+
+  it("retries a dropped chunked upload then starts the job", async () => {
+    const f = new File([new Uint8Array(4_000_000)], "a.mp4", { type: "video/mp4" });
+    let offset0 = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = String(url);
+      if (u === "/api/uploads") {
+        return new Response(JSON.stringify({ upload_id: "up1", chunk_hint: 2_000_000 }), { status: 200 });
+      }
+      if (u.includes("/api/uploads/up1?offset=0")) {
+        offset0 += 1;
+        if (offset0 === 1) {
+          return new Response("Bad Gateway", { status: 502, statusText: "Bad Gateway" });
+        }
+        return new Response(JSON.stringify({ received: 2000000 }), { status: 200 });
+      }
+      if (u.includes("/api/uploads/up1?offset=2000000")) {
+        return new Response(JSON.stringify({ received: 4000000 }), { status: 200 });
+      }
+      if (u === "/api/jobs/from-uploads") {
+        return new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 });
+      }
+      return new Response("nope", { status: 500, statusText: "Internal Server Error" });
+    });
+    const out = await api.createJob([f], 20);
+    expect(out.job_id).toBe("j1");
+    expect(offset0).toBe(2);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/jobs/from-uploads")).toBe(true);
+  });
 });
 
 describe("regenerate posts form n", () => {
@@ -262,6 +291,13 @@ describe("error responses surface FastAPI `detail`", () => {
       ),
     );
     await expect(api.getDriveStatus()).rejects.toThrow("no ok videos in selection; destination required");
+  });
+
+  it("maps 502 to a Generate-again upload drop", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>502</html>", { status: 502, statusText: "Bad Gateway" }),
+    );
+    await expect(api.getDriveStatus()).rejects.toThrow(/Generate again/i);
   });
 
   it("falls back to status text when the body isn't JSON", async () => {

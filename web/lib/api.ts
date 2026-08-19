@@ -23,6 +23,9 @@ import {
  * permission/quota errors) reach the UI instead of "400 Bad Request".
  */
 async function errorMessage(res: Response): Promise<string> {
+  if (res.status === 502 || res.status === 503) {
+    return "Upload dropped before Generate started — hit Generate again.";
+  }
   const fallback = `${res.status} ${res.statusText}`;
   try {
     const body = await res.clone().json();
@@ -61,6 +64,33 @@ export const getDiagnostics = () => fetch("/api/diagnostics").then(json<Diagnost
 /** RunPod's HTTP proxy often drops multipart bodies above a few MB — chunk instead. */
 const CHUNK_THRESHOLD = 3_500_000;
 const CHUNK_SIZE = 2_000_000;
+const CHUNK_RETRIES = 4;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function putChunk(url: string, body: ArrayBuffer): Promise<void> {
+  let last = "Upload dropped — hit Generate again.";
+  for (let attempt = 0; attempt < CHUNK_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/octet-stream" },
+        body,
+      });
+      if (res.ok) return;
+      last = await errorMessage(res);
+      if (res.status !== 400 && res.status !== 408 && res.status < 500) {
+        throw new Error(last);
+      }
+    } catch (err) {
+      last = err instanceof Error ? err.message : last;
+    }
+    await sleep(400 * 2 ** attempt);
+  }
+  throw new Error(last);
+}
 
 async function uploadFileChunked(file: File): Promise<string> {
   const initFd = new FormData();
@@ -74,12 +104,7 @@ async function uploadFileChunked(file: File): Promise<string> {
   while (offset < file.size) {
     const blob = file.slice(offset, offset + chunkSize);
     const buf = await blob.arrayBuffer();
-    const res = await fetch(`/api/uploads/${init.upload_id}?offset=${offset}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: buf,
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    await putChunk(`/api/uploads/${init.upload_id}?offset=${offset}`, buf);
     offset += blob.size;
   }
   return init.upload_id;

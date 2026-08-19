@@ -148,6 +148,25 @@ def test_chunked_upload_then_create_job(tmp_path):
     store.wait(body["job_id"], timeout=5)
 
 
+def test_put_upload_client_disconnect_is_400(tmp_path, monkeypatch):
+    from starlette.requests import ClientDisconnect, Request
+
+    client, _store = _client(tmp_path)
+    init = client.post(
+        "/api/uploads",
+        data={"filename": "clip.mp4", "size": "12"},
+    )
+    uid = init.json()["upload_id"]
+
+    async def boom(self):
+        raise ClientDisconnect()
+
+    monkeypatch.setattr(Request, "body", boom)
+    resp = client.put(f"/api/uploads/{uid}?offset=0", content=b"not-enough")
+    assert resp.status_code == 400
+    assert "Generate" in resp.json()["detail"]
+
+
 def test_get_job_exposes_in_flight_from_event_log(tmp_path):
     from variant_maker.server.events import VariantEvent
 

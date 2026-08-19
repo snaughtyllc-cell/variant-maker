@@ -14,6 +14,7 @@ from typing import Any, Callable, Mapping
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
+from starlette.requests import ClientDisconnect
 
 from .captions import CaptionError, CaptionStore, split_caption_bank
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
@@ -446,7 +447,13 @@ def create_app(
         meta = _UPLOAD_META.get(upload_id)
         if meta is None:
             raise HTTPException(status_code=404, detail="upload not found")
-        data = await request.body()
+        try:
+            data = await request.body()
+        except ClientDisconnect as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Upload dropped — hit Generate again.",
+            ) from exc
         path = meta["path"]
         with open(path, "r+b") as f:
             f.seek(int(offset))
