@@ -17,11 +17,14 @@ import tempfile
 
 METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). VaryForge defaults
-# above that for top-tail resilience: 24 bits ≈ 37.5% unique.
-TARGET_BITS = 24
-DEFAULT_TARGET = TARGET_BITS / 64.0  # ≈ 0.375
-# Same-batch peer floor; TikFusion uses 8 — we raise slightly for diversity.
-MIN_PEER_BITS = 10
+# above that for top-tail resilience: 32 bits = 50% unique (32/64 = 0.5).
+# Local uniqueness gate only — not a platform verdict.
+TARGET_BITS = 32
+DEFAULT_TARGET = TARGET_BITS / 64.0  # 32/64 = 0.5
+# Same-batch peer floor; TikFusion uses 8 — we raise to 18 so siblings spread.
+MIN_PEER_BITS = 18
+DEFAULT_PEER = MIN_PEER_BITS  # alias
+MAX_PASSES = 3
 FRAME_FRACS = (0.25, 0.50, 0.75)
 # Vertical TikTok/Reels-ish canvas used for pairwise SSIM.
 SSIM_WIDTH = 576

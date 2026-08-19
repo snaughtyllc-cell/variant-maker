@@ -112,9 +112,12 @@ Status legend: ✅ done & verified · 🔨 to build
 
 ## Phase 11 — Auto-tune controller  ✅
 - Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default
-  `uniqueness.DEFAULT_TARGET` 0.375). **Fast default on** (`stop_on_clear` so a pack
+  `uniqueness.DEFAULT_TARGET` = 32/64). **Fast default on** (`stop_on_clear` so a pack
   stops at the first uniqueness+quality hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
+- Fast gate is **32 bits vs source**, **18 vs peers**. Over-budget `sample()` shrinks
+  color/encode first so crop/rotate survive. Color stays zero-mean. VMAF floor stays.
+  Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 
 ## Phase 12 — Platform outcome tracking (learning loop)  ⏸ skipped for now
@@ -123,14 +126,17 @@ Status legend: ✅ done & verified · 🔨 to build
   bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
 - After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12.
 
-## Phase 14 — Split pack across creator destinations  ⏸ noted (build shortly)
+## Phase 14 — Split pack across creator destinations  ✅
 - One generate → partition variants into **main / trial / growth** Drive folders
   (one Repurpose queue each). Same niche caption folder; different files per account.
 - Spec: `docs/superpowers/specs/2026-08-19-creator-pack-split.md`.
-- Until then: generate once, Gallery Send to Drive in slices. Do **not** point three
-  workflows at the same inbox (that re-renders 3×).
+- Studio Send to Drive: **Split pack** with three choosable destination dropdowns.
+  Any subset can be filled (Growth empty is a 2-way split; one dest can take all).
+  File counts must **sum to the selected total**. Default 20×3 is 1–7 / 8–14 / 15–20.
+  `POST /api/drive/exports/split` starts one existing export job per destination.
+  No re-render. Do **not** point three workflows at the same inbox.
 
-## Phase 15 — Fast parallel / slim CPU worker  ◑ option 3 in flight
+## Phase 15 — Fast parallel / slim CPU worker  ✅ shipped (scale to zero)
 - Fast is CPU x264; HQ is GPU. Pipeline already parallelizes Fast (`jobs` + uniqueness lock).
   Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
 - **Shipped:** Fast `jobs` up to 8 in the payload (`encode_jobs_for_worker`). Worker must

@@ -18,16 +18,19 @@ def _tiny_mp4(path, *, color="black", extra_vf=None, lavfi=None):
 def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0) == 0
     assert uniqueness.bits_from_ssim(0.0) == 64
-    # TikFusion floor ≈ 18 bits; VaryForge default hard gate is 24 (~37.5% unique).
+    # TikFusion floor ≈ 18 bits; VaryForge default hard gate is 32 (32/64 = 0.5).
+    # Local uniqueness only — not a platform verdict.
     assert uniqueness.bits_from_ssim(1.0 - 18 / 64) == 18
-    assert uniqueness.bits_from_ssim(1.0 - 24 / 64) == 24
-    assert uniqueness.TARGET_BITS == 24
-    assert uniqueness.DEFAULT_TARGET == 24 / 64
-    assert uniqueness.MIN_PEER_BITS == 10
+    assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
+    assert uniqueness.TARGET_BITS == 32
+    assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
+    assert uniqueness.MIN_PEER_BITS == 18
+    assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
+    assert uniqueness.MAX_PASSES == 3
 
 
 def test_similarity_is_one_minus_uniqueness():
-    assert uniqueness.similarity_from_uniqueness(0.375) == 0.625
+    assert uniqueness.similarity_from_uniqueness(uniqueness.DEFAULT_TARGET) == 1.0 - uniqueness.DEFAULT_TARGET
     assert uniqueness.similarity_from_uniqueness(0.0) == 1.0
     assert uniqueness.similarity_from_uniqueness(1.0) == 0.0
 

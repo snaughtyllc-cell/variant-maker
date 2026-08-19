@@ -27,6 +27,7 @@ export interface SourceOut {
   created_utc?: string | null;
   files_ready?: number;
   copy_status?: "ok" | "copying" | "missing";
+  job_id?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
@@ -81,6 +82,28 @@ export interface ExportJob {
   state: string;
   created_utc: string;
   files: ExportFile[];
+}
+export interface SplitDestination {
+  destination_id: string;
+  label?: string | null;
+  count?: number | null;
+}
+export interface SplitExportDest {
+  destination_id: string;
+  label?: string | null;
+  count?: number | null;
+}
+export interface SplitExportJob {
+  id: string;
+  dest: string;
+  files: string[];
+  count: number;
+  label?: string | null;
+}
+export interface SplitExportResult {
+  ok: boolean;
+  jobs: SplitExportJob[];
+  split: number[][];
 }
 
 export interface DriveVideo {

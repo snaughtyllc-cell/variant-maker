@@ -11,8 +11,8 @@ Contract:
 
 The distortion model is the budget contract: each budgeted axis contributes a value in
 [0, 1] measuring how far it strays from its calm point, relative to its in-range reach.
-sample() shrinks every budgeted axis toward its calm point by one shared factor when the
-raw draw overspends, which keeps zero-mean symmetry and the [lo, hi] bounds intact.
+When the raw draw overspends, sample() shrinks COLOR/encode axes toward calm first and
+keeps crop_keep/rotate_deg as long as possible. Color stays zero-mean; bounds stay intact.
 """
 from __future__ import annotations
 
@@ -47,6 +47,11 @@ _VIDEO_AXES = (
 )
 # crf is output as an int (floored toward its calm 'lo' end, so its budget share never grows).
 _INT_AXES = frozenset({"crf"})
+# Over-budget shrink: collapse these first so geometry (crop/rotate) survives longer.
+_COLOR_ENCODE_AXES = frozenset({
+    "brightness", "contrast", "saturation", "gamma", "hue_deg", "grain", "unsharp", "crf",
+})
+_GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg"})
 
 
 def derive_seed(master_seed: int, index: int) -> int:
@@ -74,6 +79,28 @@ def _axis_distortion(kind, ref, lo: float, hi: float, value: float) -> float:
     if reach <= 0:
         return 0.0
     return abs(value - _calm_point(kind, ref, lo, hi)) / reach
+
+
+def _spent_on(raw: dict[str, float], preset: Preset, names: frozenset[str]) -> float:
+    total = 0.0
+    for name, kind, ref, budgeted in _VIDEO_AXES:
+        if not budgeted or name not in names:
+            continue
+        r = getattr(preset, name)
+        total += _axis_distortion(kind, ref, r.lo, r.hi, raw[name])
+    return total
+
+
+def _shrink_toward_calm(
+    raw: dict[str, float], preset: Preset, names: frozenset[str], factor: float,
+) -> None:
+    """Scale named axes toward their calm point. factor=0 collapses to calm; 1 keeps raw."""
+    for name, kind, ref, budgeted in _VIDEO_AXES:
+        if not budgeted or name not in names:
+            continue
+        r = getattr(preset, name)
+        calm = _calm_point(kind, ref, r.lo, r.hi)
+        raw[name] = calm + factor * (raw[name] - calm)
 
 
 def total_distortion(preset: Preset, params: dict) -> float:
@@ -159,19 +186,19 @@ def sample(
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
 
-    # Fit the budget: shrink every budgeted axis toward its calm point by one factor.
-    spent = sum(
-        _axis_distortion(kind, ref, getattr(preset, name).lo, getattr(preset, name).hi, raw[name])
-        for name, kind, ref, b in _VIDEO_AXES if b
-    )
+    # Fit the budget: shrink COLOR/encode first; keep crop_keep/rotate_deg as long as possible.
+    spent = _spent_on(raw, preset, _COLOR_ENCODE_AXES | _GEOMETRY_AXES)
     if spent > budget and spent > 0:
-        factor = budget / spent
-        for name, kind, ref, b in _VIDEO_AXES:
-            if not b:
-                continue
-            r = getattr(preset, name)
-            calm = _calm_point(kind, ref, r.lo, r.hi)
-            raw[name] = calm + factor * (raw[name] - calm)
+        geo_spent = _spent_on(raw, preset, _GEOMETRY_AXES)
+        leftover = budget - geo_spent
+        if leftover >= 0:
+            color_spent = _spent_on(raw, preset, _COLOR_ENCODE_AXES)
+            if color_spent > 0:
+                _shrink_toward_calm(raw, preset, _COLOR_ENCODE_AXES, leftover / color_spent)
+        else:
+            _shrink_toward_calm(raw, preset, _COLOR_ENCODE_AXES, 0.0)
+            if geo_spent > 0:
+                _shrink_toward_calm(raw, preset, _GEOMETRY_AXES, budget / geo_spent)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats

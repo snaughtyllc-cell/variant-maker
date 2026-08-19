@@ -3,11 +3,22 @@ import os
 import subprocess
 
 import pytest
+from conftest import HAS_FFMPEG
 
 from variant_maker import pipeline
-from variant_maker.probe import probe
 from variant_maker.neural import upscale
-from conftest import HAS_FFMPEG
+from variant_maker.probe import probe
+from variant_maker.uniqueness import DEFAULT_TARGET, MIN_PEER_BITS, TARGET_BITS
+
+
+def test_default_uniqueness_target_is_32_bits():
+    """Fast uniqueness gate is 32/64 — twins that merely clear 24 bits are not enough."""
+    assert TARGET_BITS == 32
+    assert pipeline.DEFAULT_UNIQUENESS_TARGET == DEFAULT_TARGET
+    assert pipeline.DEFAULT_UNIQUENESS_TARGET == 32 / 64
+    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == MIN_PEER_BITS
+    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 18
+
 
 HAS_RESR = upscale.available("models/realesrgan")
 

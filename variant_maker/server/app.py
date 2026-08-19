@@ -26,6 +26,8 @@ from .drive_config import (
 )
 from .drive_exports import (ExportError, ExportJob, ExportRunner, ExportStore, VariantRef,
                             build_export_files)
+from .drive_split import execute_split_export
+from .pack_split import assign_refs, partition, split_indices
 from .drive_oauth import (
     OAuthPendingStore,
     OAuthTokenStore,
@@ -55,8 +57,9 @@ from .jobs import (
 from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
                      DiagnosticsItem, DriveStatusOut, DriveVideoOut, DriveVideosOut,
                      DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
-                     ExportCreateIn, ExportFileOut, ExportJobOut, InFlightOut, JobDetail,
+                     ExportCreateIn, ExportFileOut, ExportJobOut, ExportSplitDestIn, ExportSplitIn, InFlightOut, JobDetail,
                      JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
+                     SplitExportJobOut, SplitExportOut,
                      VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn,
                      CaptionAdvanceIn, CaptionBankFolderOut, CaptionBankOut, CaptionBulkIn,
                      CaptionCreateIn, CaptionFolderCreateIn, CaptionOut, CaptionPreviewOut)
@@ -137,6 +140,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         created_utc=job.created_utc if job is not None else None,
         files_ready=files_ready,
         copy_status=copy_status,
+        job_id=job_id,
     )
 
 
@@ -200,6 +204,7 @@ def _caption_folder_out(meta) -> CaptionBankFolderOut:
         cursor=meta.cursor,
         low=meta.low,
     )
+
 
 
 def _export_job_out(job: ExportJob) -> ExportJobOut:
@@ -1055,6 +1060,19 @@ def create_app(
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
         ExportRunner(app.state.drive, app.state.exports).start(job)
         return _export_job_out(job)
+
+    @app.post("/api/drive/exports/split", status_code=201, response_model=SplitExportOut)
+    def split_export(body: ExportSplitIn) -> SplitExportOut:
+        """Partition one generate across Main/Trial/Growth. No re-render."""
+        _require_drive()
+        return execute_split_export(
+            drive=app.state.drive,
+            job_store=store,
+            dest_store=app.state.destinations,
+            export_store=app.state.exports,
+            caption_store=app.state.captions,
+            body=body,
+        )
 
     @app.get("/api/drive/exports/{export_id}", response_model=ExportJobOut)
     def get_export(export_id: str) -> ExportJobOut:

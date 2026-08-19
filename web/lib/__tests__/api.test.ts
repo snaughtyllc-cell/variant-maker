@@ -140,6 +140,37 @@ it("createDriveExport posts destination, variants, consume_bank, and caption fol
   });
 });
 
+it("createDriveExportSplit posts job_id, selected, destinations, consume_bank, and caption folder", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ ok: true, jobs: [], split: [] }), { status: 201 }),
+  );
+  await api.createDriveExportSplit({
+    job_id: "j1",
+    selected: [{ source_id: "s1", index: 1, caption: "POV #reels" }],
+    destinations: [
+      { destination_id: "dst_main", label: "main" },
+      { destination_id: "dst_trial", label: "trial" },
+      { destination_id: "dst_growth", label: "growth" },
+    ],
+    consume_bank: true,
+    caption_bank_id: "bank_gym",
+  });
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("/api/drive/exports/split");
+  expect((init as RequestInit).method).toBe("POST");
+  expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+    job_id: "j1",
+    selected: [{ source_id: "s1", index: 1, caption: "POV #reels" }],
+    destinations: [
+      { destination_id: "dst_main", label: "main" },
+      { destination_id: "dst_trial", label: "trial" },
+      { destination_id: "dst_growth", label: "growth" },
+    ],
+    consume_bank: true,
+    caption_bank_id: "bank_gym",
+  });
+});
+
 describe("captions API", () => {
   it("listCaptions GETs /api/captions", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

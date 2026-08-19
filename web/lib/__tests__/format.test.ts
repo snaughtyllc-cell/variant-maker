@@ -24,11 +24,11 @@ describe("vmafPass", () => {
 
 describe("similarityFromUniqueness", () => {
   it("mirrors uniqueness on the SSIM-bits scale", () => {
-    // Default gate 24/64 ≈ 0.375 unique → similarity ≤ 0.625 (62.5%)
-    expect(similarityFromUniqueness(24 / 64)).toBeCloseTo(40 / 64);
+    // Default gate 32/64 = 0.5 unique → similarity ≤ 0.5 (50%)
+    expect(similarityFromUniqueness(32 / 64)).toBeCloseTo(32 / 64);
     expect(similarityFromUniqueness(0.5)).toBe(0.5);
-    expect(pct01(similarityFromUniqueness(0.375))).toBe(63);
-    expect(pct01(0.375)).toBe(38); // uniqueness % (higher better)
+    expect(pct01(similarityFromUniqueness(0.5))).toBe(50);
+    expect(pct01(0.5)).toBe(50); // uniqueness % (higher better)
   });
 });
 

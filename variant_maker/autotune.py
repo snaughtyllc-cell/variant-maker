@@ -1,7 +1,7 @@
 """Phase 11 auto-tune: bisection on ``sample(..., strength=…)``.
 
 Live metric is uniqueness (SSIM bits / 64) with default target
-``uniqueness.DEFAULT_TARGET`` (0.375). The cheap similarity readout is
+``uniqueness.DEFAULT_TARGET`` (0.5). The cheap similarity readout is
 ``1 - uniqueness`` (see ``uniqueness.similarity_from_uniqueness``). The live
 gate stays on uniqueness — switching it to a 35% similarity (Path-B) cutoff
 would trash Fast look. Path-B 35% is a later calibration, not this controller.

@@ -48,6 +48,7 @@ class SourceOut(BaseModel):
     created_utc: str | None = None
     files_ready: int = 0          # ok variants whose mp4 is on Studio disk
     copy_status: Literal["ok", "copying", "missing"] = "ok"
+    job_id: str | None = None
 
 
 class JobSummary(BaseModel):
@@ -124,6 +125,36 @@ class ExportCreateIn(BaseModel):
     variants: list[ExportVariantRefIn]
     consume_bank: bool = False
     caption_bank_id: str | None = None
+
+
+class ExportSplitDestIn(BaseModel):
+    destination_id: str
+    label: str | None = None
+    count: int | None = None
+
+
+class ExportSplitIn(BaseModel):
+    job_id: str | None = None
+    selected: list[ExportVariantRefIn] | None = None
+    variants: list[ExportVariantRefIn] | None = None
+    destinations: list[ExportSplitDestIn] | None = None
+    destination_ids: list[str] | None = None
+    consume_bank: bool = False
+    caption_bank_id: str | None = None
+
+
+class SplitExportJobOut(BaseModel):
+    id: str
+    dest: str
+    files: list[str]
+    count: int
+    label: str | None = None
+
+
+class SplitExportOut(BaseModel):
+    ok: bool = True
+    jobs: list[SplitExportJobOut] = []
+    split: list[list[int]] = []
 
 
 class ExportFileOut(BaseModel):

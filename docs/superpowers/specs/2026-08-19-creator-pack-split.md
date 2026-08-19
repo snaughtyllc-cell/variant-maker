@@ -1,7 +1,7 @@
 # Creator pack split (main / trial / growth) — Design
 
 **Date:** 2026-08-19  
-**Status:** Noted — build shortly. Do not start until caption-folder + Custom gym tests land.  
+**Status:** Shipped.  
 **Product name:** VaryForge
 
 ## Why

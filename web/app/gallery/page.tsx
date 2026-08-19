@@ -112,6 +112,14 @@ function GalleryContent() {
   const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
   const okRefs = okVariantRefs(allSources, selected);
+  const selectedJobIds = [
+    ...new Set(
+      okRefs
+        .map((r) => allSources.find((s) => s.source_id === r.source_id)?.job_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const splitJobId = selectedJobIds.length === 1 ? selectedJobIds[0] : undefined;
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
   const visibleOkCount = okVariantKeys(sorted).length;
   const allVisibleSelected = selectionHasAllOk(selected, sorted);
@@ -232,6 +240,7 @@ function GalleryContent() {
         <SendToDriveModal
           refs={okRefs}
           destinations={destinations}
+          jobId={splitJobId}
           onClose={handleSendModalClose}
         />
       )}

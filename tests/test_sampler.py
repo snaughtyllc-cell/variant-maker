@@ -2,6 +2,8 @@ import pytest
 
 from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
+    _VIDEO_AXES,
+    _axis_distortion,
     clamp_strength,
     clamp_trims,
     derive_seed,
@@ -211,6 +213,30 @@ def test_clamp_trims_leaves_long_clips_alone():
     assert (start, end) == (0.2, 0.5)
 
 
+def test_over_budget_shrink_keeps_crop_and_rotate():
+    """When over budget, shrink color/encode first; keep crop_keep and rotate_deg."""
+    geo_names = {"crop_keep", "rotate_deg"}
+    geo_ds: list[float] = []
+    color_ds: list[float] = []
+    for s in SEEDS:
+        params = sample(MEDIUM, s)
+        assert total_distortion(MEDIUM, params) <= MEDIUM.budget + 1e-9
+        v = params["video"]
+        for name, kind, ref, budgeted in _VIDEO_AXES:
+            if not budgeted:
+                continue
+            d = _axis_distortion(
+                kind, ref, getattr(MEDIUM, name).lo, getattr(MEDIUM, name).hi, v[name],
+            )
+            (geo_ds if name in geo_names else color_ds).append(d)
+    mean_geo = sum(geo_ds) / len(geo_ds)
+    mean_color = sum(color_ds) / len(color_ds)
+    assert mean_geo > mean_color + 0.05, (
+        f"geometry should retain more distortion than color/encode: "
+        f"geo={mean_geo:.4f} color={mean_color:.4f}"
+    )
+
+
 def test_sample_with_duration_scales_trims_on_short_clips():
     p = sample(STRONG, derive_seed(7, 1), duration_s=1.0)
     v = p["video"]
@@ -219,4 +245,54 @@ def test_sample_with_duration_scales_trims_on_short_clips():
     unbounded = sample(STRONG, derive_seed(7, 1))
     assert unbounded["video"]["trim_s"] + unbounded["video"]["trim_end_s"] > (
         v["trim_s"] + v["trim_end_s"]
+    )
+
+
+def _retention(tight: float, control: float, calm: float) -> float | None:
+    """How much of the control's deviation from calm survives a tighter budget (0 = collapsed)."""
+    span = abs(control - calm)
+    if span < 1e-12:
+        return None
+    return abs(tight - calm) / span
+
+
+def test_overbudget_shrink_is_geometry_first():
+    """Over-budget shrink reduces saturation/brightness more than crop_keep vs a high-strength control.
+
+    Color/encode axes absorb the overspend first so crop_keep/rotate_deg stay on the
+    uniqueness-useful geometry as long as the budget allows.
+    """
+    sat_ret: list[float] = []
+    br_ret: list[float] = []
+    crop_ret: list[float] = []
+    kept_geo_killed_color = 0
+    for s in SEEDS[:200]:
+        control = sample(MEDIUM, s, strength=2.0)["video"]
+        tight = sample(MEDIUM, s, strength=0.25)["video"]
+        rs = _retention(tight["saturation"], control["saturation"], 1.0)
+        rb = _retention(tight["brightness"], control["brightness"], 0.0)
+        rc = _retention(tight["crop_keep"], control["crop_keep"], MEDIUM.crop_keep.hi)
+        if rs is not None:
+            sat_ret.append(rs)
+        if rb is not None:
+            br_ret.append(rb)
+        if rc is not None:
+            crop_ret.append(rc)
+        if (
+            abs(tight["saturation"] - 1.0) < 1e-9
+            and abs(tight["crop_keep"] - MEDIUM.crop_keep.hi) > 1e-4
+        ):
+            kept_geo_killed_color += 1
+    assert sat_ret and br_ret and crop_ret
+    mean_sat = sum(sat_ret) / len(sat_ret)
+    mean_br = sum(br_ret) / len(br_ret)
+    mean_crop = sum(crop_ret) / len(crop_ret)
+    assert mean_sat < mean_crop - 0.05, (
+        f"saturation retention {mean_sat:.3f} should shrink more than crop_keep {mean_crop:.3f}"
+    )
+    assert mean_br < mean_crop - 0.05, (
+        f"brightness retention {mean_br:.3f} should shrink more than crop_keep {mean_crop:.3f}"
+    )
+    assert kept_geo_killed_color > 10, (
+        "tight budget should collapse saturation to calm while leaving crop_keep off calm"
     )

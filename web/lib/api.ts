@@ -9,6 +9,8 @@ import {
   DriveVideo,
   ExportJob,
   ExportVariantRef,
+  SplitExportDest,
+  SplitExportResult,
   JobDetail,
   JobSummary,
   PlatformResult,
@@ -213,6 +215,63 @@ export function createDriveExport(
       ...(captionBankId ? { caption_bank_id: captionBankId } : {}),
     }),
   }).then(json<ExportJob>);
+}
+
+export function createDriveExportSplit(body: {
+  job_id?: string;
+  selected: ExportVariantRef[];
+  destinations: SplitExportDest[];
+  consume_bank?: boolean;
+  caption_bank_id?: string;
+}): Promise<SplitExportResult> {
+  return fetch("/api/drive/exports/split", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(body.job_id ? { job_id: body.job_id } : {}),
+      selected: body.selected,
+      destinations: body.destinations,
+      consume_bank: body.consume_bank ?? false,
+      ...(body.caption_bank_id ? { caption_bank_id: body.caption_bank_id } : {}),
+    }),
+  }).then(json<SplitExportResult>);
+}
+
+export function splitResultToJobs(result: SplitExportResult): ExportJob[] {
+  return result.jobs.map((j) => ({
+    export_id: j.id,
+    destination_id: j.dest,
+    folder_id: "",
+    state: "pending",
+    created_utc: "",
+    files: j.files.map((filename, index) => ({
+      source_id: "",
+      index: index + 1,
+      filename,
+      status: "pending",
+    })),
+  }));
+}
+
+export async function createSplitDriveExport(
+  destinationIds: string[],
+  variants: ExportVariantRef[],
+  consumeBank = false,
+  captionBankId?: string,
+  jobId?: string,
+): Promise<ExportJob[]> {
+  const labels = ["main", "trial", "growth"] as const;
+  const result = await createDriveExportSplit({
+    job_id: jobId,
+    selected: variants,
+    destinations: destinationIds.map((destination_id, i) => ({
+      destination_id,
+      label: labels[i],
+    })),
+    consume_bank: consumeBank,
+    caption_bank_id: captionBankId,
+  });
+  return splitResultToJobs(result);
 }
 
 export const getDriveExport = (exportId: string) =>

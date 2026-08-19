@@ -62,6 +62,22 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           {uniquenessPct}%
         </span>
       )}
+      {variant.escalated && (
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#1e1740",
+            color: "#c7b8ff",
+            border: "1px solid #362a68",
+            lineHeight: 1.4,
+          }}
+        >
+          esc
+        </span>
+      )}
       {/* Spatial tick — ONLY when spatial_ok === true */}
       {spatialOk && (
         <span
@@ -89,22 +105,6 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         zIndex: 2,
       }}
     >
-      {variant.escalated && (
-        <span
-          style={{
-            fontSize: 8,
-            fontWeight: 800,
-            padding: "1px 5px",
-            borderRadius: 5,
-            background: "#1e1740",
-            color: "#c7b8ff",
-            border: "1px solid #362a68",
-            textShadow: "0 1px 2px #000",
-          }}
-        >
-          ⚡
-        </span>
-      )}
       {variant.platform_result === "passed" && (
         <span
           style={{
