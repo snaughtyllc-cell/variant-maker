@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from .app import create_app
 from .drive_config import ENV_SA_JSON
 from .jobs import JobStore
-from .runner import LocalRunner, Runner
+from .runner import LocalRunner, RoutingRunner, Runner, fast_local_max_from_env
 from .runpod_client import HttpRunPodClient
 from .runpod_runner import RunPodServerlessRunner
 from .storage import S3ObjectStore
@@ -41,7 +41,11 @@ def make_runner(kind: str) -> Runner:
             access_key=os.environ["R2_ACCESS_KEY"], secret_key=os.environ["R2_SECRET_KEY"])
         client = HttpRunPodClient(endpoint_id=os.environ["RUNPOD_ENDPOINT_ID"],
                                   api_key=os.environ["RUNPOD_API_KEY"])
-        return RunPodServerlessRunner(store, client)
+        return RoutingRunner(
+            LocalRunner(),
+            RunPodServerlessRunner(store, client),
+            max_local_fast=fast_local_max_from_env(),
+        )
     raise SystemExit(f"unknown runner: {kind!r}")
 
 

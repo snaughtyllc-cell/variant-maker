@@ -135,8 +135,8 @@ Status legend: ✅ done & verified · 🔨 to build
   parallelize Fast. Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
 - **Do first (no new image):** Fast `jobs` 4–8 on the current GPU box; HQ stays 1.
 - **Do not:** split one 20-pack across CPU+GPU (uniqueness / cancel / two encodes).
-- **Later:** slim ffmpeg CPU worker for all Fast if CUDA boot is still the daily pain.
-  Optional: `count <= 3` Fast on CPU so a try-out never waits on GPU wake.
+- **Trying now:** `count <= 3` Fast on Studio CPU (Railway) so a try-out skips GPU wake.
+  20-packs and HQ still RunPod. Env `VARIANT_FAST_LOCAL_MAX` (default 3, 0 disables).
 
 ## Phase 13 — Stronger audio uniqueness  ✅
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).

@@ -119,3 +119,37 @@ def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
     )
     assert captured["quality_mode"] == "hq"
     assert captured["auto_tune"] is False
+
+
+def test_should_run_fast_local_only_tiny_fast_packs():
+    from variant_maker.server.runner import should_run_fast_local
+
+    assert should_run_fast_local("fast", 1) is True
+    assert should_run_fast_local("fast", 3) is True
+    assert should_run_fast_local("fast", 4) is False
+    assert should_run_fast_local("fast", 20) is False
+    assert should_run_fast_local("hq", 1) is False
+    assert should_run_fast_local("hq", 3) is False
+    assert should_run_fast_local("fast", 3, max_local_fast=0) is False
+
+
+def test_routing_runner_sends_tiny_fast_to_local_else_remote():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, remote = Fake("local"), Fake("remote")
+    router = RoutingRunner(local, remote, max_local_fast=3)
+    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    assert len(local.calls) == 1 and local.calls[0]["count"] == 3
+    assert [c["count"] for c in remote.calls] == [20, 1]
+    assert remote.calls[1]["quality_mode"] == "hq"

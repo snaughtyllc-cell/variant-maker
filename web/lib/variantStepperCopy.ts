@@ -8,7 +8,7 @@ export const SPEED_TEST_PER_VIDEO = 3;
 
 export function variantStepperHint(qualityMode: "fast" | "hq"): string | null {
   if (qualityMode !== "fast") return null;
-  return "Usual pack is 20 encodes of this clip. Tap − to 3 for a speed test.";
+  return "Usual pack is 20 on the GPU. Tap − to 3 for a speed test on Studio (no GPU wait).";
 }
 
 export function generatePackLabel(fileCount: number, perVideo: number): string {

@@ -16,9 +16,10 @@ describe("variantStepperCopy", () => {
 
   it("on Fast, says 20 encodes and a 3-clip speed test", () => {
     const hint = variantStepperHint("fast");
-    expect(hint).toMatch(/20 encodes/i);
+    expect(hint).toMatch(/20 on the GPU/i);
     expect(hint).toMatch(/tap − to 3/i);
     expect(hint).toMatch(/speed test/i);
+    expect(hint).toMatch(/studio/i);
     expect(hint).not.toMatch(/kill/i);
   });
 

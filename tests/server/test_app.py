@@ -533,6 +533,7 @@ def test_make_runner_local():
 
 def test_make_runner_runpod_from_env(monkeypatch):
     from variant_maker.server import cli
+    from variant_maker.server.runner import LocalRunner, RoutingRunner
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
     # avoid real boto3/httpx construction
     monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
@@ -541,7 +542,10 @@ def test_make_runner_runpod_from_env(monkeypatch):
                  "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
                  "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}.items():
         monkeypatch.setenv(k, v)
-    assert isinstance(cli.make_runner("runpod"), RunPodServerlessRunner)
+    runner = cli.make_runner("runpod")
+    assert isinstance(runner, RoutingRunner)
+    assert isinstance(runner._remote, RunPodServerlessRunner)
+    assert isinstance(runner._local, LocalRunner)
 
 
 def test_make_runner_runpod_missing_env_exits(monkeypatch):

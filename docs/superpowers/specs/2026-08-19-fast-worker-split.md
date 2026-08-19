@@ -43,12 +43,12 @@ Keep one worker. Fast: `jobs` 4–8 (cap to CPU count). HQ: `jobs` 1.
 This is the check that 20-packs are slow because of **serial Fast**, not
 because we lack a second GPU.
 
-### 2. Optional — tiny Fast tests only on CPU
+### 2. Trying now — tiny Fast tests on Studio CPU
 
-`quality_mode=fast` **and** `count <= 3` → local/Railway or a slim CPU worker.
-A 1-clip speed test never waits on CUDA.
+`quality_mode=fast` **and** `count <= 3` → `LocalRunner` on Railway (ffmpeg already
+there for the ingest proxy). A 1–3 variant speed test never waits on CUDA.
 
-Do **not** send 20-packs to Railway’s small CPU.
+`VARIANT_FAST_LOCAL_MAX` (default 3, `0` disables). Do **not** send 20-packs here.
 
 ### 3. Later — slim Fast CPU serverless (all Fast)
 

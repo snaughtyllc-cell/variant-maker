@@ -45,6 +45,32 @@ def normalize_quality_mode(value: str | None, *, default: str = DEFAULT_QUALITY_
     return mode if mode in ("fast", "hq") else default
 
 
+FAST_LOCAL_MAX_ENV = "VARIANT_FAST_LOCAL_MAX"
+DEFAULT_FAST_LOCAL_MAX = 3
+
+
+def fast_local_max_from_env() -> int:
+    """0 disables Studio-CPU Fast try-outs. Default 3."""
+    raw = os.environ.get(FAST_LOCAL_MAX_ENV, str(DEFAULT_FAST_LOCAL_MAX))
+    try:
+        return max(0, int(str(raw).strip()))
+    except ValueError:
+        return DEFAULT_FAST_LOCAL_MAX
+
+
+def should_run_fast_local(
+    quality_mode: str | None,
+    count: int,
+    max_local_fast: int = DEFAULT_FAST_LOCAL_MAX,
+) -> bool:
+    """Tiny Fast packs skip GPU wake. HQ and 20-packs stay on the remote runner."""
+    if max_local_fast <= 0 or count < 1:
+        return False
+    if normalize_quality_mode(quality_mode) != "fast":
+        return False
+    return count <= max_local_fast
+
+
 @dataclass
 class VariantResult:
     index: int
@@ -142,3 +168,46 @@ class LocalRunner:
             for v in manifest.variants
         ]
         return SourceResult(variants=variants, manifest_path=os.path.join(out_dir, "manifest.json"))
+
+
+class RoutingRunner:
+    """Fast count<=N on local CPU; everything else (HQ, 20-packs) on remote GPU."""
+
+    def __init__(
+        self,
+        local: Runner,
+        remote: Runner,
+        *,
+        max_local_fast: int = DEFAULT_FAST_LOCAL_MAX,
+    ) -> None:
+        self._local = local
+        self._remote = remote
+        self._max_local_fast = max_local_fast
+
+    def _pick(self, quality_mode: str | None, count: int) -> Runner:
+        if should_run_fast_local(quality_mode, count, self._max_local_fast):
+            return self._local
+        return self._remote
+
+    def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True,
+            quality_mode: str = DEFAULT_QUALITY_MODE,
+            cancel_token=None) -> SourceResult:
+        return self._pick(quality_mode, count).run(
+            source_path, count=count, out_dir=out_dir, source_id=source_id,
+            on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode, cancel_token=cancel_token,
+        )
+
+    def resume_run(self, *args, **kwargs) -> SourceResult:
+        resume = getattr(self._remote, "resume_run", None)
+        if not callable(resume):
+            raise TypeError("remote runner cannot resume a cloud job")
+        return resume(*args, **kwargs)
+
+    def fetch_outputs(self, *args, **kwargs):
+        fetch = getattr(self._remote, "fetch_outputs", None)
+        if not callable(fetch):
+            return None
+        return fetch(*args, **kwargs)
