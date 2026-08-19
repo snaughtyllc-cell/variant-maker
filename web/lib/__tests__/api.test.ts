@@ -109,8 +109,8 @@ describe("captions API", () => {
   });
 
   it("listCaptions and previewCaptions pass bank_id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ cursor: 0, items: [], captions: [] }), { status: 200 }),
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ cursor: 0, items: [], captions: [] }), { status: 200 })),
     );
     await api.listCaptions("bank_gym");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/captions?bank_id=bank_gym");
