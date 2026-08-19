@@ -57,8 +57,8 @@ from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, Des
                      ExportCreateIn, ExportFileOut, ExportJobOut, InFlightOut, JobDetail,
                      JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
                      VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn,
-                     CaptionAdvanceIn, CaptionBankOut, CaptionBulkIn, CaptionCreateIn, CaptionOut,
-                     CaptionPreviewOut)
+                     CaptionAdvanceIn, CaptionBankFolderOut, CaptionBankOut, CaptionBulkIn,
+                     CaptionCreateIn, CaptionFolderCreateIn, CaptionOut, CaptionPreviewOut)
 from .runner import LocalRunner
 from .sheets import GoogleSheets, SheetsClient
 from .workflow_runner import tick_workflow
@@ -171,6 +171,33 @@ def _workflow_out(w: Workflow) -> WorkflowOut:
         last_sweep_at=w.last_sweep_at,
         last_summary=_workflow_summary_out(w.last_summary),
         auto_caption=w.auto_caption,
+        caption_bank_id=w.caption_bank_id or None,
+    )
+
+
+def _caption_bank_payload(store: CaptionStore, bank_id: str | None = None) -> CaptionBankOut:
+    meta = store.bank_meta(bank_id)
+    return CaptionBankOut(
+        cursor=meta.cursor,
+        items=[CaptionOut(id=c.id, text=c.text) for c in store.list(meta.id)],
+        bank_id=meta.id,
+        bank_name=meta.name,
+        count=meta.count,
+        remaining=meta.remaining,
+        low=meta.low,
+        is_default=meta.is_default,
+    )
+
+
+def _caption_folder_out(meta) -> CaptionBankFolderOut:
+    return CaptionBankFolderOut(
+        id=meta.id,
+        name=meta.name,
+        is_default=meta.is_default,
+        count=meta.count,
+        remaining=meta.remaining,
+        cursor=meta.cursor,
+        low=meta.low,
     )
 
 
@@ -871,6 +898,7 @@ def create_app(
                 enabled=body.enabled,
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
+                caption_bank_id=body.caption_bank_id or "",
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -896,6 +924,7 @@ def create_app(
                 enabled=body.enabled,
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
+                caption_bank_id=body.caption_bank_id,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -921,22 +950,48 @@ def create_app(
             raise HTTPException(status_code=404, detail="workflow not found")
         return _workflow_out(_run_workflow_tick(wf))
 
+    @app.get("/api/caption-banks", response_model=list[CaptionBankFolderOut])
+    def list_caption_banks() -> list[CaptionBankFolderOut]:
+        return [_caption_folder_out(m) for m in app.state.captions.list_banks()]
+
+    @app.post("/api/caption-banks", status_code=201, response_model=CaptionBankFolderOut)
+    def create_caption_bank(body: CaptionFolderCreateIn) -> CaptionBankFolderOut:
+        try:
+            return _caption_folder_out(app.state.captions.create_bank(body.name))
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @app.patch("/api/caption-banks/{bank_id}", response_model=CaptionBankFolderOut)
+    def rename_caption_bank(bank_id: str, body: CaptionFolderCreateIn) -> CaptionBankFolderOut:
+        try:
+            meta = app.state.captions.rename_bank(bank_id, body.name)
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if meta is None:
+            raise HTTPException(status_code=404, detail="caption folder not found")
+        return _caption_folder_out(meta)
+
+    @app.delete("/api/caption-banks/{bank_id}", status_code=204)
+    def delete_caption_bank(bank_id: str) -> None:
+        try:
+            ok = app.state.captions.delete_bank(bank_id)
+        except CaptionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if not ok:
+            raise HTTPException(status_code=404, detail="caption folder not found")
+
     @app.get("/api/captions", response_model=CaptionBankOut)
-    def list_captions() -> CaptionBankOut:
-        bank = app.state.captions
-        return CaptionBankOut(
-            cursor=bank.cursor(),
-            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
-        )
+    def list_captions(bank_id: str | None = None) -> CaptionBankOut:
+        return _caption_bank_payload(app.state.captions, bank_id)
 
     @app.get("/api/captions/preview", response_model=CaptionPreviewOut)
-    def preview_captions(n: int = 1) -> CaptionPreviewOut:
-        return CaptionPreviewOut(captions=app.state.captions.peek(max(0, n)))
+    def preview_captions(n: int = 1, bank_id: str | None = None) -> CaptionPreviewOut:
+        return CaptionPreviewOut(captions=app.state.captions.peek(max(0, n), bank_id=bank_id))
 
     @app.post("/api/captions", status_code=201, response_model=CaptionOut)
     def create_caption(body: CaptionCreateIn) -> CaptionOut:
         try:
-            cap = app.state.captions.add(body.text)
+            cap = app.state.captions.add(body.text, bank_id=body.bank_id)
         except CaptionError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         return CaptionOut(id=cap.id, text=cap.text)
@@ -944,14 +999,10 @@ def create_app(
     @app.post("/api/captions/bulk", status_code=201, response_model=CaptionBankOut)
     def bulk_captions(body: CaptionBulkIn) -> CaptionBankOut:
         try:
-            app.state.captions.add_many(split_caption_bank(body.raw))
+            app.state.captions.add_many(split_caption_bank(body.raw), bank_id=body.bank_id)
         except CaptionError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        bank = app.state.captions
-        return CaptionBankOut(
-            cursor=bank.cursor(),
-            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
-        )
+        return _caption_bank_payload(app.state.captions, body.bank_id)
 
     @app.patch("/api/captions/{caption_id}", response_model=CaptionOut)
     def update_caption(caption_id: str, body: CaptionCreateIn) -> CaptionOut:
@@ -970,12 +1021,8 @@ def create_app(
 
     @app.post("/api/captions/advance", response_model=CaptionBankOut)
     def advance_captions(body: CaptionAdvanceIn) -> CaptionBankOut:
-        bank = app.state.captions
-        bank.advance(body.n)
-        return CaptionBankOut(
-            cursor=bank.cursor(),
-            items=[CaptionOut(id=c.id, text=c.text) for c in bank.list()],
-        )
+        app.state.captions.advance(body.n, bank_id=body.bank_id)
+        return _caption_bank_payload(app.state.captions, body.bank_id)
 
     @app.post("/api/drive/exports", status_code=201, response_model=ExportJobOut)
     def create_export(body: ExportCreateIn) -> ExportJobOut:
@@ -992,7 +1039,7 @@ def create_app(
         except ExportError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         if body.consume_bank:
-            app.state.captions.advance(len(files))
+            app.state.captions.advance(len(files), bank_id=body.caption_bank_id)
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
         ExportRunner(app.state.drive, app.state.exports).start(job)
         return _export_job_out(job)

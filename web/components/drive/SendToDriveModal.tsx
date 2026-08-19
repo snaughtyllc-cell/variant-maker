@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { createDriveExport, previewCaptions } from "@/lib/api";
-import { captionFilenamePreview } from "@/lib/captions";
-import type { Destination, ExportJob, ExportVariantRef } from "@/lib/types";
+import { createDriveExport, listCaptionBanks, previewCaptions } from "@/lib/api";
+import { captionFilenamePreview, captionFolderSelectLabel } from "@/lib/captions";
+import type { CaptionBankFolder, Destination, ExportJob, ExportVariantRef } from "@/lib/types";
 import { ExportProgress } from "./ExportProgress";
 
 interface SendToDriveModalProps {
@@ -19,20 +19,38 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
   const [job, setJob] = useState<ExportJob | null>(null);
   const [captions, setCaptions] = useState<string[]>(() => refs.map(() => ""));
   const [fromBank, setFromBank] = useState(false);
+  const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
+  const [bankId, setBankId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    previewCaptions(refs.length)
+    listCaptionBanks()
+      .then((list) => {
+        if (cancelled) return;
+        setBanks(list);
+        const generic = list.find((b) => b.is_default) ?? list[0];
+        if (generic) setBankId(generic.id);
+      })
+      .catch(() => {/* Generic preview below still works */});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    previewCaptions(refs.length, bankId || undefined)
       .then((out) => {
         if (cancelled) return;
         if (out.captions.length > 0) {
           setCaptions(out.captions);
           setFromBank(true);
+        } else {
+          setCaptions(refs.map(() => ""));
+          setFromBank(false);
         }
       })
       .catch(() => {/* keep blank captions; VA can type them */});
     return () => { cancelled = true; };
-  }, [refs.length]);
+  }, [refs.length, bankId]);
 
   async function handleConfirm() {
     if (!destinationId || submitting) return;
@@ -46,6 +64,7 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
           caption: (captions[i] ?? "").trim() || undefined,
         })),
         fromBank,
+        bankId || undefined,
       );
       setJob(created);
     } catch (e) {
@@ -140,6 +159,31 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
                   ))}
                 </select>
               </label>
+
+              {banks.length > 0 && (
+                <label style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+                  <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
+                  <select
+                    value={bankId}
+                    onChange={(e) => setBankId(e.target.value)}
+                    style={{
+                      background: "var(--color-panel2)",
+                      border: "1px solid var(--color-line)",
+                      borderRadius: 9,
+                      padding: "9px 12px",
+                      fontSize: 13,
+                      color: "var(--color-text)",
+                      outline: "none",
+                    }}
+                  >
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10, maxHeight: 280, overflow: "auto" }}>
                 {refs.map((ref, i) => (

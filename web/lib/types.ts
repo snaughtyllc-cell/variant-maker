@@ -105,9 +105,25 @@ export interface Caption {
   text: string;
 }
 
+export interface CaptionBankFolder {
+  id: string;
+  name: string;
+  is_default: boolean;
+  count: number;
+  remaining: number;
+  cursor: number;
+  low: boolean;
+}
+
 export interface CaptionBank {
   cursor: number;
   items: Caption[];
+  bank_id?: string;
+  bank_name?: string;
+  count?: number;
+  remaining?: number;
+  low?: boolean;
+  is_default?: boolean;
 }
 
 export interface Workflow {
@@ -123,4 +139,5 @@ export interface Workflow {
   last_sweep_at: string | null;
   last_summary: WorkflowSummary | null;
   auto_caption: boolean;
+  caption_bank_id?: string | null;
 }

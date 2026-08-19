@@ -123,6 +123,7 @@ class ExportCreateIn(BaseModel):
     destination_id: str
     variants: list[ExportVariantRefIn]
     consume_bank: bool = False
+    caption_bank_id: str | None = None
 
 
 class ExportFileOut(BaseModel):
@@ -213,6 +214,7 @@ class WorkflowOut(BaseModel):
     last_sweep_at: str | None = None
     last_summary: WorkflowSummaryOut | None = None
     auto_caption: bool = False
+    caption_bank_id: str | None = None
 
 
 class WorkflowCreateIn(BaseModel):
@@ -225,6 +227,7 @@ class WorkflowCreateIn(BaseModel):
     enabled: bool = False
     poll_seconds: int = 120
     auto_caption: bool = False
+    caption_bank_id: str | None = None
 
 
 class WorkflowUpdateIn(BaseModel):
@@ -237,6 +240,7 @@ class WorkflowUpdateIn(BaseModel):
     enabled: bool | None = None
     poll_seconds: int | None = None
     auto_caption: bool | None = None
+    caption_bank_id: str | None = None
 
 
 class CaptionOut(BaseModel):
@@ -244,21 +248,44 @@ class CaptionOut(BaseModel):
     text: str
 
 
+class CaptionBankFolderOut(BaseModel):
+    id: str
+    name: str
+    is_default: bool = False
+    count: int = 0
+    remaining: int = 0
+    cursor: int = 0
+    low: bool = False
+
+
 class CaptionBankOut(BaseModel):
     cursor: int = 0
     items: list[CaptionOut] = []
+    bank_id: str = ""
+    bank_name: str = ""
+    count: int = 0
+    remaining: int = 0
+    low: bool = False
+    is_default: bool = False
 
 
 class CaptionCreateIn(BaseModel):
     text: str
+    bank_id: str | None = None
 
 
 class CaptionBulkIn(BaseModel):
     raw: str
+    bank_id: str | None = None
 
 
 class CaptionAdvanceIn(BaseModel):
     n: int
+    bank_id: str | None = None
+
+
+class CaptionFolderCreateIn(BaseModel):
+    name: str
 
 
 class CaptionPreviewOut(BaseModel):

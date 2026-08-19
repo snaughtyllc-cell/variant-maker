@@ -40,6 +40,34 @@ export function captionBankChatPrompt(opts?: { count?: number; topic?: string })
   ].join("\n");
 }
 
+export const CAPTION_PACK_SIZE = 20;
+
+export function captionFolderCountLabel(count: number, remaining: number): string {
+  if (count <= 0) return "0 left";
+  return `${remaining} left · ${count} total`;
+}
+
+export function captionFolderSelectLabel(
+  name: string,
+  count: number,
+  remaining: number,
+): string {
+  if (count <= 0) return `${name} — 0 left`;
+  return `${name} — ${remaining} left`;
+}
+
+export function captionFolderLowCopy(
+  count: number,
+  remaining: number,
+  pack = CAPTION_PACK_SIZE,
+): string | null {
+  if (count <= 0) return "Empty — add captions or exports keep v01.mp4 names.";
+  if (remaining < pack) {
+    return `Low — ${remaining} left before this folder repeats. A ${pack}-pack will reuse lines.`;
+  }
+  return null;
+}
+
 export function captionFilenamePreview(text: string, fallback = "v01.mp4"): string {
   const stem = (text ?? "")
     .replace(/\r\n/g, "\n")

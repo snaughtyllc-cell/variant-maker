@@ -3,15 +3,29 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import {
   bulkCaptions,
   createCaption,
+  createCaptionBank,
   deleteCaption,
+  deleteCaptionBank,
+  listCaptionBanks,
   listCaptions,
   updateCaption,
 } from "@/lib/api";
-import { captionBankChatPrompt, captionFilenamePreview, splitCaptionBank } from "@/lib/captions";
-import type { Caption } from "@/lib/types";
+import {
+  captionBankChatPrompt,
+  captionFilenamePreview,
+  captionFolderCountLabel,
+  captionFolderLowCopy,
+  splitCaptionBank,
+} from "@/lib/captions";
+import type { Caption, CaptionBankFolder } from "@/lib/types";
 
 export function CaptionBankPanel() {
   const [items, setItems] = useState<Caption[]>([]);
+  const [folders, setFolders] = useState<CaptionBankFolder[]>([]);
+  const [bankId, setBankId] = useState<string>("");
+  const [remaining, setRemaining] = useState(0);
+  const [countInFolder, setCountInFolder] = useState(0);
+  const [newFolder, setNewFolder] = useState("");
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [paste, setPaste] = useState("");
@@ -24,21 +38,64 @@ export function CaptionBankPanel() {
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(selected?: string, opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true);
     try {
-      const bank = await listCaptions();
+      const [folderList, bank] = await Promise.all([
+        listCaptionBanks(),
+        listCaptions(selected || bankId || undefined),
+      ]);
+      setFolders(folderList);
+      const id = bank.bank_id || folderList.find((f) => f.is_default)?.id || folderList[0]?.id || "";
+      setBankId(id);
       setItems(bank.items);
+      const folder = folderList.find((f) => f.id === id);
+      setRemaining(bank.remaining ?? folder?.remaining ?? 0);
+      setCountInFolder(bank.count ?? bank.items.length);
     } catch (e) {
       console.error("Failed to load captions", e);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleSelectFolder(id: string) {
+    setBankId(id);
+    await refresh(id);
+  }
+
+  async function handleCreateFolder(e: FormEvent) {
+    e.preventDefault();
+    if (!newFolder.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const created = await createCaptionBank(newFolder.trim());
+      setNewFolder("");
+      await refresh(created.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add folder");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteFolder(id: string) {
+    const folder = folders.find((f) => f.id === id);
+    if (!folder || folder.is_default) return;
+    if (!window.confirm(`Delete folder “${folder.name}” and its captions?`)) return;
+    try {
+      await deleteCaptionBank(id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete folder");
+    }
+  }
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -46,9 +103,9 @@ export function CaptionBankPanel() {
     setSaving(true);
     setError(null);
     try {
-      const created = await createCaption(text.trim());
-      setItems((prev) => [...prev, created]);
+      await createCaption(text.trim(), bankId || undefined);
       setText("");
+      await refresh(bankId, { silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add caption");
     } finally {
@@ -66,9 +123,9 @@ export function CaptionBankPanel() {
     setSaving(true);
     setError(null);
     try {
-      const bank = await bulkCaptions(raw);
-      setItems(bank.items);
+      await bulkCaptions(raw, bankId || undefined);
       setPaste("");
+      await refresh(bankId, { silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to import captions");
     } finally {
@@ -120,11 +177,14 @@ export function CaptionBankPanel() {
     if (!window.confirm("Remove this caption from the bank?")) return;
     try {
       await deleteCaption(id);
-      setItems((prev) => prev.filter((c) => c.id !== id));
+      await refresh(bankId, { silent: true });
     } catch (err) {
       console.error("Failed to delete caption", err);
     }
   }
+
+  const currentFolder = folders.find((f) => f.id === bankId);
+  const lowCopy = captionFolderLowCopy(countInFolder, remaining);
 
   return (
     <div>
@@ -132,8 +192,64 @@ export function CaptionBankPanel() {
       <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 640, lineHeight: 1.45 }}>
         Repurpose.io uses the Drive filename as the post caption. Paste captions here, then turn
         auto-caption on for a workflow — or edit them on Gallery Send to Drive before export.
-        Copy the ChatGPT prompt, paste the reply (or a .txt), and import.
+        Copy the ChatGPT prompt into a niche folder (Gym, cooking, models). Each folder
+        shows how many captions are left before it wraps. Workflows pick which folder
+        to use. Generic is the default if a workflow is not connected.
       </div>
+
+      <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        {folders.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => void handleSelectFolder(f.id)}
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: bankId === f.id ? "#fff" : "var(--color-text)",
+              background: bankId === f.id ? "#7c5cff" : "var(--color-panel2)",
+              border: `1px solid ${f.low ? "var(--color-red)" : "var(--color-line)"}`,
+              padding: "7px 10px",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            {f.name}
+            <span style={{ marginLeft: 6, opacity: 0.85, fontWeight: 500 }}>
+              {captionFolderCountLabel(f.count, f.remaining)}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleCreateFolder} style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          value={newFolder}
+          onChange={(e) => setNewFolder(e.target.value)}
+          placeholder="New folder (Gym, cooking…)"
+          style={{ ...areaStyle, resize: "none", flex: "1 1 180px" }}
+        />
+        <button type="submit" disabled={saving || !newFolder.trim()} style={secondaryBtn(saving || !newFolder.trim())}>
+          Add folder
+        </button>
+        {bankId && !folders.find((f) => f.id === bankId)?.is_default && (
+          <button type="button" onClick={() => void handleDeleteFolder(bankId)} style={{ ...secondaryBtn(false), color: "var(--color-red)" }}>
+            Delete folder
+          </button>
+        )}
+      </form>
+
+      {currentFolder && (
+        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 800, color: "var(--color-text)" }}>
+          {currentFolder.name}: {captionFolderCountLabel(countInFolder, remaining)}
+        </div>
+      )}
+
+      {lowCopy && (
+        <div style={{ marginTop: 6, fontSize: 12, color: "var(--color-red)" }}>
+          {lowCopy}
+        </div>
+      )}
 
       <div
         style={{
@@ -236,7 +352,8 @@ export function CaptionBankPanel() {
 
       {!loading && items.length === 0 && (
         <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--color-muted)" }}>
-          Bank is empty — workflows keep v01.mp4 names until you add captions and turn auto-caption on.
+          This folder is empty (0 left) — workflows keep v01.mp4 names until you add captions
+          and turn auto-caption on.
         </div>
       )}
 

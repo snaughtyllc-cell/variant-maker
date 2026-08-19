@@ -85,16 +85,17 @@ describe("retryCopy", () => {
   });
 });
 
-it("createDriveExport posts destination, variants, and consume_bank", async () => {
+it("createDriveExport posts destination, variants, consume_bank, and caption folder", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ export_id: "exp_1", state: "pending", files: [] }), { status: 200 }),
   );
-  await api.createDriveExport("dst_1", [{ source_id: "s1", index: 1, caption: "POV #reels" }], true);
+  await api.createDriveExport("dst_1", [{ source_id: "s1", index: 1, caption: "POV #reels" }], true, "bank_gym");
   const [, init] = fetchMock.mock.calls[0];
   expect(JSON.parse((init as RequestInit).body as string)).toEqual({
     destination_id: "dst_1",
     variants: [{ source_id: "s1", index: 1, caption: "POV #reels" }],
     consume_bank: true,
+    caption_bank_id: "bank_gym",
   });
 });
 
@@ -105,6 +106,24 @@ describe("captions API", () => {
     );
     await api.listCaptions();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/captions");
+  });
+
+  it("listCaptions and previewCaptions pass bank_id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ cursor: 0, items: [], captions: [] }), { status: 200 }),
+    );
+    await api.listCaptions("bank_gym");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/captions?bank_id=bank_gym");
+    await api.previewCaptions(3, "bank_gym");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/captions/preview?n=3&bank_id=bank_gym");
+  });
+
+  it("listCaptionBanks GETs /api/caption-banks", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 }),
+    );
+    await api.listCaptionBanks();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/caption-banks");
   });
 });
 
@@ -159,6 +178,7 @@ describe("workflows API", () => {
     last_sweep_at: null,
     last_summary: null,
     auto_caption: false,
+    caption_bank_id: null,
   };
 
   it("listWorkflows GETs /api/workflows", async () => {

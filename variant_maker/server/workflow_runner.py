@@ -74,6 +74,7 @@ def _export_source(
     sha: str,
     output_folder_id: str,
     caption_store: CaptionStore | None = None,
+    caption_bank_id: str | None = None,
 ) -> tuple[str, int]:
     variants = _uploadable(source)
     if not variants:
@@ -82,7 +83,10 @@ def _export_source(
     sub_id = drive.find_or_create_folder(sub_name, output_folder_id)
     if not sub_id or sub_id == output_folder_id:
         raise RuntimeError("refusing to dump variants into the parent output folder")
-    captions = caption_store.take(len(variants)) if caption_store is not None else []
+    captions = (
+        caption_store.take(len(variants), bank_id=caption_bank_id)
+        if caption_store is not None else []
+    )
     uploaded = 0
     for i, v in enumerate(variants):
         path = job_store.find_variant(source.source_id, v.filename)
@@ -107,6 +111,7 @@ def _harvest(
     summary: TickSummary,
     max_attempts: int,
     caption_store: CaptionStore | None = None,
+    caption_bank_id: str | None = None,
 ) -> int:
     """Finish exports for jobs that left `running`. Returns how many are still in flight."""
     still = 0
@@ -139,6 +144,7 @@ def _harvest(
                 drive, job_store, job, source,
                 stem=stem, sha=sha, output_folder_id=output_folder_id,
                 caption_store=caption_store,
+                caption_bank_id=caption_bank_id,
             )
         except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
             ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=file_id, md5=md5)
@@ -232,8 +238,9 @@ def tick_workflow(
         summary.error = "inbox and output folders must be different"
         return summary
     bank = caption_store if workflow.auto_caption else None
+    bank_id = workflow.caption_bank_id or None
     still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
-                     caption_store=bank)
+                     caption_store=bank, caption_bank_id=bank_id)
     _queue_new(
         workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
         max_attempts=max_attempts, slots=max(0, max_inflight - still),
@@ -249,6 +256,6 @@ def tick_workflow(
         # Don't double-count running from the first harvest; reset running then re-harvest.
         summary.running = 0
         still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
-                         caption_store=bank)
+                         caption_store=bank, caption_bank_id=bank_id)
         summary.running = still
     return summary

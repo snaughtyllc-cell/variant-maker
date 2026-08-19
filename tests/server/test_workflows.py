@@ -246,6 +246,36 @@ def test_workflow_auto_caption_names_drive_files_from_bank(tmp_path):
     assert "v01.mp4" not in packed
 
 
+def test_workflow_auto_caption_uses_selected_folder_not_generic(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip-bytes")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    client.post("/api/captions", json={"text": "generic hook #reels"})
+    gym = client.post("/api/caption-banks", json={"name": "Gym"}).json()
+    client.post("/api/captions", json={"text": "gym pump #gymtok", "bank_id": gym["id"]})
+    wf = client.post("/api/workflows", json={
+        "name": "Gym cap",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+        "auto_caption": True,
+        "caption_bank_id": gym["id"],
+    }).json()
+    assert wf["caption_bank_id"] == gym["id"]
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 1)
+    packed = {c.name for c in drive.list_files(_folders(drive, out)[0].id)}
+    assert "gym pump #gymtok.mp4" in packed
+    assert "generic hook #reels.mp4" not in packed
+    folders = {f["name"]: f for f in client.get("/api/caption-banks").json()}
+    assert folders["Generic"]["remaining"] == 1
+    assert folders["Gym"]["count"] == 1
+
+
 def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path):
     """Don't stamp the ledger done if GPU metadata is ok but Studio has no mp4s."""
     drive = FakeDrive()

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { captionBankChatPrompt, captionFilenamePreview, splitCaptionBank } from "@/lib/captions";
+import {
+  captionBankChatPrompt,
+  captionFilenamePreview,
+  captionFolderCountLabel,
+  captionFolderLowCopy,
+  captionFolderSelectLabel,
+  splitCaptionBank,
+} from "@/lib/captions";
 
 describe("caption bank paste", () => {
   it("splits blocks on a --- line", () => {
@@ -31,6 +38,18 @@ describe("captionBankChatPrompt", () => {
     expect(prompt).toMatch(/20 captions/);
     expect(prompt).toMatch(/dating POV Reels/);
     expect(prompt).not.toMatch(/numbered list/i);
+  });
+});
+
+describe("captionFolderCountLabel", () => {
+  it("shows remaining vs total and a low warning", () => {
+    expect(captionFolderCountLabel(40, 40)).toBe("40 left · 40 total");
+    expect(captionFolderCountLabel(0, 0)).toBe("0 left");
+    expect(captionFolderSelectLabel("Gym", 14, 3)).toBe("Gym — 3 left");
+    expect(captionFolderSelectLabel("Cooking", 0, 0)).toBe("Cooking — 0 left");
+    expect(captionFolderLowCopy(0, 0)).toMatch(/empty/i);
+    expect(captionFolderLowCopy(14, 14)).toMatch(/low/i);
+    expect(captionFolderLowCopy(40, 40)).toBeNull();
   });
 });
 

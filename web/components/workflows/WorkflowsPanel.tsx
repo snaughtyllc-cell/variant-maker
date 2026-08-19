@@ -5,12 +5,14 @@ import {
   createWorkflow,
   deleteWorkflow,
   getDriveStatus,
+  listCaptionBanks,
   listDestinations,
   listWorkflows,
   runWorkflow,
   updateWorkflow,
 } from "@/lib/api";
-import type { Destination, DriveStatus, Workflow, WorkflowSummary } from "@/lib/types";
+import type { CaptionBankFolder, Destination, DriveStatus, Workflow, WorkflowSummary } from "@/lib/types";
+import { captionFolderSelectLabel } from "@/lib/captions";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 import {
   workflowFoldersClash,
@@ -26,6 +28,12 @@ const MAX_POLL_MINUTES = 60;
 
 function destName(destinations: Destination[], id: string): string {
   return destinations.find((d) => d.id === id)?.name ?? id;
+}
+
+function bankLabel(banks: CaptionBankFolder[], bankId: string | null | undefined): string {
+  const selected = banks.find((b) => b.id === bankId) ?? banks.find((b) => b.is_default);
+  if (!selected) return "Generic";
+  return captionFolderSelectLabel(selected.name, selected.count, selected.remaining);
 }
 
 function formatSummary(summary: WorkflowSummary | null): string {
@@ -55,6 +63,8 @@ export function WorkflowsPanel() {
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
   const [autoCaption, setAutoCaption] = useState(false);
+  const [captionBankId, setCaptionBankId] = useState("");
+  const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,10 +75,20 @@ export function WorkflowsPanel() {
   async function refresh() {
     setLoading(true);
     try {
-      const [s, d, w] = await Promise.all([getDriveStatus(), listDestinations(), listWorkflows()]);
+      const [s, d, w, b] = await Promise.all([
+        getDriveStatus(),
+        listDestinations(),
+        listWorkflows(),
+        listCaptionBanks().catch(() => [] as CaptionBankFolder[]),
+      ]);
       setStatus(s);
       setDestinations(d);
       setWorkflows(w);
+      setBanks(b);
+      if (!captionBankId) {
+        const generic = b.find((x) => x.is_default) ?? b[0];
+        if (generic) setCaptionBankId(generic.id);
+      }
       const inboxDest = d.find((x) => x.id === inboxId) ?? d[0];
       if (inboxDest && !inboxId) setInboxId(inboxDest.id);
       if (!outputId && inboxDest) {
@@ -112,6 +132,7 @@ export function WorkflowsPanel() {
         enabled,
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
+        caption_bank_id: captionBankId || null,
       });
       setWorkflows((prev) => [...prev, created]);
       setName("");
@@ -141,6 +162,18 @@ export function WorkflowsPanel() {
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle auto-caption", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleCaptionBank(wf: Workflow, nextBankId: string) {
+    setActionId(wf.id);
+    try {
+      const updated = await updateWorkflow(wf.id, { caption_bank_id: nextBankId || null });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to set caption folder", err);
     } finally {
       setActionId(null);
     }
@@ -371,6 +404,24 @@ export function WorkflowsPanel() {
           </span>
         </label>
 
+        {banks.length > 0 && (
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
+            <select
+              value={captionBankId}
+              onChange={(e) => setCaptionBankId(e.target.value)}
+              disabled={destinations.length === 0 || driveNotReady}
+              style={inputStyle(destinations.length === 0 || driveNotReady)}
+            >
+              {banks.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {formError && <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>}
 
         <button
@@ -438,6 +489,7 @@ export function WorkflowsPanel() {
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
                   {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
                   {wf.auto_caption ? " · auto-caption on" : ""}
+                  {wf.auto_caption ? ` · ${bankLabel(banks, wf.caption_bank_id)}` : ""}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted2)", marginTop: 6 }}>
                   Last sweep: {formatSummary(wf.last_summary)}
@@ -481,6 +533,20 @@ export function WorkflowsPanel() {
                   />
                   Auto-caption
                 </label>
+                {banks.length > 0 && (
+                  <select
+                    value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
+                    disabled={busy}
+                    onChange={(e) => handleCaptionBank(wf, e.target.value)}
+                    style={{ ...inputStyle(busy), minWidth: 140 }}
+                  >
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={() => handleRun(wf)}

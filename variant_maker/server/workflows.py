@@ -34,6 +34,7 @@ class Workflow:
     last_sweep_at: str | None = None
     last_summary: dict | None = None
     auto_caption: bool = False
+    caption_bank_id: str = ""
 
 
 def _validate(
@@ -91,6 +92,7 @@ class WorkflowStore:
         enabled: bool = False,
         poll_seconds: int = DEFAULT_POLL_SECONDS,
         auto_caption: bool = False,
+        caption_bank_id: str = "",
     ) -> Workflow:
         name, inbox, output, count, quality, poll_seconds = _validate(
             name=name,
@@ -112,6 +114,7 @@ class WorkflowStore:
             enabled=bool(enabled),
             poll_seconds=poll_seconds,
             auto_caption=bool(auto_caption),
+            caption_bank_id=(caption_bank_id or "").strip(),
         )
         items.append(wf)
         self._save(items)
@@ -133,6 +136,7 @@ class WorkflowStore:
         last_summary: dict | None = None,
         touch_sweep: bool = False,
         auto_caption: bool | None = None,
+        caption_bank_id: str | None = None,
     ) -> Workflow | None:
         items = self._load()
         for i, w in enumerate(items):
@@ -161,6 +165,9 @@ class WorkflowStore:
                 last_sweep_at=last_sweep_at if touch_sweep else w.last_sweep_at,
                 last_summary=last_summary if touch_sweep else w.last_summary,
                 auto_caption=w.auto_caption if auto_caption is None else bool(auto_caption),
+                caption_bank_id=(
+                    w.caption_bank_id if caption_bank_id is None else str(caption_bank_id or "").strip()
+                ),
             )
             items[i] = updated
             self._save(items)
@@ -197,6 +204,7 @@ class WorkflowStore:
                 last_sweep_at=item.get("last_sweep_at"),
                 last_summary=item.get("last_summary") if isinstance(item.get("last_summary"), dict) else None,
                 auto_caption=bool(item.get("auto_caption") or False),
+                caption_bank_id=str(item.get("caption_bank_id") or ""),
             ))
         return out
 

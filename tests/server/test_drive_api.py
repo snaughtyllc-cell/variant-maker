@@ -95,14 +95,45 @@ def test_caption_bank_crud_and_preview(tmp_path):
     client.post("/api/captions", json={"text": "Second #fyp"})
     listed = client.get("/api/captions").json()
     assert listed["cursor"] == 0
+    assert listed["count"] == 2
+    assert listed["remaining"] == 2
+    assert listed["bank_name"] == "Generic"
     assert [c["text"] for c in listed["items"]] == ["First #reels", "Second #fyp"]
     preview = client.get("/api/captions/preview", params={"n": 3}).json()
     assert preview["captions"] == ["First #reels", "Second #fyp", "First #reels"]
     assert client.get("/api/captions").json()["cursor"] == 0
     advanced = client.post("/api/captions/advance", json={"n": 1}).json()
     assert advanced["cursor"] == 1
+    assert advanced["remaining"] == 1
     assert client.delete(f"/api/captions/{created['id']}").status_code == 204
     assert [c["text"] for c in client.get("/api/captions").json()["items"]] == ["Second #fyp"]
+
+
+def test_caption_folders_are_isolated(tmp_path):
+    client, _, _ = _app(tmp_path)
+    gym = client.post("/api/caption-banks", json={"name": "Gym"}).json()
+    assert gym["name"] == "Gym"
+    assert gym["count"] == 0
+    client.post("/api/captions", json={"text": "gym pump #gymtok", "bank_id": gym["id"]})
+    client.post("/api/captions", json={"text": "gym night #gymtok", "bank_id": gym["id"]})
+    client.post("/api/captions", json={"text": "gym morning #gymtok", "bank_id": gym["id"]})
+    client.post("/api/captions", json={"text": "generic hook"})
+    gym_bank = client.get("/api/captions", params={"bank_id": gym["id"]}).json()
+    generic = client.get("/api/captions").json()
+    assert [c["text"] for c in gym_bank["items"]] == [
+        "gym pump #gymtok", "gym night #gymtok", "gym morning #gymtok",
+    ]
+    assert [c["text"] for c in generic["items"]] == ["generic hook"]
+    folders = {f["name"]: f for f in client.get("/api/caption-banks").json()}
+    assert folders["Gym"]["count"] == 3
+    assert folders["Gym"]["remaining"] == 3
+    assert folders["Generic"]["count"] == 1
+    assert folders["Generic"]["remaining"] == 1
+    client.post("/api/captions/advance", json={"n": 2, "bank_id": gym["id"]})
+    folders = {f["name"]: f for f in client.get("/api/caption-banks").json()}
+    assert folders["Gym"]["remaining"] == 1
+    assert folders["Gym"]["low"] is True
+    assert folders["Generic"]["remaining"] == 1
 
 
 def test_export_uses_per_variant_caption(tmp_path):

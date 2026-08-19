@@ -17,6 +17,7 @@ describe("workflow folder layout copy", () => {
     expect(workflowNeedTwoFolders()).toMatch(/two Drive folders/i);
     expect(workflowOutputHint()).toMatch(/one subfolder per source/i);
     expect(workflowAutoCaptionHint()).toMatch(/off by default/i);
+    expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
     expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
   });
 

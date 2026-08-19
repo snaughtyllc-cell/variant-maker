@@ -25,7 +25,11 @@ export function workflowOutputHint(): string {
 }
 
 export function workflowAutoCaptionHint(): string {
-  return "Off by default. When on, workflow uploads name each file from the caption bank (Repurpose reads that name as the post). Gallery Send to Drive still lets you edit first.";
+  return (
+    "Off by default. When on, each file is named from the caption folder you pick " +
+    "(Generic if none). Remaining on that folder counts down so you know when a " +
+    "20-pack will wrap. Gallery Send to Drive still lets you edit first."
+  );
 }
 
 export function workflowFoldersClash(
