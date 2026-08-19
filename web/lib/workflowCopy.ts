@@ -28,7 +28,7 @@ export function workflowAutoCaptionHint(): string {
   return (
     "Off by default. When on, each file is named from the caption folder you pick " +
     "(Generic if none). Remaining on that folder counts down so you know when a " +
-    "20-pack will wrap. Gallery Send to Drive still lets you edit first."
+    "20-pack will wrap. Gallery Send to Drive can use a folder or Custom (type the filename)."
   );
 }
 

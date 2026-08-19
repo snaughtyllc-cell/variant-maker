@@ -47,6 +47,16 @@ export function captionFolderCountLabel(count: number, remaining: number): strin
   return `${remaining} left · ${count} total`;
 }
 
+export const CUSTOM_CAPTION_SOURCE = "";
+
+export function isCustomCaptionSource(bankId: string | null | undefined): boolean {
+  return !bankId;
+}
+
+export function captionCustomSourceLabel(): string {
+  return "Custom — write the filename";
+}
+
 export function captionFolderSelectLabel(
   name: string,
   count: number,

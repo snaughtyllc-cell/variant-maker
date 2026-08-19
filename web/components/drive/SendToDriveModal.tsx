@@ -2,7 +2,13 @@
 import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { createDriveExport, listCaptionBanks, previewCaptions } from "@/lib/api";
-import { captionFilenamePreview, captionFolderSelectLabel } from "@/lib/captions";
+import {
+  CUSTOM_CAPTION_SOURCE,
+  captionCustomSourceLabel,
+  captionFilenamePreview,
+  captionFolderSelectLabel,
+  isCustomCaptionSource,
+} from "@/lib/captions";
 import type { CaptionBankFolder, Destination, ExportJob, ExportVariantRef } from "@/lib/types";
 import { ExportProgress } from "./ExportProgress";
 
@@ -12,6 +18,16 @@ interface SendToDriveModalProps {
   onClose: () => void;
 }
 
+const selectStyle = {
+  background: "var(--color-panel2)",
+  border: "1px solid var(--color-line)",
+  borderRadius: 9,
+  padding: "9px 12px",
+  fontSize: 13,
+  color: "var(--color-text)",
+  outline: "none",
+} as const;
+
 export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveModalProps) {
   const [destinationId, setDestinationId] = useState(destinations[0]?.id ?? "");
   const [submitting, setSubmitting] = useState(false);
@@ -20,7 +36,8 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
   const [captions, setCaptions] = useState<string[]>(() => refs.map(() => ""));
   const [fromBank, setFromBank] = useState(false);
   const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
-  const [bankId, setBankId] = useState("");
+  const [bankId, setBankId] = useState(CUSTOM_CAPTION_SOURCE);
+  const custom = isCustomCaptionSource(bankId);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,16 +45,19 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
       .then((list) => {
         if (cancelled) return;
         setBanks(list);
-        const generic = list.find((b) => b.is_default) ?? list[0];
-        if (generic) setBankId(generic.id);
       })
-      .catch(() => {/* Generic preview below still works */});
+      .catch(() => {/* Custom still works with no folders */});
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    if (isCustomCaptionSource(bankId)) {
+      setCaptions(refs.map(() => ""));
+      setFromBank(false);
+      return;
+    }
     let cancelled = false;
-    previewCaptions(refs.length, bankId || undefined)
+    previewCaptions(refs.length, bankId)
       .then((out) => {
         if (cancelled) return;
         if (out.captions.length > 0) {
@@ -56,6 +76,7 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
     if (!destinationId || submitting) return;
     setSubmitting(true);
     setError(null);
+    const useFolder = !custom && fromBank;
     try {
       const created = await createDriveExport(
         destinationId,
@@ -63,8 +84,8 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
           ...ref,
           caption: (captions[i] ?? "").trim() || undefined,
         })),
-        fromBank,
-        bankId || undefined,
+        useFolder,
+        useFolder ? bankId : undefined,
       );
       setJob(created);
     } catch (e) {
@@ -135,22 +156,14 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
             <>
               <div style={{ fontSize: 12.5, color: "var(--color-muted)", marginBottom: 14 }}>
                 {refs.length} variant{refs.length !== 1 ? "s" : ""} selected. Filename is the
-                Repurpose caption — edit before send.
+                Repurpose caption — pick a folder or write it yourself.
               </div>
               <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Destination</span>
                 <select
                   value={destinationId}
                   onChange={(e) => setDestinationId(e.target.value)}
-                  style={{
-                    background: "var(--color-panel2)",
-                    border: "1px solid var(--color-line)",
-                    borderRadius: 9,
-                    padding: "9px 12px",
-                    fontSize: 13,
-                    color: "var(--color-text)",
-                    outline: "none",
-                  }}
+                  style={selectStyle}
                 >
                   {destinations.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -160,30 +173,26 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
                 </select>
               </label>
 
-              {banks.length > 0 && (
-                <label style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
-                  <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
-                  <select
-                    value={bankId}
-                    onChange={(e) => setBankId(e.target.value)}
-                    style={{
-                      background: "var(--color-panel2)",
-                      border: "1px solid var(--color-line)",
-                      borderRadius: 9,
-                      padding: "9px 12px",
-                      fontSize: 13,
-                      color: "var(--color-text)",
-                      outline: "none",
-                    }}
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+                <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption</span>
+                <select
+                  value={bankId}
+                  onChange={(e) => setBankId(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value={CUSTOM_CAPTION_SOURCE}>{captionCustomSourceLabel()}</option>
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>
+                  {custom
+                    ? "Type each Drive filename below. Empty stays v01.mp4. Folder counts are not used."
+                    : "Filled from that folder. You can still edit a line before send."}
+                </span>
+              </label>
 
               <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10, maxHeight: 280, overflow: "auto" }}>
                 {refs.map((ref, i) => (
@@ -199,7 +208,7 @@ export function SendToDriveModal({ refs, destinations, onClose }: SendToDriveMod
                         setCaptions(next);
                       }}
                       rows={2}
-                      placeholder="Caption (Drive filename)"
+                      placeholder={custom ? "Write the caption (Drive filename)" : "Caption (Drive filename)"}
                       style={{
                         background: "var(--color-panel2)",
                         border: "1px solid var(--color-line)",

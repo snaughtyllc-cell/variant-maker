@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  CUSTOM_CAPTION_SOURCE,
   captionBankChatPrompt,
+  captionCustomSourceLabel,
   captionFilenamePreview,
   captionFolderCountLabel,
   captionFolderLowCopy,
   captionFolderSelectLabel,
+  isCustomCaptionSource,
   splitCaptionBank,
 } from "@/lib/captions";
 
@@ -50,6 +53,14 @@ describe("captionFolderCountLabel", () => {
     expect(captionFolderLowCopy(0, 0)).toMatch(/empty/i);
     expect(captionFolderLowCopy(14, 14)).toMatch(/low/i);
     expect(captionFolderLowCopy(40, 40)).toBeNull();
+  });
+
+  it("has a Custom source that is not a folder", () => {
+    expect(isCustomCaptionSource("")).toBe(true);
+    expect(isCustomCaptionSource(CUSTOM_CAPTION_SOURCE)).toBe(true);
+    expect(isCustomCaptionSource("bank_gym")).toBe(false);
+    expect(captionCustomSourceLabel()).toMatch(/custom/i);
+    expect(captionCustomSourceLabel()).toMatch(/filename/i);
   });
 });
 

@@ -18,6 +18,7 @@ describe("workflow folder layout copy", () => {
     expect(workflowOutputHint()).toMatch(/one subfolder per source/i);
     expect(workflowAutoCaptionHint()).toMatch(/off by default/i);
     expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
+    expect(workflowAutoCaptionHint()).toMatch(/custom/i);
     expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
   });
 
