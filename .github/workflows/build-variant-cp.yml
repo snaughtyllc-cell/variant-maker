@@ -9,6 +9,7 @@ on:
       # in variant_maker/*.py + neural/, not only deploy/runpod/.
       - deploy/runpod/**
       - variant_maker/*.py
+      - variant_maker/server/**
       - variant_maker/neural/**
       - pyproject.toml
       - .github/workflows/build-variant-cp.yml

@@ -15,6 +15,7 @@ from .runner import (
     UNIQUENESS_TARGET,
     SourceResult,
     VariantResult,
+    encode_jobs_for_worker,
     hq_job_limits,
     normalize_quality_mode,
 )
@@ -58,6 +59,7 @@ class RunPodServerlessRunner:
             "uniq_strengths": limits.get("uniq_strengths", list(UNIQ_STRENGTHS)),
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "auto_tune": limits.get("auto_tune", True),
+            "jobs": encode_jobs_for_worker(quality_mode, count),
         }}
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),

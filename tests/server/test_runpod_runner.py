@@ -77,6 +77,7 @@ def test_runner_sends_hq_defaults_in_payload(tmp_path):
     assert captured["allow_creative_escalate"] is False
     assert captured["auto_tune"] is False
     assert captured["uniqueness_target"] == DEFAULT_TARGET
+    assert captured["jobs"] == 1
 
 
 def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
@@ -96,6 +97,26 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
         on_event=lambda e: None)
     assert captured["quality_mode"] == "fast"
     assert captured["auto_tune"] is True
+    assert captured["jobs"] == 1
+
+
+def test_fast_20_pack_payload_jobs_not_capped_to_studio_cpus(tmp_path, monkeypatch):
+    captured = {}
+
+    class CapturingClient:
+        def stream_run(self, payload, cancel_token=None):
+            captured.update(payload["input"])
+            return iter([{"type": "result", "variants": [], "manifest_key": None}])
+
+    monkeypatch.setenv("VARIANT_QUALITY_MODE", "fast")
+    monkeypatch.setattr("variant_maker.server.runner.os.cpu_count", lambda: 2)
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    RunPodServerlessRunner(store, CapturingClient()).run(
+        str(src), count=20, out_dir=str(tmp_path / "o"), source_id="s",
+        on_event=lambda e: None, quality_mode="fast")
+    assert captured["jobs"] == 8
 
 
 def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
@@ -115,6 +136,7 @@ def test_runner_job_quality_mode_hq_overrides_env_fast(tmp_path, monkeypatch):
         on_event=lambda e: None, quality_mode="hq")
     assert captured["quality_mode"] == "hq"
     assert captured["auto_tune"] is False
+    assert captured["jobs"] == 1
 
 
 def test_runner_accepts_allow_creative_escalate(tmp_path):

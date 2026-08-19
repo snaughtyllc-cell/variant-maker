@@ -89,12 +89,13 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
         return M()
 
     monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    monkeypatch.setattr(runner_mod.os, "cpu_count", lambda: 16)
     LocalRunner().run("src.mp4", count=5, out_dir=str(tmp_path), source_id="s", on_event=lambda e: None)
     assert captured["quality_mode"] == "fast"
     assert captured["preset"] == "medium"
     assert captured["platform"] == "tiktok"
     assert captured["max_regen"] == 3
-    assert captured["jobs"] == 1
+    assert captured["jobs"] == 5
     assert captured["count"] == 5
     assert captured["auto_tune"] is True
 
@@ -113,12 +114,33 @@ def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
         return M()
 
     monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    monkeypatch.setattr(runner_mod.os, "cpu_count", lambda: 16)
     LocalRunner().run(
-        "src.mp4", count=1, out_dir=str(tmp_path), source_id="s",
+        "src.mp4", count=5, out_dir=str(tmp_path), source_id="s",
         on_event=lambda e: None, quality_mode="hq",
     )
     assert captured["quality_mode"] == "hq"
     assert captured["auto_tune"] is False
+    assert captured["jobs"] == 1
+
+
+def test_encode_jobs_hq_serial_fast_parallel():
+    from variant_maker.server.runner import (
+        DEFAULT_FAST_JOBS,
+        encode_jobs,
+        encode_jobs_for_worker,
+    )
+
+    assert encode_jobs("hq", 20, cpu_count=16) == 1
+    assert encode_jobs("hq", 1, cpu_count=16) == 1
+    assert encode_jobs("fast", 20, cpu_count=16) == DEFAULT_FAST_JOBS
+    assert encode_jobs("fast", 20, cpu_count=4) == 4
+    assert encode_jobs("fast", 3, cpu_count=16) == 3
+    assert encode_jobs("fast", 20, requested=1, cpu_count=16) == 1
+    assert encode_jobs("fast", 20, requested=8, cpu_count=4) == 4
+    # Studio (2 vCPU) must not shrink the GPU payload.
+    assert encode_jobs_for_worker("fast", 20) == DEFAULT_FAST_JOBS
+    assert encode_jobs_for_worker("hq", 20) == 1
 
 
 def test_should_run_fast_local_only_tiny_fast_packs():

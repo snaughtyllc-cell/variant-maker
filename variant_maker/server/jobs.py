@@ -106,14 +106,16 @@ class Job:
 
 
 def _public_job_error(exc: BaseException) -> str:
-    """Short UI string. RunPod FAILED after ~20 min is the HQ hang, not a mystery freeze."""
+    """Short UI string. RunPod FAILED after ~20 min is serial Fast hitting the cap."""
     raw = str(exc)
     if "ended: CANCELLED" in raw:
         return USER_CANCEL_MSG
     if "ended: FAILED" in raw or "TIMED_OUT" in raw.upper():
         return (
-            "GPU job failed or hit the 20-minute limit. That HQ run is over — "
-            "New run, then Fast for the usual pack."
+            "Job hit the worker time limit before the pack finished. "
+            "A 20-pack one-at-a-time often exceeds 20 minutes — New run. "
+            "Later Fast packs encode several variants at once. "
+            "If this keeps happening, set RunPod execution timeout to 3600s."
         )
     return raw or type(exc).__name__
 

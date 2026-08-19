@@ -18,6 +18,7 @@ from .runner import (
     MIN_BITS_VS_PEERS,
     UNIQ_STRENGTHS,
     UNIQUENESS_TARGET,
+    encode_jobs,
 )
 from .storage import ObjectStore
 
@@ -59,7 +60,10 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "preset": job_input.get("preset", DEFAULT_PRESET),
         "platform": job_input.get("platform", DEFAULT_PLATFORM),
         "quality_mode": quality_mode,
-        "max_regen": job_input.get("max_regen", MAX_REGEN), "jobs": 1,
+        "max_regen": job_input.get("max_regen", MAX_REGEN),
+        "jobs": encode_jobs(
+            quality_mode, count, requested=job_input.get("jobs"),
+        ),
         "uniqueness_target": job_input.get("uniqueness_target", UNIQUENESS_TARGET),
         "uniq_strengths": job_input.get("uniq_strengths", list(UNIQ_STRENGTHS)),
         "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),

@@ -1,13 +1,14 @@
 # Fast generate speed (parallel + where it runs) — Design
 
 **Date:** 2026-08-19  
-**Status:** Noted — decide order before splitting workers.  
+**Status:** Option 1 shipped (Fast `jobs` 4–8 on the GPU box). Slim CPU worker still later.  
 **Product name:** VaryForge
 
-## Why Fast is serial today
+## Why Fast was serial
 
 `pipeline.run` already supports `jobs > 1` (thread pool + a lock on kept
-peers for uniqueness). Studio / RunPod still pass **`jobs: 1`**.
+peers for uniqueness). Studio / RunPod used to pass **`jobs: 1`**. Fast now
+sends `encode_jobs_for_worker` (cap 8, not Railway's vCPU count). HQ stays 1.
 
 | Mode | Bound by | Parallel? |
 |---|---|---|
@@ -32,7 +33,7 @@ overlap is a rounding error once GPU is up.
 FlashBoot on, idle timeout **600s**, min workers 0. Morning 3-variant primer.
 This is still the free cold-start habit.
 
-### 1. Easy win — Fast `jobs` on the GPU we already have (do before a split)
+### 1. Shipped — Fast `jobs` on the GPU we already have
 
 Keep one worker. Fast: `jobs` 4–8 (cap to CPU count). HQ: `jobs` 1.
 

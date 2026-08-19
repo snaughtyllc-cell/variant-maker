@@ -247,6 +247,7 @@ def test_runner_crash_marks_done_with_gpu_timeout_copy(tmp_path):
     assert job.state == "done"
     assert job.error is not None
     assert "20-minute" in job.error
+    assert "New run" in job.error
     assert job.sources[0].delivered == 0
 
 

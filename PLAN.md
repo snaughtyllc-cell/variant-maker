@@ -130,12 +130,13 @@ Status legend: ✅ done & verified · 🔨 to build
 - Until then: generate once, Gallery Send to Drive in slices. Do **not** point three
   workflows at the same inbox (that re-renders 3×).
 
-## Phase 15 — Fast parallel / slim CPU worker  ⏸ noted (before a worker split)
-- Fast is CPU x264; HQ is GPU. Today both use `jobs: 1`. Pipeline already can
-  parallelize Fast. Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
-- **Do first (no new image):** Fast `jobs` 4–8 on the current GPU box; HQ stays 1.
+## Phase 15 — Fast parallel / slim CPU worker  ◑ option 1 shipped
+- Fast is CPU x264; HQ is GPU. Pipeline already parallelizes Fast (`jobs` + uniqueness lock).
+  Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
+- **Shipped:** Fast `jobs` up to 8 on the current GPU box (`encode_jobs` / `VARIANT_FAST_JOBS`);
+  HQ stays 1. Payload uses worker cap, not Railway vCPU count. Needs a worker image rebuild.
 - **Do not:** split one 20-pack across CPU+GPU (uniqueness / cancel / two encodes).
-- **Trying now:** `count <= 3` Fast on Studio CPU (Railway) so a try-out skips GPU wake.
+- **Also:** `count <= 3` Fast on Studio CPU (Railway) so a try-out skips GPU wake.
   20-packs and HQ still RunPod. Env `VARIANT_FAST_LOCAL_MAX` (default 3, 0 disables).
 
 ## Phase 13 — Stronger audio uniqueness  ✅

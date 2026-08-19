@@ -71,6 +71,43 @@ def should_run_fast_local(
     return count <= max_local_fast
 
 
+FAST_JOBS_ENV = "VARIANT_FAST_JOBS"
+DEFAULT_FAST_JOBS = 8
+MAX_FAST_JOBS = 8
+
+
+def encode_jobs(
+    quality_mode: str | None,
+    count: int,
+    *,
+    requested: int | None = None,
+    cpu_count: int | None = None,
+) -> int:
+    """Fast x264 can run several-at-once on CPU cores. HQ stays serial (VRAM)."""
+    if normalize_quality_mode(quality_mode) == "hq":
+        return 1
+    if requested is not None:
+        try:
+            want = max(1, int(requested))
+        except (TypeError, ValueError):
+            want = DEFAULT_FAST_JOBS
+    else:
+        raw = os.environ.get(FAST_JOBS_ENV, str(DEFAULT_FAST_JOBS))
+        try:
+            want = max(1, int(str(raw).strip()))
+        except ValueError:
+            want = DEFAULT_FAST_JOBS
+    cpus = cpu_count if cpu_count is not None else (os.cpu_count() or 2)
+    return max(1, min(int(count), want, max(1, int(cpus)), MAX_FAST_JOBS))
+
+
+def encode_jobs_for_worker(quality_mode: str | None, count: int) -> int:
+    """Desired Fast parallelism on the GPU box. Never use Studio's cpu_count
+    (Railway is often 2 vCPU; that would serialize a 20-pack again). The worker
+    re-caps to its own cores in encode_jobs(..., requested=)."""
+    return encode_jobs(quality_mode, count, cpu_count=MAX_FAST_JOBS)
+
+
 @dataclass
 class VariantResult:
     index: int
@@ -141,7 +178,7 @@ class LocalRunner:
             "platform": DEFAULT_PLATFORM,
             "quality_mode": quality_mode,
             "max_regen": limits.get("max_regen", MAX_REGEN),
-            "jobs": 1,
+            "jobs": encode_jobs(quality_mode, count),
             "uniqueness_target": UNIQUENESS_TARGET,
             "uniq_strengths": limits.get("uniq_strengths", list(UNIQ_STRENGTHS)),
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
