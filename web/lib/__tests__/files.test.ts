@@ -12,13 +12,14 @@ describe("files helpers", () => {
     expect(totalVariants(0, 20)).toBe(0);
   });
 
-  it("rejects files over 120 MB with an export hint", () => {
-    const big = new File([new Uint8Array(1)], "camera.mov", { type: "video/quicktime" });
-    Object.defineProperty(big, "size", { value: 253 * 1024 * 1024 });
-    expect(tooLargeMessage(big)).toMatch(/253 MB/);
-    expect(tooLargeMessage(big)).toMatch(/1080p/i);
-    const ok = new File([new Uint8Array(1)], "clip.mp4", { type: "video/mp4" });
-    Object.defineProperty(ok, "size", { value: 20 * 1024 * 1024 });
-    expect(tooLargeMessage(ok)).toBeNull();
+  it("allows iPhone 4K under 512 MB and rejects bigger dumps", () => {
+    const reel = new File([new Uint8Array(1)], "IMG_0683.MOV", { type: "video/quicktime" });
+    Object.defineProperty(reel, "size", { value: 204 * 1024 * 1024 });
+    expect(tooLargeMessage(reel)).toBeNull();
+
+    const dump = new File([new Uint8Array(1)], "long.mov", { type: "video/quicktime" });
+    Object.defineProperty(dump, "size", { value: 600 * 1024 * 1024 });
+    expect(tooLargeMessage(dump)).toMatch(/600 MB/);
+    expect(tooLargeMessage(dump)).toMatch(/512 MB/);
   });
 });
