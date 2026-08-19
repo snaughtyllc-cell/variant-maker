@@ -1,7 +1,7 @@
 # Fast generate speed (parallel + where it runs) — Design
 
 **Date:** 2026-08-19  
-**Status:** Option 1 shipped (Fast `jobs` 4–8 on the GPU box). Slim CPU worker still later.  
+**Status:** Option 3 in flight (slim Fast CPU worker, scale to zero).  
 **Product name:** VaryForge
 
 ## Why Fast was serial
@@ -10,21 +10,27 @@
 peers for uniqueness). Studio / RunPod used to pass **`jobs: 1`**. Fast now
 sends `encode_jobs_for_worker` (cap 8, not Railway's vCPU count). HQ stays 1.
 
+The GPU worker used to recap that 8 down to `os.cpu_count()`. RunPod GPU
+serverless often reports **1 CPU**, so a Fast 20 still encoded one-at-a-time
+(Norway-wood, 2026-08-19). The worker now honors the payload cap, same as Studio.
+
 | Mode | Bound by | Parallel? |
 |---|---|---|
-| **Fast** | CPU libx264 (+ uniqueness) | Safe. The GPU is idle during Fast. A 4090 box still has many CPU cores. |
-| **HQ** | GPU Real-ESRGAN + VRAM | Keep **serial**. Two HQ encodes on one card OOM or fight the GPU. |
-
-We did not turn Fast parallel on because HQ and Fast share one worker and one
-`jobs: 1` knob. That was caution, not a GPU limit.
+| **Fast** | CPU libx264 (+ uniqueness) | Yes, up to 8. Runs on a **slim CPU** worker. |
+| **HQ** | GPU Real-ESRGAN + VRAM | Keep **serial** on the sleeping 4090. |
 
 ## What we will not do
 
 **Do not split one pack across CPU and GPU** (CPU does v01–v03 while GPU boots
 and takes v04–v20). Uniqueness is *this source’s kept peers*. Two machines
 means two uniqueness states, two ffmpeg builds, two cancel/resume paths, and
-the VA still waits on the GPU for the bulk of a 20-pack. The first-three
-overlap is a rounding error once GPU is up.
+the VA still waits on the GPU for the bulk of a 20-pack.
+
+**Do not** leave a Fast or HQ worker always-on (~$24/day for a 4090). Min
+workers stay **0**. Idle timeout ~10 min after a pack is fine (warm next
+Generate). Overnight **$0**.
+
+**Do not** send 20-packs to Railway Studio CPU (starves the website).
 
 ## Options (best position, in order)
 
@@ -33,36 +39,28 @@ overlap is a rounding error once GPU is up.
 FlashBoot on, idle timeout **600s**, min workers 0. Morning 3-variant primer.
 This is still the free cold-start habit.
 
-### 1. Shipped — Fast `jobs` on the GPU we already have
+### 1. Shipped — Fast `jobs` in the payload
 
-Keep one worker. Fast: `jobs` 4–8 (cap to CPU count). HQ: `jobs` 1.
+Fast: `jobs` 4–8. HQ: `jobs` 1. Worker does not shrink to advertised CPU count.
 
-- Warm **20-pack** wall clock drops (several x264 at once on the box’s CPUs).
-- **Cold start unchanged** (same fat CUDA+ESRGAN image).
-- Does not require a second endpoint.
+### 2. Shipped — tiny Fast tests on Studio CPU (fallback)
 
-This is the check that 20-packs are slow because of **serial Fast**, not
-because we lack a second GPU.
-
-### 2. Trying now — tiny Fast tests on Studio CPU
-
-`quality_mode=fast` **and** `count <= 3` → `LocalRunner` on Railway (ffmpeg already
-there for the ingest proxy). A 1–3 variant speed test never waits on CUDA.
+`quality_mode=fast` **and** `count <= 3` → `LocalRunner` on Railway **only when
+`RUNPOD_FAST_ENDPOINT_ID` is unset**. A 1–3 variant speed test never waits on CUDA.
 
 `VARIANT_FAST_LOCAL_MAX` (default 3, `0` disables). Do **not** send 20-packs here.
 
-### 3. Later — slim Fast CPU serverless (all Fast)
+### 3. Now — slim Fast CPU serverless (all Fast)
 
-ffmpeg+libvmaf image, 8–16 cores, `jobs` 4–8, scale to 0. **All Fast** goes
-here. HQ stays on the sleeping GPU.
+`deploy/runpod/Dockerfile.fast`: ffmpeg+libvmaf, no CUDA. 8-core CPU serverless,
+`jobs` 4–8, scale to 0. **All Fast** goes here when `RUNPOD_FAST_ENDPOINT_ID` is
+set. HQ stays on `RUNPOD_ENDPOINT_ID` (sleeping 4090).
 
-Do this after (1) if daily Fast still pays a CUDA boot we hate. Not required
-to prove parallel Fast.
+Until that env var is set, Fast 20s still hit the GPU endpoint (same as today).
 
 ## Success
 
 - 3-variant Fast try-out: tens of seconds, not a CUDA boot.
 - 20-variant Fast (warm): minutes with parallel x264, not 20× serial.
 - HQ still one-at-a-time on GPU.
-- One Generate button. Fast vs HQ picks knobs (and later, worker). Overnight
-  GPU still $0 until we pay for a warm worker.
+- One Generate button. Fast vs HQ picks the worker. Overnight both $0.

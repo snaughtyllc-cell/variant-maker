@@ -71,6 +71,22 @@ Then on Railway set `RUNPOD_ENDPOINT_ID`, `RUNPOD_API_KEY`, the four `R2_*`
 vars, and `VARIANT_RUNNER=runpod` (or omit `VARIANT_RUNNER` — auto-selects
 runpod when those vars are complete). Restart the Railway service.
 
+### 3b. Fast CPU worker (scale to zero)
+
+Fast 20-packs should **not** wake the 4090. CI builds
+`ghcr.io/snaughtyllc-cell/variant-fast:latest` from
+`deploy/runpod/Dockerfile.fast` (ffmpeg+libvmaf, no CUDA). Create a second
+RunPod **CPU** serverless endpoint from that image:
+
+- Compute type: **CPU**. Instance with **8+ cores** (e.g. `cpu3g-8-32`).
+- Start command is already `python -u /app/deploy/runpod/cp_handler.py`.
+- Min workers **0**, max workers 1–2, idle timeout **600s**, FlashBoot on.
+- Execution timeout **3600s** (a 20-pack must not die at 10–20 min).
+- Same `R2_*` env as the GPU endpoint.
+
+Set `RUNPOD_FAST_ENDPOINT_ID` on Railway to that endpoint id. Until it is set,
+Fast 20s still use the GPU endpoint. HQ always uses `RUNPOD_ENDPOINT_ID`.
+
 Control-plane HQ defaults stay on the GPU worker (`quality_mode=hq`). Uniqueness
 gate + one creative escalate are forwarded in the job payload.
 

@@ -101,11 +101,20 @@ def encode_jobs(
     return max(1, min(int(count), want, max(1, int(cpus)), MAX_FAST_JOBS))
 
 
-def encode_jobs_for_worker(quality_mode: str | None, count: int) -> int:
-    """Desired Fast parallelism on the GPU box. Never use Studio's cpu_count
-    (Railway is often 2 vCPU; that would serialize a 20-pack again). The worker
-    re-caps to its own cores in encode_jobs(..., requested=)."""
-    return encode_jobs(quality_mode, count, cpu_count=MAX_FAST_JOBS)
+def encode_jobs_for_worker(
+    quality_mode: str | None,
+    count: int,
+    requested: int | None = None,
+) -> int:
+    """Fast parallelism for a remote worker payload.
+
+    Never use this container's os.cpu_count() — Railway Studio is often 2 vCPU,
+    and GPU serverless often reports 1. Either would serialize a 20-pack.
+    Cap at MAX_FAST_JOBS; the Fast CPU endpoint is sized for that.
+    """
+    return encode_jobs(
+        quality_mode, count, requested=requested, cpu_count=MAX_FAST_JOBS,
+    )
 
 
 @dataclass
@@ -208,23 +217,35 @@ class LocalRunner:
 
 
 class RoutingRunner:
-    """Fast count<=N on local CPU; everything else (HQ, 20-packs) on remote GPU."""
+    """Pick a machine: tiny Fast on Studio CPU, all Fast on a slim CPU worker
+    when configured, HQ (and Fast fallback) on the GPU endpoint."""
 
     def __init__(
         self,
         local: Runner,
         remote: Runner,
         *,
+        fast_remote: Runner | None = None,
         max_local_fast: int = DEFAULT_FAST_LOCAL_MAX,
     ) -> None:
         self._local = local
         self._remote = remote
+        self._fast_remote = fast_remote
         self._max_local_fast = max_local_fast
 
     def _pick(self, quality_mode: str | None, count: int) -> Runner:
+        if normalize_quality_mode(quality_mode) == "fast" and self._fast_remote is not None:
+            return self._fast_remote
         if should_run_fast_local(quality_mode, count, self._max_local_fast):
             return self._local
         return self._remote
+
+    def _cloud(self, quality_mode: str | None, count: int) -> Runner:
+        """Resume/fetch never use Studio CPU — those jobs have a RunPod id."""
+        picked = self._pick(quality_mode, count)
+        if picked is self._local:
+            return self._fast_remote or self._remote
+        return picked
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
@@ -238,13 +259,19 @@ class RoutingRunner:
         )
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
-        resume = getattr(self._remote, "resume_run", None)
+        target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)
+        resume = getattr(target, "resume_run", None)
         if not callable(resume):
             raise TypeError("remote runner cannot resume a cloud job")
         return resume(*args, **kwargs)
 
     def fetch_outputs(self, *args, **kwargs):
-        fetch = getattr(self._remote, "fetch_outputs", None)
-        if not callable(fetch):
-            return None
-        return fetch(*args, **kwargs)
+        for target in (self._fast_remote, self._remote):
+            if target is None:
+                continue
+            fetch = getattr(target, "fetch_outputs", None)
+            if callable(fetch):
+                got = fetch(*args, **kwargs)
+                if got:
+                    return got
+        return None

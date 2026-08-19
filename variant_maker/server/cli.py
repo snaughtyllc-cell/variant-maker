@@ -18,6 +18,7 @@ from .workspace import Workspace
 
 _RUNPOD_ENV = ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
                "R2_ACCESS_KEY", "R2_SECRET_KEY")
+FAST_ENDPOINT_ENV = "RUNPOD_FAST_ENDPOINT_ID"
 
 
 def resolve_runner(kind: str | None) -> str:
@@ -27,6 +28,11 @@ def resolve_runner(kind: str | None) -> str:
     if all(os.environ.get(k) for k in _RUNPOD_ENV):
         return "runpod"
     return "local"
+
+
+def _fast_endpoint_id() -> str | None:
+    raw = (os.environ.get(FAST_ENDPOINT_ENV) or "").strip()
+    return raw or None
 
 
 def make_runner(kind: str) -> Runner:
@@ -39,11 +45,22 @@ def make_runner(kind: str) -> Runner:
         store = S3ObjectStore(
             endpoint_url=os.environ["R2_ENDPOINT"], bucket=os.environ["R2_BUCKET"],
             access_key=os.environ["R2_ACCESS_KEY"], secret_key=os.environ["R2_SECRET_KEY"])
-        client = HttpRunPodClient(endpoint_id=os.environ["RUNPOD_ENDPOINT_ID"],
-                                  api_key=os.environ["RUNPOD_API_KEY"])
+        api_key = os.environ["RUNPOD_API_KEY"]
+        gpu = RunPodServerlessRunner(
+            store,
+            HttpRunPodClient(endpoint_id=os.environ["RUNPOD_ENDPOINT_ID"], api_key=api_key),
+        )
+        fast_id = _fast_endpoint_id()
+        fast = None
+        if fast_id:
+            fast = RunPodServerlessRunner(
+                store,
+                HttpRunPodClient(endpoint_id=fast_id, api_key=api_key),
+            )
         return RoutingRunner(
             LocalRunner(),
-            RunPodServerlessRunner(store, client),
+            gpu,
+            fast_remote=fast,
             max_local_fast=fast_local_max_from_env(),
         )
     raise SystemExit(f"unknown runner: {kind!r}")

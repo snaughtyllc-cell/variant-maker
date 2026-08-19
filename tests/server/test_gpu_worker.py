@@ -88,6 +88,16 @@ def test_fast_worker_parallelizes_20_pack_even_without_jobs_key(monkeypatch, tmp
     assert captured["jobs"] == 8
 
 
+def test_fast_worker_honors_payload_jobs_when_container_reports_one_cpu(monkeypatch, tmp_path):
+    """GPU serverless often advertises 1 CPU. That recap made Norway-wood serial."""
+    monkeypatch.setattr("variant_maker.server.runner.os.cpu_count", lambda: 1)
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 20,
+        "quality_mode": "fast", "jobs": 8,
+    })
+    assert captured["jobs"] == 8
+
+
 def test_hq_worker_stays_serial_even_if_jobs_requested(monkeypatch, tmp_path):
     captured = _capture_jobs(monkeypatch, tmp_path, {
         "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 20,

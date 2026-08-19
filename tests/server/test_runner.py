@@ -175,3 +175,48 @@ def test_routing_runner_sends_tiny_fast_to_local_else_remote():
     assert len(local.calls) == 1 and local.calls[0]["count"] == 3
     assert [c["count"] for c in remote.calls] == [20, 1]
     assert remote.calls[1]["quality_mode"] == "hq"
+
+
+def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+            self.resumes = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+        def resume_run(self, *args, **kw):
+            self.resumes.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu, fast = Fake("local"), Fake("gpu"), Fake("fast")
+    router = RoutingRunner(local, gpu, fast_remote=fast, max_local_fast=3)
+    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    assert not local.calls
+    assert [c["count"] for c in fast.calls] == [3, 20]
+    assert gpu.calls[0]["count"] == 1 and gpu.calls[0]["quality_mode"] == "hq"
+    router.resume_run(
+        "s.mp4", count=20, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="fast", runpod_job_id="rp1",
+    )
+    router.resume_run(
+        "s.mp4", count=1, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="hq", runpod_job_id="rp2",
+    )
+    assert fast.resumes and fast.resumes[0]["runpod_job_id"] == "rp1"
+    assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
+
+
+def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):
+    from variant_maker.server.runner import encode_jobs_for_worker
+
+    monkeypatch.setattr("variant_maker.server.runner.os.cpu_count", lambda: 1)
+    assert encode_jobs_for_worker("fast", 20, requested=8) == 8
+    assert encode_jobs_for_worker("hq", 20, requested=8) == 1

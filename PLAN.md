@@ -130,14 +130,19 @@ Status legend: ✅ done & verified · 🔨 to build
 - Until then: generate once, Gallery Send to Drive in slices. Do **not** point three
   workflows at the same inbox (that re-renders 3×).
 
-## Phase 15 — Fast parallel / slim CPU worker  ◑ option 1 shipped
+## Phase 15 — Fast parallel / slim CPU worker  ◑ option 3 in flight
 - Fast is CPU x264; HQ is GPU. Pipeline already parallelizes Fast (`jobs` + uniqueness lock).
   Spec: `docs/superpowers/specs/2026-08-19-fast-worker-split.md`.
-- **Shipped:** Fast `jobs` up to 8 on the current GPU box (`encode_jobs` / `VARIANT_FAST_JOBS`);
-  HQ stays 1. Payload uses worker cap, not Railway vCPU count. Needs a worker image rebuild.
-- **Do not:** split one 20-pack across CPU+GPU (uniqueness / cancel / two encodes).
-- **Also:** `count <= 3` Fast on Studio CPU (Railway) so a try-out skips GPU wake.
-  20-packs and HQ still RunPod. Env `VARIANT_FAST_LOCAL_MAX` (default 3, 0 disables).
+- **Shipped:** Fast `jobs` up to 8 in the payload (`encode_jobs_for_worker`). Worker must
+  **not** recap to `os.cpu_count()` (GPU serverless often reports 1 — that serialized
+  the Norway-wood 20-pack). HQ stays 1.
+- **Shipped:** `count <= 3` Fast on Studio CPU when no Fast endpoint is set
+  (`VARIANT_FAST_LOCAL_MAX`). Do **not** send 20-packs to Railway.
+- **Now:** slim Fast CPU image (`deploy/runpod/Dockerfile.fast` →
+  `ghcr.io/snaughtyllc-cell/variant-fast:latest`). All Fast goes to
+  `RUNPOD_FAST_ENDPOINT_ID` when set (min workers 0). HQ stays on the 4090
+  (`RUNPOD_ENDPOINT_ID`). Overnight both scale to $0.
+- **Do not:** split one 20-pack across CPU+GPU. **Do not:** always-on workers.
 
 ## Phase 13 — Stronger audio uniqueness  ✅
 - Video variants already re-encode audio (speed=`atempo` locked to video, EQ, loudnorm, AAC).

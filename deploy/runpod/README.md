@@ -94,7 +94,8 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
 
 4. **Point the control plane at it** (local or Railway):
    ```
-   export RUNPOD_ENDPOINT_ID=<id> RUNPOD_API_KEY=<key>
+   export RUNPOD_ENDPOINT_ID=<hq-id> RUNPOD_API_KEY=<key>
+   export RUNPOD_FAST_ENDPOINT_ID=<fast-cpu-id>   # optional until the CPU endpoint exists
    export R2_ENDPOINT=<url> R2_BUCKET=<bucket> R2_ACCESS_KEY=<ak> R2_SECRET_KEY=<sk>
    export VARIANT_RUNNER=runpod
    variant-server --runner runpod
@@ -102,4 +103,8 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
    On Railway, set the same vars on the Studio service and restart. See
    [`docs/ops/railway-studio.md`](../../docs/ops/railway-studio.md).
 
-5. **Rotate the RunPod API key** (it was pasted in chat early in the project).
+5. **Fast CPU endpoint** (all Fast packs; min workers 0). Image:
+   `ghcr.io/snaughtyllc-cell/variant-fast:latest` from `Dockerfile.fast`.
+   CPU, 8+ cores, same `R2_*`, execution timeout 3600s. Do not point HQ at it.
+
+6. **Rotate the RunPod API key** (it was pasted in chat early in the project).
