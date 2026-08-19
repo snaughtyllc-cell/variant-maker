@@ -24,7 +24,8 @@ def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
     assert uniqueness.TARGET_BITS == 32
     assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
-    assert uniqueness.MIN_PEER_BITS == 18
+    # Sibling floor: 24 bits (old source floor). 18 did not bite Fast packs.
+    assert uniqueness.MIN_PEER_BITS == 24
     assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
     assert uniqueness.MAX_PASSES == 3
 

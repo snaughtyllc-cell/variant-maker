@@ -255,6 +255,45 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
     assert v2.strength_final == 1.4
 
 
+def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
+    """v2 clears 32 vs source but not vs v1 → auto-tune searches stronger, not milder."""
+    _stub_common(monkeypatch)
+    seen = []
+    stub_sample = pipeline.sample
+
+    def spy_sample(preset, seed, **kwargs):
+        seen.append(kwargs.get("strength", 1.0))
+        return stub_sample(preset, seed, **kwargs)
+
+    monkeypatch.setattr(pipeline, "sample", spy_sample)
+
+    peer_n = {"n": 0}
+
+    def fake_bits_vs(a, b):
+        peer_n["n"] += 1
+        # First v2 check is a twin; later attempt clears the 24-bit sibling floor.
+        return 10 if peer_n["n"] == 1 else 30
+
+    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", fake_bits_vs)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+
+    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+
+    v1, v2 = manifest.variants
+    assert v1.uniqueness_status == "ok"
+    assert v2.uniqueness_status == "ok"
+    assert v2.quality.get("min_bits_vs_peers") == 30
+    # v1 stop_on_clear: one strength. v2: first miss then a stronger hit.
+    assert len(seen) >= 3
+    v2_strengths = seen[1:]
+    assert v2_strengths[1] > v2_strengths[0]
+    assert v2.strength_final > v2_strengths[0]
+
+
 def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch, tmp_path):
     """Fast default: uniqueness starts below target then clears; 3-rung ladder unused."""
     _stub_common(monkeypatch)

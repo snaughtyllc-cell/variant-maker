@@ -18,20 +18,24 @@ def step(
     passed: bool,
     uniqueness: float | None,
     target: float,
+    peer_ok: bool = True,
 ) -> tuple[float, float, float]:
     """One bisection step. Returns ``(new_lo, new_hi, next_strength)``.
 
     ``mid`` is ``(lo+hi)/2`` of the *current* bounds before the update.
+
+    ``passed`` is quality only (VMAF / histogram). Source uniqueness and
+    sibling ``peer_ok`` are the too-similar axes — they search stronger.
     """
     mid = (lo + hi) / 2
     if not passed:
-        # Too strong (quality / combined gate fail) → search milder.
+        # Too strong (quality fail) → search milder.
         hi = mid
-    elif uniqueness is None or uniqueness < target:
-        # Too similar → search stronger.
+    elif uniqueness is None or uniqueness < target or not peer_ok:
+        # Too similar vs source or vs siblings → search stronger.
         lo = mid
     else:
-        # Hits both → try milder.
+        # Hits quality + source + peers → try milder.
         hi = mid
     return lo, hi, (lo + hi) / 2
 
@@ -48,14 +52,16 @@ def tune(
 ) -> dict:
     """Bisect strength until uniqueness clears ``target`` (or ``max_iters``).
 
-    ``attempt(strength) -> dict`` must include ``passed`` (bool) and
-    ``uniqueness`` (float | None).
+    ``attempt(strength) -> dict`` must include ``passed`` (bool, quality) and
+    ``uniqueness`` (float | None). Optional ``peer_ok`` (default True) is the
+    sibling-spread gate.
 
-    ``best`` is the last result that passed AND ``uniqueness >= target``;
-    otherwise the last result. Tags ``autotune_iters`` on the returned dict.
+    ``best`` is the last result that passed quality AND ``uniqueness >= target``
+    AND ``peer_ok``; otherwise the last result. Tags ``autotune_iters``.
 
-    ``stop_on_clear``: Fast daily packs stop at the first hit so a 20-pack does
-    not pay five extra encodes hunting a milder strength.
+    ``stop_on_clear``: Fast daily packs stop at the first full hit so a 20-pack
+    does not pay five extra encodes hunting a milder strength. Source uniqueness
+    alone is not a hit — twins must keep searching stronger.
     """
     strength = (lo + hi) / 2
     best = None
@@ -68,12 +74,22 @@ def tune(
         iters += 1
         last = result
         uniqueness = result.get("uniqueness")
-        if result.get("passed") and uniqueness is not None and uniqueness >= target:
+        peer_ok = result.get("peer_ok", True)
+        if (
+            result.get("passed")
+            and uniqueness is not None
+            and uniqueness >= target
+            and peer_ok
+        ):
             best = result
             if stop_on_clear:
                 break
         lo, hi, strength = step(
-            lo, hi, passed=result["passed"], uniqueness=uniqueness, target=target,
+            lo, hi,
+            passed=result["passed"],
+            uniqueness=uniqueness,
+            target=target,
+            peer_ok=peer_ok,
         )
     out = best if best is not None else last
     out["autotune_iters"] = iters

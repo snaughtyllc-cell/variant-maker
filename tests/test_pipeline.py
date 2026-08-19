@@ -17,7 +17,7 @@ def test_default_uniqueness_target_is_32_bits():
     assert pipeline.DEFAULT_UNIQUENESS_TARGET == DEFAULT_TARGET
     assert pipeline.DEFAULT_UNIQUENESS_TARGET == 32 / 64
     assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == MIN_PEER_BITS
-    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 18
+    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 24
 
 
 HAS_RESR = upscale.available("models/realesrgan")

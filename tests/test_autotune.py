@@ -41,6 +41,30 @@ def test_step_hits_both_tries_milder():
     assert nxt == (lo + hi) / 2
 
 
+def test_step_peer_fail_is_too_similar():
+    """Quality + source uniqueness clear, but siblings are twins → search stronger."""
+    lo0, hi0 = 0.5, 1.8
+    mid = (lo0 + hi0) / 2
+    lo, hi, nxt = autotune.step(
+        lo0, hi0, passed=True, uniqueness=0.5, target=DEFAULT_TARGET, peer_ok=False,
+    )
+    assert lo == mid
+    assert hi == hi0
+    assert nxt == (lo + hi) / 2
+
+
+def test_step_quality_fail_beats_peer_fail():
+    """VMAF miss still searches milder even when peers also fail."""
+    lo0, hi0 = 0.5, 1.8
+    mid = (lo0 + hi0) / 2
+    lo, hi, nxt = autotune.step(
+        lo0, hi0, passed=False, uniqueness=0.5, target=DEFAULT_TARGET, peer_ok=False,
+    )
+    assert lo == lo0
+    assert hi == mid
+    assert nxt == (lo + hi) / 2
+
+
 def test_step_uniqueness_at_target_counts_as_hit():
     lo0, hi0 = 0.0, 2.0
     mid = (lo0 + hi0) / 2
@@ -120,6 +144,46 @@ def test_tune_stop_on_clear_does_not_hunt_milder():
     assert out["id"] == 1
     assert out["autotune_iters"] == 1
     assert len(seen) == 1
+
+
+def test_tune_stop_on_clear_does_not_stop_when_peers_fail():
+    """Source uniqueness is not enough — twins must keep searching stronger."""
+    seen = []
+
+    def attempt(strength):
+        seen.append(strength)
+        n = len(seen)
+        return {
+            "passed": True,
+            "uniqueness": 0.5,
+            "peer_ok": n >= 2,
+            "id": n,
+        }
+
+    out = autotune.tune(
+        attempt, target=DEFAULT_TARGET, max_iters=5, stop_on_clear=True,
+    )
+    assert out["id"] == 2
+    assert out["peer_ok"] is True
+    assert out["autotune_iters"] == 2
+    assert len(seen) == 2
+    assert seen[1] > seen[0]
+
+
+def test_tune_peer_fail_is_not_best_even_if_source_unique():
+    seen = []
+
+    def attempt(strength):
+        seen.append(strength)
+        n = len(seen)
+        if n == 1:
+            return {"passed": True, "uniqueness": 0.5, "peer_ok": False, "id": 1}
+        return {"passed": True, "uniqueness": 0.1, "peer_ok": False, "id": n}
+
+    out = autotune.tune(attempt, target=DEFAULT_TARGET, max_iters=3)
+    assert out["id"] != 1
+    assert out["peer_ok"] is False
+    assert out["autotune_iters"] == 3
 
 
 def test_tune_starts_at_mid_of_bounds():

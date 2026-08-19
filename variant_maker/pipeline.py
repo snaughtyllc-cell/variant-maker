@@ -233,11 +233,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 )
                 peer_min = _peer_bits(path)
                 u_try = _apply_peer_status(u_try, peer_min)
+                # Quality `passed` is VMAF/histogram only. Peer miss is too-similar
+                # (search stronger), not too-strong (search milder).
                 return {
                     **r_try,
                     **u_try,
                     "quality_passed": r_try["passed"],
-                    "passed": r_try["passed"] and _gate_ok(u_try, peer_min),
+                    "passed": r_try["passed"],
+                    "peer_ok": peer_min is None or peer_min >= min_bits_vs_peers,
                     "uniqueness": u_try["uniqueness"],
                 }
 
@@ -262,9 +265,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
             }
             cleared = (
-                tuned.get("passed")
+                tuned.get("quality_passed")
                 and tuned.get("uniqueness") is not None
                 and tuned["uniqueness"] >= uniqueness_target
+                and tuned.get("peer_ok", True)
             )
             if not cleared and allow_creative_escalate:
                 emit("escalating", index=i)

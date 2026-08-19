@@ -21,8 +21,9 @@ METRIC_VERSION = "ssim_bits_v1"
 # Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 32
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 32/64 = 0.5
-# Same-batch peer floor; TikFusion uses 8 — we raise to 18 so siblings spread.
-MIN_PEER_BITS = 18
+# Same-batch peer floor. TikFusion uses 8; 18 did not bite Fast packs (siblings
+# already cleared ~35 vs source). 24 is the old source floor — spread v02 vs v01.
+MIN_PEER_BITS = 24
 DEFAULT_PEER = MIN_PEER_BITS  # alias
 MAX_PASSES = 3
 FRAME_FRACS = (0.25, 0.50, 0.75)
