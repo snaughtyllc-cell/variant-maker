@@ -159,6 +159,13 @@ Status legend: ✅ done & verified · 🔨 to build
 - Fast path: `pipeline.run` auto-detects after reading `jobs` and sets `config["rubberband"]`.
   Preset ranges remain tiny (±2% medium, ±4% strong).
 
+## Phase 16 — Fast seeded resample  ⏸ parked (do not build until go)
+- Spec: `docs/superpowers/specs/2026-08-19-fast-seeded-resample.md`.
+- Fast analog of TikFusion Random Pixels **without** weird output size: unique even
+  intermediate → back to 1080×1920 with a seeded kernel. HQ skip (ESRGAN owns pixels).
+- Unbudgeted fingerprint axis. Color zero-mean. VMAF floor stays. Gates stay 32/24.
+- Not Pixel Manipulation AI / Smart Colors / fps jitter / random output dimensions.
+
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate is disabled until **New run**
   (keeps the last pack on the rail). **Cancel** stops a live job (RunPod `/cancel` + skip

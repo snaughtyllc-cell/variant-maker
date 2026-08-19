@@ -1,7 +1,7 @@
 # Fast generate speed (parallel + where it runs) — Design
 
 **Date:** 2026-08-19  
-**Status:** Option 3 in flight (slim Fast CPU worker, scale to zero).  
+**Status:** Shipped (slim Fast CPU worker, scale to zero).  
 **Product name:** VaryForge
 
 ## Why Fast was serial
