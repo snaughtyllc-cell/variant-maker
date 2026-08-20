@@ -256,7 +256,7 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
 
 
 def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
-    """v2 clears 32 vs source but not vs v1 → auto-tune searches stronger, not milder."""
+    """v2 clears vs source but not vs v1 → auto-tune searches stronger, not milder."""
     _stub_common(monkeypatch)
     seen = []
     stub_sample = pipeline.sample

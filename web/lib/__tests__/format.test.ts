@@ -26,8 +26,8 @@ describe("vmafPass", () => {
 
 describe("similarityFromUniqueness", () => {
   it("mirrors uniqueness on the SSIM-bits scale", () => {
-    // Default gate 32/64 = 0.5 unique → similarity ≤ 0.5 (50%)
-    expect(similarityFromUniqueness(32 / 64)).toBeCloseTo(32 / 64);
+    // Similarity is 1 − uniqueness on the same SSIM-bits scale.
+    expect(similarityFromUniqueness(24 / 64)).toBeCloseTo(40 / 64);
     expect(similarityFromUniqueness(0.5)).toBe(0.5);
     expect(pct01(similarityFromUniqueness(0.5))).toBe(50);
     expect(pct01(0.5)).toBe(50); // uniqueness % (higher better)

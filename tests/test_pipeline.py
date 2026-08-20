@@ -11,11 +11,16 @@ from variant_maker.probe import probe
 from variant_maker.uniqueness import DEFAULT_TARGET, MIN_PEER_BITS, TARGET_BITS
 
 
-def test_default_uniqueness_target_is_32_bits():
-    """Fast uniqueness gate is 32/64 — twins that merely clear 24 bits are not enough."""
-    assert TARGET_BITS == 32
+def test_default_uniqueness_target_is_24_bits():
+    """Fast vs-source gate is 24/64 — medium 20-pack headroom, not strong's band.
+
+    Talking-head medium measures ~27–30 SSIM bits vs source. A 32-bit gate sits
+    in strong's band on the same clip (~35–38) and escalates the whole Fast 20-pack.
+    Peer floor stays 24 so the 20 copies still spread. Escalate remains for misses.
+    """
+    assert TARGET_BITS == 24
     assert pipeline.DEFAULT_UNIQUENESS_TARGET == DEFAULT_TARGET
-    assert pipeline.DEFAULT_UNIQUENESS_TARGET == 32 / 64
+    assert pipeline.DEFAULT_UNIQUENESS_TARGET == 24 / 64
     assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == MIN_PEER_BITS
     assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 24
 

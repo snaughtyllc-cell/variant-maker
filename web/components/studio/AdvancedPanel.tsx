@@ -142,8 +142,8 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. If the
-                lighter pass doesn&apos;t hit 50% vs the source, one strong
-                pass runs and the tile shows esc — that is not a fail.
+                lighter pass misses the uniqueness target vs the source, one
+                strong pass runs and the tile shows esc — that is not a fail.
               </span>
             </span>
             <input

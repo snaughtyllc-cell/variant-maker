@@ -70,7 +70,7 @@ ruff check .                    # lint
 | `quality.py` | ✅ done | histogram sanity + VMAF quality-render guard |
 | `pipeline.py` | ✅ done | per-variant loop, uniqueness + auto-tune → manifest |
 | `autotune.py` | ✅ done | bisection; quality fail → milder; source/peer miss → stronger |
-| `uniqueness.py` | ✅ done | SSIM bits; live gate **32 vs source, 24 vs peers** |
+| `uniqueness.py` | ✅ done | SSIM bits; live gate **24 vs source, 24 vs peers** (medium 20-pack headroom) |
 | `cli.py` | ✅ done | options + `pipeline.run` |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
 | Fast resample | ✅ done | seeded even round-trip + `warp_k1`; HQ skipped |

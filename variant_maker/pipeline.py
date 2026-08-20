@@ -19,9 +19,10 @@ from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
-# Top-tail vs TikFusion's ~18-bit floor: default target 32/64 = 0.5.
+# TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source is 24/64 so a medium
+# 20-pack of talking-head stays on medium; 32 lived in strong's band and escalated all 20.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
-# Wider ladder so medium can clear 32 bits before the one creative escalate.
+# Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
 DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 

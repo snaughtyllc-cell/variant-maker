@@ -16,13 +16,14 @@ import subprocess
 import tempfile
 
 METRIC_VERSION = "ssim_bits_v1"
-# TikFusion Smart Detector floor ≈ 18 bits (~28% unique). VaryForge defaults
-# above that for top-tail resilience: 32 bits = 50% unique (32/64 = 0.5).
-# Local uniqueness gate only — not a platform verdict.
-TARGET_BITS = 32
-DEFAULT_TARGET = TARGET_BITS / 64.0  # 32/64 = 0.5
-# Same-batch peer floor. TikFusion uses 8; 18 did not bite Fast packs (siblings
-# already cleared ~35 vs source). 24 is the old source floor — spread v02 vs v01.
+# TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source is 24
+# bits (24/64 = 0.375): that is what medium actually delivers on talking-head
+# (~27–30 bits). 32 bits sits in strong's band on the same clips (~35–38) and
+# escalates a whole Fast 20-pack. Local uniqueness gate only — not a platform verdict.
+TARGET_BITS = 24
+DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
+# Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
+# vs each other; 24 keeps them spread without forcing strong.
 MIN_PEER_BITS = 24
 DEFAULT_PEER = MIN_PEER_BITS  # alias
 MAX_PASSES = 3

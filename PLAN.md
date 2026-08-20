@@ -112,10 +112,10 @@ Status legend: ✅ done & verified · 🔨 to build
 
 ## Phase 11 — Auto-tune controller  ✅
 - Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default
-  `uniqueness.DEFAULT_TARGET` = 32/64). **Fast default on** (`stop_on_clear` so a pack
+  `uniqueness.DEFAULT_TARGET` = 24/64). **Fast default on** (`stop_on_clear` so a pack
   stops at the first uniqueness+quality+peer hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
-- Fast gate is **32 bits vs source**, **24 vs peers**. Peer miss searches **stronger**
+- Fast gate is **24 bits vs source**, **24 vs peers**. Peer miss searches **stronger**
   (not milder — quality `passed` is VMAF only). Over-budget `sample()` shrinks
   color/encode first so crop/rotate survive. Color stays zero-mean. VMAF floor stays.
   Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.

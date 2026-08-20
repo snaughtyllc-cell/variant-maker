@@ -34,7 +34,7 @@ Fast pixel seed is a tiny zero-mean `lenscorrection` (`warp_k1`), VMAF-capped.
 | In | Out |
 |---|---|
 | Fast only (`quality_mode=fast`), Reels/TikTok/Shorts (platform has w×h) | HQ (ESRGAN already rebuilds pixels — `disable_fast_pixel_ops`) |
-| `sample()` draws unbudgeted `resample_*` plus budgeted zero-mean `warp_k1` | Changing uniqueness gates (stay **32 vs source, 24 vs peers**) |
+| `sample()` draws unbudgeted `resample_*` plus budgeted zero-mean `warp_k1` | Changing uniqueness gates (stay **24 vs source, 24 vs peers**) |
 | `filtergraph.build_video_filters` emits extra scales + lenscorrection | `platform=none` has no resample (quality proxy uses none) |
 | Neutralize **resample** in `_QUALITY_NEUTRAL`; **keep warp** so VMAF caps it | Odd output size; fps 30–60 jitter; named film/vibrant looks |
 

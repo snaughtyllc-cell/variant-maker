@@ -17,7 +17,7 @@ DEFAULT_PRESET = "medium"
 DEFAULT_PLATFORM = "tiktok"   # vertical 1080x1920
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
-# Top-tail gate: 32 bits = 50% unique (TikFusion floor is ~18).
+# Fast vs-source gate: 24 bits. TikFusion floor is ~18. 32 forced talking-head 20-packs onto strong.
 UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 UNIQ_STRENGTHS = list(pipeline.DEFAULT_UNIQ_STRENGTHS)
 MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS

@@ -56,7 +56,7 @@ SUBTLE = Preset(
 
 MEDIUM = Preset(
     name="medium", budget=0.65,
-    # Wider geometry so the uniqueness ladder can clear a 24-bit gate without
+    # Wider geometry so the uniqueness ladder can clear the 24-bit Fast gate without
     # leaning on color alone (still "light look" vs strong escalate).
     crop_keep=Range(0.90, 0.97), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),

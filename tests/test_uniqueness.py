@@ -18,16 +18,23 @@ def _tiny_mp4(path, *, color="black", extra_vf=None, lavfi=None):
 def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0) == 0
     assert uniqueness.bits_from_ssim(0.0) == 64
-    # TikFusion floor ≈ 18 bits; VaryForge default hard gate is 32 (32/64 = 0.5).
+    # TikFusion floor ≈ 18 bits. Fast vs-source gate is 24 (medium 20-pack headroom).
     # Local uniqueness only — not a platform verdict.
     assert uniqueness.bits_from_ssim(1.0 - 18 / 64) == 18
     assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
-    assert uniqueness.TARGET_BITS == 32
+    assert uniqueness.TARGET_BITS == 24
     assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
-    # Sibling floor: 24 bits (old source floor). 18 did not bite Fast packs.
+    # Sibling floor matches vs-source: 24 bits so a Fast 20-pack stays on medium.
     assert uniqueness.MIN_PEER_BITS == 24
     assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
     assert uniqueness.MAX_PASSES == 3
+
+
+def test_fast_gate_fits_medium_talking_head_headroom():
+    """Measured talking-head medium is ~27–30 bits; 32 lives in strong's band (~35–38)."""
+    talking_head_medium_floor = 27
+    assert uniqueness.TARGET_BITS <= talking_head_medium_floor
+    assert uniqueness.TARGET_BITS == 24
 
 
 def test_similarity_is_one_minus_uniqueness():

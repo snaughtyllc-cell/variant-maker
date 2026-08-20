@@ -1,9 +1,9 @@
 # VaryForge Uniqueness Loop — Design
 
 **Date:** 2026-07-14  
-**Status:** Shipped (loop + auto-tune). Live Fast gate is **32 bits vs source**, **24 vs peers**
-(`uniqueness.TARGET_BITS` / `MIN_PEER_BITS`) — not the 24/10 numbers in §3 below, which are
-historical brainstorm. Do not raise those floors again unless asked.  
+**Status:** Shipped (loop + auto-tune). Live Fast gate is **24 bits vs source**, **24 vs peers**
+(`uniqueness.TARGET_BITS` / `MIN_PEER_BITS`). 32 vs source sat in strong's band on
+talking-head Fast 20-packs and escalated every file. Do not raise those floors again unless asked.  
 **Product name:** VaryForge (codebase: `variant-maker`)  
 **Scope:** Upload-time duplicate resilience via a local uniqueness gate + light fingerprint upgrades + optional one-step creative escalate. Tier-2 neural reconstruct is explicitly out of scope for this release.
 
