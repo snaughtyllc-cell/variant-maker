@@ -14,7 +14,7 @@ from variant_maker.uniqueness import DEFAULT_TARGET, MIN_PEER_BITS, TARGET_BITS
 def test_default_uniqueness_target_is_24_bits():
     """Fast vs-source *gate* stays 24/64 (~38% UI). Do not raise it to 32.
 
-    Medium talking-head should *score* ~32–38 bits (~50–60% UI) so packs clear
+    Medium talking-head should *score* ~35–42 bits (~55–65% UI) so packs clear
     without escalate. A 32-bit gate sat in strong's band and escalated all 20.
     Peer floor stays 24. Escalate remains for misses.
     """

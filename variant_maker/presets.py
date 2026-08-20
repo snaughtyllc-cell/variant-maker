@@ -56,12 +56,12 @@ SUBTLE = Preset(
 
 MEDIUM = Preset(
     name="medium", budget=0.65,
-    # Geometry sized so talking-head Fast lands ~32–38 SSIM bits (~50–60% UI)
+    # Geometry + Fast pixel seed sized so talking-head lands ~35–42 SSIM bits (~55–65% UI)
     # without raising the 24-bit gate (that gate previously escalated 20-packs).
     crop_keep=Range(0.86, 0.94), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03),     hue_deg=Range(-3, 3),
-    grain=Range(7, 14), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.012, 0.012),
+    grain=Range(7, 14), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.015, 0.015),
     speed=Range(0.96, 1.04),
     trim_s=Range(0.15, 0.50), crf=Range(19, 22), gop_choices=(48, 60, 90),
     loudnorm_i=Range(-15, -13), eq_gain_db=Range(-2, 2), eq_bands=2,
@@ -74,7 +74,7 @@ STRONG = Preset(
     crop_keep=Range(0.80, 0.92), rotate_deg=Range(-2.0, 2.0),
     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05),     hue_deg=Range(-6, 6),
-    grain=Range(14, 22), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.016, 0.016),
+    grain=Range(14, 22), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.020, 0.020),
     speed=Range(0.94, 1.06),
     trim_s=Range(0.30, 0.85), crf=Range(20, 23), gop_choices=(60, 90, 120),
     loudnorm_i=Range(-16, -13), eq_gain_db=Range(-3, 3), eq_bands=2,
