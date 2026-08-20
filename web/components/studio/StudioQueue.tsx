@@ -6,10 +6,14 @@ export function StudioQueueCard({
   queue,
   qualityMode,
   jobId,
+  onCancel,
+  cancellingId,
 }: {
   queue: QueueSnapshot;
   qualityMode: "fast" | "hq";
   jobId?: string | null;
+  onCancel?: (jobId: string) => void;
+  cancellingId?: string | null;
 }) {
   return (
     <div
@@ -40,6 +44,7 @@ export function StudioQueueCard({
         <ul style={{ margin: "0 0 8px", padding: "0 0 0 0", listStyle: "none" }}>
           {queue.jobs.map((job) => {
             const mine = job.job_id === jobId;
+            const stopping = cancellingId === job.job_id;
             return (
               <li
                 key={job.job_id}
@@ -47,10 +52,35 @@ export function StudioQueueCard({
                   margin: "0 0 4px",
                   color: mine ? "var(--color-text)" : "var(--color-muted)",
                   fontWeight: mine ? 650 : 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
                 }}
               >
-                {queueRowLabel(job)}
-                {mine ? " · you" : ""}
+                <span>
+                  {queueRowLabel(job)}
+                  {mine ? " · you" : ""}
+                </span>
+                {onCancel && job.state === "running" && (
+                  <button
+                    type="button"
+                    onClick={() => onCancel(job.job_id)}
+                    disabled={stopping}
+                    style={{
+                      background: "#2a0e0e",
+                      border: "1px solid #5a1a1a",
+                      color: "var(--color-red)",
+                      borderRadius: 7,
+                      padding: "4px 8px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: stopping ? "wait" : "pointer",
+                    }}
+                  >
+                    {stopping ? "Stopping…" : "Cancel"}
+                  </button>
+                )}
               </li>
             );
           })}

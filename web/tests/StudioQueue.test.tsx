@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { StudioQueueCard } from "@/components/studio/StudioQueue";
 import type { QueueSnapshot } from "@/lib/types";
 
@@ -47,5 +47,16 @@ describe("StudioQueueCard", () => {
   it("marks your pack when this browser started it", () => {
     render(<StudioQueueCard queue={two} qualityMode="hq" jobId="bbb" />);
     expect(screen.getByText(/2\. HQ · partner\.mov · 0\/5 · you/)).toBeInTheDocument();
+  });
+
+  it("cancels a live pack from the queue row", () => {
+    const onCancel = vi.fn();
+    render(
+      <StudioQueueCard queue={two} qualityMode="fast" jobId={null} onCancel={onCancel} />,
+    );
+    const buttons = screen.getAllByRole("button", { name: /^cancel$/i });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[0]);
+    expect(onCancel).toHaveBeenCalledWith("aaa");
   });
 });

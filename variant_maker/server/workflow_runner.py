@@ -220,6 +220,28 @@ def _queue_new(
             shutil.rmtree(job_dir, ignore_errors=True)
 
 
+def cancel_workflow_jobs(
+    ledger: Ledger,
+    job_store: JobStore,
+    extra_job_ids: list[str] | None = None,
+) -> list[str]:
+    """Stop every in-flight pack for this workflow. Returns cancelled job ids."""
+    cancelled: list[str] = []
+    for _sha, rec in list(ledger.running_records()):
+        job_id = rec.get("job_id")
+        if not job_id:
+            continue
+        job_store.cancel(job_id)
+        cancelled.append(job_id)
+    for job_id in extra_job_ids or []:
+        if job_id in cancelled:
+            continue
+        job = job_store.cancel(job_id)
+        if job is not None:
+            cancelled.append(job_id)
+    return cancelled
+
+
 def tick_workflow(
     workflow: Workflow,
     *,

@@ -340,6 +340,17 @@ describe("workflows API", () => {
     expect(url).toBe("/api/workflows/wf_1/run");
     expect((init as RequestInit).method).toBe("POST");
   });
+
+  it("cancelWorkflow POSTs /api/workflows/:id/cancel", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...sampleWorkflow, enabled: false }), { status: 200 }),
+    );
+    const out = await api.cancelWorkflow("wf_1");
+    expect(out.enabled).toBe(false);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workflows/wf_1/cancel");
+    expect((init as RequestInit).method).toBe("POST");
+  });
 });
 
 describe("auth API", () => {

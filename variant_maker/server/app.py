@@ -152,7 +152,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
-from .workflow_runner import tick_workflow
+from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
 
@@ -1618,6 +1618,26 @@ def create_app(
         if wf is None:
             raise HTTPException(status_code=404, detail="workflow not found")
         return _workflow_out(_run_workflow_tick(wf))
+
+    @app.post("/api/workflows/{workflow_id}/cancel", response_model=WorkflowOut)
+    def cancel_workflow(workflow_id: str) -> WorkflowOut:
+        wf = app.state.workflows.get(workflow_id)
+        if wf is None:
+            raise HTTPException(status_code=404, detail="workflow not found")
+        extra = list((wf.last_summary or {}).get("job_ids") or [])
+        with app.state.workflow_tick_lock:
+            ledger = Ledger(store._ws.workflow_ledger_path(wf.id))
+            cancel_workflow_jobs(ledger, store, extra_job_ids=extra)
+            summary = dict(wf.last_summary or {})
+            summary["running"] = 0
+            updated = app.state.workflows.update(
+                wf.id,
+                enabled=False,
+                last_sweep_at=wf.last_sweep_at,
+                last_summary=summary,
+                touch_sweep=True,
+            )
+        return _workflow_out(updated or wf)
 
     @app.get("/api/caption-banks", response_model=list[CaptionBankFolderOut])
     def list_caption_banks() -> list[CaptionBankFolderOut]:

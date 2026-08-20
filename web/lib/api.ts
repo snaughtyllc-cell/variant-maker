@@ -370,6 +370,9 @@ export async function deleteWorkflow(id: string): Promise<void> {
 export const runWorkflow = (id: string) =>
   fetch(`/api/workflows/${id}/run`, { method: "POST" }).then(json<Workflow>);
 
+export const cancelWorkflow = (id: string) =>
+  fetch(`/api/workflows/${id}/cancel`, { method: "POST" }).then(json<Workflow>);
+
 function bankQuery(bankId?: string | null): string {
   return bankId ? `bank_id=${encodeURIComponent(bankId)}` : "";
 }

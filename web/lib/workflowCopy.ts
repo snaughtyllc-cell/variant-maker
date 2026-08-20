@@ -38,3 +38,7 @@ export function workflowFoldersClash(
 ): boolean {
   return inbox.id === output.id || inbox.folder_id === output.folder_id;
 }
+
+export function workflowCanCancel(summary: { running?: number } | null | undefined): boolean {
+  return (summary?.running ?? 0) > 0;
+}
