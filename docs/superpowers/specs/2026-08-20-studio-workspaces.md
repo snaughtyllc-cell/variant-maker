@@ -170,6 +170,8 @@ This is occupancy routing (busy workspace → idle endpoint), not “every
 customer gets a dedicated card.” Still scale-to-zero. Still Fast = CPU,
 HQ = GPU. Do not start until Track A team invites are in operators’ hands.
 See `docs/superpowers/specs/2026-08-20-sales-tracks.md` Track D.
+After Team / Drop Ledger 12a / onboarding ship, unpark order is
+`docs/superpowers/specs/2026-08-20-after-sales-tracks.md`.
 
 ## Not this
 

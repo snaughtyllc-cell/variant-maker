@@ -86,3 +86,8 @@ worker. Same idea later for HQ GPUs.
 - Always-on GPU.
 - Uniqueness 55% / raising 24-bit gates.
 - Cloning TikFusion Pixel AI or Telegram bots.
+
+After A/B/C are in operators’ hands, next-wave order (hybrid runners →
+1–2 clip speed → HQ occupancy → Drop Ledger 12b/12c → billing last) is
+`docs/superpowers/specs/2026-08-20-after-sales-tracks.md`.
+
