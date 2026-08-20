@@ -12,6 +12,12 @@ describe("url builders use relative /api", () => {
     expect(api.sourceUrl("s1")).toBe("/api/sources/s1/source");
     expect(api.eventsUrl("j1")).toBe("/api/jobs/j1/events");
   });
+
+  it("variantUrl encodes spaces and hashtags so thumbs load", () => {
+    expect(
+      api.variantUrl("s1", "Age is just a number #fyp_v01.mp4"),
+    ).toBe("/api/variants/s1/Age%20is%20just%20a%20number%20%23fyp_v01.mp4");
+  });
 });
 
 describe("getQueue", () => {

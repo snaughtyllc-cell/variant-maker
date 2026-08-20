@@ -50,7 +50,8 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const variantUrl = (sourceId: string, filename: string) => `/api/variants/${sourceId}/${filename}`;
+export const variantUrl = (sourceId: string, filename: string) =>
+  `/api/variants/${encodeURIComponent(sourceId)}/${encodeURIComponent(filename)}`;
 export const sourceUrl = (sourceId: string) => `/api/sources/${sourceId}/source`;
 export const eventsUrl = (jobId: string) => `/api/jobs/${jobId}/events`;
 export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`;

@@ -10,6 +10,7 @@ import threading
 import traceback
 import uuid
 from typing import Any, Callable, Mapping
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
@@ -81,7 +82,7 @@ FetchEmailFn = Callable[[dict[str, Any]], str | None]
 def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
     return VariantOut(
         index=v.index, filename=v.filename, status=v.status, quality=v.quality,
-        file_url=f"/api/variants/{source_id}/{v.filename}",
+        file_url=f"/api/variants/{source_id}/{quote(v.filename, safe='')}",
         uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
         uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
         preset_used=v.preset_used, strength_final=v.strength_final,

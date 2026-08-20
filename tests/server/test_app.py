@@ -345,6 +345,33 @@ def test_serve_variant_and_source_files(tmp_path):
     assert client.get("/api/variants/nope/x.mp4").status_code == 404
 
 
+def test_hashtag_variant_filename_encodes_file_url(tmp_path):
+    """TikTok-style stems include #fyp — unquoted URLs never load a thumb."""
+    import os
+    from urllib.parse import unquote
+
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("clip.mp4", b"orig", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    source = job.sources[0]
+    variant = source.variants[0]
+    old = store.find_variant(source.source_id, variant.filename)
+    new_name = "Age is just a number #fyp_v01.mp4"
+    os.rename(old, os.path.join(os.path.dirname(old), new_name))
+    variant.filename = new_name
+
+    url = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]["file_url"]
+    assert "%23" in url
+    assert "#" not in url
+    assert unquote(url.rsplit("/", 1)[-1]) == new_name
+    assert client.get(url).status_code == 200
+
+
 def test_regenerate_endpoint(tmp_path):
     client, store = _client(tmp_path)
     job_id = client.post("/api/jobs",
