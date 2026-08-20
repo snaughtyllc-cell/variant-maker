@@ -1,7 +1,7 @@
 # Operator friction — Drive trust, phone save, tracking
 
 **Date:** 2026-08-20  
-**Status:** Active — Diagnostics hide ships with Studio; phone save + Drive trust + drops board are next slices  
+**Status:** Active — Diagnostics hide and phone Save/Share videos ship with Studio; Drive trust + drops board are next slices  
 **Product name:** VaryForge  
 **Jeff (2026-08-20):** Diagnostics unused; Drive setup too hard / sharing his email feels wrong; phone ZIP→Files→unzip kills posting; uniqueness + posting-tracking is the no-brainer sell.
 
