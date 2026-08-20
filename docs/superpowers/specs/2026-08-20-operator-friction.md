@@ -1,0 +1,98 @@
+# Operator friction — Drive trust, phone save, tracking
+
+**Date:** 2026-08-20  
+**Status:** Active — Diagnostics hide ships with Studio; phone save + Drive trust + drops board are next slices  
+**Product name:** VaryForge  
+**Jeff (2026-08-20):** Diagnostics unused; Drive setup too hard / sharing his email feels wrong; phone ZIP→Files→unzip kills posting; uniqueness + posting-tracking is the no-brainer sell.
+
+## Diagnostics (this slice)
+
+Operators never look at failed-encode leftovers. **Hide Diagnostics** in the top nav
+for every logged-in non-admin. Keep the page for site admin (and when auth is
+off, for local/dev). Nav space stays for Team / later tools.
+
+## Drive — do not make them set up Google Cloud
+
+Operators must **not** open Google Cloud, OAuth clients, or APIs. That is
+**Jeff-once** on the VaryForge GCP project (`VARIANT_DRIVE_OAUTH_*` on Railway).
+
+**What they should do:** Settings → Drive → **Connect Google** as the Google
+account that already owns the folders. Paste a folder link. No share-with-Jeff.
+
+That path **already exists** per workspace. The sell-blocker is Google’s
+**unverified app** screen (Drive is a restricted scope: `.../auth/drive` plus
+`drive.file` + `spreadsheets`). Until the app is published/verified, only
+**OAuth test users** can Connect. Adding each operator as a test user is Jeff
+ops, not an operator tutorial.
+
+### Tools email (fallback, not the default)
+
+A branded mailbox (`drive@varyforge.app` or similar) that they share a folder
+with as Editor:
+
+- Looks less personal than Jeff’s Gmail.
+- Still “share this folder with a third party” — the gray area he named.
+- A `*.iam.gserviceaccount.com` robot in the UI is worse. If we use this
+  fallback, show a human address (Workspace user or Google Group), never the
+  SA client_email in operator copy.
+
+**Prefer Connect Google as *their* account** so files stay in their Drive under
+their identity. Tools-email share is only for people who refuse OAuth.
+
+### Later (when Connect Google is the complaint)
+
+1. Jeff: add operator Google emails as OAuth test users the same day as
+   `new_workspace` invite. Document in `docs/ops/` (not the operator page).
+2. Start Google verification / shrink scopes if a folder **picker** can replace
+   full `drive` (`drive.file` + picker). Do not promise this until probed.
+3. Tools-email SA/Workspace user as optional “share this folder” fallback.
+
+Do **not** ask outside operators to create a GCP project.
+
+## Phone — no ZIP dance
+
+Today: Download ZIP → Files → unzip → save each mp4. That blocks
+generate-on-phone → post.
+
+**Build:** Gallery pack action **Save / Share videos** that hands the phone
+**mp4 files**, not a zip.
+
+1. If `navigator.canShare({ files })`, share the ready mp4s (Photos / Files /
+   Instagram share sheet).
+2. Else download each ready mp4 (no zip).
+3. Keep **Download ZIP** as a secondary for desktop.
+
+Do not unzip on the server to write into the camera roll — browsers cannot do
+that. Share sheet / per-file mp4 is the lever.
+
+Uniqueness / VMAF unchanged.
+
+## Tracking — uniqueness + “what posted”
+
+Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer product is
+**good variants + a posting board**, not Sheets.
+
+Jeff will send the competitor URL again. Until then, Studio target is:
+
+- One **Drops** (or Gallery filter) of packs sent to Drive: date, count,
+  unlabeled = pass, flagged / duplicate-reject as misses.
+- Mark from Gallery (already) and see it on that board.
+- Identity: `job_id` + variant id + Drive file id (12b). Never caption
+  filenames (Repurpose renames).
+
+**Not:** Instagram login, auto-post, scraping insights, a local detector.
+The platform stays the oracle. Scheduler/calendar clones wait until 12a is
+used and we have the screenshot/URL.
+
+## Parallel file boxes
+
+| Track | Box | Not |
+|---|---|---|
+| Diagnostics | `TopNav.tsx`, `web/app/diagnostics/`, TopNav tests | Drive, Gallery zip |
+| Phone save | `web/lib/` share helpers, `SourceGroup.tsx`, gallery tests | TopNav, Drive OAuth, uniqueness |
+| Drive trust | this spec + `docs/ops/` Jeff-only OAuth test-user note | DestinationsPanel (onboarding PR), DropLedgerPanel |
+| Drops board | spec until URL arrives; then Gallery/ledger UI | engine, Stripe |
+
+## Frozen
+
+24-bit Fast gate, VMAF on, Fast = CPU, HQ = GPU, unlabeled = pass, invite-only.

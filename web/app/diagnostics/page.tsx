@@ -1,10 +1,32 @@
 "use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useDiagnostics } from "@/lib/useDiagnostics";
 import { DiagnosticsList } from "@/components/diagnostics/DiagnosticsList";
+import { useAuthMe } from "@/lib/useAuthMe";
+import { showDiagnosticsNav } from "@/lib/navAccess";
 
 export default function DiagnosticsPage() {
+  const router = useRouter();
+  const { data: me, isLoading: meLoading } = useAuthMe();
+  const allowed = showDiagnosticsNav(me);
   const { data, mutate, isLoading } = useDiagnostics();
   const items = data ?? [];
+
+  useEffect(() => {
+    if (meLoading) return;
+    if (!allowed) router.replace("/");
+  }, [meLoading, allowed, router]);
+
+  if (meLoading || !allowed) {
+    return (
+      <main style={{ minHeight: "100vh", background: "#0a0a0e" }}>
+        <div style={{ padding: "18px 20px", color: "#8a8aa0", fontSize: 13 }}>
+          {meLoading ? "Loading…" : "Admin only"}
+        </div>
+      </main>
+    );
+  }
 
   const totalFailed = items.length;
 

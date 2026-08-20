@@ -59,4 +59,27 @@ describe("TopNav", () => {
     expect(screen.getByRole("link", { name: "Team" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
   });
+
+  it("hides Diagnostics for operators", () => {
+    render(<TopNav />);
+    expect(screen.queryByRole("link", { name: "Diagnostics" })).not.toBeInTheDocument();
+  });
+
+  it("shows Diagnostics for the site admin", () => {
+    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
+    render(<TopNav />);
+    expect(screen.getByRole("link", { name: "Diagnostics" })).toHaveAttribute("href", "/diagnostics");
+  });
+
+  it("keeps Diagnostics when login is off", () => {
+    me.data = {
+      ...BASE,
+      auth_required: false,
+      email: null,
+      role: null,
+      is_admin: false,
+    };
+    render(<TopNav />);
+    expect(screen.getByRole("link", { name: "Diagnostics" })).toBeInTheDocument();
+  });
 });

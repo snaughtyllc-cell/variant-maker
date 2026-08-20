@@ -160,3 +160,7 @@ share packs on purpose). Owner workspaces already have their own Drive.
    invite-only until Stripe exists.
 5. Do not start 12c, Stripe, and hybrid runners in the same week — they
    share almost no files, but they compete for “what is the product.”
+
+Operator-friction (Diagnostics hide, Drive trust, phone save-without-zip,
+drops board) is `docs/superpowers/specs/2026-08-20-operator-friction.md`.
+Those can run in parallel with capacity waves; they do not raise uniqueness.

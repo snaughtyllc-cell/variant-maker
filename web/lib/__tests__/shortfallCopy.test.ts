@@ -25,9 +25,10 @@ describe("shortfallCopy", () => {
     expect(msg).not.toMatch(/Diagnostics/i);
   });
 
-  it("points at Diagnostics only when failed variants exist", () => {
+  it("does not send operators to Diagnostics when variants failed", () => {
     const msg = shortfallCopy(base({ job_state: "done", failed: 2, shortfall: 2 }));
-    expect(msg).toMatch(/Diagnostics/i);
+    expect(msg).toMatch(/regenerat/i);
+    expect(msg).not.toMatch(/Diagnostics/i);
   });
 
   it("says missing (not Diagnostics) when shortfall with zero failed", () => {

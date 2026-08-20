@@ -3,13 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
+import { showDiagnosticsNav } from "@/lib/navAccess";
 import { StatusStrip } from "./StatusStrip";
 
 const NAV_LINKS = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
   { href: "/workflows", label: "Workflows" },
-  { href: "/diagnostics", label: "Diagnostics" },
   { href: "/settings/drive", label: "Drive" },
 ] as const;
 
@@ -67,6 +67,19 @@ export function TopNav() {
               </Link>
             );
           })}
+          {showDiagnosticsNav(me) && (
+            <Link
+              href="/diagnostics"
+              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
+              style={
+                pathname === "/diagnostics" || pathname.startsWith("/diagnostics/")
+                  ? { color: "#ffffff", background: "#1b1b27" }
+                  : { color: "#8a8aa0" }
+              }
+            >
+              Diagnostics
+            </Link>
+          )}
           {(me?.role === "owner" || me?.is_admin) && (
             <Link
               href="/team"
