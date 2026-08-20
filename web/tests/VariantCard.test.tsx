@@ -56,4 +56,17 @@ describe("VariantCard uniqueness", () => {
     expect(esc).toBeInTheDocument();
     expect(esc).toHaveAttribute("title", ESCALATED_TITLE);
   });
+
+  it("marks a variant that has a pasted live post link", () => {
+    render(
+      <VariantCard
+        variant={variant({ post_url: "https://www.instagram.com/reel/AbC/" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("link")).toBeInTheDocument();
+  });
 });

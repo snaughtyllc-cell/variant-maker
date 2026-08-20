@@ -69,13 +69,14 @@ describe("AuthGate", () => {
   it("keeps the studio visible when login is off", () => {
     me.isLoading = false;
     me.data = AUTH_OFF;
-    render(
+    const { container } = render(
       <AuthGate>
         <div>Studio</div>
       </AuthGate>,
     );
     expect(screen.getByText("Studio")).toBeInTheDocument();
     expect(screen.getByText("TopNav")).toBeInTheDocument();
+    expect(container.querySelector(".app-main")).toContainElement(screen.getByText("Studio"));
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
@@ -97,13 +98,14 @@ describe("AuthGate", () => {
     nav.pathname = "/login";
     me.isLoading = false;
     me.data = NEED_LOGIN;
-    render(
+    const { container } = render(
       <AuthGate>
         <div>Login</div>
       </AuthGate>,
     );
     expect(screen.getByText("Login")).toBeInTheDocument();
     expect(screen.queryByText("TopNav")).not.toBeInTheDocument();
+    expect(container.querySelector(".app-main")).toBeNull();
     expect(nav.replace).not.toHaveBeenCalled();
   });
 

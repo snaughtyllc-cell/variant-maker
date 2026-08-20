@@ -137,6 +137,22 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           ⚠
         </span>
       )}
+      {variant.post_url && (
+        <span
+          title={variant.post_url}
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#072830",
+            color: "#22d3ee",
+            border: "1px solid #0c3d47",
+          }}
+        >
+          link
+        </span>
+      )}
     </div>
   );
 

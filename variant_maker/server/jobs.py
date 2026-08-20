@@ -74,6 +74,7 @@ class VariantInfo:
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    post_url: str | None = None
 
 
 @dataclass
@@ -133,7 +134,7 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "uniqueness_status": v.uniqueness_status, "uniqueness_metric": v.uniqueness_metric,
         "uniqueness_target": v.uniqueness_target, "preset_used": v.preset_used,
         "strength_final": v.strength_final, "escalated": v.escalated,
-        "platform_result": v.platform_result,
+        "platform_result": v.platform_result, "post_url": v.post_url,
     }
 
 
@@ -182,6 +183,7 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         strength_final=data.get("strength_final"),
         escalated=bool(data.get("escalated") or False),
         platform_result=data.get("platform_result"),
+        post_url=data.get("post_url") or None,
     )
 
 
@@ -621,6 +623,7 @@ class JobStore:
                         strength_final=v.get("strength_final"),
                         escalated=bool(v.get("escalated") or False),
                         platform_result=v.get("platform_result"),
+                        post_url=v.get("post_url") or None,
                     ))
                 sources.append(source)
             if not sources:
@@ -768,11 +771,29 @@ class JobStore:
         if variant is None:
             return None
         variant.platform_result = result
-        self._rewrite_manifest_platform_result(job_id, source_id, index, result)
+        self._rewrite_manifest_fields(job_id, source_id, index, platform_result=result)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
         return variant
 
-    def _rewrite_manifest_platform_result(self, job_id: str, source_id: str,
-                                          index: int, result: str) -> None:
+    def set_post_url(self, source_id: str, index: int, url: str | None) -> VariantInfo | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        variant.post_url = url
+        self._rewrite_manifest_fields(job_id, source_id, index, post_url=url)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
+    def _rewrite_manifest_fields(self, job_id: str, source_id: str, index: int,
+                                 **fields: object) -> None:
         out_dir = self._ws.source_out_dir(job_id, source_id)
         path = os.path.join(out_dir, "manifest.json")
         try:
@@ -783,7 +804,7 @@ class JobStore:
         changed = False
         for v in data.get("variants", []):
             if v.get("index") == index:
-                v["platform_result"] = result
+                v.update(fields)
                 changed = True
         if changed:
             with open(path, "w") as f:

@@ -171,6 +171,14 @@ export function setPlatformResult(sourceId: string, index: number, result: Platf
   }).then(json<VariantOut>);
 }
 
+export function setPostUrl(sourceId: string, index: number, url: string): Promise<VariantOut> {
+  return fetch(`/api/variants/${sourceId}/${index}/post-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  }).then(json<VariantOut>);
+}
+
 export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveStatus>);
 
 export async function disconnectDriveOAuth(): Promise<void> {

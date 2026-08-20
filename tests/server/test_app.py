@@ -400,6 +400,7 @@ def test_get_job_detail_includes_uniqueness_fields(tmp_path):
     assert v["strength_final"] == 1.0
     assert v["escalated"] is False
     assert v["platform_result"] is None
+    assert v.get("post_url") in (None, "")
 
 
 def test_platform_result_roundtrip(tmp_path):
@@ -426,6 +427,38 @@ def test_platform_result_roundtrip(tmp_path):
                        json={"result": "passed"}).status_code == 404
     assert client.post(f"/api/variants/{sid}/{index}/platform-result",
                        json={"result": "bogus"}).status_code == 422
+
+
+def test_post_url_roundtrip_and_persist(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+
+    url = "https://www.tiktok.com/@va/video/99"
+    resp = client.post(f"/api/variants/{sid}/{index}/post-url", json={"url": url})
+    assert resp.status_code == 200
+    assert resp.json()["post_url"] == url
+    assert client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]["post_url"] == url
+
+    # Survive Studio restart via job.json
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    restored = store2.get(job_id).sources[0].variants[0]
+    assert restored.post_url == url
+
+    cleared = client.post(f"/api/variants/{sid}/{index}/post-url", json={"url": "  "})
+    assert cleared.status_code == 200
+    assert cleared.json()["post_url"] is None
+
+    assert client.post(f"/api/variants/{sid}/{index}/post-url",
+                       json={"url": "javascript:alert(1)"}).status_code == 400
+    assert client.post(f"/api/variants/{sid}/999/post-url",
+                       json={"url": url}).status_code == 404
 
 
 def test_zip_contains_ok_variants(tmp_path):

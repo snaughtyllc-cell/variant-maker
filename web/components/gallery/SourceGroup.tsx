@@ -16,6 +16,7 @@ import {
   shareVideosLabel,
   zipSecondaryCopy,
 } from "@/lib/shareVideos";
+import { postedCountCopy } from "@/lib/postUrl";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -53,6 +54,9 @@ export function SourceGroup({
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
   const shortfallMsg = shortfallCopy(source);
+  const postedCopy = postedCountCopy(
+    source.variants.filter((v) => Boolean(v.post_url)).length,
+  );
 
   // Compute avg VMAF
   const vmafValues = source.variants.map(v => v.quality.vmaf).filter(Boolean);
@@ -245,6 +249,7 @@ export function SourceGroup({
               : source.variants.length > 0
               ? "no spatial checks (Tier-1)"
               : "no variants yet"}
+            {postedCopy && ` · ${postedCopy}`}
           </div>
         </div>
 

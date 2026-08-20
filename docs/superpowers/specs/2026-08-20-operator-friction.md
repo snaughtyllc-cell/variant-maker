@@ -81,11 +81,14 @@ Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
 - Mark from Gallery and see it on that board.
 - Identity: `job_id` + variant id + Drive file id (12b). Never caption
   filenames (Repurpose renames).
+- **Paste live post URL** onto the variant (`post_url`) after the VA posts —
+  click to open; views later. Not a scraper, not Eagle Browser.
 - Amplify = Generate more of a **winning source**, same Fast engine — not
   Butter-style hook/overlay scrambles.
 
 **Not:** Instagram login, auto-post, scraping insights, a local detector,
-shoutout marketplace. The platform stays the oracle.
+shoutout marketplace. The platform stays the oracle. Spec:
+`docs/superpowers/specs/2026-08-20-post-url-tracking.md`.
 
 ## Parallel file boxes
 

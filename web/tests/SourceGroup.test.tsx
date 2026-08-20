@@ -186,3 +186,25 @@ describe("SourceGroup phone save/share", () => {
     ]);
   });
 });
+
+describe("SourceGroup live post count", () => {
+  it("shows how many variants have a pasted permalink", () => {
+    render(
+      <SourceGroup
+        source={source({
+          variants: [
+            variant({ post_url: "https://www.instagram.com/reel/a/" }),
+            variant({
+              index: 2,
+              filename: "v02.mp4",
+              file_url: "/api/variants/s1/v02.mp4",
+              post_url: "https://www.tiktok.com/@x/video/1",
+            }),
+          ],
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText(/2 live posts/i)).toBeInTheDocument();
+  });
+});

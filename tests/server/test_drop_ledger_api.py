@@ -93,9 +93,37 @@ def test_platform_result_writes_through_to_sheet(tmp_path):
 
     # Find the sheet and check platform_result column
     sheet_id = client.get("/api/drop-ledger/status").json()["spreadsheet_id"]
-    values = sheets.get_values(sheet_id, "A:T")
+    values = sheets.get_values(sheet_id, "A:U")
     # header + 1 data row
     assert values[1][10] == "passed"  # platform_result column
+    assert values[0][-1] == "post_url"
+
+
+def test_post_url_writes_through_to_sheet(tmp_path):
+    sheets = FakeSheets()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    client = TestClient(create_app(store, sheets=sheets, sa_json_path="", hydrate=False))
+
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+    client.post("/api/drop-ledger/sync", json={"job_ids": [job_id], "ensure": True})
+
+    url = "https://www.instagram.com/reel/AbC123/"
+    resp = client.post(f"/api/variants/{sid}/{index}/post-url", json={"url": url})
+    assert resp.status_code == 200
+    assert resp.json()["post_url"] == url
+
+    sheet_id = client.get("/api/drop-ledger/status").json()["spreadsheet_id"]
+    values = sheets.get_values(sheet_id, "A:U")
+    assert values[0][-1] == "post_url"
+    assert values[1][-1] == url
 
 
 def test_hydrate_from_disk_restores_gallery(tmp_path):

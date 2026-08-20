@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
+import { PostLinkField } from "./PostLinkField";
 
 interface VariantActionsProps {
   sourceId: string;
@@ -51,6 +52,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
       uniqueness_status: variant.uniqueness_status,
       escalated: variant.escalated,
       platform_result: variant.platform_result,
+      post_url: variant.post_url,
     },
     null,
     2,
@@ -92,6 +94,9 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           </span>
         )}
       </div>
+
+      {/* VA-pasted live permalink — Studio does not post */}
+      <PostLinkField sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
 
       {/* Platform outcome — records what the real platform did with this upload */}
       <div

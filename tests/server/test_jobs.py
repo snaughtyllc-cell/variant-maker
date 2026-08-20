@@ -471,3 +471,20 @@ def test_two_jobs_use_separate_folders_and_cancel_is_per_job(tmp_path):
     assert store.wait(b.job_id, timeout=5)
     assert b.state == "done"
     assert queue_snapshot(store.list())["running"] == 0
+
+
+def test_set_post_url_survives_hydrate(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    url = "https://www.instagram.com/reel/Hydrate1/"
+    updated = store.set_post_url(src.source_id, src.variants[0].index, url)
+    assert updated is not None
+    assert updated.post_url == url
+
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    restored = store2.get(job.job_id).sources[0].variants[0]
+    assert restored.post_url == url
+    assert restored.platform_result is None

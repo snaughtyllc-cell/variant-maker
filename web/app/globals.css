@@ -32,6 +32,10 @@ body {
   overflow-x: hidden;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+.app-main {
+  flex: 1;
+  min-width: 0;
+}
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-size: 16px; }
 
@@ -82,7 +86,7 @@ input, select, textarea { font-size: 16px; }
 @media (max-width: 639px) {
   :root {
     --nav-h: 44px;
-    --tab-h: calc(52px + env(safe-area-inset-bottom, 0px));
+    --tab-h: calc(64px + env(safe-area-inset-bottom, 0px));
   }
   .app-tab-bar {
     display: flex;
@@ -111,6 +115,11 @@ input, select, textarea { font-size: 16px; }
   .status-ready-text { display: none; }
   .status-engine {
     padding: 6px 8px;
+  }
+  /* Fixed tab bar sits on top of this spacer so Studio Advanced, Flows, Drive
+     can scroll fully into view instead of hiding under the buttons. */
+  .app-main {
+    padding-bottom: var(--tab-h);
   }
 }
 

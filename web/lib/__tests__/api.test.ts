@@ -131,6 +131,26 @@ describe("retryCopy", () => {
   });
 });
 
+describe("setPostUrl", () => {
+  it("POSTs the pasted permalink", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        index: 1, filename: "v01.mp4", status: "ok", quality: {},
+        file_url: "/api/variants/s1/v01.mp4",
+        post_url: "https://www.instagram.com/reel/AbC/",
+      }), { status: 200 }),
+    );
+    const out = await api.setPostUrl("s1", 1, "https://www.instagram.com/reel/AbC/");
+    expect(out.post_url).toBe("https://www.instagram.com/reel/AbC/");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/variants/s1/1/post-url");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      url: "https://www.instagram.com/reel/AbC/",
+    });
+  });
+});
+
 describe("removeSource", () => {
   it("DELETEs /api/sources/:id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

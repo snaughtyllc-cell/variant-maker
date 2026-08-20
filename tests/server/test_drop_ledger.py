@@ -7,11 +7,13 @@ from variant_maker.server.drop_ledger import (
     HEADERS,
     DropRow,
     ensure_ledger,
+    ledger_values_range,
     load_manifest_rows,
     merge_upsert,
     row_from_manifest_variant,
     sync_rows,
     update_platform_result_cell,
+    update_post_url_cell,
     variant_id,
 )
 from variant_maker.server.sheets import FakeSheets
@@ -39,6 +41,7 @@ def _row(**kw) -> DropRow:
         escalated="false",
         source_id="s1",
         variant_index="1",
+        post_url="",
     )
     base.update(kw)
     return DropRow(**base)
@@ -46,6 +49,18 @@ def _row(**kw) -> DropRow:
 
 def test_variant_id_format():
     assert variant_id("abc", 3) == "abc:3"
+
+
+def test_merge_upsert_preserves_post_url():
+    sheet, _ = merge_upsert([], [_row(post_url="https://instagram.com/p/a/")])
+    sheet2, stats = merge_upsert(sheet, [_row(post_url="")])
+    assert sheet2[1][HEADERS.index("post_url")] == "https://instagram.com/p/a/"
+    assert stats["unchanged"] == 1
+
+
+def test_ledger_range_covers_post_url_column():
+    assert ledger_values_range().endswith("U")
+    assert HEADERS[-1] == "post_url"
 
 
 def test_row_from_manifest_variant_computes_similarity():
@@ -109,13 +124,20 @@ def test_sync_rows_roundtrip_fake_sheets():
     assert sheets.created_titles == ["VaryForge Drop Ledger"]
     stats = sync_rows(sheets, sid, [_row(), _row(variant_id="s1:2", variant_index="2")])
     assert stats["inserted"] == 2
-    values = sheets.get_values(sid, "A:T")
+    values = sheets.get_values(sid, ledger_values_range())
     assert len(values) == 3  # header + 2
     assert update_platform_result_cell(
         sheets, sid, job_id="j1", source_id="s1", index=1, result="passed",
     )
-    values2 = sheets.get_values(sid, "A:T")
+    values2 = sheets.get_values(sid, ledger_values_range())
     assert values2[1][_COL_PLATFORM()] == "passed"
+    assert "post_url" in values2[0]
+    assert update_post_url_cell(
+        sheets, sid, job_id="j1", source_id="s1", index=1,
+        url="https://www.instagram.com/reel/AbC/",
+    )
+    values3 = sheets.get_values(sid, ledger_values_range())
+    assert values3[1][HEADERS.index("post_url")] == "https://www.instagram.com/reel/AbC/"
 
 
 def test_load_manifest_rows_from_disk(tmp_path):
@@ -149,6 +171,7 @@ def test_load_manifest_rows_from_disk(tmp_path):
                 "quality": {},
                 "seed": 2,
                 "platform_result": "passed",
+                "post_url": "https://www.tiktok.com/@x/video/1",
             },
         ],
     }
@@ -158,3 +181,4 @@ def test_load_manifest_rows_from_disk(tmp_path):
     assert rows[0].source_name == "clip.MP4"
     assert rows[0].platform == "tiktok"
     assert rows[1].platform_result == "passed"
+    assert rows[1].post_url == "https://www.tiktok.com/@x/video/1"

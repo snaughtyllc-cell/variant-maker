@@ -108,6 +108,16 @@ That is Post → Track → Amplify without logging into Instagram.
 
 ## Build slices (flow, in order)
 
+### F0 — Paste the live post link (ship with Studio)
+
+VAs post from Drive / the phone / Repurpose, then **paste the permalink**
+onto the variant in Gallery. Studio stores `post_url` (not Drive `drop_url`),
+opens it in one click, and later can attach views if a *public* lookup or
+official API exists. Age-gated 18+ accounts will not scrape without a
+logged-in browser — we do not run that farm.
+
+See `docs/superpowers/specs/2026-08-20-post-url-tracking.md`.
+
 ### F1 — Drops board in Studio (the missing room)
 
 One **Drops** view (nav slot Diagnostics vacated for operators):
@@ -137,10 +147,11 @@ small “posted today” from Drops — not a native poster.
 and uniqueness gate. Feed **flagged** recipes the other way (don’t clone
 losers). Still not a detector.
 
-### F4 — Optional live metrics (only with a real API)
+### F4 — Optional live metrics (only with a real API or public lookup)
 
-If a platform gives us views on *our* connected account later, attach them to
-the drop row. Until then: pass/flag is the oracle. Do not scrape.
+v1 already stores `post_url`. If a platform gives us views on *our*
+connected account later, attach them to that URL. Public oEmbed is optional
+and will miss 18+ / restricted posts. Do not scrape logged-in Instagram.
 
 ## Success
 

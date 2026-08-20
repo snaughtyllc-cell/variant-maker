@@ -20,11 +20,16 @@ class VariantOut(BaseModel):
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    post_url: str | None = None
     file_ready: bool = True
 
 
 class PlatformResultIn(BaseModel):
     result: Literal["passed", "duplicate_reject", "flagged", "unknown"]
+
+
+class PostUrlIn(BaseModel):
+    url: str = ""
 
 
 class InFlightOut(BaseModel):

@@ -10,6 +10,7 @@ export interface VariantOut {
   uniqueness_metric?: string | null; uniqueness_target?: number | null;
   preset_used?: string | null; strength_final?: number | null;
   escalated?: boolean; platform_result?: PlatformResult | null;
+  post_url?: string | null;
   file_ready?: boolean;
 }
 export interface InFlightOut {

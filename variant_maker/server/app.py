@@ -64,6 +64,7 @@ from .drop_ledger import (
     spreadsheet_url,
     sync_rows,
     update_platform_result_cell,
+    update_post_url_cell,
     write_sheet_id_file,
 )
 from .events import event_to_dict
@@ -114,6 +115,7 @@ from .models import (
     PasswordLoginIn,
     PasswordSetIn,
     PlatformResultIn,
+    PostUrlIn,
     QueueOut,
     SourceOut,
     SplitExportOut,
@@ -126,6 +128,7 @@ from .models import (
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
+from .post_url import normalize_post_url
 from .runner import LocalRunner
 from .sessions import (
     COOKIE_NAME,
@@ -168,6 +171,7 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
         preset_used=v.preset_used, strength_final=v.strength_final,
         escalated=v.escalated, platform_result=v.platform_result,
+        post_url=v.post_url,
         file_ready=file_ready,
     )
 
@@ -677,6 +681,23 @@ def create_app(
             )
         except Exception as exc:
             print(f"drop ledger platform_result write failed: {exc}", flush=True)
+
+    def _sync_post_url_to_sheet(source_id: str, index: int, url: str | None) -> None:
+        sheets_client = _sheets()
+        sid = _current_sheet_id()
+        if sheets_client is None or not sid:
+            return
+        loc = store._locate(source_id)
+        if loc is None:
+            return
+        job_id, _ = loc
+        try:
+            update_post_url_cell(
+                sheets_client, sid,
+                job_id=job_id, source_id=source_id, index=index, url=url or "",
+            )
+        except Exception as exc:
+            print(f"drop ledger post_url write failed: {exc}", flush=True)
 
     def _redirect_uri_for(request: Request) -> str:
         explicit = oauth_env.get(ENV_OAUTH_REDIRECT_URI)
@@ -1265,6 +1286,22 @@ def create_app(
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
         _sync_platform_result_to_sheet(source_id, index, body.result)
+        loc = store._locate(source_id)
+        file_ready = True
+        if loc is not None:
+            file_ready = variant_on_disk(store._ws, loc[0], source_id, variant.filename)
+        return _variant_out(source_id, variant, file_ready=file_ready)
+
+    @app.post("/api/variants/{source_id}/{index}/post-url", response_model=VariantOut)
+    def set_post_url(source_id: str, index: int, body: PostUrlIn) -> VariantOut:
+        try:
+            url = normalize_post_url(body.url)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        variant = store.set_post_url(source_id, index, url)
+        if variant is None:
+            raise HTTPException(status_code=404, detail="variant not found")
+        _sync_post_url_to_sheet(source_id, index, url)
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:

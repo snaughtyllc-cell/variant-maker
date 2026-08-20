@@ -32,7 +32,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!isLogin && <TopNav />}
-      {children}
+      {isLogin ? children : <div className="app-main">{children}</div>}
     </>
   );
 }
