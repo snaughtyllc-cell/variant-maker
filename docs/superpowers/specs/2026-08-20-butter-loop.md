@@ -17,6 +17,34 @@ not become their poster, marketplace, or IG login farm.
 The no-brainer is: **their loop, our uniqueness, our Studio as the one place
 it happens.**
 
+## How we beat them (not by becoming Butter)
+
+They win today on **glue**: one screen from library → post → numbers → more
+variants. Their “variants” are the weak link (overlays / hooks / grades on
+the same file). Upload-time duplicate is exactly the miss Jeff’s VAs feel.
+
+We win if an agency believes three things at once:
+
+1. **These files get on the platform.** Color-correct Fast, VMAF floor,
+   uniqueness gate — not a sticker pack. That is the spoof they cannot
+   buy from Butter without looking cheap or getting duplicate-rejected.
+2. **I never leave Studio to run the week.** Drops board + split to
+   account folders + generate-more on winners. Drive / Repurpose (or the
+   phone) still *publishes*. We do not log into 50 Instagrams.
+3. **It is faster to say yes than to run Butter + a spoofer.** Phone save
+   without ZIP, Connect Google as *their* Drive, Team for their VA.
+   Two tools is the competitor. One URL is us.
+
+Do **not** try to beat them at native posting, CPM dashboards, shoutout
+marketplaces, or overlay volume. That is their product and their risk
+(account farms, real-device posting). Our customer already has VAs and
+Repurpose. They need files that survive, and a loop that does not live in
+Sheets.
+
+**Kill shot:** Butter is a poster that mints lookalikes. VaryForge is a
+variant engine that learned to feel like a poster. When Drops + amplify
+ship, they do not need both.
+
 ## Butter’s five steps (what “flow” means)
 
 From their site (not our backlog):
