@@ -64,8 +64,9 @@ _COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
 })
 _GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1"})
 
-# Unbudgeted Fast resample: even px off target width, never 0; AR kept in filtergraph.
-RESAMPLE_PX_CHOICES = tuple(x for x in range(-16, 17, 2) if x != 0)
+# Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
+# Mix of smaller and larger intermediates so we do not systematically soften one way.
+RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
 RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
 
 
