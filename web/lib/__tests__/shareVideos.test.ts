@@ -119,7 +119,10 @@ describe("fetchVariantFiles", () => {
   it("fetches each url as a File named after the variant", async () => {
     const fetchFn = vi.fn(async (url: string) => {
       expect(url).toBe("/api/variants/s1/v01.mp4");
-      return new Response(new Blob(["mp4bytes"], { type: "video/mp4" }), { status: 200 });
+      return new Response("mp4bytes", {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" },
+      });
     });
     const files = await fetchVariantFiles(
       [{ file_url: "/api/variants/s1/v01.mp4", filename: "v01.mp4" }],
@@ -127,7 +130,7 @@ describe("fetchVariantFiles", () => {
     );
     expect(files).toHaveLength(1);
     expect(files[0].name).toBe("v01.mp4");
-    expect(files[0].type).toBe("video/mp4");
+    expect(files[0].type).toMatch(/video\/mp4/);
     expect(await files[0].text()).toBe("mp4bytes");
   });
 

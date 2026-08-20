@@ -113,7 +113,10 @@ describe("SourceGroup phone save/share", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
-      return new Response(new Blob([url], { type: "video/mp4" }), { status: 200 });
+      return new Response(url, {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" },
+      });
     });
     const downloads: string[] = [];
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:dl");
@@ -148,7 +151,7 @@ describe("SourceGroup phone save/share", () => {
       value: share,
     });
     vi.mocked(fetch).mockImplementation(async () =>
-      new Response(new Blob(["vid"], { type: "video/mp4" }), { status: 200 }),
+      new Response("vid", { status: 200, headers: { "Content-Type": "video/mp4" } }),
     );
 
     render(<SourceGroup source={source()} {...props} />);
@@ -160,7 +163,9 @@ describe("SourceGroup phone save/share", () => {
   });
 
   it("does not fetch variants that are not ready or not ok", async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response(new Blob(["x"]), { status: 200 }));
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("x", { status: 200, headers: { "Content-Type": "video/mp4" } }),
+    );
     render(
       <SourceGroup
         source={source({

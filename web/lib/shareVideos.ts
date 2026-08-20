@@ -73,8 +73,9 @@ export async function fetchVariantFiles(
   for (const variant of variants) {
     const res = await fetchFn(variant.file_url);
     if (!res.ok) continue;
-    const blob = await res.blob();
-    files.push(new File([blob], variant.filename, { type: blob.type || "video/mp4" }));
+    const buf = await res.arrayBuffer();
+    const type = (res.headers.get("content-type") || "video/mp4").split(";")[0] || "video/mp4";
+    files.push(new File([buf], variant.filename, { type }));
   }
   return files;
 }
