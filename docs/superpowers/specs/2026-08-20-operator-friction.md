@@ -69,20 +69,23 @@ Uniqueness / VMAF unchanged.
 
 ## Tracking — uniqueness + “what posted”
 
-Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer product is
-**good variants + a posting board**, not Sheets.
+Reference: [Butter](https://hellobutter.io/) — Post → Track → Amplify in one
+product. North star for *flow*: `docs/superpowers/specs/2026-08-20-butter-loop.md`.
+Do not clone their poster, marketplace, or overlay engine.
 
-Jeff will send the competitor URL again. Until then, Studio target is:
+Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
+**our uniqueness + a Drops board**, not Sheets and not logging into Instagram.
 
-- One **Drops** (or Gallery filter) of packs sent to Drive: date, count,
-  unlabeled = pass, flagged / duplicate-reject as misses.
-- Mark from Gallery (already) and see it on that board.
+- One **Drops** view of packs sent to Drive: date, destination, unlabeled = pass,
+  flagged / duplicate-reject as misses.
+- Mark from Gallery and see it on that board.
 - Identity: `job_id` + variant id + Drive file id (12b). Never caption
   filenames (Repurpose renames).
+- Amplify = Generate more of a **winning source**, same Fast engine — not
+  Butter-style hook/overlay scrambles.
 
-**Not:** Instagram login, auto-post, scraping insights, a local detector.
-The platform stays the oracle. Scheduler/calendar clones wait until 12a is
-used and we have the screenshot/URL.
+**Not:** Instagram login, auto-post, scraping insights, a local detector,
+shoutout marketplace. The platform stays the oracle.
 
 ## Parallel file boxes
 
@@ -91,7 +94,7 @@ used and we have the screenshot/URL.
 | Diagnostics | `TopNav.tsx`, `web/app/diagnostics/`, TopNav tests | Drive, Gallery zip |
 | Phone save | `web/lib/` share helpers, `SourceGroup.tsx`, gallery tests | TopNav, Drive OAuth, uniqueness |
 | Drive trust | this spec + `docs/ops/` Jeff-only OAuth test-user note | DestinationsPanel (onboarding PR), DropLedgerPanel |
-| Drops board | spec until URL arrives; then Gallery/ledger UI | engine, Stripe |
+| Drops board | `web/app/drops/` later; see butter-loop spec | engine, Stripe, IG login |
 
 ## Frozen
 

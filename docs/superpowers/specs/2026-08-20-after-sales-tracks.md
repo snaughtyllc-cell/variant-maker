@@ -163,4 +163,6 @@ share packs on purpose). Owner workspaces already have their own Drive.
 
 Operator-friction (Diagnostics hide, Drive trust, phone save-without-zip,
 drops board) is `docs/superpowers/specs/2026-08-20-operator-friction.md`.
-Those can run in parallel with capacity waves; they do not raise uniqueness.
+Butter-style **flow** (Post → Track → Amplify in Studio, not a poster clone)
+is `docs/superpowers/specs/2026-08-20-butter-loop.md`. Those can run in
+parallel with capacity waves; they do not raise uniqueness.
