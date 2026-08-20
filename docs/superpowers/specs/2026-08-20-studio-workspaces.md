@@ -103,6 +103,18 @@ Switch is a second cookie (`vf_admin_view`). Home workspace stays on
 This is how Jeff debugs “their Generate is stuck” without a shared public
 gallery.
 
+## Later (speed — not this slice)
+
+Workspaces split **data** (gallery, Drive, captions), not hardware. Every studio
+still shares the same Fast CPU endpoint and the one HQ GPU. Adding a partner
+does not give them their own cards.
+
+Jeff’s note (2026-08-20): 5 minutes for **one** Fast variant feels too slow;
+5 minutes for an 8-pack is fine. When we come back: extra Fast workers / more
+parallelism so one person’s job doesn’t sit on a cold or serial worker. Do
+**not** raise uniqueness floors or turn escalate off as a speed hack. Do not
+split Fast across CPU+GPU. Do not always-on GPU.
+
 ## Not this
 
 - Postgres, Stripe, public signup, uniqueness changes, per-VA Drive inside
