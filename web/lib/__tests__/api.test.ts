@@ -14,6 +14,17 @@ describe("url builders use relative /api", () => {
   });
 });
 
+describe("getQueue", () => {
+  it("GETs /api/queue", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ running: 0, fast: 0, hq: 0, jobs: [] }), { status: 200 }),
+    );
+    const out = await api.getQueue();
+    expect(out.running).toBe(0);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/queue");
+  });
+});
+
 describe("cancelJob", () => {
   it("POSTs /api/jobs/:id/cancel", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

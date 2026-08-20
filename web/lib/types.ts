@@ -30,6 +30,24 @@ export interface SourceOut {
   job_id?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
+export interface QueueItem {
+  job_id: string;
+  quality_mode: "fast" | "hq" | string;
+  state: string;
+  created_utc: string;
+  count: number;
+  source_count: number;
+  filenames: string[];
+  delivered: number;
+  requested: number;
+  position: number;
+}
+export interface QueueSnapshot {
+  running: number;
+  fast: number;
+  hq: number;
+  jobs: QueueItem[];
+}
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt"; quality: Quality; }

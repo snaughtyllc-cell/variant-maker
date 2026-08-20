@@ -59,7 +59,7 @@ from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, Des
                      DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
                      ExportCreateIn, ExportFileOut, ExportJobOut, ExportSplitDestIn, ExportSplitIn, InFlightOut, JobDetail,
                      JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
-                     SplitExportJobOut, SplitExportOut,
+                     QueueOut, SplitExportJobOut, SplitExportOut,
                      VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn,
                      CaptionAdvanceIn, CaptionBankFolderOut, CaptionBankOut, CaptionBulkIn,
                      CaptionCreateIn, CaptionFolderCreateIn, CaptionOut, CaptionPreviewOut)
@@ -538,6 +538,11 @@ def create_app(
         return [JobSummary(job_id=j.job_id, count=j.count, created_utc=j.created_utc,
                            state=j.state, source_count=len(j.sources))
                 for j in store.list()]
+
+    @app.get("/api/queue", response_model=QueueOut)
+    def studio_queue() -> QueueOut:
+        """Who is generating on this shared URL. Filenames only — no video bytes."""
+        return QueueOut(**store.queue())
 
     @app.get("/api/jobs/{job_id}", response_model=JobDetail)
     def get_job(job_id: str) -> JobDetail:

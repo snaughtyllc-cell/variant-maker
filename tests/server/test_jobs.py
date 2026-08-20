@@ -389,3 +389,85 @@ def test_delete_running_source_cancels_and_does_not_resurrect(tmp_path):
     assert store.get(job_id) is None
     assert store.gallery() == []
     assert not os.path.isdir(os.path.join(str(tmp_path), "jobs", job_id))
+
+
+class _HoldRunner:
+    """Starts two sources in parallel and holds until released — isolation + queue."""
+
+    def __init__(self) -> None:
+        self.started: list[tuple[str, str]] = []
+        self.gate = threading.Event()
+        self._lock = threading.Lock()
+        self.started_n = threading.Event()
+
+    def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True, quality_mode: str = "fast",
+            cancel_token=None) -> SourceResult:
+        os.makedirs(out_dir, exist_ok=True)
+        with self._lock:
+            self.started.append((source_path, out_dir))
+            if len(self.started) >= 2:
+                self.started_n.set()
+        fname = "v01.mp4"
+        quality = {"vmaf": 95.0, "passed": True}
+        on_event(VariantEvent(
+            source_id=source_id, index=1, state="done",
+            status="ok", quality=quality, filename=fname,
+        ))
+        open(os.path.join(out_dir, fname), "w").close()
+        while not self.gate.wait(timeout=0.05):
+            if cancel_token is not None and cancel_token.is_set():
+                from variant_maker.server.cancel import JobCancelled
+                raise JobCancelled()
+        mpath = os.path.join(out_dir, "manifest.json")
+        open(mpath, "w").close()
+        return SourceResult(
+            variants=[VariantResult(
+                index=1, filename=fname, status="ok", quality=quality,
+                path=os.path.join(out_dir, fname),
+            )],
+            manifest_path=mpath,
+        )
+
+
+def test_two_jobs_use_separate_folders_and_cancel_is_per_job(tmp_path):
+    """Shared Studio URL: two Generates must not mix files or cancel each other."""
+    from variant_maker.server.jobs import queue_snapshot
+
+    runner = _HoldRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    a = store.create_job([("va.mp4", b"aaa")], count=1, quality_mode="fast")
+    b = store.create_job([("partner.mp4", b"bbb")], count=1, quality_mode="hq")
+    assert runner.started_n.wait(timeout=5)
+    paths_a = store._ws.source_in_path(a.job_id, a.sources[0].source_id, "va.mp4")
+    paths_b = store._ws.source_in_path(b.job_id, b.sources[0].source_id, "partner.mp4")
+    assert os.path.isfile(paths_a) and os.path.isfile(paths_b)
+    assert os.path.dirname(os.path.dirname(paths_a)) != os.path.dirname(os.path.dirname(paths_b))
+    with open(paths_a, "rb") as f:
+        assert f.read() == b"aaa"
+    with open(paths_b, "rb") as f:
+        assert f.read() == b"bbb"
+    out_dirs = {out for _, out in runner.started}
+    assert len(out_dirs) == 2
+
+    snap = queue_snapshot(store.list())
+    assert snap["running"] == 2
+    assert snap["fast"] == 1 and snap["hq"] == 1
+    assert [j["position"] for j in snap["jobs"]] == [1, 2]
+    names = {tuple(j["filenames"]) for j in snap["jobs"]}
+    assert names == {("va.mp4",), ("partner.mp4",)}
+    assert all("file_url" not in j for j in snap["jobs"])
+
+    store.cancel(a.job_id)
+    assert store.wait(a.job_id, timeout=5)
+    assert a.state == "cancelled"
+    assert store.get(b.job_id).state == "running"
+    snap = queue_snapshot(store.list())
+    assert snap["running"] == 1
+    assert snap["jobs"][0]["job_id"] == b.job_id
+
+    runner.gate.set()
+    assert store.wait(b.job_id, timeout=5)
+    assert b.state == "done"
+    assert queue_snapshot(store.list())["running"] == 0

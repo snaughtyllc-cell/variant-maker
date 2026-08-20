@@ -16,7 +16,7 @@ export function copyMissingCopy(): string {
 
 export function removePackCopy(running: boolean): string {
   return running
-    ? "This pack is still generating. Stop it and remove it from Gallery? Files on Studio are deleted."
+    ? "This pack is still generating. Removing it stops that Generate for everyone on this Studio URL. Files on Studio are deleted."
     : "Remove this pack from Gallery? Files on Studio are deleted. Drive uploads are not touched.";
 }
 

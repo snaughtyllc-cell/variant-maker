@@ -14,6 +14,7 @@ import {
   JobDetail,
   JobSummary,
   PlatformResult,
+  QueueSnapshot,
   SourceOut,
   VariantOut,
   Workflow,
@@ -56,6 +57,7 @@ export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`
 
 export const getHealth = () => fetch("/api/health").then(json<{ status: string }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
+export const getQueue = () => fetch("/api/queue").then(json<QueueSnapshot>);
 export const getJob = (id: string) =>
   fetch(`/api/jobs/${id}`, { cache: "no-store" }).then(json<JobDetail>);
 export const cancelJob = (id: string) =>

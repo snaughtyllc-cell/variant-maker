@@ -53,6 +53,7 @@ describe("gallery helpers", () => {
   it("explains removing a pack, including a live one", () => {
     expect(removePackCopy(false)).toMatch(/Gallery/i);
     expect(removePackCopy(true)).toMatch(/still generating/i);
+    expect(removePackCopy(true)).toMatch(/everyone on this Studio/i);
   });
 
   it("treats omitted file_ready as present (older Studio payloads)", () => {

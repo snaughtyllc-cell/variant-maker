@@ -67,6 +67,39 @@ def test_get_unknown_job_404(tmp_path):
     assert client.get("/api/jobs/nope").status_code == 404
 
 
+def test_queue_lists_running_jobs_without_videos(tmp_path):
+    from tests.server.test_jobs import _PausingRunner
+
+    runner = _PausingRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    client = TestClient(create_app(store))
+    empty = client.get("/api/queue").json()
+    assert empty == {"running": 0, "fast": 0, "hq": 0, "jobs": []}
+
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("iphone.mov", b"x", "video/mp4"))],
+        data={"count": "2", "quality_mode": "fast"},
+    ).json()["job_id"]
+    assert runner.v1_done.wait(timeout=5)
+    body = client.get("/api/queue").json()
+    assert body["running"] == 1
+    assert body["fast"] == 1 and body["hq"] == 0
+    item = body["jobs"][0]
+    assert item["job_id"] == job_id
+    assert item["quality_mode"] == "fast"
+    assert item["filenames"] == ["iphone.mov"]
+    assert item["requested"] == 2
+    assert item["delivered"] >= 1
+    assert item["position"] == 1
+    assert "file_url" not in item
+    assert "variants" not in item
+
+    runner.gate.set()
+    store.wait(job_id, timeout=5)
+    assert client.get("/api/queue").json()["running"] == 0
+
+
 def test_cancel_job_stops_running_pack(tmp_path):
     from tests.server.test_jobs import _PausingRunner
 

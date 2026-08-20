@@ -59,6 +59,27 @@ class JobSummary(BaseModel):
     source_count: int
 
 
+class QueueItemOut(BaseModel):
+    job_id: str
+    quality_mode: str
+    state: str
+    created_utc: str
+    count: int
+    source_count: int
+    filenames: list[str]
+    delivered: int
+    requested: int
+    position: int
+
+
+class QueueOut(BaseModel):
+    """Live generating packs on this Studio URL — filenames only, no video."""
+    running: int
+    fast: int = 0
+    hq: int = 0
+    jobs: list[QueueItemOut] = []
+
+
 class JobDetail(BaseModel):
     job_id: str
     count: int

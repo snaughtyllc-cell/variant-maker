@@ -1,12 +1,16 @@
 "use client";
 import useSWR from "swr";
 import { getHealth } from "../../lib/api";
+import { useQueue } from "../../lib/useQueue";
+import { queueStripLabel } from "../../lib/queue";
 
 export function StatusStrip() {
   const { data, error } = useSWR("/api/health", () => getHealth(), {
     refreshInterval: 10000,
     revalidateOnFocus: false,
   });
+  const { data: queue } = useQueue();
+  const queueLabel = queueStripLabel(queue);
 
   const online = !error && data?.status === "ok";
   const ready = data !== undefined && !error;
@@ -31,6 +35,16 @@ export function StatusStrip() {
         />
         {loading ? "…" : ready && online ? "Ready" : "Offline"}
       </span>
+
+      {queueLabel && (
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+          style={{ background: "#1a1610", color: "var(--color-amber)", borderColor: "#3a3020" }}
+          title="Live packs on this shared Studio URL"
+        >
+          {queueLabel}
+        </span>
+      )}
 
       {/* Local mode pill — desktop only; phones hide it to keep the bar usable */}
       <span

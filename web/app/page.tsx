@@ -8,6 +8,7 @@ import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
+import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
@@ -112,6 +113,7 @@ export default function StudioPage() {
         </p>
 
         <EngineWaitNote />
+        <StudioQueue qualityMode={qualityMode} jobId={jobId} />
 
         <DropZone onFiles={handleFiles} />
 

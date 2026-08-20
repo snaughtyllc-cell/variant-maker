@@ -137,6 +137,35 @@ def _variant_to_dict(v: VariantInfo) -> dict:
     }
 
 
+def queue_snapshot(jobs: list[Job]) -> dict:
+    """Live generating packs on a shared Studio URL. Filenames only — no video."""
+    running = [j for j in jobs if j.state == "running"]
+    running.sort(key=lambda j: (j.created_utc or "", j.job_id))
+    items = []
+    for i, job in enumerate(running, start=1):
+        requested = sum(s.requested for s in job.sources)
+        if requested <= 0:
+            requested = job.count * max(len(job.sources), 1)
+        items.append({
+            "job_id": job.job_id,
+            "quality_mode": job.quality_mode,
+            "state": job.state,
+            "created_utc": job.created_utc,
+            "count": job.count,
+            "source_count": len(job.sources),
+            "filenames": [s.filename for s in job.sources],
+            "delivered": sum(s.delivered for s in job.sources),
+            "requested": requested,
+            "position": i,
+        })
+    return {
+        "running": len(items),
+        "fast": sum(1 for it in items if it["quality_mode"] != "hq"),
+        "hq": sum(1 for it in items if it["quality_mode"] == "hq"),
+        "jobs": items,
+    }
+
+
 def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
     quality = data.get("quality") if isinstance(data.get("quality"), dict) else {}
     return VariantInfo(
@@ -486,6 +515,11 @@ class JobStore:
 
     def list(self) -> list[Job]:
         return list(self._jobs.values())
+
+    def queue(self) -> dict:
+        with self._lock:
+            jobs = list(self._jobs.values())
+        return queue_snapshot(jobs)
 
     def _install_hydrated_job(self, job: Job) -> None:
         token = CancelToken()
