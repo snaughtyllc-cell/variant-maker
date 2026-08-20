@@ -117,6 +117,8 @@ open Studio). To give each operator their own gallery + Drive:
    existing packs into your workspace.
 4. **Admin** in the top nav:
    - **Join my workspace** — VAs land in your gallery (shared on purpose).
+     Tell them: Studio URL → invited email + a password they choose (or
+     Google). First password sign-in sets it.
    - **New workspace** — outside operators get an empty studio + their own
      Drive Connect.
    - **Open** on a row — you see their Studio (gallery, queue, Generate,

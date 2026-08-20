@@ -123,11 +123,27 @@ Workspaces split **data** (gallery, Drive, captions), not hardware. Every studio
 still shares the same Fast CPU endpoint and the one HQ GPU. Adding a partner
 does not give them their own cards.
 
-Jeff’s note (2026-08-20): 5 minutes for **one** Fast variant feels too slow;
-5 minutes for an 8-pack is fine. When we come back: extra Fast workers / more
-parallelism so one person’s job doesn’t sit on a cold or serial worker. Do
+Jeff’s notes (2026-08-20), parked — do not start this while invites/login land:
+
+- **Pain is interactive 1–2 clips**, not the Drive workflow. Workflow pull →
+  generate → send can stay slow; nobody is waiting on the button. Studio
+  Generate for one or two files is the gap.
+- **Telegram spoofer** (unnamed bot): one clip comes back in **seconds to ~1
+  minute**; bigger jobs **~1–2 minutes**. Jeff’s guess: an always-on runner
+  (warm), plus we do not know which transforms / uniqueness / quality loop it
+  uses. Optional later: he can send a spoofed output so we can probe what it
+  actually did (resolution, filters, whether it skipped a quality/uniqueness
+  ladder). Not a detector; not cloning that bot.
+- **TikFusion** is the closer product; maybe a tad quicker than us last he
+  used it.
+- Earlier the same day: 5 minutes for **one** Fast variant feels too slow;
+  5 minutes for an 8-pack is fine.
+
+When we come back: extra Fast workers / more parallelism so one person’s job
+doesn’t sit on a cold or serial worker; measure warm vs cold start. Do
 **not** raise uniqueness floors or turn escalate off as a speed hack. Do not
-split Fast across CPU+GPU. Do not always-on GPU.
+split Fast across CPU+GPU. Do not always-on GPU. Always-on Fast CPU is a
+cost trade to discuss then, not a default.
 
 ## Not this
 
