@@ -1,4 +1,6 @@
 import {
+  AdminWorkspace,
+  AuthMe,
   Caption,
   CaptionBank,
   CaptionBankFolder,
@@ -9,6 +11,8 @@ import {
   DriveVideo,
   ExportJob,
   ExportVariantRef,
+  Invite,
+  InviteKind,
   SplitExportDest,
   SplitExportResult,
   JobDetail,
@@ -417,5 +421,56 @@ export function updateCaption(id: string, text: string): Promise<Caption> {
 
 export async function deleteCaption(id: string): Promise<void> {
   const res = await fetch(`/api/captions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+/** 401 from a public /api/auth/me means login is on and the cookie is missing. */
+export const LOGGED_OUT_ME: AuthMe = {
+  auth_required: true,
+  email: null,
+  name: null,
+  workspace_id: null,
+  workspace_name: null,
+  home_workspace_id: null,
+  viewing_other: false,
+  role: null,
+  is_admin: false,
+};
+
+export async function getAuthMe(): Promise<AuthMe> {
+  const res = await fetch("/api/auth/me");
+  if (res.status === 401) return { ...LOGGED_OUT_ME };
+  return json<AuthMe>(res);
+}
+
+export async function logout(): Promise<void> {
+  const res = await fetch("/api/auth/logout", { method: "POST" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const listInvites = () => fetch("/api/auth/invites").then(json<Invite[]>);
+
+export function createInvite(email: string, kind: InviteKind): Promise<Invite> {
+  return fetch("/api/auth/invites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, kind }),
+  }).then(json<Invite>);
+}
+
+export async function deleteInvite(id: string): Promise<void> {
+  const res = await fetch(`/api/auth/invites/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const listAdminWorkspaces = () =>
+  fetch("/api/admin/workspaces").then(json<AdminWorkspace[]>);
+
+export async function setAdminView(workspaceId: string | null): Promise<void> {
+  const res = await fetch("/api/admin/view", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_id: workspaceId }),
+  });
   if (!res.ok) throw new Error(await errorMessage(res));
 }

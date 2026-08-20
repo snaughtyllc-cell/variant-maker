@@ -9,14 +9,20 @@ import tempfile
 import threading
 import traceback
 import uuid
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from datetime import UTC
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from sse_starlette.sse import EventSourceResponse
 from starlette.requests import ClientDisconnect
 
+from variant_maker.farm.drive import DriveClient, is_video_file
+from variant_maker.farm.ledger import Ledger
+
+from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
 from .captions import CaptionError, CaptionStore, split_caption_bank
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
 from .drive_config import (
@@ -25,21 +31,30 @@ from .drive_config import (
     ENV_OAUTH_REDIRECT_URI,
     resolve_drive_status,
 )
-from .drive_exports import (ExportError, ExportJob, ExportRunner, ExportStore, VariantRef,
-                            build_export_files)
-from .drive_split import execute_split_export
-from .pack_split import assign_refs, partition, split_indices
+from .drive_exports import (
+    ExportError,
+    ExportJob,
+    ExportRunner,
+    ExportStore,
+    VariantRef,
+    build_export_files,
+)
 from .drive_oauth import (
+    ENV_LOGIN_REDIRECT_URI,
+    LOGIN_SCOPES,
     OAuthPendingStore,
     OAuthTokenStore,
     build_authorization_url,
     exchange_code_for_token,
     fetch_connected_email,
+    login_profile_from_token,
     new_oauth_state,
     public_request_base,
+    resolve_login_redirect_uri,
     resolve_redirect_uri,
     studio_origin_from_redirect_uri,
 )
+from .drive_split import execute_split_export
 from .drive_urls import DriveUrlError, parse_folder_id
 from .drop_ledger import (
     ensure_ledger,
@@ -53,24 +68,83 @@ from .drop_ledger import (
 )
 from .events import event_to_dict
 from .jobs import (
-    Job, JobSource, JobStore, source_copy_status, source_files_ready, variant_on_disk,
+    Job,
+    JobSource,
+    JobStore,
+    source_copy_status,
+    source_files_ready,
+    variant_on_disk,
 )
-from .models import (CreateJobResponse, DestinationCreateIn, DestinationOut, DestinationUpdateIn,
-                     DiagnosticsItem, DriveStatusOut, DriveVideoOut, DriveVideosOut,
-                     DropLedgerEnsureOut, DropLedgerStatusOut, DropLedgerSyncIn, DropLedgerSyncOut,
-                     ExportCreateIn, ExportFileOut, ExportJobOut, ExportSplitDestIn, ExportSplitIn, InFlightOut, JobDetail,
-                     JobEventsSnapshot, JobFromDriveIn, JobSummary, PlatformResultIn, SourceOut,
-                     QueueOut, SplitExportJobOut, SplitExportOut,
-                     VariantOut, WorkflowCreateIn, WorkflowOut, WorkflowSummaryOut, WorkflowUpdateIn,
-                     CaptionAdvanceIn, CaptionBankFolderOut, CaptionBankOut, CaptionBulkIn,
-                     CaptionCreateIn, CaptionFolderCreateIn, CaptionOut, CaptionPreviewOut)
+from .models import (
+    AdminViewIn,
+    AdminWorkspaceOut,
+    AuthMeOut,
+    CaptionAdvanceIn,
+    CaptionBankFolderOut,
+    CaptionBankOut,
+    CaptionBulkIn,
+    CaptionCreateIn,
+    CaptionFolderCreateIn,
+    CaptionOut,
+    CaptionPreviewOut,
+    CreateJobResponse,
+    DestinationCreateIn,
+    DestinationOut,
+    DestinationUpdateIn,
+    DiagnosticsItem,
+    DriveStatusOut,
+    DriveVideoOut,
+    DriveVideosOut,
+    DropLedgerEnsureOut,
+    DropLedgerStatusOut,
+    DropLedgerSyncIn,
+    DropLedgerSyncOut,
+    ExportCreateIn,
+    ExportFileOut,
+    ExportJobOut,
+    ExportSplitIn,
+    InFlightOut,
+    InviteCreateIn,
+    InviteOut,
+    JobDetail,
+    JobEventsSnapshot,
+    JobFromDriveIn,
+    JobSummary,
+    PlatformResultIn,
+    QueueOut,
+    SourceOut,
+    SplitExportOut,
+    VariantOut,
+    WorkflowCreateIn,
+    WorkflowOut,
+    WorkflowSummaryOut,
+    WorkflowUpdateIn,
+)
 from .runner import LocalRunner
+from .sessions import (
+    COOKIE_NAME,
+    DEFAULT_TTL_S,
+    VIEW_COOKIE_NAME,
+    load_or_create_secret,
+    read_session,
+    read_view,
+    sign_session,
+    sign_view,
+)
 from .sheets import GoogleSheets, SheetsClient
+from .tenant_runtime import TenantHub
+from .tenants import (
+    ADMIN_EMAIL_ENV,
+    TenantStore,
+    is_admin_email,
+    provision_login,
+)
+from .tenants import (
+    auth_required as tenant_auth_required,
+)
 from .workflow_runner import tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
-from variant_maker.farm.drive import DriveClient, is_video_file
-from variant_maker.farm.ledger import Ledger
 
 _IN_FLIGHT_STATES = frozenset({"rendering", "checking", "rerolling", "uniqueness", "escalating"})
 _UPLOAD_META: dict[str, dict] = {}
@@ -264,25 +338,54 @@ def create_app(
     oauth_fetch_email: FetchEmailFn | None = None,
     hydrate: bool = True,
     enable_workflow_poller: bool = False,
+    auth_environ: Mapping[str, str] | None = None,
+    login_exchange: ExchangeFn | None = None,
 ) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
-    if hydrate:
-        store.hydrate_from_disk()
-    app = FastAPI(title="variant-maker control plane")
-    app.state.store = store
-
+    fallback_store = store
     oauth_env: Mapping[str, str] = oauth_environ if oauth_environ is not None else os.environ
+    auth_env: Mapping[str, str] = auth_environ if auth_environ is not None else os.environ
+    auth_on = tenant_auth_required(auth_env)
+    admin_email = (auth_env.get(ADMIN_EMAIL_ENV) or "").strip() or None
+    data_dir = fallback_store._ws.root
+
+    app = FastAPI(title="variant-maker control plane")
+    tenants: TenantStore | None = None
+    hub: TenantHub | None = None
+    auth_secret = ""
+    login_pending: OAuthPendingStore | None = None
+    if auth_on:
+        auth_dir = os.path.join(data_dir, "auth")
+        os.makedirs(auth_dir, exist_ok=True)
+        tenants = TenantStore(os.path.join(auth_dir, "tenants.json"))
+        hub = TenantHub(data_dir, fallback_store._runner)
+        auth_secret = load_or_create_secret(
+            os.path.join(auth_dir, "secret"),
+            environ=auth_env if auth_environ is not None else None,
+        )
+        login_pending = OAuthPendingStore(os.path.join(auth_dir, "login_pending.json"))
+        if hydrate:
+            hub.hydrate_all(tenants.list_workspace_ids())
+    elif hydrate:
+        fallback_store.hydrate_from_disk()
+
+    store = JobStoreProxy(fallback_store)
+    app.state.store = store
+    app.state.tenants = tenants
+    app.state.tenant_hub = hub
+    app.state.auth_required = auth_on
+
     if oauth_token_path is None:
-        oauth_token_path = store._ws.oauth_token_path()
+        oauth_token_path = fallback_store._ws.oauth_token_path()
     token_store = OAuthTokenStore(oauth_token_path)
-    pending_store = OAuthPendingStore(store._ws.oauth_pending_path())
+    pending_store = OAuthPendingStore(fallback_store._ws.oauth_pending_path())
     app.state.oauth_token_store = token_store
     app.state.oauth_pending = pending_store
     app.state.oauth_environ = oauth_env
     app.state.oauth_exchange = oauth_exchange or exchange_code_for_token
     app.state.oauth_fetch_email = oauth_fetch_email or fetch_connected_email
-    drop_sheet_path = store._ws.drop_sheet_config_path()
+    app.state.login_exchange = login_exchange
 
     # Explicit "" means "no SA" (tests); None means fall through to env.
     sa_arg = None if sa_json_path in (None, "") else sa_json_path
@@ -316,44 +419,210 @@ def create_app(
     app.state.drive = drive
     app.state.sheets = sheets
     app.state.drive_info = drive_info
-    app.state.destinations = DestinationStore(store._ws.destinations_path())
-    app.state.exports = ExportStore(store._ws.exports_dir())
-    app.state.workflows = WorkflowStore(store._ws.workflows_path())
-    app.state.captions = CaptionStore(store._ws.captions_path())
+    app.state.destinations = AttrProxy(
+        "destinations", DestinationStore(fallback_store._ws.destinations_path()),
+    )
+    app.state.exports = AttrProxy("exports", ExportStore(fallback_store._ws.exports_dir()))
+    app.state.workflows = AttrProxy(
+        "workflows", WorkflowStore(fallback_store._ws.workflows_path()),
+    )
+    app.state.captions = AttrProxy("captions", CaptionStore(fallback_store._ws.captions_path()))
     app.state.workflow_tick_lock = threading.Lock()
 
-    def _refresh_drive_info() -> None:
-        app.state.drive_info = resolve_drive_status(
+    def _oauth_tokens() -> OAuthTokenStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return bundle.oauth_token_store
+        return token_store
+
+    def _oauth_pending() -> OAuthPendingStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return bundle.oauth_pending
+        return pending_store
+
+    def _token_path() -> str:
+        return _oauth_tokens().path
+
+    def _compute_drive_info():
+        path = _token_path()
+        if sa_json_path == "":
+            return resolve_drive_status(None, oauth_token_path=path, environ=oauth_env)
+        return resolve_drive_status(
             None if sa_json_path in (None, "") else sa_json_path,
-            oauth_token_path=oauth_token_path,
+            oauth_token_path=path,
             environ=oauth_env,
         )
 
+    def _refresh_drive_info() -> None:
+        info = _compute_drive_info()
+        if current_bundle() is None:
+            app.state.drive_info = info
+
+    def _drive_info():
+        if current_bundle() is None:
+            return app.state.drive_info
+        return _compute_drive_info()
+
+    def _attach_oauth_clients() -> tuple[DriveClient | None, SheetsClient | None]:
+        path = _token_path()
+        client = None
+        sheets_client = None
+        try:
+            client = _build_drive_client(oauth_token_path=path)
+        except Exception:  # noqa: BLE001 — token file may be incomplete
+            client = None
+        try:
+            sheets_client = GoogleSheets(oauth_token=path)
+        except Exception:  # noqa: BLE001 — sheets optional
+            sheets_client = None
+        return client, sheets_client
+
+    def _drive() -> DriveClient | None:
+        bundle = current_bundle()
+        if bundle is None:
+            return app.state.drive
+        if bundle.drive is not None:
+            return bundle.drive
+        info = _compute_drive_info()
+        if info.status == "ready" and info.auth_mode == "oauth":
+            bundle.drive, bundle.sheets = _attach_oauth_clients()
+        elif info.status == "ready" and info.auth_mode == "service_account" and sa_arg:
+            try:
+                bundle.drive = _build_drive_client(sa_json_path=sa_arg)
+            except Exception:  # noqa: BLE001 — SA json may be unreadable
+                bundle.drive = None
+        return bundle.drive
+
+    def _sheets() -> SheetsClient | None:
+        bundle = current_bundle()
+        if bundle is None:
+            return app.state.sheets
+        if bundle.sheets is not None:
+            return bundle.sheets
+        info = _compute_drive_info()
+        if info.status == "ready" and info.auth_mode == "oauth":
+            _, bundle.sheets = _attach_oauth_clients()
+        return bundle.sheets
+
+    def _set_drive(client: DriveClient | None) -> None:
+        bundle = current_bundle()
+        if bundle is not None:
+            bundle.drive = client
+        else:
+            app.state.drive = client
+
+    def _set_sheets(client: SheetsClient | None) -> None:
+        bundle = current_bundle()
+        if bundle is not None:
+            bundle.sheets = client
+        else:
+            app.state.sheets = client
+
     def _account_email() -> str | None:
-        info = app.state.drive_info
+        info = _drive_info()
         return info.connected_email or info.sa_email
 
     def _require_drive() -> None:
-        if app.state.drive is None or app.state.drive_info.status != "ready":
-            raise HTTPException(status_code=503, detail=app.state.drive_info.message)
+        info = _drive_info()
+        if _drive() is None or info.status != "ready":
+            raise HTTPException(status_code=503, detail=info.message)
 
     def _require_sheets() -> SheetsClient:
-        if app.state.sheets is None:
+        sheets_client = _sheets()
+        if sheets_client is None:
             raise HTTPException(
                 status_code=503,
                 detail="Sheets not available — Connect Google in Settings → Drive "
                        "(must grant Spreadsheets scope)",
             )
-        return app.state.sheets
+        return sheets_client
+
+    def _drop_sheet_path() -> str:
+        return store._ws.drop_sheet_config_path()
 
     def _current_sheet_id() -> str | None:
-        return resolve_sheet_id(oauth_env, drop_sheet_path)
+        return resolve_sheet_id(oauth_env, _drop_sheet_path())
 
     def _persist_sheet_id(sid: str) -> None:
-        write_sheet_id_file(drop_sheet_path, sid)
+        write_sheet_id_file(_drop_sheet_path(), sid)
+
+    def _cookie_kw(request: Request) -> dict[str, Any]:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        secure = str(proto).split(",")[0].strip() == "https"
+        return {
+            "httponly": True,
+            "samesite": "lax",
+            "path": "/",
+            "max_age": DEFAULT_TTL_S,
+            "secure": secure,
+        }
+
+    def _oauth_client_pair() -> tuple[str, str]:
+        cid = str(oauth_env.get(ENV_OAUTH_CLIENT_ID) or auth_env.get(ENV_OAUTH_CLIENT_ID) or "")
+        csec = str(oauth_env.get(ENV_OAUTH_CLIENT_SECRET) or auth_env.get(ENV_OAUTH_CLIENT_SECRET) or "")
+        return cid, csec
+
+    def _login_redirect_uri(request: Request) -> str:
+        explicit = auth_env.get(ENV_LOGIN_REDIRECT_URI)
+        fallback = str(request.base_url).rstrip("/")
+        base = public_request_base(request.headers, fallback)
+        return resolve_login_redirect_uri(auth_env, request_base=base, explicit=explicit)
+
+    def _login_origin(request: Request) -> str:
+        fallback = str(request.base_url).rstrip("/")
+        return studio_origin_from_redirect_uri(
+            _login_redirect_uri(request),
+            public_request_base(request.headers, fallback),
+        )
+
+    def _require_user(request: Request):
+        user = getattr(request.state, "user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="login required")
+        return user
+
+    def _require_admin(request: Request):
+        user = _require_user(request)
+        if not is_admin_email(user.email, admin_email):
+            raise HTTPException(status_code=403, detail="admin only")
+        return user
+
+    def _admin_workspace_out(ws) -> AdminWorkspaceOut:
+        assert tenants is not None and hub is not None
+        users = [u for u in tenants.list_users() if u.workspace_id == ws.id]
+        owner = next((u.email for u in users if u.role == "owner"), None)
+        if owner is None and users:
+            owner = users[0].email
+        bundle = hub.bundle(ws.id)
+        q = bundle.store.queue()
+        ordered = sorted(bundle.store.list(), key=lambda j: j.created_utc or "", reverse=True)
+        last_job_utc = ordered[0].created_utc if ordered else None
+        last_error = next((j.error for j in ordered if j.error), None)
+        return AdminWorkspaceOut(
+            id=ws.id,
+            name=ws.name,
+            owner_email=owner,
+            member_count=len(users),
+            running=int(q.get("running") or 0),
+            fast=int(q.get("fast") or 0),
+            hq=int(q.get("hq") or 0),
+            last_job_utc=last_job_utc,
+            last_error=last_error,
+        )
+
+    def _default_login_exchange(
+        *, code: str, client_id: str, client_secret: str, redirect_uri: str, **_kwargs: Any,
+    ) -> dict[str, Any]:
+        token_data = exchange_code_for_token(
+            code=code, client_id=client_id, client_secret=client_secret,
+            redirect_uri=redirect_uri, scopes=LOGIN_SCOPES,
+        )
+        email, name = login_profile_from_token(token_data)
+        return {"email": email, "name": name, **token_data}
 
     def _sync_platform_result_to_sheet(source_id: str, index: int, result: str) -> None:
-        sheets_client = app.state.sheets
+        sheets_client = _sheets()
         sid = _current_sheet_id()
         if sheets_client is None or not sid:
             return
@@ -384,8 +653,8 @@ def create_app(
         return f"{origin}/settings/drive?{query}"
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:
-        from datetime import datetime, timezone
-        ts = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        from datetime import datetime
+        ts = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         inbox = app.state.destinations.get(wf.inbox_destination_id)
         output = app.state.destinations.get(wf.output_destination_id)
         if inbox is None or output is None:
@@ -396,11 +665,13 @@ def create_app(
             return app.state.workflows.update(
                 wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
             ) or wf
-        if app.state.drive is None or app.state.drive_info.status != "ready":
+        drive_client = _drive()
+        info = _drive_info()
+        if drive_client is None or info.status != "ready":
             summary = {
                 "queued": 0, "exported": 0, "skipped": 0, "failed": 0,
                 "running": 0, "job_ids": [],
-                "error": app.state.drive_info.message,
+                "error": info.message,
             }
             return app.state.workflows.update(
                 wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
@@ -409,7 +680,7 @@ def create_app(
         with app.state.workflow_tick_lock:
             result = tick_workflow(
                 wf,
-                drive=app.state.drive,
+                drive=drive_client,
                 inbox_folder_id=inbox.folder_id,
                 output_folder_id=output.folder_id,
                 job_store=store,
@@ -421,9 +692,187 @@ def create_app(
             wf.id, last_sweep_at=ts, last_summary=result.as_dict(), touch_sweep=True,
         ) or wf
 
+    @app.middleware("http")
+    async def tenant_middleware(request: Request, call_next):
+        token = tenant_cv.set(None)
+        try:
+            if not auth_on or tenants is None or hub is None:
+                return await call_next(request)
+            path = request.url.path
+            sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
+            user = tenants.get_user(sess["email"]) if sess else None
+            if user is None or not user.workspace_id:
+                user = None
+            protected = path.startswith("/api/") and path not in PUBLIC_API_PATHS
+            if protected and user is None:
+                return JSONResponse({"detail": "login required"}, status_code=401)
+            if user is not None:
+                viewing_id = user.workspace_id
+                if is_admin_email(user.email, admin_email):
+                    view = read_view(request.cookies.get(VIEW_COOKIE_NAME), auth_secret)
+                    if view and tenants.get_workspace(view) is not None:
+                        viewing_id = view
+                tenant_cv.set(hub.bundle(viewing_id))
+                request.state.user = user
+                request.state.viewing_workspace_id = viewing_id
+            else:
+                request.state.user = None
+                request.state.viewing_workspace_id = None
+            return await call_next(request)
+        finally:
+            tenant_cv.reset(token)
+
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/api/auth/me", response_model=AuthMeOut)
+    def auth_me(request: Request) -> AuthMeOut:
+        if not auth_on or tenants is None:
+            return AuthMeOut(auth_required=False)
+        user = getattr(request.state, "user", None)
+        if user is None:
+            return AuthMeOut(auth_required=True)
+        viewing_id = getattr(request.state, "viewing_workspace_id", None) or user.workspace_id
+        ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
+        return AuthMeOut(
+            auth_required=True,
+            email=user.email,
+            name=user.name,
+            workspace_id=viewing_id,
+            workspace_name=ws.name if ws else None,
+            home_workspace_id=user.workspace_id,
+            viewing_other=viewing_id != user.workspace_id,
+            role=user.role,
+            is_admin=is_admin_email(user.email, admin_email),
+        )
+
+    @app.post("/api/auth/logout", status_code=204)
+    def auth_logout() -> Response:
+        resp = Response(status_code=204)
+        resp.delete_cookie(COOKIE_NAME, path="/")
+        resp.delete_cookie(VIEW_COOKIE_NAME, path="/")
+        return resp
+
+    @app.get("/api/auth/google/start")
+    def auth_google_start(request: Request):
+        if not auth_on or login_pending is None:
+            raise HTTPException(status_code=404, detail="auth is off")
+        client_id, _client_secret = _oauth_client_pair()
+        if not client_id:
+            raise HTTPException(
+                status_code=503,
+                detail="OAuth not configured — set VARIANT_DRIVE_OAUTH_CLIENT_ID and "
+                       "VARIANT_DRIVE_OAUTH_CLIENT_SECRET",
+            )
+        state = new_oauth_state()
+        login_pending.add(state)
+        redirect_uri = _login_redirect_uri(request)
+        url = build_authorization_url(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            state=state,
+            scopes=LOGIN_SCOPES,
+        )
+        return RedirectResponse(url=url, status_code=302)
+
+    @app.get("/api/auth/google/callback")
+    def auth_google_callback(
+        request: Request,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+    ):
+        if not auth_on or tenants is None or login_pending is None:
+            raise HTTPException(status_code=404, detail="auth is off")
+        origin = _login_origin(request)
+
+        def fail(reason: str) -> RedirectResponse:
+            return RedirectResponse(url=f"{origin}/login?error={reason}", status_code=302)
+
+        if error or not code or not state or not login_pending.consume(state):
+            return fail("oauth")
+        client_id, client_secret = _oauth_client_pair()
+        redirect_uri = _login_redirect_uri(request)
+        exch = login_exchange or _default_login_exchange
+        try:
+            profile = exch(
+                code=code, client_id=client_id, client_secret=client_secret,
+                redirect_uri=redirect_uri,
+            )
+            email = str((profile or {}).get("email") or "")
+            name = str((profile or {}).get("name") or "")
+        except Exception as exc:  # noqa: BLE001 — Google token exchange is opaque
+            print(f"login exchange failed: {exc}", flush=True)
+            traceback.print_exc()
+            return fail("oauth")
+        if not email:
+            return fail("oauth")
+        user = provision_login(
+            tenants, email=email, name=name, admin_email=admin_email, data_dir=data_dir,
+        )
+        if user is None:
+            return fail("not_invited")
+        token = sign_session(
+            email=user.email, workspace_id=user.workspace_id, secret=auth_secret,
+        )
+        resp = RedirectResponse(url=f"{origin}/", status_code=302)
+        resp.set_cookie(COOKIE_NAME, token, **_cookie_kw(request))
+        return resp
+
+    @app.get("/api/auth/invites", response_model=list[InviteOut])
+    def list_invites(request: Request) -> list[InviteOut]:
+        _require_admin(request)
+        assert tenants is not None
+        return [
+            InviteOut(
+                id=i.id, email=i.email, kind=i.kind,
+                workspace_id=i.workspace_id, created_utc=i.created_utc,
+            )
+            for i in tenants.list_invites()
+        ]
+
+    @app.post("/api/auth/invites", status_code=201, response_model=InviteOut)
+    def create_invite(request: Request, body: InviteCreateIn) -> InviteOut:
+        admin = _require_admin(request)
+        assert tenants is not None
+        ws_id = admin.workspace_id if body.kind == "join" else None
+        try:
+            inv = tenants.add_invite(email=body.email, kind=body.kind, workspace_id=ws_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return InviteOut(
+            id=inv.id, email=inv.email, kind=inv.kind,
+            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
+        )
+
+    @app.delete("/api/auth/invites/{invite_id}", status_code=204)
+    def delete_invite(request: Request, invite_id: str) -> None:
+        _require_admin(request)
+        assert tenants is not None
+        if not tenants.delete_invite(invite_id):
+            raise HTTPException(status_code=404, detail="invite not found")
+
+    @app.get("/api/admin/workspaces", response_model=list[AdminWorkspaceOut])
+    def admin_workspaces(request: Request) -> list[AdminWorkspaceOut]:
+        _require_admin(request)
+        assert tenants is not None
+        return [_admin_workspace_out(ws) for ws in tenants.list_workspaces()]
+
+    @app.post("/api/admin/view", status_code=204)
+    def admin_view(request: Request, body: AdminViewIn) -> Response:
+        _require_admin(request)
+        assert tenants is not None
+        resp = Response(status_code=204)
+        if not body.workspace_id:
+            resp.delete_cookie(VIEW_COOKIE_NAME, path="/")
+            return resp
+        if tenants.get_workspace(body.workspace_id) is None:
+            raise HTTPException(status_code=404, detail="workspace not found")
+        resp.set_cookie(
+            VIEW_COOKIE_NAME, sign_view(body.workspace_id, auth_secret), **_cookie_kw(request),
+        )
+        return resp
 
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(files: list[UploadFile], count: int = Form(...),
@@ -509,7 +958,7 @@ def create_app(
         if not file_ids:
             raise HTTPException(status_code=400, detail="file_ids required")
         children = {
-            f.id: f for f in app.state.drive.list_files(dest.folder_id) if is_video_file(f)
+            f.id: f for f in _drive().list_files(dest.folder_id) if is_video_file(f)
         }
         missing = [fid for fid in file_ids if fid not in children]
         if missing:
@@ -521,7 +970,7 @@ def create_app(
                 f = children[fid]
                 name = os.path.basename(f.name) or "clip.mp4"
                 local = os.path.join(stage, f"{i}_{name}")
-                app.state.drive.download(fid, local)
+                _drive().download(fid, local)
                 paths.append((name, local))
             job = store.create_job_from_paths(
                 paths, count=body.count,
@@ -672,7 +1121,7 @@ def create_app(
                 spreadsheet_url=spreadsheet_url(sid),
                 message="Drop Ledger configured",
             )
-        if app.state.sheets is None:
+        if _sheets() is None:
             return DropLedgerStatusOut(
                 configured=False,
                 message="Connect Google (Settings → Drive), then POST /api/drop-ledger/ensure",
@@ -728,7 +1177,7 @@ def create_app(
     @app.get("/api/drive/status", response_model=DriveStatusOut)
     def drive_status() -> DriveStatusOut:
         _refresh_drive_info()
-        return _drive_status_out(app.state.drive_info)
+        return _drive_status_out(_drive_info())
 
     @app.get("/api/drive/oauth/start")
     def drive_oauth_start(request: Request):
@@ -739,7 +1188,7 @@ def create_app(
                        "VARIANT_DRIVE_OAUTH_CLIENT_SECRET",
             )
         state = new_oauth_state()
-        pending_store.add(state)
+        _oauth_pending().add(state)
         redirect_uri = _redirect_uri_for(request)
         url = build_authorization_url(
             client_id=oauth_env[ENV_OAUTH_CLIENT_ID],
@@ -757,7 +1206,7 @@ def create_app(
         if not code or not state:
             return RedirectResponse(url=_settings_url(request, "oauth=error&reason=missing_code"),
                                     status_code=302)
-        if not pending_store.consume(state):
+        if not _oauth_pending().consume(state):
             return RedirectResponse(url=_settings_url(request, "oauth=error&reason=bad_state"),
                                     status_code=302)
 
@@ -777,34 +1226,36 @@ def create_app(
             # Persist client secrets alongside token so GoogleDrive can refresh headless
             token_data.setdefault("client_id", client_id)
             token_data.setdefault("client_secret", client_secret)
-            token_store.save(token_data)
+            _oauth_tokens().save(token_data)
         except Exception as exc:
             print(f"oauth exchange failed: {exc}", flush=True)
             traceback.print_exc()
             return RedirectResponse(url=_settings_url(request, "oauth=error&reason=exchange_failed"),
                                     status_code=302)
 
-        try:
-            app.state.drive = _build_drive_client(oauth_token_path=oauth_token_path)
-        except Exception:
-            pass
-        try:
-            app.state.sheets = GoogleSheets(oauth_token=oauth_token_path)
-        except Exception:
-            pass
+        client, sheets_client = _attach_oauth_clients()
+        _set_drive(client)
+        if sheets_client is not None:
+            _set_sheets(sheets_client)
         _refresh_drive_info()
         return RedirectResponse(url=_settings_url(request, "oauth=connected"), status_code=302)
 
     @app.post("/api/drive/oauth/disconnect")
     def drive_oauth_disconnect() -> dict:
-        token_store.clear()
-        if app.state.drive_info.auth_mode == "oauth":
-            app.state.drive = None
+        _oauth_tokens().clear()
+        info = _drive_info()
+        if info.auth_mode == "oauth":
+            _set_drive(None)
+            _set_sheets(None)
         _refresh_drive_info()
-        # Re-attach SA client if still configured
-        if app.state.drive is None and app.state.drive_info.status == "ready":
-            if app.state.drive_info.auth_mode == "service_account" and sa_arg:
-                app.state.drive = _build_drive_client(sa_json_path=sa_arg)
+        info = _drive_info()
+        if (
+            _drive() is None
+            and info.status == "ready"
+            and info.auth_mode == "service_account"
+            and sa_arg
+        ):
+            _set_drive(_build_drive_client(sa_json_path=sa_arg))
         return {"ok": True}
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])
@@ -818,10 +1269,10 @@ def create_app(
             folder_id = _resolve_folder_id(body.folder_url)
         except DriveUrlError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        auth_mode = app.state.drive_info.auth_mode or "service_account"
+        auth_mode = _drive_info().auth_mode or "service_account"
         try:
             probe_folder_writable(
-                app.state.drive, folder_id,
+                _drive(), folder_id,
                 sa_email=_account_email(), auth_mode=auth_mode,
             )
         except DestinationError as e:
@@ -838,7 +1289,7 @@ def create_app(
         if existing is None:
             raise HTTPException(status_code=404, detail="destination not found")
         folder_id = None
-        auth_mode = app.state.drive_info.auth_mode or existing.auth_mode
+        auth_mode = _drive_info().auth_mode or existing.auth_mode
         if body.folder_url is not None:
             try:
                 folder_id = _resolve_folder_id(body.folder_url)
@@ -847,7 +1298,7 @@ def create_app(
             if folder_id != existing.folder_id:
                 try:
                     probe_folder_writable(
-                        app.state.drive, folder_id,
+                        _drive(), folder_id,
                         sa_email=_account_email(), auth_mode=auth_mode,
                     )
                 except DestinationError as e:
@@ -860,7 +1311,6 @@ def create_app(
         _require_drive()
         if not app.state.destinations.delete(dest_id):
             raise HTTPException(status_code=404, detail="destination not found")
-        return None
 
     @app.post("/api/drive/destinations/{dest_id}/test")
     def test_destination(dest_id: str) -> dict:
@@ -870,9 +1320,9 @@ def create_app(
             raise HTTPException(status_code=404, detail="destination not found")
         try:
             probe_folder_writable(
-                app.state.drive, dest.folder_id,
+                _drive(), dest.folder_id,
                 sa_email=_account_email(),
-                auth_mode=app.state.drive_info.auth_mode or dest.auth_mode,
+                auth_mode=_drive_info().auth_mode or dest.auth_mode,
             )
         except DestinationError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -886,7 +1336,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="destination not found")
         videos = [
             DriveVideoOut(id=f.id, name=f.name, mime_type=f.mime_type, md5=f.md5)
-            for f in app.state.drive.list_files(dest.folder_id)
+            for f in _drive().list_files(dest.folder_id)
             if is_video_file(f)
         ]
         return DriveVideosOut(videos=videos)
@@ -1064,7 +1514,7 @@ def create_app(
         if body.consume_bank:
             app.state.captions.advance(len(files), bank_id=body.caption_bank_id)
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
-        ExportRunner(app.state.drive, app.state.exports).start(job)
+        ExportRunner(_drive(), app.state.exports).start(job)
         return _export_job_out(job)
 
     @app.post("/api/drive/exports/split", status_code=201, response_model=SplitExportOut)
@@ -1072,7 +1522,7 @@ def create_app(
         """Partition one generate across Main/Trial/Growth. No re-render."""
         _require_drive()
         return execute_split_export(
-            drive=app.state.drive,
+            drive=_drive(),
             job_store=store,
             dest_store=app.state.destinations,
             export_store=app.state.exports,
@@ -1091,7 +1541,7 @@ def create_app(
     def retry_export(export_id: str) -> ExportJobOut:
         _require_drive()
         try:
-            job = ExportRunner(app.state.drive, app.state.exports).retry_failed(export_id)
+            job = ExportRunner(_drive(), app.state.exports).retry_failed(export_id)
         except ExportError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return _export_job_out(job)
@@ -1101,15 +1551,32 @@ def create_app(
         app.state.workflow_poller_stop = stop
 
         def _workflow_poll_delay() -> float:
+            if auth_on and tenants is not None and hub is not None:
+                secs: list[int] = []
+                for ws_id in tenants.list_workspace_ids():
+                    secs.extend(
+                        w.poll_seconds for w in hub.bundle(ws_id).workflows.list() if w.enabled
+                    )
+                return float(min(secs)) if secs else 30.0
             enabled = [w.poll_seconds for w in app.state.workflows.list() if w.enabled]
             return float(min(enabled)) if enabled else 30.0
 
         def _poll_loop() -> None:
             while not stop.wait(timeout=_workflow_poll_delay()):
                 try:
-                    for wf in app.state.workflows.list():
-                        if wf.enabled:
-                            _run_workflow_tick(wf)
+                    if auth_on and tenants is not None and hub is not None:
+                        for ws_id in tenants.list_workspace_ids():
+                            token = tenant_cv.set(hub.bundle(ws_id))
+                            try:
+                                for wf in app.state.workflows.list():
+                                    if wf.enabled:
+                                        _run_workflow_tick(wf)
+                            finally:
+                                tenant_cv.reset(token)
+                    else:
+                        for wf in app.state.workflows.list():
+                            if wf.enabled:
+                                _run_workflow_tick(wf)
                 except Exception as exc:  # noqa: BLE001 — poller must not die on one sweep
                     print(f"workflow poller: {type(exc).__name__}: {exc}", flush=True)
 

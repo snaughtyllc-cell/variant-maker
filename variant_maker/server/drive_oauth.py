@@ -5,6 +5,7 @@ same `GoogleDrive(oauth_token=…)` path used by the farm works without an SA ke
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
@@ -22,6 +23,14 @@ OAUTH_SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
 ]
+
+# Login only — Drive Connect stays a second consent with OAUTH_SCOPES.
+LOGIN_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+ENV_LOGIN_REDIRECT_URI = "VARIANT_AUTH_OAUTH_REDIRECT_URI"
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
@@ -193,6 +202,47 @@ def resolve_redirect_uri(
     return "http://127.0.0.1:8000/api/drive/oauth/callback"
 
 
+def resolve_login_redirect_uri(
+    environ: Mapping[str, str],
+    *,
+    request_base: str | None = None,
+    explicit: str | None = None,
+) -> str:
+    """Prefer VARIANT_AUTH_OAUTH_REDIRECT_URI; else `{origin}/api/auth/google/callback`."""
+    if explicit:
+        return explicit.rstrip("/")
+    env_uri = environ.get(ENV_LOGIN_REDIRECT_URI)
+    if env_uri:
+        return env_uri.rstrip("/")
+    if request_base:
+        return f"{request_base.rstrip('/')}/api/auth/google/callback"
+    return "http://127.0.0.1:8000/api/auth/google/callback"
+
+
+def login_profile_from_token(token_data: Mapping[str, Any]) -> tuple[str, str]:
+    """Email + name from a Google token dict (`email`/`name` or `id_token` claims)."""
+    email = token_data.get("email") if isinstance(token_data.get("email"), str) else None
+    name = token_data.get("name") if isinstance(token_data.get("name"), str) else ""
+    id_token = token_data.get("id_token")
+    if isinstance(id_token, str) and id_token.count(".") >= 2:
+        payload_b64 = id_token.split(".")[1]
+        pad = "=" * (-len(payload_b64) % 4)
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64 + pad))
+        except (OSError, json.JSONDecodeError, ValueError):
+            payload = {}
+        if isinstance(payload, dict):
+            if not email and isinstance(payload.get("email"), str):
+                email = payload["email"]
+            if not name and isinstance(payload.get("name"), str):
+                name = payload["name"]
+            elif not name and isinstance(payload.get("given_name"), str):
+                name = payload["given_name"]
+    if not email:
+        raise ValueError("Google login did not return an email")
+    return email, name or email
+
+
 def public_request_base(headers: Mapping[str, str], fallback: str) -> str:
     """Build public origin from RunPod / reverse-proxy forwarded headers when present."""
     proto = headers.get("x-forwarded-proto") or headers.get("X-Forwarded-Proto")
@@ -213,6 +263,7 @@ def exchange_code_for_token(
     client_id: str,
     client_secret: str,
     redirect_uri: str,
+    scopes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Exchange auth code for tokens; returns authorized-user dict for GoogleDrive."""
     from google_auth_oauthlib.flow import Flow
@@ -226,7 +277,7 @@ def exchange_code_for_token(
                 "token_uri": TOKEN_URI,
             }
         },
-        scopes=OAUTH_SCOPES,
+        scopes=list(scopes or OAUTH_SCOPES),
         redirect_uri=redirect_uri,
     )
     # Google often returns a slightly different granted-scope set than we asked

@@ -342,3 +342,44 @@ class CaptionFolderCreateIn(BaseModel):
 
 class CaptionPreviewOut(BaseModel):
     captions: list[str] = []
+
+
+class AuthMeOut(BaseModel):
+    auth_required: bool
+    email: str | None = None
+    name: str | None = None
+    workspace_id: str | None = None
+    workspace_name: str | None = None
+    home_workspace_id: str | None = None
+    viewing_other: bool = False
+    role: Literal["owner", "member"] | None = None
+    is_admin: bool = False
+
+
+class InviteCreateIn(BaseModel):
+    email: str
+    kind: Literal["join", "new_workspace"]
+
+
+class InviteOut(BaseModel):
+    id: str
+    email: str
+    kind: Literal["join", "new_workspace"]
+    workspace_id: str | None = None
+    created_utc: str
+
+
+class AdminWorkspaceOut(BaseModel):
+    id: str
+    name: str
+    owner_email: str | None = None
+    member_count: int = 0
+    running: int = 0
+    fast: int = 0
+    hq: int = 0
+    last_job_utc: str | None = None
+    last_error: str | None = None
+
+
+class AdminViewIn(BaseModel):
+    workspace_id: str | None = None

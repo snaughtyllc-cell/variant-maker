@@ -92,19 +92,38 @@ gate + one creative escalate are forwarded in the job payload.
 
 ## 4. Drive OAuth
 
-Google Cloud → Web OAuth client → authorized redirect URI:
+Google Cloud → Web OAuth client → authorized redirect URIs:
 
 ```
 https://varyforge-studio-production.up.railway.app/api/drive/oauth/callback
+https://varyforge-studio-production.up.railway.app/api/auth/google/callback
 ```
 
 Set `VARIANT_DRIVE_OAUTH_*` on Railway (see `deploy/railway/studio.env.example`).
 Studio → Settings → Drive → Connect Google.
 
-## 5. Team use
+## 5. Team use (invite-only workspaces)
 
-Share the Railway URL. One login is enough (no multi-user accounts yet). Treat
-the URL like a password until you add auth.
+One public URL. Auth is **off** until `VARIANT_AUTH_ADMIN_EMAIL` is set (today’s
+open Studio). To give each operator their own gallery + Drive:
+
+1. Add the login callback URI above to the Google OAuth client.
+2. Set on Railway:
+   - `VARIANT_AUTH_ADMIN_EMAIL` — your Google email
+   - `VARIANT_AUTH_SECRET` — a long random string (or omit and Studio writes
+     one to `{DATA_DIR}/auth/secret` on first boot)
+3. Redeploy, open Studio, **Continue with Google**. First admin login moves
+   existing packs into your workspace.
+4. **Admin** in the top nav:
+   - **Join my workspace** — VAs land in your gallery (shared on purpose).
+   - **New workspace** — outside operators get an empty studio + their own
+     Drive Connect.
+   - **Open** on a row — you see their Studio (gallery, queue, Generate,
+     Drive) with a **Viewing {name} — Exit to your studio** banner. Exit
+     returns you home.
+
+Non-admins never see the Admin page or anyone else’s packs. Uninvited Google
+accounts get “ask the operator to add you.”
 
 **Platform flags:** Gallery variant sheet can mark Passed / Duplicate rejected
 (`platform_result`). Unlabeled clips count as pass. Drop Ledger (Google Sheet)

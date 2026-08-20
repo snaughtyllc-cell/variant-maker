@@ -322,6 +322,106 @@ describe("workflows API", () => {
   });
 });
 
+describe("auth API", () => {
+  const loggedOut = {
+    auth_required: true,
+    email: null,
+    name: null,
+    workspace_id: null,
+    workspace_name: null,
+    home_workspace_id: null,
+    viewing_other: false,
+    role: null,
+    is_admin: false,
+  };
+
+  it("getAuthMe GETs /api/auth/me", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...loggedOut, auth_required: false }), { status: 200 }),
+    );
+    const out = await api.getAuthMe();
+    expect(out.auth_required).toBe(false);
+    expect(out.email).toBeNull();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/me");
+  });
+
+  it("getAuthMe maps 401 to a logged-out auth_required session", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "login_required" }), { status: 401, statusText: "Unauthorized" }),
+    );
+    const out = await api.getAuthMe();
+    expect(out).toEqual(loggedOut);
+  });
+
+  it("logout POSTs /api/auth/logout", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.logout();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/auth/logout");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  it("listInvites GETs /api/auth/invites", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 }),
+    );
+    await api.listInvites();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/invites");
+  });
+
+  it("createInvite POSTs email and kind", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "inv_1", email: "va@example.com", kind: "join",
+        workspace_id: "ws_home", created_utc: "2026-08-20T00:00:00Z",
+      }), { status: 201 }),
+    );
+    await api.createInvite("va@example.com", "join");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/auth/invites");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      email: "va@example.com",
+      kind: "join",
+    });
+  });
+
+  it("deleteInvite DELETEs /api/auth/invites/:id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteInvite("inv_1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/auth/invites/inv_1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
+describe("admin API", () => {
+  it("listAdminWorkspaces GETs /api/admin/workspaces", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 }),
+    );
+    await api.listAdminWorkspaces();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/admin/workspaces");
+  });
+
+  it("setAdminView POSTs workspace_id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.setAdminView("ws_va");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/admin/view");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ workspace_id: "ws_va" });
+  });
+
+  it("setAdminView POSTs null to exit to home studio", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.setAdminView(null);
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      workspace_id: null,
+    });
+  });
+});
+
 describe("error responses surface FastAPI `detail`", () => {
   it("throws the detail string from a JSON error body", async () => {
     const detail = "Cannot write to this folder — share it as Editor with sa@example.iam.gserviceaccount.com";

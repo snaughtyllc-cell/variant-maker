@@ -1,5 +1,6 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
 import { CaptionBankPanel } from "@/components/drive/CaptionBankPanel";
+import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
 
 export default function DriveSettingsPage() {
   return (
@@ -31,6 +32,7 @@ export default function DriveSettingsPage() {
             }}
           >
             Manage the Google Drive folders variants can be exported to. Studio import and Workflows use the same saved folders.
+            <DriveLoginNote />
           </div>
         </div>
       </div>

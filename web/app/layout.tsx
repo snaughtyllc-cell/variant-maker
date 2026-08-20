@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RunProvider } from "../lib/runStore";
-import { TopNav } from "../components/nav/TopNav";
+import { AuthGate } from "../components/auth/AuthGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,8 +48,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-bg text-text">
         <RunProvider>
-          <TopNav />
-          {children}
+          <AuthGate>{children}</AuthGate>
         </RunProvider>
       </body>
     </html>

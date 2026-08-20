@@ -182,3 +182,38 @@ export interface Workflow {
   auto_caption: boolean;
   caption_bank_id?: string | null;
 }
+
+export type AuthRole = "owner" | "member";
+export type InviteKind = "join" | "new_workspace";
+
+export interface AuthMe {
+  auth_required: boolean;
+  email: string | null;
+  name: string | null;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  home_workspace_id: string | null;
+  viewing_other: boolean;
+  role: AuthRole | null;
+  is_admin: boolean;
+}
+
+export interface Invite {
+  id: string;
+  email: string;
+  kind: InviteKind;
+  workspace_id: string | null;
+  created_utc: string;
+}
+
+export interface AdminWorkspace {
+  id: string;
+  name: string;
+  owner_email: string | null;
+  member_count: number;
+  running: number;
+  fast: number;
+  hq: number;
+  last_job_utc: string | null;
+  last_error: string | null;
+}
