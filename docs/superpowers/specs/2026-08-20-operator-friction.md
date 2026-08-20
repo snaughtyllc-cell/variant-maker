@@ -87,6 +87,9 @@ Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
 **Not:** Instagram login, auto-post, scraping insights, a local detector,
 shoutout marketplace. The platform stays the oracle.
 
+Implementable v1 (Drive-sent list, identity, slices, competitor paste-slot):
+`docs/superpowers/specs/2026-08-20-studio-drops-board.md`.
+
 ## Parallel file boxes
 
 | Track | Box | Not |
