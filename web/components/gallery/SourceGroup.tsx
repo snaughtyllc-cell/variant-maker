@@ -1,10 +1,21 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
 import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
 import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
+import {
+  canShareVideoFiles,
+  downloadVideoFiles,
+  fetchVariantFiles,
+  phoneShareHintCopy,
+  readyShareableVariants,
+  shareEmptyCopy,
+  shareVideoFiles,
+  shareVideosLabel,
+  zipSecondaryCopy,
+} from "@/lib/shareVideos";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -26,11 +37,19 @@ export function SourceGroup({
   const [copyLoading, setCopyLoading] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [zipMsg, setZipMsg] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [canShare, setCanShare] = useState(false);
 
   const hasShortfall = source.shortfall > 0;
   const filesReady = filesReadyCount(source);
   const fullDelivery = deliveryComplete(source);
   const stillRunning = source.job_state === "running" || !!source.in_flight;
+  const shareable = readyShareableVariants(source.variants);
+  const canSaveVideos = shareable.length > 0 && !stillRunning;
+
+  useEffect(() => {
+    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
+  }, []);
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
   const shortfallMsg = shortfallCopy(source);
@@ -44,6 +63,34 @@ export function SourceGroup({
   // Spatial checks summary
   const spatialCount = source.variants.filter(v => v.quality.spatial_ok === true).length;
   const allSpatial = spatialCount === source.variants.length && source.variants.length > 0;
+
+  async function handleSaveShare(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (stillRunning || shareBusy || shareable.length === 0) return;
+    setShareBusy(true);
+    setZipMsg(null);
+    try {
+      const files = await fetchVariantFiles(
+        shareable.map((v) => ({ file_url: v.file_url, filename: v.filename })),
+      );
+      if (files.length === 0) {
+        setZipMsg(shareEmptyCopy());
+        return;
+      }
+      const nav = typeof navigator === "undefined" ? undefined : navigator;
+      if (nav && typeof nav.share === "function" && canShareVideoFiles(nav, files)) {
+        const share = nav.share.bind(nav);
+        const result = await shareVideoFiles(files, (data) => share(data));
+        if (result === "shared" || result === "aborted") return;
+      }
+      downloadVideoFiles(files);
+    } catch {
+      setZipMsg(shareEmptyCopy());
+    } finally {
+      setShareBusy(false);
+    }
+  }
 
   async function handleZip(e: React.MouseEvent) {
     e.preventDefault();
@@ -246,14 +293,42 @@ export function SourceGroup({
               {sourceSelectLabel}
             </button>
           )}
+          {canSaveVideos && (
+            <button
+              type="button"
+              title={phoneShareHintCopy()}
+              aria-label={shareVideosLabel(canShare)}
+              onClick={handleSaveShare}
+              disabled={shareBusy}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--color-violet-l)",
+                background: "#15101f",
+                border: "1px solid #2c2748",
+                padding: "7px 10px",
+                minHeight: 36,
+                borderRadius: 8,
+                cursor: shareBusy ? "wait" : "pointer",
+                opacity: shareBusy ? 0.7 : 1,
+              }}
+            >
+              {shareBusy
+                ? canShare
+                  ? "Sharing…"
+                  : "Saving…"
+                : shareVideosLabel(canShare)}
+            </button>
+          )}
           {filesReady > 0 && !stillRunning && (
             <a
               href={sourceZipUrl(source.source_id)}
               download
+              title={zipSecondaryCopy()}
               onClick={handleZip}
-              style={{ fontSize: 12, color: "var(--color-violet-l)", textDecoration: "none" }}
+              style={{ fontSize: 11, color: "var(--color-muted)", textDecoration: "none" }}
             >
-              ⬇ Download ZIP
+              Download ZIP
             </a>
           )}
           <span
