@@ -446,6 +446,48 @@ describe("admin API", () => {
   });
 });
 
+describe("workspace team API", () => {
+  it("getWorkspaceTeam GETs /api/workspace/team", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        workspace_id: "ws_ops", workspace_name: "Ops", members: [], invites: [],
+      }), { status: 200 }),
+    );
+    await api.getWorkspaceTeam();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/workspace/team");
+  });
+
+  it("createWorkspaceInvite POSTs email only (join)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "inv_1", email: "va@x.com", kind: "join",
+        workspace_id: "ws_ops", created_utc: "2026-08-20T00:00:00Z",
+      }), { status: 201 }),
+    );
+    await api.createWorkspaceInvite("va@x.com");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workspace/invites");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ email: "va@x.com" });
+  });
+
+  it("deleteWorkspaceInvite DELETEs the invite id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.deleteWorkspaceInvite("inv_1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workspace/invites/inv_1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+
+  it("removeWorkspaceMember DELETEs the encoded email", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.removeWorkspaceMember("va@x.com");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workspace/members/va%40x.com");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
 describe("error responses surface FastAPI `detail`", () => {
   it("throws the detail string from a JSON error body", async () => {
     const detail = "Cannot write to this folder — share it as Editor with sa@example.iam.gserviceaccount.com";

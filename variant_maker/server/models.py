@@ -398,5 +398,16 @@ class AdminWorkspaceOut(BaseModel):
     last_error: str | None = None
 
 
+class WorkspaceInviteIn(BaseModel):
+    email: str
+
+
+class TeamOut(BaseModel):
+    workspace_id: str
+    workspace_name: str | None = None
+    members: list[AdminMemberOut] = []
+    invites: list[InviteOut] = []
+
+
 class AdminViewIn(BaseModel):
     workspace_id: str | None = None

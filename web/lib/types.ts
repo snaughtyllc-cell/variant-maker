@@ -213,6 +213,13 @@ export interface AdminMember {
   role: AuthRole;
 }
 
+export interface Team {
+  workspace_id: string;
+  workspace_name: string | null;
+  members: AdminMember[];
+  invites: Invite[];
+}
+
 export interface AdminWorkspace {
   id: string;
   name: string;

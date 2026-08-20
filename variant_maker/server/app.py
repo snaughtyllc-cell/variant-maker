@@ -117,11 +117,13 @@ from .models import (
     QueueOut,
     SourceOut,
     SplitExportOut,
+    TeamOut,
     VariantOut,
     WorkflowCreateIn,
     WorkflowOut,
     WorkflowSummaryOut,
     WorkflowUpdateIn,
+    WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from .runner import LocalRunner
@@ -593,6 +595,34 @@ def create_app(
             raise HTTPException(status_code=403, detail="admin only")
         return user
 
+    def _require_workspace_owner(request: Request):
+        user = _require_user(request)
+        if user.role != "owner" and not is_admin_email(user.email, admin_email):
+            raise HTTPException(status_code=403, detail="owner only")
+        return user
+
+    def _team_out(home_id: str) -> TeamOut:
+        assert tenants is not None
+        ws = tenants.get_workspace(home_id)
+        users = [u for u in tenants.list_users() if u.workspace_id == home_id]
+        members = sorted(users, key=lambda u: (0 if u.role == "owner" else 1, u.email))
+        invites = [i for i in tenants.list_invites() if i.workspace_id == home_id]
+        return TeamOut(
+            workspace_id=home_id,
+            workspace_name=ws.name if ws else None,
+            members=[
+                AdminMemberOut(email=u.email, name=u.name, role=u.role)
+                for u in members
+            ],
+            invites=[
+                InviteOut(
+                    id=i.id, email=i.email, kind=i.kind,
+                    workspace_id=i.workspace_id, created_utc=i.created_utc,
+                )
+                for i in invites
+            ],
+        )
+
     def _admin_workspace_out(ws) -> AdminWorkspaceOut:
         assert tenants is not None and hub is not None
         users = [u for u in tenants.list_users() if u.workspace_id == ws.id]
@@ -946,6 +976,47 @@ def create_app(
             raise HTTPException(status_code=400, detail="cannot remove the admin account")
         if not tenants.delete_user(addr):
             raise HTTPException(status_code=404, detail="user not found")
+
+    @app.get("/api/workspace/team", response_model=TeamOut)
+    def workspace_team(request: Request) -> TeamOut:
+        owner = _require_workspace_owner(request)
+        return _team_out(owner.workspace_id)
+
+    @app.post("/api/workspace/invites", status_code=201, response_model=InviteOut)
+    def workspace_create_invite(request: Request, body: WorkspaceInviteIn) -> InviteOut:
+        owner = _require_workspace_owner(request)
+        assert tenants is not None
+        try:
+            inv = tenants.add_invite(
+                email=body.email, kind="join", workspace_id=owner.workspace_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return InviteOut(
+            id=inv.id, email=inv.email, kind=inv.kind,
+            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
+        )
+
+    @app.delete("/api/workspace/invites/{invite_id}", status_code=204)
+    def workspace_delete_invite(request: Request, invite_id: str) -> None:
+        owner = _require_workspace_owner(request)
+        assert tenants is not None
+        inv = next((i for i in tenants.list_invites() if i.id == invite_id), None)
+        if inv is None or inv.workspace_id != owner.workspace_id:
+            raise HTTPException(status_code=404, detail="invite not found")
+        tenants.delete_invite(invite_id)
+
+    @app.delete("/api/workspace/members/{email}", status_code=204)
+    def workspace_remove_member(request: Request, email: str) -> None:
+        owner = _require_workspace_owner(request)
+        assert tenants is not None
+        addr = normalize_email(email)
+        if addr == normalize_email(owner.email) or is_admin_email(addr, admin_email):
+            raise HTTPException(status_code=400, detail="cannot remove this account")
+        target = tenants.get_user(addr)
+        if target is None or target.workspace_id != owner.workspace_id:
+            raise HTTPException(status_code=404, detail="user not found")
+        tenants.delete_user(addr)
 
     @app.post("/api/admin/view", status_code=204)
     def admin_view(request: Request, body: AdminViewIn) -> Response:

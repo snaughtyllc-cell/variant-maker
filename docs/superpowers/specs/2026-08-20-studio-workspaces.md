@@ -77,6 +77,10 @@ DELETE /api/auth/invites/{id}   (admin)
 GET  /api/admin/workspaces      (admin) — studios, members, counts, no video
 DELETE /api/admin/users/{email} (admin) — revoke login; cannot remove admin
 POST /api/admin/view            (admin) { workspace_id: string | null }
+GET  /api/workspace/team        (owner or site admin) — home studio members + pending joins
+POST /api/workspace/invites     (owner or site admin) { email } — join into **home** workspace
+DELETE /api/workspace/invites/{id} (owner or site admin) — that home invite only
+DELETE /api/workspace/members/{email} (owner or site admin) — cannot remove self or site admin
 ```
 
 `/api/auth/me` when auth off:
@@ -116,6 +120,11 @@ control in the existing top nav:
    `Viewing {name} — Exit to your studio`.
 3. **Exit** — back to the admin’s own workspace.
 
+**Team** (`/team`) is for workspace **owners** (new-workspace operators and
+Jeff). Join-invite into the session’s **home** workspace — never the admin
+view cookie. Members cannot invite. `new_workspace` stays site Admin only.
+If the owner is bringing their own VA, they use Team, not Jeff.
+
 Switch is a second cookie (`vf_admin_view`). Home workspace stays on
 `vf_session`. Non-admins cannot set the view cookie.
 
@@ -149,6 +158,18 @@ doesn’t sit on a cold or serial worker; measure warm vs cold start. Do
 **not** raise uniqueness floors or turn escalate off as a speed hack. Do not
 split Fast across CPU+GPU. Do not always-on GPU. Always-on Fast CPU is a
 cost trade to discuss then, not a default.
+
+### Hybrid runners (parked — three workspaces, one queue)
+
+Jeff (2026-08-20): if workspace A is on a Fast CPU job, boot a **second**
+serverless CPU for workspace B instead of one shared queue. If only one
+studio is generating, they keep the single worker (no extra spend). Same
+pattern later for a second HQ GPU.
+
+This is occupancy routing (busy workspace → idle endpoint), not “every
+customer gets a dedicated card.” Still scale-to-zero. Still Fast = CPU,
+HQ = GPU. Do not start until Track A team invites are in operators’ hands.
+See `docs/superpowers/specs/2026-08-20-sales-tracks.md` Track D.
 
 ## Not this
 

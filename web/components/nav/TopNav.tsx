@@ -67,6 +67,19 @@ export function TopNav() {
               </Link>
             );
           })}
+          {(me?.role === "owner" || me?.is_admin) && (
+            <Link
+              href="/team"
+              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
+              style={
+                pathname === "/team" || pathname.startsWith("/team/")
+                  ? { color: "#ffffff", background: "#1b1b27" }
+                  : { color: "#8a8aa0" }
+              }
+            >
+              Team
+            </Link>
+          )}
           {me?.is_admin && (
             <Link
               href="/admin"

@@ -20,6 +20,7 @@ import {
   PlatformResult,
   QueueSnapshot,
   SourceOut,
+  Team,
   VariantOut,
   Workflow,
 } from "./types";
@@ -494,6 +495,30 @@ export async function setAdminView(workspaceId: string | null): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workspace_id: workspaceId }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const getWorkspaceTeam = () => fetch("/api/workspace/team").then(json<Team>);
+
+export function createWorkspaceInvite(email: string): Promise<Invite> {
+  return fetch("/api/workspace/invites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  }).then(json<Invite>);
+}
+
+export async function deleteWorkspaceInvite(id: string): Promise<void> {
+  const res = await fetch(`/api/workspace/invites/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export async function removeWorkspaceMember(email: string): Promise<void> {
+  const res = await fetch(`/api/workspace/members/${encodeURIComponent(email)}`, {
+    method: "DELETE",
   });
   if (!res.ok) throw new Error(await errorMessage(res));
 }

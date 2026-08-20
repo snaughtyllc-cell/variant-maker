@@ -131,6 +131,8 @@ export default function AdminPage() {
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
           Open another studio with the same UI. Members are listed on each
           workspace — Remove drops their login until you invite them again.
+          Outside operators add their own VAs on <strong>Team</strong>; this
+          page is the only place that can mint a new empty studio.
         </div>
       </div>
 

@@ -115,7 +115,7 @@ open Studio). To give each operator their own gallery + Drive:
 3. Redeploy, open Studio, sign in with **email + password** (first visit sets
    the password) or **Continue with Google**. First admin login moves
    existing packs into your workspace.
-4. **Admin** in the top nav:
+4. **Admin** in the top nav (site admin only):
    - **Join my workspace** — VAs land in your gallery (shared on purpose).
      Tell them: Studio URL → invited email + a password they choose (or
      Google). First password sign-in sets it.
@@ -126,6 +126,10 @@ open Studio). To give each operator their own gallery + Drive:
      returns you home.
    - **Remove** on a member — they cannot sign in until you invite them
      again. Workspace files stay. You cannot remove your own admin login.
+5. **Team** in the top nav (workspace owners, including those new-workspace
+   operators): invite a VA into *this* studio. Same join-invite as Admin
+   “Join my workspace,” without creating a new empty studio. They can
+   Remove their own members. They cannot mint `new_workspace` invites.
 
 Non-admins never see the Admin page or anyone else’s packs. Uninvited emails
 get “ask the operator to add you.” Invited people can use email + password

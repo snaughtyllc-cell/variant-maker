@@ -362,6 +362,80 @@ def test_non_admin_cannot_remove_users(tmp_path):
     assert jeff.get("/api/auth/me").json()["email"] == ADMIN
 
 
+def test_workspace_owner_invites_and_removes_own_va(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    helper = TestClient(app)
+    va = TestClient(app)
+
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    _login(va, "va")
+
+    assert va.get("/api/workspace/team").status_code == 403
+    team = ops.get("/api/workspace/team").json()
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    assert team["workspace_id"] == ops_id
+    assert {m["email"] for m in team["members"]} == {"ops@x.com"}
+
+    inv = ops.post("/api/workspace/invites", json={"email": "helper@x.com"})
+    assert inv.status_code == 201
+    assert inv.json()["kind"] == "join"
+    assert inv.json()["workspace_id"] == ops_id
+    assert ops.post(
+        "/api/auth/invites", json={"email": "z@x.com", "kind": "new_workspace"},
+    ).status_code == 403
+
+    pending = ops.get("/api/workspace/team").json()["invites"]
+    assert [i["email"] for i in pending] == ["helper@x.com"]
+    assert jeff.delete(f"/api/workspace/invites/{pending[0]['id']}").status_code == 404
+    assert ops.delete(f"/api/workspace/invites/{pending[0]['id']}").status_code == 204
+    assert ops.get("/api/workspace/team").json()["invites"] == []
+    inv = ops.post("/api/workspace/invites", json={"email": "helper@x.com"})
+    assert inv.status_code == 201
+
+    first = _password_login(helper, "helper@x.com", "helper-secret")
+    assert first.status_code == 200
+    assert first.json()["workspace_id"] == ops_id
+    assert first.json()["role"] == "member"
+    assert first.json()["email"] == "helper@x.com"
+
+    listed = ops.get("/api/workspace/team").json()
+    assert {m["email"] for m in listed["members"]} == {"ops@x.com", "helper@x.com"}
+    assert ops.delete(f"/api/workspace/members/{ADMIN}").status_code == 404
+    assert ops.delete("/api/workspace/members/ops@x.com").status_code == 400
+    removed = ops.delete("/api/workspace/members/helper@x.com")
+    assert removed.status_code == 204
+    assert helper.get("/api/gallery").status_code == 401
+
+
+def test_admin_team_invites_home_even_when_viewing_other(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    home_id = jeff.get("/api/auth/me").json()["home_workspace_id"]
+
+    switched = jeff.post("/api/admin/view", json={"workspace_id": ops_id})
+    assert switched.status_code == 204
+    me = jeff.get("/api/auth/me").json()
+    assert me["viewing_other"] is True
+    assert me["workspace_id"] == ops_id
+
+    team = jeff.get("/api/workspace/team").json()
+    assert team["workspace_id"] == home_id
+    inv = jeff.post("/api/workspace/invites", json={"email": "homeva@x.com"})
+    assert inv.status_code == 201
+    assert inv.json()["workspace_id"] == home_id
+    assert inv.json()["workspace_id"] != ops_id
+
+
 def _password_login(client: TestClient, email: str, password: str):
     return client.post("/api/auth/password", json={"email": email, "password": password})
 
