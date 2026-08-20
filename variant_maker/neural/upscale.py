@@ -67,7 +67,7 @@ def upscale_clip(
     """
     from .. import ffmpeg
     from ..color import output_color_args, resolve_output_color
-    from ..platforms import Platform
+    from ..platforms import Platform, x264_rate_args
 
     if backend is None:
         backend = get_backend(model_dir=model_dir)
@@ -144,6 +144,7 @@ def upscale_clip(
             reassemble += ["-i", small, "-map", "0:v:0", "-map", "1:a:0"]
         reassemble += ["-vf", f"{sat_fix}{scale_fmt}",
                        "-c:v", "libx264", "-preset", "medium", "-crf", str(params["video"]["crf"]),
+                       *x264_rate_args(platform),
                        "-pix_fmt", "yuv420p", *output_color_args(oc)]
         if src.has_audio:
             reassemble += ["-c:a", "copy", "-shortest"]

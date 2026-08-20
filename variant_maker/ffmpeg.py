@@ -1,7 +1,8 @@
 """Phase 5. Build + run one ffmpeg invocation per variant.
 
 Applies color.output_color_args(...) on OUTPUT, -map_metadata -1, -fflags +bitexact,
-libx264 with sampled crf/gop, aac audio. Returns the exact command string for the manifest
+libx264 with sampled crf/gop, aac audio, and a social maxrate ceiling (constrained
+VBR — CRF still picks quality). Returns the exact command string for the manifest
 (the reproduction contract — x264 isn't bit-deterministic, so the cmd + params ARE the record).
 """
 from __future__ import annotations
@@ -11,7 +12,7 @@ import subprocess
 
 from .color import output_color_args, resolve_output_color
 from .filtergraph import build_audio_filters, build_video_filters
-from .platforms import Platform
+from .platforms import Platform, x264_rate_args
 from .probe import SourceInfo
 
 # None = not probed yet. Cached so has_rubberband() does not spawn ffmpeg per variant.
@@ -69,6 +70,7 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
         "-vf", build_video_filters(params, src, platform),
         "-c:v", "libx264", "-preset", "medium",
         "-crf", str(v["crf"]), "-g", str(v["gop"]),
+        *x264_rate_args(platform),
         "-pix_fmt", "yuv420p",
         *output_color_args(out_color),
     ]

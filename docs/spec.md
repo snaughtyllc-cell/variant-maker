@@ -182,6 +182,7 @@ Two checks, run on every variant; fail → reduce strength and regenerate (bound
 | trim/end (s) | 0–0.10 | 0.10–0.30 | 0.20–0.50 |
 | CRF | 18–20 | 19–22 | 20–23 |
 | GOP | 48/60 | 48/60/90 | 60/90/120 |
+| Social maxrate (reels/tiktok/shorts) | 12M ceiling (constrained VBR; `none` uncapped) | same | same |
 
 | Audio param | subtle | medium | strong |
 |---|---|---|---|
