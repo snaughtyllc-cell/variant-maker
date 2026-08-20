@@ -189,6 +189,12 @@ def test_admin_login_and_join_invite_share_gallery(tmp_path):
         "/api/auth/invites", json={"email": "x@y.com", "kind": "join"},
     ).status_code == 403
 
+    spaces = jeff.get("/api/admin/workspaces").json()
+    home = next(s for s in spaces if s["id"] == me["workspace_id"])
+    assert {m["email"] for m in home["members"]} == {ADMIN, "va@x.com"}
+    assert all("password_hash" not in m for m in home["members"])
+    assert home["member_count"] == 2
+
 
 def test_new_workspace_invite_isolates_galleries(tmp_path):
     app, _ = _auth_app(tmp_path)
@@ -319,6 +325,41 @@ def test_delete_invite(tmp_path):
     assert jeff.delete(f"/api/auth/invites/{inv['id']}").status_code == 204
     assert jeff.get("/api/auth/invites").json() == []
     assert jeff.delete(f"/api/auth/invites/{inv['id']}").status_code == 404
+
+
+def test_admin_remove_member_revokes_login(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    _login(va, "va")
+    assert va.get("/api/gallery").status_code == 200
+
+    removed = jeff.delete("/api/admin/users/va@x.com")
+    assert removed.status_code == 204
+    spaces = jeff.get("/api/admin/workspaces").json()
+    home = next(s for s in spaces if s["id"] == jeff.get("/api/auth/me").json()["home_workspace_id"])
+    assert [m["email"] for m in home["members"]] == [ADMIN]
+    assert va.get("/api/gallery").status_code == 401
+    again = _login(va, "va")
+    assert again.status_code in (302, 307)
+    assert "error=not_invited" in again.headers["location"]
+    assert jeff.delete("/api/admin/users/va@x.com").status_code == 404
+    assert jeff.delete(f"/api/admin/users/{ADMIN}").status_code == 400
+    anon = TestClient(app)
+    assert anon.delete("/api/admin/users/x@y.com").status_code == 401
+
+
+def test_non_admin_cannot_remove_users(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    _login(va, "va")
+    assert va.delete(f"/api/admin/users/{ADMIN}").status_code == 403
+    assert jeff.get("/api/auth/me").json()["email"] == ADMIN
 
 
 def _password_login(client: TestClient, email: str, password: str):

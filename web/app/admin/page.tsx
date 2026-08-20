@@ -6,6 +6,7 @@ import {
   deleteInvite,
   listAdminWorkspaces,
   listInvites,
+  removeAdminUser,
   setAdminView,
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
@@ -22,6 +23,7 @@ export default function AdminPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [removingEmail, setRemovingEmail] = useState<string | null>(null);
 
   const isAdmin = Boolean(me?.is_admin);
 
@@ -84,6 +86,25 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRemoveUser(email: string) {
+    if (removingEmail) return;
+    const ok = window.confirm(
+      `Remove ${email}? They will not be able to sign in until you invite them again.`,
+    );
+    if (!ok) return;
+    setRemovingEmail(email);
+    setFormError(null);
+    try {
+      await removeAdminUser(email);
+      const ws = await listAdminWorkspaces();
+      setWorkspaces(ws);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to remove member");
+    } finally {
+      setRemovingEmail(null);
+    }
+  }
+
   async function handleDeleteInvite(id: string) {
     try {
       await deleteInvite(id);
@@ -108,8 +129,8 @@ export default function AdminPage() {
       <div style={{ padding: "18px 20px 4px" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Admin</div>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
-          Open another studio with the same UI. Invites are required before they
-          can sign in with email and a password, or with Google.
+          Open another studio with the same UI. Members are listed on each
+          workspace — Remove drops their login until you invite them again.
         </div>
       </div>
 
@@ -165,7 +186,54 @@ export default function AdminPage() {
                   <tr key={ws.id} style={{ borderTop: "1px solid var(--color-line)" }}>
                     <td style={{ padding: "10px 12px", fontWeight: 700 }}>{ws.name}</td>
                     <td style={{ padding: "10px 12px", color: "var(--color-muted)" }}>{ws.owner_email ?? "—"}</td>
-                    <td style={{ padding: "10px 12px" }}>{ws.member_count}</td>
+                    <td style={{ padding: "10px 12px", verticalAlign: "top", minWidth: 220 }}>
+                      {(ws.members ?? []).length === 0 ? (
+                        <span style={{ color: "var(--color-muted)" }}>—</span>
+                      ) : (
+                        (ws.members ?? []).map((m) => {
+                          const isYou = m.email === me?.email;
+                          return (
+                            <div
+                              key={m.email}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 6,
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 600 }}>{m.email}</div>
+                                <div style={{ color: "var(--color-muted)", fontSize: 11 }}>
+                                  {m.role}
+                                  {isYou ? " · you" : ""}
+                                </div>
+                              </div>
+                              {!isYou && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveUser(m.email)}
+                                  disabled={removingEmail === m.email}
+                                  aria-label={`Remove ${m.email}`}
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: "var(--color-red)",
+                                    background: "var(--color-panel2)",
+                                    border: "1px solid var(--color-line)",
+                                    padding: "4px 8px",
+                                    borderRadius: 8,
+                                    cursor: removingEmail === m.email ? "wait" : "pointer",
+                                  }}
+                                >
+                                  {removingEmail === m.email ? "Removing…" : "Remove"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </td>
                     <td style={{ padding: "10px 12px" }}>{ws.running}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.fast}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.hq}</td>

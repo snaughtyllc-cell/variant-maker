@@ -379,11 +379,18 @@ class InviteOut(BaseModel):
     created_utc: str
 
 
+class AdminMemberOut(BaseModel):
+    email: str
+    name: str
+    role: Literal["owner", "member"]
+
+
 class AdminWorkspaceOut(BaseModel):
     id: str
     name: str
     owner_email: str | None = None
     member_count: int = 0
+    members: list[AdminMemberOut] = []
     running: int = 0
     fast: int = 0
     hq: int = 0

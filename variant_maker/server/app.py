@@ -76,6 +76,7 @@ from .jobs import (
     variant_on_disk,
 )
 from .models import (
+    AdminMemberOut,
     AdminViewIn,
     AdminWorkspaceOut,
     AuthMeOut,
@@ -603,11 +604,16 @@ def create_app(
         ordered = sorted(bundle.store.list(), key=lambda j: j.created_utc or "", reverse=True)
         last_job_utc = ordered[0].created_utc if ordered else None
         last_error = next((j.error for j in ordered if j.error), None)
+        members = sorted(users, key=lambda u: (0 if u.role == "owner" else 1, u.email))
         return AdminWorkspaceOut(
             id=ws.id,
             name=ws.name,
             owner_email=owner,
             member_count=len(users),
+            members=[
+                AdminMemberOut(email=u.email, name=u.name, role=u.role)
+                for u in members
+            ],
             running=int(q.get("running") or 0),
             fast=int(q.get("fast") or 0),
             hq=int(q.get("hq") or 0),
@@ -930,6 +936,16 @@ def create_app(
         _require_admin(request)
         assert tenants is not None
         return [_admin_workspace_out(ws) for ws in tenants.list_workspaces()]
+
+    @app.delete("/api/admin/users/{email}", status_code=204)
+    def admin_delete_user(request: Request, email: str) -> None:
+        _require_admin(request)
+        assert tenants is not None
+        addr = normalize_email(email)
+        if is_admin_email(addr, admin_email):
+            raise HTTPException(status_code=400, detail="cannot remove the admin account")
+        if not tenants.delete_user(addr):
+            raise HTTPException(status_code=404, detail="user not found")
 
     @app.post("/api/admin/view", status_code=204)
     def admin_view(request: Request, body: AdminViewIn) -> Response:

@@ -74,7 +74,8 @@ GET  /api/auth/google/callback
 GET  /api/auth/invites          (admin)
 POST /api/auth/invites          { email, kind: "join" | "new_workspace" }
 DELETE /api/auth/invites/{id}   (admin)
-GET  /api/admin/workspaces      (admin) — all studios, counts, no video
+GET  /api/admin/workspaces      (admin) — studios, members, counts, no video
+DELETE /api/admin/users/{email} (admin) — revoke login; cannot remove admin
 POST /api/admin/view            (admin) { workspace_id: string | null }
 ```
 
@@ -104,8 +105,12 @@ Queue/gallery/jobs/Drive/captions/workflows are **this workspace only**.
 Not a second app. Admin (`VARIANT_AUTH_ADMIN_EMAIL`) sees an extra **Admin**
 control in the existing top nav:
 
-1. **All studios** — list every workspace: name, owner email, live Fast/HQ
-   counts, last job time, last error. No video bytes.
+1. **All studios** — list every workspace: name, owner email, **who can sign
+   in** (email + role), live Fast/HQ counts, last job time, last error. No
+   video bytes. **Remove** on a member drops their user (and any pending
+   invite). Their next request is 401 until you invite that email again.
+   Workspace files stay so you can still Open the studio. You cannot remove
+   the admin account.
 2. **Open** — switch the admin session into that workspace. Gallery, queue,
    Generate, Drive, captions look like *theirs*. A banner:
    `Viewing {name} — Exit to your studio`.

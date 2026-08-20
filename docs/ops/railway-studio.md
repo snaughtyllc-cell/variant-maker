@@ -124,6 +124,8 @@ open Studio). To give each operator their own gallery + Drive:
    - **Open** on a row — you see their Studio (gallery, queue, Generate,
      Drive) with a **Viewing {name} — Exit to your studio** banner. Exit
      returns you home.
+   - **Remove** on a member — they cannot sign in until you invite them
+     again. Workspace files stay. You cannot remove your own admin login.
 
 Non-admins never see the Admin page or anyone else’s packs. Uninvited emails
 get “ask the operator to add you.” Invited people can use email + password

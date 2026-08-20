@@ -74,6 +74,19 @@ def test_upsert_user_preserves_password_hash(tmp_path):
     assert listed[0].password_hash == "pbkdf2_sha256$1$abc$def"
 
 
+def test_delete_user_drops_login_and_pending_invite(tmp_path):
+    store = TenantStore(str(tmp_path / "tenants.json"))
+    ws = store.create_workspace(name="Jeff")
+    store.upsert_user(UserInfo(
+        email="va@x.com", name="VA", workspace_id=ws.id, role="member",
+    ))
+    store.add_invite(email="va@x.com", kind="join", workspace_id=ws.id)
+    assert store.delete_user("VA@x.com") is True
+    assert store.get_user("va@x.com") is None
+    assert store.list_invites() == []
+    assert store.delete_user("va@x.com") is False
+
+
 def test_delete_invite(tmp_path):
     store = TenantStore(str(tmp_path / "tenants.json"))
     inv = store.add_invite(email="n@x.com", kind="new_workspace", workspace_id=None)

@@ -284,6 +284,21 @@ class TenantStore:
             self._save(data)
         return found
 
+    def delete_user(self, email: str) -> bool:
+        """Drop the login. Leaves workspace files in place. Also drops a pending invite."""
+        key = normalize_email(email)
+        with self._lock:
+            data = self._load()
+            if key not in data["users"]:
+                return False
+            del data["users"][key]
+            data["invites"] = [
+                i for i in data["invites"]
+                if not (isinstance(i, dict) and normalize_email(str(i.get("email") or "")) == key)
+            ]
+            self._save(data)
+        return True
+
     def list_workspace_ids(self) -> list[str]:
         with self._lock:
             return list(self._load()["workspaces"].keys())

@@ -207,11 +207,18 @@ export interface Invite {
   created_utc: string;
 }
 
+export interface AdminMember {
+  email: string;
+  name: string;
+  role: AuthRole;
+}
+
 export interface AdminWorkspace {
   id: string;
   name: string;
   owner_email: string | null;
   member_count: number;
+  members: AdminMember[];
   running: number;
   fast: number;
   hq: number;

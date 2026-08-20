@@ -25,11 +25,13 @@ vi.mock("@/lib/api", () => ({
   createInvite: vi.fn(),
   deleteInvite: vi.fn(),
   setAdminView: vi.fn(),
+  removeAdminUser: vi.fn(),
 }));
 
 import {
   listAdminWorkspaces,
   listInvites,
+  removeAdminUser,
   setAdminView,
 } from "@/lib/api";
 import AdminPage from "@/app/admin/page";
@@ -53,6 +55,10 @@ const workspaces: AdminWorkspace[] = [
     name: "Maya",
     owner_email: "maya@example.com",
     member_count: 2,
+    members: [
+      { email: "maya@example.com", name: "Maya", role: "owner" },
+      { email: "va@example.com", name: "VA", role: "member" },
+    ],
     running: 1,
     fast: 1,
     hq: 0,
@@ -73,18 +79,41 @@ beforeEach(() => {
   vi.mocked(listAdminWorkspaces).mockResolvedValue(workspaces);
   vi.mocked(listInvites).mockResolvedValue(invites);
   vi.mocked(setAdminView).mockResolvedValue(undefined);
+  vi.mocked(removeAdminUser).mockResolvedValue(undefined);
 });
 
 describe("Admin page", () => {
   it("lists workspaces and Open switches view then goes home", async () => {
     render(<AdminPage />);
     expect(await screen.findByText("Maya")).toBeInTheDocument();
-    expect(screen.getByText("maya@example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("maya@example.com").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() => {
       expect(setAdminView).toHaveBeenCalledWith("ws_va");
     });
     expect(push).toHaveBeenCalledWith("/");
+  });
+
+  it("lists member emails and Remove revokes a VA", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(listAdminWorkspaces)
+      .mockResolvedValueOnce(workspaces)
+      .mockResolvedValueOnce([
+        {
+          ...workspaces[0],
+          member_count: 1,
+          members: [{ email: "maya@example.com", name: "Maya", role: "owner" }],
+        },
+      ]);
+    render(<AdminPage />);
+    expect(await screen.findByText("va@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove va@example.com" }));
+    await waitFor(() => {
+      expect(removeAdminUser).toHaveBeenCalledWith("va@example.com");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("va@example.com")).not.toBeInTheDocument();
+    });
   });
 
   it("sends non-admins home", async () => {

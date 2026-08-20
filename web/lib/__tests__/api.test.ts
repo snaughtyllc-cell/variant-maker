@@ -420,6 +420,14 @@ describe("admin API", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/admin/workspaces");
   });
 
+  it("removeAdminUser DELETEs the encoded email", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.removeAdminUser("va@x.com");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/admin/users/va%40x.com");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+
   it("setAdminView POSTs workspace_id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     await api.setAdminView("ws_va");

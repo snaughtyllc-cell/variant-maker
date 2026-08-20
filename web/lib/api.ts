@@ -484,6 +484,11 @@ export async function deleteInvite(id: string): Promise<void> {
 export const listAdminWorkspaces = () =>
   fetch("/api/admin/workspaces").then(json<AdminWorkspace[]>);
 
+export async function removeAdminUser(email: string): Promise<void> {
+  const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 export async function setAdminView(workspaceId: string | null): Promise<void> {
   const res = await fetch("/api/admin/view", {
     method: "POST",
