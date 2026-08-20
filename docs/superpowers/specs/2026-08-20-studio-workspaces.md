@@ -159,19 +159,17 @@ doesn’t sit on a cold or serial worker; measure warm vs cold start. Do
 split Fast across CPU+GPU. Do not always-on GPU. Always-on Fast CPU is a
 cost trade to discuss then, not a default.
 
-### Hybrid runners (parked — three workspaces, one queue)
+### Hybrid runners (two Fast CPUs)
 
 Jeff (2026-08-20): if workspace A is on a Fast CPU job, boot a **second**
 serverless CPU for workspace B instead of one shared queue. If only one
 studio is generating, they keep the single worker (no extra spend). Same
 pattern later for a second HQ GPU.
 
-This is occupancy routing (busy workspace → idle endpoint), not “every
-customer gets a dedicated card.” Still scale-to-zero. Still Fast = CPU,
-HQ = GPU. Do not start until Track A team invites are in operators’ hands.
-See `docs/superpowers/specs/2026-08-20-sales-tracks.md` Track D.
-After Team / Drop Ledger 12a / onboarding ship, unpark order is
-`docs/superpowers/specs/2026-08-20-after-sales-tracks.md`.
+Occupancy lives in `FastOccupancy` / `RoutingRunner`. Env:
+`RUNPOD_FAST_ENDPOINT_ID` (primary) + `RUNPOD_FAST_ENDPOINT_ID_2` (overflow).
+Still scale-to-zero. Still Fast = CPU, HQ = GPU. Do not split one pack
+across CPU+GPU. Do not always-on GPU.
 
 ## Not this
 

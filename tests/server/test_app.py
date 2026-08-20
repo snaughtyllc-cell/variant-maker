@@ -668,6 +668,7 @@ def test_make_runner_runpod_from_env(monkeypatch):
     monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
     monkeypatch.setattr(cli, "HttpRunPodClient", lambda **kw: object())
     monkeypatch.delenv("RUNPOD_FAST_ENDPOINT_ID", raising=False)
+    monkeypatch.delenv("RUNPOD_FAST_ENDPOINT_ID_2", raising=False)
     for k, v in {"RUNPOD_ENDPOINT_ID": "ep", "RUNPOD_API_KEY": "k",
                  "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
                  "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}.items():
@@ -686,6 +687,7 @@ def test_make_runner_runpod_wires_fast_endpoint(monkeypatch):
     clients = []
     monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
     monkeypatch.setattr(cli, "HttpRunPodClient", lambda **kw: clients.append(kw) or object())
+    monkeypatch.delenv("RUNPOD_FAST_ENDPOINT_ID_2", raising=False)
     for k, v in {"RUNPOD_ENDPOINT_ID": "ep-gpu", "RUNPOD_API_KEY": "k",
                  "RUNPOD_FAST_ENDPOINT_ID": "ep-fast",
                  "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
@@ -696,6 +698,26 @@ def test_make_runner_runpod_wires_fast_endpoint(monkeypatch):
     assert isinstance(runner._remote, RunPodServerlessRunner)
     assert isinstance(runner._fast_remote, RunPodServerlessRunner)
     assert [c["endpoint_id"] for c in clients] == ["ep-gpu", "ep-fast"]
+
+
+def test_make_runner_runpod_wires_overflow_fast_endpoint(monkeypatch):
+    from variant_maker.server import cli
+    from variant_maker.server.runner import RoutingRunner
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+    clients = []
+    monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
+    monkeypatch.setattr(cli, "HttpRunPodClient", lambda **kw: clients.append(kw) or object())
+    for k, v in {"RUNPOD_ENDPOINT_ID": "ep-gpu", "RUNPOD_API_KEY": "k",
+                 "RUNPOD_FAST_ENDPOINT_ID": "ep-fast",
+                 "RUNPOD_FAST_ENDPOINT_ID_2": "ep-fast-2",
+                 "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
+                 "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}.items():
+        monkeypatch.setenv(k, v)
+    runner = cli.make_runner("runpod")
+    assert isinstance(runner, RoutingRunner)
+    assert isinstance(runner._remote, RunPodServerlessRunner)
+    assert len(runner._fast_remotes) == 2
+    assert [c["endpoint_id"] for c in clients] == ["ep-gpu", "ep-fast", "ep-fast-2"]
 
 
 def test_make_runner_runpod_missing_env_exits(monkeypatch):

@@ -182,3 +182,12 @@ def test_provision_new_workspace_invite(tmp_path):
     )
     assert jeff is not None
     assert ops.workspace_id != jeff.workspace_id
+
+
+def test_tenant_hub_jobstore_knows_workspace_id(tmp_path):
+    from tests.server.fakes import FakeRunner
+    from variant_maker.server.tenant_runtime import TenantHub
+
+    hub = TenantHub(str(tmp_path), FakeRunner({}))
+    bundle = hub.bundle("ws_partner")
+    assert bundle.store._workspace_id == "ws_partner"

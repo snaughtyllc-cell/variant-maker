@@ -87,6 +87,26 @@ RunPod **CPU** serverless endpoint from that image:
 Set `RUNPOD_FAST_ENDPOINT_ID` on Railway to that endpoint id. Until it is set,
 Fast 20s still use the GPU endpoint. HQ always uses `RUNPOD_ENDPOINT_ID`.
 
+### 3c. Second Fast CPU (two studios generating at once)
+
+One Fast endpoint is a single queue. If you are generating and a partner
+workspace hits Generate, they wait. Clone the Fast CPU endpoint (same
+`variant-fast` image, CPU 8+, min workers **0**, max workers **1**, idle
+600s, FlashBoot, same `R2_*` env). Set the new id on Railway:
+
+```
+RUNPOD_FAST_ENDPOINT_ID_2=<overflow-fast-cpu-id>
+```
+
+Studio occupancy: your workspace keeps the primary Fast CPU; their studio
+boots the overflow. If only one of you is generating, only one worker
+runs (scale to zero, no extra spend). Do **not** split one pack across
+CPU+GPU. Do not raise uniqueness floors. A third overlapping studio
+queues on the primary.
+
+Redeploy Studio after setting the env var. Create the partner studio with
+Admin → **New workspace** (not Join my workspace).
+
 Control-plane HQ defaults stay on the GPU worker (`quality_mode=hq`). Uniqueness
 gate + one creative escalate are forwarded in the job payload.
 

@@ -214,6 +214,80 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
     assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
 
 
+def test_fast_occupancy_second_workspace_gets_overflow():
+    from variant_maker.server.runner import FastOccupancy
+
+    occ = FastOccupancy()
+    assert occ.acquire("ws_a", 2) == 0
+    assert occ.acquire("ws_b", 2) == 1
+    assert occ.acquire("ws_a", 2) == 0  # sticky
+    occ.release("ws_a")
+    assert occ.slot("ws_a") == 0  # still held (refcount)
+    occ.release("ws_a")
+    assert occ.slot("ws_a") == 0  # gone → default 0
+    # B still holds overflow; next studio reuses primary
+    assert occ.acquire("ws_c", 2) == 0
+    # both slots taken → third queues on primary
+    assert occ.acquire("ws_d", 2) == 0
+
+
+def test_routing_runner_sends_second_workspace_fast_to_overflow():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu, fast, fast2 = Fake("local"), Fake("gpu"), Fake("fast"), Fake("fast2")
+    router = RoutingRunner(local, gpu, fast_remotes=[fast, fast2], max_local_fast=3)
+    router.acquire_fast("ws_jeff")
+    router.run(
+        "s.mp4", count=8, out_dir="o", source_id="s", on_event=lambda e: None,
+        quality_mode="fast", workspace_id="ws_jeff",
+    )
+    router.acquire_fast("ws_partner")
+    router.run(
+        "s.mp4", count=8, out_dir="o", source_id="s", on_event=lambda e: None,
+        quality_mode="fast", workspace_id="ws_partner",
+    )
+    assert [c["count"] for c in fast.calls] == [8]
+    assert [c["count"] for c in fast2.calls] == [8]
+    assert not gpu.calls
+    router.release_fast("ws_jeff")
+    router.release_fast("ws_partner")
+
+
+def test_routing_runner_resume_tries_overflow_fast_when_primary_misses():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name, *, fail=False):
+            self.name = name
+            self.resumes = []
+            self._fail = fail
+
+        def resume_run(self, *args, **kw):
+            self.resumes.append(kw)
+            if self._fail:
+                raise RuntimeError("not on this endpoint")
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu = Fake("local"), Fake("gpu")
+    fast, fast2 = Fake("fast", fail=True), Fake("fast2")
+    router = RoutingRunner(local, gpu, fast_remotes=[fast, fast2], max_local_fast=3)
+    router.resume_run(
+        "s.mp4", count=8, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="fast", runpod_job_id="rp-overflow",
+    )
+    assert fast.resumes and fast2.resumes
+    assert fast2.resumes[0]["runpod_job_id"] == "rp-overflow"
+
+
 def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):
     from variant_maker.server.runner import encode_jobs_for_worker
 

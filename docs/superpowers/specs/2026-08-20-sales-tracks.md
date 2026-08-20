@@ -60,15 +60,16 @@ HQ, workflow vs one-off). Link from Team + Drive empty states. No new auth.
 
 **Not:** engine, uniqueness, workers.
 
-## Track D — Smart / hybrid runners (parked)
+## Track D — Smart / hybrid runners
 
-**Why:** Three busy workspaces on one Fast CPU endpoint = one queue. Jeff’s
-idea: if workspace A is using a Fast worker, boot a **second** serverless
-CPU for workspace B; if only one workspace is busy, they keep the one
-worker. Same idea later for HQ GPUs.
+**Why:** Two busy workspaces on one Fast CPU endpoint = one queue. If Jeff
+is generating and a partner studio hits Generate, they wait. If workspace A
+is using a Fast worker, boot a **second** serverless CPU for workspace B;
+if only one workspace is busy, they keep the one worker.
 
-**Do not build this track yet.** Notes live on the workspaces spec
-(`Later — hybrid runners`). Constraints when we do:
+**Unparked** when the partner gets their own workspace.
+
+Constraints:
 
 - Extra Fast **CPU** endpoints (scale to zero), not always-on GPU.
 - Do not split **one pack** across CPU+GPU.
@@ -76,8 +77,8 @@ worker. Same idea later for HQ GPUs.
 - Route by “this workspace has a live Fast job,” not by selling a dedicated
   card per customer on day one.
 
-**Box (when unparked):** `variant_maker/server/runpod_runner.py`,
-`runner.py`, `docs/ops/railway-studio.md`, RunPod env. Not auth UI.
+**Box:** `variant_maker/server/runner.py` (`FastOccupancy`), `cli.py`
+(`RUNPOD_FAST_ENDPOINT_ID_2`), `docs/ops/railway-studio.md` §3c. Not auth UI.
 
 ## Do not start in parallel (single-threaded)
 

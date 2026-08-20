@@ -280,9 +280,10 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
 
 
 class JobStore:
-    def __init__(self, workspace: Workspace, runner: Runner) -> None:
+    def __init__(self, workspace: Workspace, runner: Runner, *, workspace_id: str | None = None) -> None:
         self._ws = workspace
         self._runner = runner
+        self._workspace_id = workspace_id
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._done: dict[str, threading.Event] = {}
@@ -331,6 +332,11 @@ class JobStore:
         self._persist(job)
         threading.Thread(target=self._run_job, args=(job, token), daemon=True).start()
         return job
+
+    def _workspace_runner_kw(self) -> dict:
+        if self._workspace_id and hasattr(self._runner, "acquire_fast"):
+            return {"workspace_id": self._workspace_id}
+        return {}
 
     def cancel(self, job_id: str) -> Job | None:
         """Stop a running job. Finished jobs are returned unchanged (204-style no-op)."""
@@ -399,7 +405,16 @@ class JobStore:
             os.replace(tmp, path)
 
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
+        leased = False
         try:
+            acquire = getattr(self._runner, "acquire_fast", None)
+            if (
+                callable(acquire)
+                and self._workspace_id
+                and normalize_quality_mode(job.quality_mode) != "hq"
+            ):
+                acquire(self._workspace_id)
+                leased = True
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
                 if token.runpod_job_id:
@@ -455,6 +470,7 @@ class JobStore:
                             quality_mode=job.quality_mode,
                             cancel_token=token,
                             runpod_job_id=source.runpod_job_id,
+                            **self._workspace_runner_kw(),
                         )
                     except Exception as exc:
                         print(
@@ -468,6 +484,7 @@ class JobStore:
                             allow_creative_escalate=job.allow_creative_escalate,
                             quality_mode=job.quality_mode,
                             cancel_token=token,
+                            **self._workspace_runner_kw(),
                         )
                 else:
                     result = self._runner.run(
@@ -476,6 +493,7 @@ class JobStore:
                         allow_creative_escalate=job.allow_creative_escalate,
                         quality_mode=job.quality_mode,
                         cancel_token=token,
+                        **self._workspace_runner_kw(),
                     )
                 source.variants = [
                     VariantInfo(
@@ -502,6 +520,10 @@ class JobStore:
                 job.error = _public_job_error(exc)
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
+            if leased:
+                release = getattr(self._runner, "release_fast", None)
+                if callable(release) and self._workspace_id:
+                    release(self._workspace_id)
             if job.job_id not in self._jobs:
                 return
             job.state = "cancelled" if token.is_set() else "done"

@@ -36,13 +36,17 @@ to take the first outside operator.
 
 ## Wave 1 — two studios generating at once (unpark D)
 
-**Trigger:** A second workspace is waiting on Fast while another is mid-job.
-Until then one Fast CPU endpoint is enough.
+**Trigger:** A second workspace (partner studio) will generate at the same
+time as Jeff. Unparked.
 
 **Build:** Occupancy routing. If workspace A holds a live Fast job, boot a
 **second serverless Fast CPU** for workspace B. If only one studio is busy,
 they keep the single worker (no extra spend). Same idea later for a second
 HQ GPU — not in this wave.
+
+**Ops:** Clone the existing Fast CPU endpoint. Set `RUNPOD_FAST_ENDPOINT_ID_2`
+on Railway. Admin → New workspace for the partner (empty studio + their
+own Drive).
 
 **Not:** dedicated card per customer, always-on GPU, serializing Fast into
 one line, uniqueness changes.
