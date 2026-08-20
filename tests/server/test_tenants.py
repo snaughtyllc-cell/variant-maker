@@ -56,6 +56,24 @@ def test_upsert_user(tmp_path):
     assert again is not None and again.workspace_id == ws.id and again.role == "owner"
 
 
+def test_upsert_user_preserves_password_hash(tmp_path):
+    store = TenantStore(str(tmp_path / "tenants.json"))
+    ws = store.create_workspace(name="Ops")
+    store.upsert_user(UserInfo(
+        email="a@b.com", name="Ann", workspace_id=ws.id, role="owner",
+        password_hash="pbkdf2_sha256$1$abc$def",
+    ))
+    store.upsert_user(UserInfo(
+        email="a@b.com", name="Ann B", workspace_id=ws.id, role="owner",
+    ))
+    again = store.get_user("a@b.com")
+    assert again is not None
+    assert again.name == "Ann B"
+    assert again.password_hash == "pbkdf2_sha256$1$abc$def"
+    listed = store.list_users()
+    assert listed[0].password_hash == "pbkdf2_sha256$1$abc$def"
+
+
 def test_delete_invite(tmp_path):
     store = TenantStore(str(tmp_path / "tenants.json"))
     inv = store.add_invite(email="n@x.com", kind="new_workspace", workspace_id=None)

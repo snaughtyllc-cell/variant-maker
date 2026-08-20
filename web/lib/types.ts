@@ -196,6 +196,7 @@ export interface AuthMe {
   viewing_other: boolean;
   role: AuthRole | null;
   is_admin: boolean;
+  has_password: boolean;
 }
 
 export interface Invite {

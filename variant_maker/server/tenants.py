@@ -53,6 +53,7 @@ class UserInfo:
     name: str
     workspace_id: str
     role: MemberRole
+    password_hash: str | None = None
 
 
 @dataclass
@@ -62,6 +63,36 @@ class Invite:
     kind: InviteKind
     workspace_id: str | None
     created_utc: str
+
+
+def _parse_user(raw: object, key: str = "") -> UserInfo | None:
+    if not isinstance(raw, dict):
+        return None
+    email = normalize_email(str(raw.get("email") or key or ""))
+    if not email:
+        return None
+    role = raw.get("role") if raw.get("role") in ("owner", "member") else "member"
+    stored = raw.get("password_hash")
+    password_hash = stored.strip() if isinstance(stored, str) and stored.strip() else None
+    return UserInfo(
+        email=email,
+        name=str(raw.get("name") or email),
+        workspace_id=str(raw.get("workspace_id") or ""),
+        role=role,
+        password_hash=password_hash,
+    )
+
+
+def _user_payload(user: UserInfo) -> dict:
+    payload = {
+        "email": user.email,
+        "name": user.name,
+        "workspace_id": user.workspace_id,
+        "role": user.role,
+    }
+    if user.password_hash:
+        payload["password_hash"] = user.password_hash
+    return payload
 
 
 def _now() -> str:
@@ -128,15 +159,7 @@ class TenantStore:
         key = normalize_email(email)
         with self._lock:
             raw = self._load()["users"].get(key)
-        if not isinstance(raw, dict):
-            return None
-        role = raw.get("role") if raw.get("role") in ("owner", "member") else "member"
-        return UserInfo(
-            email=key,
-            name=str(raw.get("name") or key),
-            workspace_id=str(raw.get("workspace_id") or ""),
-            role=role,
-        )
+        return _parse_user(raw, key)
 
     def list_invites(self) -> list[Invite]:
         with self._lock:
@@ -168,13 +191,34 @@ class TenantStore:
 
     def upsert_user(self, user: UserInfo) -> UserInfo:
         key = normalize_email(user.email)
-        stored = UserInfo(email=key, name=user.name or key,
-                          workspace_id=user.workspace_id, role=user.role)
         with self._lock:
             data = self._load()
-            data["users"][key] = asdict(stored)
+            prev = _parse_user(data["users"].get(key), key)
+            password_hash = user.password_hash
+            if password_hash is None and prev is not None:
+                password_hash = prev.password_hash
+            stored = UserInfo(
+                email=key,
+                name=user.name or key,
+                workspace_id=user.workspace_id,
+                role=user.role,
+                password_hash=password_hash,
+            )
+            data["users"][key] = _user_payload(stored)
             self._save(data)
         return stored
+
+    def set_password(self, email: str, password_hash: str) -> UserInfo | None:
+        user = self.get_user(email)
+        if user is None:
+            return None
+        return self.upsert_user(UserInfo(
+            email=user.email,
+            name=user.name,
+            workspace_id=user.workspace_id,
+            role=user.role,
+            password_hash=password_hash,
+        ))
 
     def add_invite(self, *, email: str, kind: InviteKind,
                    workspace_id: str | None) -> Invite:
@@ -248,19 +292,10 @@ class TenantStore:
         with self._lock:
             users = self._load()["users"]
         out: list[UserInfo] = []
-        for raw in users.values():
-            if not isinstance(raw, dict):
-                continue
-            role = raw.get("role") if raw.get("role") in ("owner", "member") else "member"
-            email = normalize_email(str(raw.get("email") or ""))
-            if not email:
-                continue
-            out.append(UserInfo(
-                email=email,
-                name=str(raw.get("name") or email),
-                workspace_id=str(raw.get("workspace_id") or ""),
-                role=role,
-            ))
+        for key, raw in users.items():
+            parsed = _parse_user(raw, str(key))
+            if parsed is not None:
+                out.append(parsed)
         return out
 
     def list_workspaces(self) -> list[WorkspaceInfo]:
@@ -314,7 +349,7 @@ def provision_login(
     admin_email: str | None,
     data_dir: str | None = None,
 ) -> UserInfo | None:
-    """Map a Google email to a workspace. None = not invited."""
+    """Map a login email to a workspace. None = not invited."""
     addr = normalize_email(email)
     existing = store.get_user(addr)
     if existing is not None and existing.workspace_id:

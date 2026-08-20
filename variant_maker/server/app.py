@@ -106,6 +106,8 @@ from .models import (
     InFlightOut,
     InviteCreateIn,
     InviteOut,
+    PasswordLoginIn,
+    PasswordSetIn,
     JobDetail,
     JobEventsSnapshot,
     JobFromDriveIn,
@@ -131,12 +133,14 @@ from .sessions import (
     sign_session,
     sign_view,
 )
+from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from .sheets import GoogleSheets, SheetsClient
 from .tenant_runtime import TenantHub
 from .tenants import (
     ADMIN_EMAIL_ENV,
     TenantStore,
     is_admin_email,
+    normalize_email,
     provision_login,
 )
 from .tenants import (
@@ -726,15 +730,11 @@ def create_app(
     def health() -> dict:
         return {"status": "ok"}
 
-    @app.get("/api/auth/me", response_model=AuthMeOut)
-    def auth_me(request: Request) -> AuthMeOut:
-        if not auth_on or tenants is None:
-            return AuthMeOut(auth_required=False)
-        user = getattr(request.state, "user", None)
-        if user is None:
-            return AuthMeOut(auth_required=True)
-        viewing_id = getattr(request.state, "viewing_workspace_id", None) or user.workspace_id
+    def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
+        assert tenants is not None
+        viewing_id = viewing_id or user.workspace_id
         ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
+        fresh = tenants.get_user(user.email) or user
         return AuthMeOut(
             auth_required=True,
             email=user.email,
@@ -745,7 +745,82 @@ def create_app(
             viewing_other=viewing_id != user.workspace_id,
             role=user.role,
             is_admin=is_admin_email(user.email, admin_email),
+            has_password=bool(fresh.password_hash),
         )
+
+    def _set_session_cookie(response: Response, request: Request, user) -> None:
+        token = sign_session(
+            email=user.email, workspace_id=user.workspace_id, secret=auth_secret,
+        )
+        response.set_cookie(COOKIE_NAME, token, **_cookie_kw(request))
+
+    @app.get("/api/auth/me", response_model=AuthMeOut)
+    def auth_me(request: Request) -> AuthMeOut:
+        if not auth_on or tenants is None:
+            return AuthMeOut(auth_required=False)
+        user = getattr(request.state, "user", None)
+        if user is None:
+            return AuthMeOut(auth_required=True)
+        viewing_id = getattr(request.state, "viewing_workspace_id", None) or user.workspace_id
+        return _auth_me_out(user, viewing_id)
+
+    @app.post("/api/auth/password", response_model=AuthMeOut)
+    def auth_password(request: Request, body: PasswordLoginIn, response: Response) -> AuthMeOut:
+        if not auth_on or tenants is None:
+            raise HTTPException(status_code=404, detail="auth is off")
+        email = normalize_email(body.email)
+        password = body.password or ""
+        if not email:
+            raise HTTPException(status_code=400, detail="email is required")
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+            )
+        existing = tenants.get_user(email)
+        if existing is not None and existing.password_hash:
+            if not verify_password(password, existing.password_hash):
+                raise HTTPException(status_code=401, detail="Email or password is wrong.")
+            user = existing
+        else:
+            if existing is not None and not existing.password_hash:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This account signs in with Google. Use Continue with Google, "
+                           "then add a password under Drive.",
+                )
+            user = provision_login(
+                tenants,
+                email=email,
+                name=email.split("@")[0] or email,
+                admin_email=admin_email,
+                data_dir=data_dir,
+            )
+            if user is None:
+                raise HTTPException(
+                    status_code=401,
+                    detail="This email isn't invited. Ask the operator to add you.",
+                )
+            tenants.set_password(user.email, hash_password(password))
+            user = tenants.get_user(user.email) or user
+        _set_session_cookie(response, request, user)
+        return _auth_me_out(user)
+
+    @app.post("/api/auth/password/set", status_code=204)
+    def auth_password_set(request: Request, body: PasswordSetIn) -> Response:
+        if not auth_on or tenants is None:
+            raise HTTPException(status_code=404, detail="auth is off")
+        user = getattr(request.state, "user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="login required")
+        password = body.password or ""
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+            )
+        tenants.set_password(user.email, hash_password(password))
+        return Response(status_code=204)
 
     @app.post("/api/auth/logout", status_code=204)
     def auth_logout() -> Response:
@@ -813,11 +888,8 @@ def create_app(
         )
         if user is None:
             return fail("not_invited")
-        token = sign_session(
-            email=user.email, workspace_id=user.workspace_id, secret=auth_secret,
-        )
         resp = RedirectResponse(url=f"{origin}/", status_code=302)
-        resp.set_cookie(COOKIE_NAME, token, **_cookie_kw(request))
+        _set_session_cookie(resp, request, user)
         return resp
 
     @app.get("/api/auth/invites", response_model=list[InviteOut])

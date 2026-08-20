@@ -319,3 +319,91 @@ def test_delete_invite(tmp_path):
     assert jeff.delete(f"/api/auth/invites/{inv['id']}").status_code == 204
     assert jeff.get("/api/auth/invites").json() == []
     assert jeff.delete(f"/api/auth/invites/{inv['id']}").status_code == 404
+
+
+def _password_login(client: TestClient, email: str, password: str):
+    return client.post("/api/auth/password", json={"email": email, "password": password})
+
+
+def test_password_login_404_when_auth_off(tmp_path):
+    client = TestClient(create_app(JobStore(Workspace(str(tmp_path)), FakeRunner({}))))
+    resp = client.post("/api/auth/password", json={"email": ADMIN, "password": "secret12"})
+    assert resp.status_code == 404
+
+
+def test_password_login_admin_first_sign_in_sets_password(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    client = TestClient(app)
+    resp = _password_login(client, ADMIN, "secret12")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["email"] == ADMIN
+    assert body["is_admin"] is True
+    assert body["has_password"] is True
+    assert "password_hash" not in body
+    assert "pbkdf2" not in resp.text
+    assert client.get("/api/gallery").status_code == 200
+    me = client.get("/api/auth/me").json()
+    assert me["has_password"] is True
+    assert "password_hash" not in me
+
+    client.post("/api/auth/logout")
+    assert client.get("/api/gallery").status_code == 401
+    bad = _password_login(client, ADMIN, "wrong-pass")
+    assert bad.status_code == 401
+    again = _password_login(client, ADMIN, "secret12")
+    assert again.status_code == 200
+    assert client.get("/api/gallery").status_code == 200
+
+
+def test_password_login_invite_only_and_short_password(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    stranger = TestClient(app)
+    denied = _password_login(stranger, "stranger@x.com", "secret12")
+    assert denied.status_code == 401
+    assert "invited" in denied.json()["detail"].lower()
+    assert stranger.get("/api/gallery").status_code == 401
+
+    jeff = TestClient(app)
+    _password_login(jeff, ADMIN, "secret12")
+    short = _password_login(jeff, "va@x.com", "short")
+    assert short.status_code == 400
+
+    inv = jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    assert inv.status_code == 201
+    va = TestClient(app)
+    first = _password_login(va, "va@x.com", "va-secret")
+    assert first.status_code == 200
+    assert first.json()["email"] == "va@x.com"
+    assert first.json()["role"] == "member"
+    assert first.json()["workspace_id"] == jeff.get("/api/auth/me").json()["workspace_id"]
+    assert va.get("/api/gallery").status_code == 200
+
+
+def test_google_only_account_cannot_set_password_from_login(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    me = jeff.get("/api/auth/me").json()
+    assert me["has_password"] is False
+
+    anon = TestClient(app)
+    blocked = _password_login(anon, ADMIN, "secret12")
+    assert blocked.status_code == 400
+    assert "google" in blocked.json()["detail"].lower()
+    assert anon.get("/api/gallery").status_code == 401
+
+    set_pw = jeff.post("/api/auth/password/set", json={"password": "secret12"})
+    assert set_pw.status_code == 204
+    assert jeff.get("/api/auth/me").json()["has_password"] is True
+    jeff.post("/api/auth/logout")
+    again = _password_login(jeff, ADMIN, "secret12")
+    assert again.status_code == 200
+    assert again.json()["has_password"] is True
+
+
+def test_password_set_requires_login(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    anon = TestClient(app)
+    assert anon.post("/api/auth/password/set", json={"password": "secret12"}).status_code == 401
+

@@ -37,6 +37,7 @@ const AUTH_OFF: AuthMe = {
   viewing_other: false,
   role: null,
   is_admin: false,
+  has_password: false,
 };
 
 const NEED_LOGIN: AuthMe = {
@@ -54,6 +55,7 @@ const LOGGED_IN: AuthMe = {
   viewing_other: false,
   role: "owner",
   is_admin: true,
+  has_password: false,
 };
 
 beforeEach(() => {

@@ -44,6 +44,7 @@ const ADMIN: AuthMe = {
   viewing_other: false,
   role: "owner",
   is_admin: true,
+  has_password: false,
 };
 
 const workspaces: AdminWorkspace[] = [

@@ -108,7 +108,8 @@ export default function AdminPage() {
       <div style={{ padding: "18px 20px 4px" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Admin</div>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
-          Open another studio with the same UI. Invites are required before Google login.
+          Open another studio with the same UI. Invites are required before they
+          can sign in with email and a password, or with Google.
         </div>
       </div>
 
@@ -266,6 +267,7 @@ export default function AdminPage() {
         </form>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
           Join adds them to your home workspace. New workspace gives them an empty studio of their own.
+          They sign in with that email plus a password they choose, or with Google.
         </div>
 
         <div

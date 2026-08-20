@@ -354,6 +354,16 @@ class AuthMeOut(BaseModel):
     viewing_other: bool = False
     role: Literal["owner", "member"] | None = None
     is_admin: bool = False
+    has_password: bool = False
+
+
+class PasswordLoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class PasswordSetIn(BaseModel):
+    password: str
 
 
 class InviteCreateIn(BaseModel):

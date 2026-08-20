@@ -112,7 +112,8 @@ open Studio). To give each operator their own gallery + Drive:
    - `VARIANT_AUTH_ADMIN_EMAIL` — your Google email
    - `VARIANT_AUTH_SECRET` — a long random string (or omit and Studio writes
      one to `{DATA_DIR}/auth/secret` on first boot)
-3. Redeploy, open Studio, **Continue with Google**. First admin login moves
+3. Redeploy, open Studio, sign in with **email + password** (first visit sets
+   the password) or **Continue with Google**. First admin login moves
    existing packs into your workspace.
 4. **Admin** in the top nav:
    - **Join my workspace** — VAs land in your gallery (shared on purpose).
@@ -122,8 +123,9 @@ open Studio). To give each operator their own gallery + Drive:
      Drive) with a **Viewing {name} — Exit to your studio** banner. Exit
      returns you home.
 
-Non-admins never see the Admin page or anyone else’s packs. Uninvited Google
-accounts get “ask the operator to add you.”
+Non-admins never see the Admin page or anyone else’s packs. Uninvited emails
+get “ask the operator to add you.” Invited people can use email + password
+or Google.
 
 **Platform flags:** Gallery variant sheet can mark Passed / Duplicate rejected
 (`platform_result`). Unlabeled clips count as pass. Drop Ledger (Google Sheet)

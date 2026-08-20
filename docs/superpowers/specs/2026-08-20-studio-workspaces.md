@@ -1,4 +1,4 @@
-# Studio workspaces (invite-only Google login)
+# Studio workspaces (invite-only login)
 
 **Date:** 2026-08-20  
 **Status:** Shipped (auth off until `VARIANT_AUTH_ADMIN_EMAIL` is set)  
@@ -14,7 +14,7 @@ not see those models, captions, or Drive folders. Uniqueness/speed stays frozen.
 | Term | Meaning |
 |------|---------|
 | **Workspace** | One operator world: gallery, jobs, captions, destinations, Drive token |
-| **User** | Google email with a session cookie |
+| **User** | Invited email with a session cookie (password and/or Google) |
 | **Join invite** | Email lands in an *existing* workspace (VAs on Jeff’s) |
 | **New-workspace invite** | Email gets an empty workspace + their own Drive connect |
 | **Admin** | `VARIANT_AUTH_ADMIN_EMAIL` — can invite; first login claims legacy data |
@@ -37,19 +37,29 @@ them into that admin workspace (one-time).
 HttpOnly cookie `vf_session` (HMAC, `VARIANT_AUTH_SECRET` or a file at
 `{DATA_DIR}/auth/secret`). Payload: email, workspace_id, exp (7 days).
 
-## Google login
+## Login
 
-Reuse Drive OAuth client id/secret. Scopes: `openid email profile` only.  
-Redirect: `{origin}/api/auth/google/callback`  
+Invite-only. No public signup.
+
+**Email + password:** `POST /api/auth/password` `{ email, password }`. First
+sign-in for an invited (or admin) email **sets** that password. Later visits
+verify it. Google-only accounts (no hash yet) cannot have a stranger set a
+password from the login page — they sign in with Google, then add a password
+under Drive → Studio password (`POST /api/auth/password/set`).
+
+**Google:** Reuse Drive OAuth client id/secret. Scopes: `openid email profile`
+only.
+Redirect: `{origin}/api/auth/google/callback`
 (`VARIANT_AUTH_OAUTH_REDIRECT_URI` override). Drive Connect stays a
 **second** Google consent with Drive scopes, token file **per workspace**.
 
-Uninvited emails → 403 after Google (“ask Jeff for an invite”).
+Uninvited emails → 401 / `not_invited` (“ask the operator for an invite”).
 
 ## HTTP
 
-Public with auth on: `GET /api/health`, `/api/auth/google/start`,
-`/api/auth/google/callback`, `/api/auth/me` (returns `{auth_required, …}`).
+Public with auth on: `GET /api/health`, `/api/auth/password`,
+`/api/auth/google/start`, `/api/auth/google/callback`, `/api/auth/me`
+(returns `{auth_required, …}`).
 
 Everything else (including `/api/variants/...`, `/api/sources/.../source`,
 queue, gallery, Drive, captions) **401** without a valid session.
@@ -57,6 +67,8 @@ queue, gallery, Drive, captions) **401** without a valid session.
 ```
 GET  /api/auth/me
 POST /api/auth/logout
+POST /api/auth/password          { email, password }  (invite/admin; first visit sets hash)
+POST /api/auth/password/set      { password }         (logged in)
 GET  /api/auth/google/start
 GET  /api/auth/google/callback
 GET  /api/auth/invites          (admin)
@@ -70,7 +82,8 @@ POST /api/admin/view            (admin) { workspace_id: string | null }
 
 ```json
 { "auth_required": false, "email": null, "workspace_id": null,
-  "workspace_name": null, "role": null, "is_admin": false }
+  "workspace_name": null, "role": null, "is_admin": false,
+  "has_password": false }
 ```
 
 When auth on + session:
@@ -80,7 +93,8 @@ When auth on + session:
   "workspace_id": "ws_…", "workspace_name": "…",
   "home_workspace_id": "ws_…",
   "viewing_other": false,
-  "role": "owner" | "member", "is_admin": true }
+  "role": "owner" | "member", "is_admin": true,
+  "has_password": true }
 ```
 
 Queue/gallery/jobs/Drive/captions/workflows are **this workspace only**.

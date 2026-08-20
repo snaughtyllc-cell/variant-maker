@@ -435,6 +435,7 @@ export const LOGGED_OUT_ME: AuthMe = {
   viewing_other: false,
   role: null,
   is_admin: false,
+  has_password: false,
 };
 
 export async function getAuthMe(): Promise<AuthMe> {
@@ -445,6 +446,23 @@ export async function getAuthMe(): Promise<AuthMe> {
 
 export async function logout(): Promise<void> {
   const res = await fetch("/api/auth/logout", { method: "POST" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export function passwordLogin(email: string, password: string): Promise<AuthMe> {
+  return fetch("/api/auth/password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then(json<AuthMe>);
+}
+
+export async function setStudioPassword(password: string): Promise<void> {
+  const res = await fetch("/api/auth/password/set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 

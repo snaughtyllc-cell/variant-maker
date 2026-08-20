@@ -333,6 +333,7 @@ describe("auth API", () => {
     viewing_other: false,
     role: null,
     is_admin: false,
+    has_password: false,
   };
 
   it("getAuthMe GETs /api/auth/me", async () => {
@@ -353,12 +354,27 @@ describe("auth API", () => {
     expect(out).toEqual(loggedOut);
   });
 
-  it("logout POSTs /api/auth/logout", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await api.logout();
+  it("passwordLogin POSTs email and password", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...loggedOut, email: "a@b.com", has_password: true }), { status: 200 }),
+    );
+    await api.passwordLogin("a@b.com", "secret12");
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/auth/logout");
+    expect(url).toBe("/api/auth/password");
     expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      email: "a@b.com",
+      password: "secret12",
+    });
+  });
+
+  it("setStudioPassword POSTs /api/auth/password/set", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.setStudioPassword("secret12");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/auth/password/set");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ password: "secret12" });
   });
 
   it("listInvites GETs /api/auth/invites", async () => {
