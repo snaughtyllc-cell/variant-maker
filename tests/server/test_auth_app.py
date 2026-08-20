@@ -405,7 +405,7 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
 
     listed = ops.get("/api/workspace/team").json()
     assert {m["email"] for m in listed["members"]} == {"ops@x.com", "helper@x.com"}
-    assert ops.delete(f"/api/workspace/members/{ADMIN}").status_code == 404
+    assert ops.delete(f"/api/workspace/members/{ADMIN}").status_code == 400
     assert ops.delete("/api/workspace/members/ops@x.com").status_code == 400
     removed = ops.delete("/api/workspace/members/helper@x.com")
     assert removed.status_code == 204
