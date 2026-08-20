@@ -10,6 +10,7 @@ import {
   listWorkflows,
   runWorkflow,
   updateWorkflow,
+  cancelWorkflow,
 } from "@/lib/api";
 import type { CaptionBankFolder, Destination, DriveStatus, Workflow, WorkflowSummary } from "@/lib/types";
 import { captionFolderSelectLabel } from "@/lib/captions";
@@ -21,6 +22,7 @@ import {
   workflowNeedTwoFolders,
   workflowOutputHint,
   workflowAutoCaptionHint,
+  workflowCanCancel,
 } from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
@@ -186,6 +188,18 @@ export function WorkflowsPanel() {
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to run workflow", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleCancel(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const updated = await cancelWorkflow(wf.id);
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to cancel workflow", err);
     } finally {
       setActionId(null);
     }
@@ -555,6 +569,16 @@ export function WorkflowsPanel() {
                 >
                   {busy ? "…" : "Run now"}
                 </button>
+                {workflowCanCancel(wf.last_summary) && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancel(wf)}
+                    disabled={busy}
+                    style={{ ...secondaryBtn(busy), color: "var(--color-red)" }}
+                  >
+                    {busy ? "Stopping…" : "Cancel"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(wf)}

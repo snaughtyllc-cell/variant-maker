@@ -6,6 +6,7 @@ import {
   workflowOutputHint,
   workflowAutoCaptionHint,
   workflowPageBlurb,
+  workflowCanCancel,
 } from "@/lib/workflowCopy";
 
 describe("workflow folder layout copy", () => {
@@ -41,5 +42,17 @@ describe("workflow folder layout copy", () => {
         { id: "b", folder_id: "FOLDER" },
       ),
     ).toBe(true);
+  });
+});
+
+describe("workflowCanCancel", () => {
+  it("is true only while a sweep still has a live pack", () => {
+    expect(workflowCanCancel(null)).toBe(false);
+    expect(workflowCanCancel({
+      queued: 1, exported: 0, skipped: 0, failed: 0, running: 1, job_ids: ["j1"],
+    })).toBe(true);
+    expect(workflowCanCancel({
+      queued: 0, exported: 8, skipped: 0, failed: 0, running: 0, job_ids: ["j1"],
+    })).toBe(false);
   });
 });

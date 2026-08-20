@@ -309,3 +309,58 @@ def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path
             drive, store, job, source,
             stem="ghost", sha="abcd1234", output_folder_id=out_dest["folder_id"],
         )
+
+
+def test_workflow_cancel_stops_running_job_and_turns_watch_off(tmp_path):
+    from tests.server.test_jobs import _PausingRunner
+
+    drive = FakeDrive()
+    runner = _PausingRunner()
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, runner)
+    sa = tmp_path / "sa.json"
+    sa.write_text(json.dumps({"client_email": "bot@x.iam.gserviceaccount.com"}))
+    client = TestClient(create_app(
+        store, drive=drive, sa_json_path=str(sa),
+        enable_workflow_poller=False,
+    ))
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, _out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"cancel-me")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Strata",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 4,
+        "enabled": True,
+        "poll_seconds": 240,
+    }).json()
+
+    first = client.post(f"/api/workflows/{wf['id']}/run")
+    assert first.status_code == 200
+    summary = first.json()["last_summary"]
+    assert summary["running"] >= 1
+    job_ids = summary["job_ids"]
+    assert job_ids
+    assert runner.v1_done.wait(timeout=5)
+
+    resp = client.post(f"/api/workflows/{wf['id']}/cancel")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["enabled"] is False
+    assert (body.get("last_summary") or {}).get("running") == 0
+
+    for jid in job_ids:
+        store.wait(jid, timeout=5)
+        job = store.get(jid)
+        assert job is not None
+        assert job.state == "cancelled"
+        assert "Cancelled" in (job.error or "")
+    runner.gate.set()
+
+
+def test_workflow_cancel_unknown_404(tmp_path):
+    client, _, _ = _app(tmp_path)
+    assert client.post("/api/workflows/wf_nope/cancel").status_code == 404
