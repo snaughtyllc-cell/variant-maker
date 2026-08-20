@@ -15,6 +15,12 @@ Team browser
 
 Studio is live at https://varyforge-studio-production.up.railway.app
 
+## Operator setup
+
+First operator path (Connect Drive, Team invites, Fast 20, Send to Drive) is
+[`operator-onboarding.md`](operator-onboarding.md). This page stays the
+Railway / RunPod runbook.
+
 Until RunPod + object-store env is set, Studio still works: the start script
 falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
 too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,
