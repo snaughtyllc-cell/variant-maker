@@ -49,8 +49,14 @@ def tune(
     max_iters: int = 5,
     min_span: float = 0.05,
     stop_on_clear: bool = False,
+    start: float = 1.0,
 ) -> dict:
     """Bisect strength until uniqueness clears ``target`` (or ``max_iters``).
+
+    First encode is the preset (``start=1.0``) so medium talking-head can clear
+    the 24-bit vs-source gate without climbing to strong. ``start`` is clamped
+    into ``[lo, hi]``. Pass ``start`` outside the window and it snaps to the
+    nearest bound (not the midpoint).
 
     ``attempt(strength) -> dict`` must include ``passed`` (bool, quality) and
     ``uniqueness`` (float | None). Optional ``peer_ok`` (default True) is the
@@ -63,7 +69,7 @@ def tune(
     does not pay five extra encodes hunting a milder strength. Source uniqueness
     alone is not a hit — twins must keep searching stronger.
     """
-    strength = (lo + hi) / 2
+    strength = min(hi, max(lo, start))
     best = None
     last = None
     iters = 0

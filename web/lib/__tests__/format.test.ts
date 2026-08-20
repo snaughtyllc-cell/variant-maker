@@ -38,7 +38,8 @@ describe("escalated copy", () => {
   it("labels a uniqueness pass, not a fail", () => {
     expect(ESCALATED_BADGE).toBe("esc");
     expect(ESCALATED_TITLE.toLowerCase()).toContain("not a fail");
-    expect(ESCALATED_TITLE.toLowerCase()).toContain("strong");
+    expect(ESCALATED_TITLE.toLowerCase()).toContain("original");
+    expect(ESCALATED_TITLE).toMatch(/38%/);
   });
 });
 

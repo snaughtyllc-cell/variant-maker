@@ -19,9 +19,9 @@ export function pct01(v: number): number {
 /** Short gallery badge. Not a quality fail. */
 export const ESCALATED_BADGE = "esc";
 
-/** Hover copy: escalate is one stronger uniqueness pass after medium missed 50%. */
+/** Hover copy: escalate is one stronger vs-source pass after medium missed ~38%. */
 export const ESCALATED_TITLE =
-  "Used a stronger uniqueness pass (preset strong). Still quality-ok — not a fail.";
+  "Too close to the original on the medium pass, so this used one stronger encode. Visual score is still OK — not a fail. Pass is ~38% vs the source, even for a single file.";
 
 export function diagnosticsReason(d: DiagnosticsItem): { title: string; metric: string; corrupt: boolean } {
   if (d.status === "corrupt" || d.quality.spatial_ok === false) {

@@ -141,9 +141,10 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Optimized for uniqueness while keeping a clean look. If the
-                lighter pass misses the uniqueness target vs the source, one
-                strong pass runs and the tile shows esc — that is not a fail.
+                Optimized for uniqueness while keeping a clean look. Even one
+                file is scored vs the original (pass ~38%), not vs other
+                variants. If medium misses that, one strong pass runs and the
+                tile shows esc — that is not a fail.
               </span>
             </span>
             <input

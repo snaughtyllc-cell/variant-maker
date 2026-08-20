@@ -181,7 +181,7 @@ export function QualityPanel({
         </div>
       )}
 
-      {/* Uniqueness — higher better */}
+      {/* Uniqueness — higher better; vs original even for n=1. Pass is ~38%. */}
       <QRow label="Uniqueness">
         {uniquenessPct != null ? (
           <>
@@ -221,7 +221,7 @@ export function QualityPanel({
             margin: "-4px 2px 8px",
           }}
         >
-          target ≥ {pct01(uniquenessTarget)}% (higher better)
+          target ≥ {pct01(uniquenessTarget)}% vs the original (even for one file)
         </div>
       )}
 

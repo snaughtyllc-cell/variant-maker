@@ -186,7 +186,7 @@ def test_tune_peer_fail_is_not_best_even_if_source_unique():
     assert out["autotune_iters"] == 3
 
 
-def test_tune_starts_at_mid_of_bounds():
+def test_tune_starts_at_preset_strength():
     seen = []
 
     def attempt(strength):
@@ -194,4 +194,15 @@ def test_tune_starts_at_mid_of_bounds():
         return {"passed": True, "uniqueness": 0.5}
 
     autotune.tune(attempt, target=DEFAULT_TARGET, lo=0.5, hi=1.8, max_iters=1)
-    assert seen == [(0.5 + 1.8) / 2]
+    assert seen == [1.0]
+
+
+def test_tune_clamps_start_into_bounds():
+    seen = []
+
+    def attempt(strength):
+        seen.append(strength)
+        return {"passed": True, "uniqueness": 0.5}
+
+    autotune.tune(attempt, target=DEFAULT_TARGET, lo=1.2, hi=1.8, max_iters=1)
+    assert seen == [1.2]
