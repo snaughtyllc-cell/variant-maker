@@ -1,7 +1,7 @@
 # Fast seeded resample (TikFusion Random Pixels, without weird output size)
 
 **Date:** 2026-08-19  
-**Status:** Parked — **do not build until Jeff says go.**  
+**Status:** Shipped on Fast (resample + encode-first look shrink + `warp_k1` pixel seed).  
 **Product name:** VaryForge
 
 ## Why
@@ -27,15 +27,16 @@ The leftover after ingest is the same as this round-trip. Shipping 1076×1912
 is the part we skip (letterbox / Repurpose re-fit).
 
 Do **not** copy Pixel Manipulation AI (secret noise / DCT / named Smart Colors).
+Fast pixel seed is a tiny zero-mean `lenscorrection` (`warp_k1`), VMAF-capped.
 
 ## Scope
 
 | In | Out |
 |---|---|
-| Fast only (`quality_mode=fast`), Reels/TikTok/Shorts (platform has w×h) | HQ (ESRGAN already rebuilds pixels — zero `resample_px`) |
-| `sample()` draws unbudgeted fingerprint axes (like `crop_x_frac`) | Changing uniqueness gates (stay **32 vs source, 24 vs peers**) |
-| `filtergraph.build_video_filters` emits the extra scales | `platform=none` (no extra scale; quality proxy uses none) |
-| Neutralize in `_QUALITY_NEUTRAL` like crop | Odd output size; fps 30–60 jitter |
+| Fast only (`quality_mode=fast`), Reels/TikTok/Shorts (platform has w×h) | HQ (ESRGAN already rebuilds pixels — `disable_fast_pixel_ops`) |
+| `sample()` draws unbudgeted `resample_*` plus budgeted zero-mean `warp_k1` | Changing uniqueness gates (stay **32 vs source, 24 vs peers**) |
+| `filtergraph.build_video_filters` emits extra scales + lenscorrection | `platform=none` has no resample (quality proxy uses none) |
+| Neutralize **resample** in `_QUALITY_NEUTRAL`; **keep warp** so VMAF caps it | Odd output size; fps 30–60 jitter; named film/vibrant looks |
 
 ## Implementation contract (when unparked)
 
@@ -49,11 +50,11 @@ TDD. `sample` and `filtergraph.build_*` stay **pure**.
    `scale=W:H:flags=KERNEL,scale=TW:TH:flags=KERNEL` with `W,H` even, AR from
    the platform target. Omit when `resample_px` is missing/0. Sanitize flags
    (unknown → `lanczos`). Golden string tests; even-dim assert.
-3. **HQ skip** — `pipeline` zeros `resample_px` on the HQ path so the
-   neural-pre downscale render is not double-resampled.
-4. **Quality** — add `resample_px: 0` to `_QUALITY_NEUTRAL`. Histogram + VMAF
-   still gate the real file. Soft-looking output → strength comes down (existing
-   guard). Do not skip VMAF.
+3. **HQ skip** — `disable_fast_pixel_ops` zeros `resample_px` and `warp_k1` on HQ.
+4. **Quality** — `resample_px: 0` in `_QUALITY_NEUTRAL`. `warp_k1` stays so VMAF
+   can cap the pixel seed. Do not skip VMAF.
+5. **Look shrink** — over-budget: grain/unsharp/crf first; color+crop+warp share
+   what remains (both still show; still zero-mean).
 
 ## Not this
 

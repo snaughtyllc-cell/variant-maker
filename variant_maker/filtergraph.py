@@ -1,8 +1,9 @@
 """Phase 4. params -> (-vf, -af) strings. PURE (unit-tested; --dry-run prints).
 
 Video filter ORDER is load-bearing:
-  trim -> crop -> scale(even, range-aware) -> [rotate w/ fill+crop] ->
-  eq(color) -> hue -> unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
+  trim -> crop -> scale(even, range-aware) -> [seeded resample] -> [rotate w/ fill] ->
+  [lenscorrection warp] -> eq(color) -> hue -> unsharp -> grain -> fps -> setpts(tempo)
+  -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   equalizer -> loudnorm.
 
@@ -31,6 +32,8 @@ from .sampler import clamp_trims
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
+_WARP_MIN = 1e-4
+_RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
 _LOUDNORM_MIN_S = 3.0
@@ -64,6 +67,35 @@ def _trim_expr(v: dict, duration_s: float) -> str:
     return f"trim=end={duration_s - end_s:.3f}"
 
 
+def even_resample_size(target_w: int, target_h: int, px: int) -> tuple[int, int]:
+    """Even intermediate size: ``target_w + px`` (even), height follows AR, even.
+
+    Never returns the identity size when ``px != 0``.
+    """
+    tw, th = int(target_w), int(target_h)
+    if px == 0 or tw <= 0 or th <= 0:
+        return tw, th
+    w = (tw + int(px)) // 2 * 2
+    if w < 2:
+        w = 2
+    h = int(round(w * th / tw)) // 2 * 2
+    if h < 2:
+        h = 2
+    if w == tw and h == th:
+        w = tw + (-2 if px < 0 else 2)
+        if w < 2:
+            w = 2
+        h = int(round(w * th / tw)) // 2 * 2
+        if h < 2:
+            h = 2
+    return w, h
+
+
+def _resample_flags(raw: object) -> str:
+    s = str(raw or "lanczos")
+    return s if s in _RESAMPLE_FLAGS else "lanczos"
+
+
 def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> str:
     v = params["video"]
     out = resolve_output_color(src.color)
@@ -93,10 +125,20 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
             parts.append(conv)
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
+        px = int(v.get("resample_px") or 0)
+        if px != 0:
+            flags = _resample_flags(v.get("resample_flags"))
+            rw, rh = even_resample_size(platform.width, platform.height, px)
+            parts.append(f"scale={rw}:{rh}:flags={flags}")
+            parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
 
     # rotation (tiny angles; corner fill — proper inscribed-crop is a later refinement)
     if abs(v.get("rotate_deg", 0.0)) >= _ROTATE_MIN_DEG:
         parts.append(f"rotate={math.radians(v['rotate_deg']):.6f}:fillcolor=black")
+
+    warp = float(v.get("warp_k1") or 0.0)
+    if abs(warp) >= _WARP_MIN:
+        parts.append(f"lenscorrection=cx=0.5:cy=0.5:k1={warp:.6f}:k2=0")
 
     # color (always emitted — this is the color stage)
     parts.append(

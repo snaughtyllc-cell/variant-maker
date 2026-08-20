@@ -11,8 +11,9 @@ Contract:
 
 The distortion model is the budget contract: each budgeted axis contributes a value in
 [0, 1] measuring how far it strays from its calm point, relative to its in-range reach.
-When the raw draw overspends, sample() shrinks COLOR/encode axes toward calm first and
-keeps crop_keep/rotate_deg as long as possible. Color stays zero-mean; bounds stay intact.
+When the raw draw overspends, sample() shrinks ENCODE axes (grain/unsharp/crf) toward
+calm first so per-copy color AND crop/rotate/warp can still show. Color stays zero-mean;
+bounds stay intact.
 """
 from __future__ import annotations
 
@@ -42,16 +43,27 @@ _VIDEO_AXES = (
     ("grain",       _DIR,  "lo",   True),
     ("unsharp",     _DIR,  "lo",   True),
     ("crf",         _DIR,  "lo",   True),   # encoder degradation counts toward the budget
+    ("warp_k1",     _SYM,  0.0,    True),   # Fast pixel seed; VMAF sees it
     ("speed",       _SYM,  1.0,    False),  # temporal identity ops ride along unbudgeted
     ("trim_s",      _DIR,  "lo",   False),
 )
 # crf is output as an int (floored toward its calm 'lo' end, so its budget share never grows).
 _INT_AXES = frozenset({"crf"})
-# Over-budget shrink: collapse these first so geometry (crop/rotate) survives longer.
-_COLOR_ENCODE_AXES = frozenset({
-    "brightness", "contrast", "saturation", "gamma", "hue_deg", "grain", "unsharp", "crf",
+# Over-budget shrink: collapse cheap-look encode first so color + geometry both show.
+_ENCODE_AXES = frozenset({"grain", "unsharp", "crf"})
+_LOOK_AXES = frozenset({
+    "crop_keep", "rotate_deg", "warp_k1",
+    "brightness", "contrast", "saturation", "gamma", "hue_deg",
 })
-_GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg"})
+# Back-compat alias used by older tests/docs: encode + color (not geometry).
+_COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
+    "brightness", "contrast", "saturation", "gamma", "hue_deg",
+})
+_GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1"})
+
+# Unbudgeted Fast resample: even px off target width, never 0; AR kept in filtergraph.
+RESAMPLE_PX_CHOICES = tuple(x for x in range(-16, 17, 2) if x != 0)
+RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
 
 
 def derive_seed(master_seed: int, index: int) -> int:
@@ -155,6 +167,14 @@ def clamp_strength(strength: float) -> float:
     return min(2.0, max(0.0, strength))
 
 
+def disable_fast_pixel_ops(params: dict) -> dict:
+    """HQ skip: ESRGAN already rebuilds pixels. Zeros resample + warp, keeps the rest."""
+    video = dict(params["video"])
+    video["resample_px"] = 0
+    video["warp_k1"] = 0.0
+    return {**params, "video": video}
+
+
 def sample(
     preset: Preset,
     seed: int,
@@ -186,19 +206,20 @@ def sample(
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
 
-    # Fit the budget: shrink COLOR/encode first; keep crop_keep/rotate_deg as long as possible.
-    spent = _spent_on(raw, preset, _COLOR_ENCODE_AXES | _GEOMETRY_AXES)
+    # Fit the budget: shrink grain/unsharp/crf first so color AND crop/rotate/warp show.
+    spent = _spent_on(raw, preset, _ENCODE_AXES | _LOOK_AXES)
     if spent > budget and spent > 0:
-        geo_spent = _spent_on(raw, preset, _GEOMETRY_AXES)
-        leftover = budget - geo_spent
+        look_spent = _spent_on(raw, preset, _LOOK_AXES)
+        leftover = budget - look_spent
         if leftover >= 0:
-            color_spent = _spent_on(raw, preset, _COLOR_ENCODE_AXES)
-            if color_spent > 0:
-                _shrink_toward_calm(raw, preset, _COLOR_ENCODE_AXES, leftover / color_spent)
+            enc_spent = _spent_on(raw, preset, _ENCODE_AXES)
+            if enc_spent > 0:
+                _shrink_toward_calm(raw, preset, _ENCODE_AXES, leftover / enc_spent)
         else:
-            _shrink_toward_calm(raw, preset, _COLOR_ENCODE_AXES, 0.0)
-            if geo_spent > 0:
-                _shrink_toward_calm(raw, preset, _GEOMETRY_AXES, budget / geo_spent)
+            _shrink_toward_calm(raw, preset, _ENCODE_AXES, 0.0)
+            look_spent = _spent_on(raw, preset, _LOOK_AXES)
+            if look_spent > 0:
+                _shrink_toward_calm(raw, preset, _LOOK_AXES, budget / look_spent)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
@@ -208,6 +229,8 @@ def sample(
     raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
     raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
+    raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
+    raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)
     if duration_s is not None:
         raw["trim_s"], raw["trim_end_s"] = clamp_trims(
             raw["trim_s"], raw["trim_end_s"], duration_s,

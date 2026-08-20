@@ -159,12 +159,15 @@ Status legend: ✅ done & verified · 🔨 to build
 - Fast path: `pipeline.run` auto-detects after reading `jobs` and sets `config["rubberband"]`.
   Preset ranges remain tiny (±2% medium, ±4% strong).
 
-## Phase 16 — Fast seeded resample  ⏸ parked (do not build until go)
+## Phase 16 — Fast seeded resample + look (color + pixel seed)  ✅
 - Spec: `docs/superpowers/specs/2026-08-19-fast-seeded-resample.md`.
 - Fast analog of TikFusion Random Pixels **without** weird output size: unique even
-  intermediate → back to 1080×1920 with a seeded kernel. HQ skip (ESRGAN owns pixels).
-- Unbudgeted fingerprint axis. Color zero-mean. VMAF floor stays. Gates stay 32/24.
-- Not Pixel Manipulation AI / Smart Colors / fps jitter / random output dimensions.
+  intermediate → back to 1080×1920 with a seeded kernel.
+- Per-copy color **shows** (still zero-mean). Over-budget shrink kills grain/unsharp/crf
+  first so crop AND eq survive. Fast pixel seed is tiny `lenscorrection` `warp_k1`
+  (VMAF sees it; quality fail → milder). HQ skips resample+warp (ESRGAN owns pixels).
+- Unbudgeted resample fingerprint. Color zero-mean. VMAF floor stays. Gates stay 32/24.
+- Not named Smart Colors / Pixel AI scramble / fps jitter / random output dimensions.
 
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate is disabled until **New run**

@@ -3,7 +3,7 @@ import subprocess
 import pytest
 
 from variant_maker import quality, ffmpeg
-from variant_maker.probe import probe
+from variant_maker.probe import ColorTags, SourceInfo, probe
 from variant_maker.platforms import get_platform
 from conftest import HAS_FFMPEG
 
@@ -21,6 +21,29 @@ def _neutral_params():
         "audio": {"speed": 1.0, "loudnorm_i": -14.0, "eq_bands": 1, "eq_gains": [0.0],
                   "pitch_pct": 0.0, "aac_kbps": 160},
     }
+
+
+def test_quality_render_strips_resample_keeps_warp(monkeypatch, tmp_path):
+    """Resample is fingerprint (neutralize). Warp is the VMAF-capped pixel seed (keep)."""
+    captured = {}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        captured["video"] = dict(params["video"])
+        captured["platform"] = platform.name
+        open(path, "w").close()
+        return path, "cmd"
+
+    monkeypatch.setattr(ffmpeg, "render_variant", fake_render)
+    src = SourceInfo(
+        "in.mp4", "abc", 4.0, 1080, 1920, 30.0, True,
+        ColorTags("tv", "bt709", "bt709", "bt709"),
+    )
+    params = _neutral_params()
+    params["video"].update({"resample_px": -8, "resample_flags": "spline", "warp_k1": 0.008})
+    quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
+    assert captured["platform"] == "none"
+    assert captured["video"]["resample_px"] == 0
+    assert captured["video"]["warp_k1"] == 0.008
 
 
 @pytest.mark.integration

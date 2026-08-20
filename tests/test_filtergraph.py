@@ -105,6 +105,63 @@ def test_none_platform_keeps_geometry_no_scale_no_fps():
     assert "fps=" not in vf
 
 
+def test_resample_roundtrip_after_reels_scale():
+    p = make_params(video={"resample_px": -8, "resample_flags": "lanczos"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_resample_size(1080, 1920, -8)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert f"scale={w}:{h}:flags=lanczos" in vf
+    assert "scale=1080:1920:flags=lanczos" in vf
+    # Final output is still the Reels canvas, not a random size.
+    assert vf.index(f"scale={w}:{h}:flags=lanczos") < vf.index("scale=1080:1920:flags=lanczos")
+
+
+def test_resample_omitted_when_px_zero_or_missing():
+    vf0 = filtergraph.build_video_filters(
+        make_params(video={"resample_px": 0, "resample_flags": "lanczos"}),
+        make_src(), REELS,
+    )
+    assert ":flags=lanczos" not in vf0
+    vf_missing = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert ":flags=lanczos" not in vf_missing
+
+
+def test_resample_omitted_on_none_platform():
+    p = make_params(video={"resample_px": 8, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), NONE)
+    assert "flags=spline" not in vf
+    assert "scale=" not in vf
+
+
+def test_resample_unknown_flags_fall_back_to_lanczos():
+    p = make_params(video={"resample_px": 6, "resample_flags": "neighbor"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "flags=lanczos" in vf
+    assert "flags=neighbor" not in vf
+
+
+def test_even_resample_size_keeps_ar_and_even():
+    w, h = filtergraph.even_resample_size(1080, 1920, -8)
+    assert w % 2 == 0 and h % 2 == 0
+    assert w != 1080
+    # AR close to 9:16
+    assert abs(w / h - 1080 / 1920) < 0.01
+
+
+def test_warp_emits_lenscorrection():
+    p = make_params(video={"warp_k1": 0.008})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "lenscorrection=" in vf
+    assert "k1=0.008000" in vf
+
+
+def test_warp_omitted_when_near_zero():
+    p = make_params(video={"warp_k1": 0.00001})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "lenscorrection=" not in vf
+
+
 # ---- no-op axes are omitted -------------------------------------------------
 
 def test_neutral_axes_are_omitted():

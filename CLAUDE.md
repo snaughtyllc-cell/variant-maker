@@ -45,8 +45,6 @@ Full design: `docs/spec.md`. Build steps: `PLAN.md`.
 - **TDD.** Red → green → refactor. Write the failing test first, then implement.
 - **Execute `PLAN.md` phase by phase.** Stop at each checkpoint for review before moving on.
 - **Verify before claiming done.** Run `pytest` and show output; never assert success without it.
-- Parked until Jeff says go: Fast seeded resample (`docs/superpowers/specs/2026-08-19-fast-seeded-resample.md`).
-  Do not implement it as a drive-by.
 
 ## Commands
 ```
@@ -66,8 +64,8 @@ ruff check .                    # lint
 | `presets.py` | ✅ done | subtle/medium/strong ranges + per-variant budget |
 | `platforms.py` | ✅ done | reels/tiktok/shorts profiles |
 | `manifest.py` | ✅ done | manifest schema + writer (+ platform_result bridge) |
-| `sampler.py` | ✅ done | seed → budgeted, zero-mean params (pure); geometry-first over-budget shrink |
-| `filtergraph.py` | ✅ done | params → -vf/-af in the documented order (pure) |
+| `sampler.py` | ✅ done | seed → budgeted, zero-mean params (pure); encode-first over-budget shrink |
+| `filtergraph.py` | ✅ done | params → -vf/-af in the documented order (pure); Fast resample + warp |
 | `ffmpeg.py` | ✅ done | build + run one render; tag color on output |
 | `quality.py` | ✅ done | histogram sanity + VMAF quality-render guard |
 | `pipeline.py` | ✅ done | per-variant loop, uniqueness + auto-tune → manifest |
@@ -75,7 +73,7 @@ ruff check .                    # lint
 | `uniqueness.py` | ✅ done | SSIM bits; live gate **32 vs source, 24 vs peers** |
 | `cli.py` | ✅ done | options + `pipeline.run` |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
-| Fast resample | ⏸ parked | spec only — `docs/superpowers/specs/2026-08-19-fast-seeded-resample.md` |
+| Fast resample | ✅ done | seeded even round-trip + `warp_k1`; HQ skipped |
 
 ## Environment notes
 - ffmpeg must be built with **libvmaf** for the Phase-6 VMAF guard (`ffmpeg -filters | grep vmaf`).

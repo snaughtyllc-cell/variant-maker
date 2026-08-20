@@ -7,8 +7,11 @@ from variant_maker.sampler import (
     clamp_strength,
     clamp_trims,
     derive_seed,
+    disable_fast_pixel_ops,
     sample,
     total_distortion,
+    RESAMPLE_FLAGS,
+    RESAMPLE_PX_CHOICES,
 )
 
 # A deterministic spread of per-variant seeds for distribution tests.
@@ -22,11 +25,12 @@ ZERO_MEAN_AXES = {
     "gamma": 1.0,
     "hue_deg": 0.0,
     "rotate_deg": 0.0,
+    "warp_k1": 0.0,
 }
 
 VIDEO_RANGE_AXES = (
     "crop_keep", "rotate_deg", "brightness", "contrast", "saturation",
-    "gamma", "hue_deg", "grain", "unsharp", "speed", "trim_s",
+    "gamma", "hue_deg", "grain", "unsharp", "warp_k1", "speed", "trim_s",
 )
 
 
@@ -213,11 +217,15 @@ def test_clamp_trims_leaves_long_clips_alone():
     assert (start, end) == (0.2, 0.5)
 
 
-def test_over_budget_shrink_keeps_crop_and_rotate():
-    """When over budget, shrink color/encode first; keep crop_keep and rotate_deg."""
-    geo_names = {"crop_keep", "rotate_deg"}
-    geo_ds: list[float] = []
-    color_ds: list[float] = []
+def test_over_budget_shrink_kills_encode_before_look():
+    """When over budget, shrink grain/unsharp/crf first; color AND crop both survive."""
+    encode_names = {"grain", "unsharp", "crf"}
+    look_names = {
+        "crop_keep", "rotate_deg", "warp_k1",
+        "brightness", "contrast", "saturation", "gamma", "hue_deg",
+    }
+    encode_ds: list[float] = []
+    look_ds: list[float] = []
     for s in SEEDS:
         params = sample(MEDIUM, s)
         assert total_distortion(MEDIUM, params) <= MEDIUM.budget + 1e-9
@@ -228,12 +236,15 @@ def test_over_budget_shrink_keeps_crop_and_rotate():
             d = _axis_distortion(
                 kind, ref, getattr(MEDIUM, name).lo, getattr(MEDIUM, name).hi, v[name],
             )
-            (geo_ds if name in geo_names else color_ds).append(d)
-    mean_geo = sum(geo_ds) / len(geo_ds)
-    mean_color = sum(color_ds) / len(color_ds)
-    assert mean_geo > mean_color + 0.05, (
-        f"geometry should retain more distortion than color/encode: "
-        f"geo={mean_geo:.4f} color={mean_color:.4f}"
+            if name in encode_names:
+                encode_ds.append(d)
+            elif name in look_names:
+                look_ds.append(d)
+    mean_encode = sum(encode_ds) / len(encode_ds)
+    mean_look = sum(look_ds) / len(look_ds)
+    assert mean_look > mean_encode + 0.05, (
+        f"look (color+geo) should retain more than grain/encode: "
+        f"look={mean_look:.4f} encode={mean_encode:.4f}"
     )
 
 
@@ -248,51 +259,60 @@ def test_sample_with_duration_scales_trims_on_short_clips():
     )
 
 
-def _retention(tight: float, control: float, calm: float) -> float | None:
-    """How much of the control's deviation from calm survives a tighter budget (0 = collapsed)."""
-    span = abs(control - calm)
-    if span < 1e-12:
-        return None
-    return abs(tight - calm) / span
-
-
-def test_overbudget_shrink_is_geometry_first():
-    """Over-budget shrink reduces saturation/brightness more than crop_keep vs a high-strength control.
-
-    Color/encode axes absorb the overspend first so crop_keep/rotate_deg stay on the
-    uniqueness-useful geometry as long as the budget allows.
-    """
-    sat_ret: list[float] = []
-    br_ret: list[float] = []
-    crop_ret: list[float] = []
-    kept_geo_killed_color = 0
+def test_overbudget_shrink_is_encode_first_look_survives():
+    """Tight budget collapses grain; saturation and crop_keep still move (look shows)."""
+    grains_at_calm = 0
+    sat_off = 0
+    crop_off = 0
     for s in SEEDS[:200]:
-        control = sample(MEDIUM, s, strength=2.0)["video"]
         tight = sample(MEDIUM, s, strength=0.25)["video"]
-        rs = _retention(tight["saturation"], control["saturation"], 1.0)
-        rb = _retention(tight["brightness"], control["brightness"], 0.0)
-        rc = _retention(tight["crop_keep"], control["crop_keep"], MEDIUM.crop_keep.hi)
-        if rs is not None:
-            sat_ret.append(rs)
-        if rb is not None:
-            br_ret.append(rb)
-        if rc is not None:
-            crop_ret.append(rc)
-        if (
-            abs(tight["saturation"] - 1.0) < 1e-9
-            and abs(tight["crop_keep"] - MEDIUM.crop_keep.hi) > 1e-4
-        ):
-            kept_geo_killed_color += 1
-    assert sat_ret and br_ret and crop_ret
-    mean_sat = sum(sat_ret) / len(sat_ret)
-    mean_br = sum(br_ret) / len(br_ret)
-    mean_crop = sum(crop_ret) / len(crop_ret)
-    assert mean_sat < mean_crop - 0.05, (
-        f"saturation retention {mean_sat:.3f} should shrink more than crop_keep {mean_crop:.3f}"
-    )
-    assert mean_br < mean_crop - 0.05, (
-        f"brightness retention {mean_br:.3f} should shrink more than crop_keep {mean_crop:.3f}"
-    )
-    assert kept_geo_killed_color > 10, (
-        "tight budget should collapse saturation to calm while leaving crop_keep off calm"
-    )
+        if abs(tight["grain"] - MEDIUM.grain.lo) < 1e-6:
+            grains_at_calm += 1
+        if abs(tight["saturation"] - 1.0) > 1e-4:
+            sat_off += 1
+        if abs(tight["crop_keep"] - MEDIUM.crop_keep.hi) > 1e-4:
+            crop_off += 1
+    assert grains_at_calm > 150, f"grain at calm on {grains_at_calm}/200"
+    assert sat_off > 50, f"saturation still showing on {sat_off}/200"
+    assert crop_off > 50, f"crop still showing on {crop_off}/200"
+
+
+def test_sample_draws_resample_fingerprint():
+    p = sample(MEDIUM, derive_seed(11, 2))
+    v = p["video"]
+    assert v["resample_px"] in RESAMPLE_PX_CHOICES
+    assert v["resample_px"] != 0
+    assert v["resample_px"] % 2 == 0
+    assert v["resample_flags"] in RESAMPLE_FLAGS
+
+
+def test_resample_is_unbudgeted_and_zero_meanish():
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["resample_px"] = 16
+    bumped["video"]["resample_flags"] = "bicubic"
+    assert total_distortion(MEDIUM, bumped) == base
+    pxs = [sample(MEDIUM, s)["video"]["resample_px"] for s in SEEDS]
+    assert abs(sum(pxs) / len(pxs)) < 2.0
+
+
+def test_warp_k1_is_budgeted_zero_mean():
+    p = sample(MEDIUM, derive_seed(9, 2))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["warp_k1"] = MEDIUM.warp_k1.hi
+    if bumped["video"]["warp_k1"] != p["video"]["warp_k1"]:
+        assert total_distortion(MEDIUM, bumped) >= base
+    vals = [sample(MEDIUM, s)["video"]["warp_k1"] for s in SEEDS]
+    mean = sum(vals) / len(vals)
+    assert abs(mean) < 0.002
+
+
+def test_disable_fast_pixel_ops_zeros_resample_and_warp():
+    p = sample(MEDIUM, derive_seed(1, 4))
+    out = disable_fast_pixel_ops(p)
+    assert out["video"]["resample_px"] == 0
+    assert out["video"]["warp_k1"] == 0.0
+    assert p["video"]["resample_px"] != 0 or p["video"]["warp_k1"] != 0.0
+    assert out["video"]["crop_keep"] == p["video"]["crop_keep"]

@@ -17,7 +17,7 @@ from .manifest import Manifest, VariantRecord
 from .platforms import get_platform
 from .presets import get_preset
 from .probe import probe
-from .sampler import clamp_strength, derive_seed, sample
+from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
 # Top-tail vs TikFusion's ~18-bit floor: default target 32/64 = 0.5.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
@@ -121,6 +121,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
+            if hq:
+                params = disable_fast_pixel_ops(params)
             _, cmd = render_variant(src, params, platform, path, dry_run=True)
             print(f"[{i}/{count}] {fname}\n  {cmd}")
             records.append(VariantRecord(index=i, filename=fname, seed=vseed,
@@ -159,6 +161,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = protect.apply_to_params(params, frame_path=protect_frame)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
+            if hq:
+                params = disable_fast_pixel_ops(params)
             if hq:
                 _, cmd, nops = neural.upscale_clip(src, params, path, platform=platform)
             else:
