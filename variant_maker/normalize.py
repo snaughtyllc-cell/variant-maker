@@ -18,6 +18,9 @@ from .color import BT709, output_color_args
 from .probe import SourceInfo, probe
 
 # Matches reels/tiktok/shorts long edge. 1080×1920 and 1920×1080 stay as-is.
+# Width/height come from probe display size (iPhone 4K portrait is often coded
+# 3840×2160 + rotate 90; ffmpeg autorotates on decode, so the proxy scale must
+# match the upright frame — not the coded landscape).
 MAX_LONG_EDGE = 1920
 _HDR_TRANSFERS = ("smpte2084", "arib-std-b67", "bt2020")
 # Fast enough that Railway CPU does not wedge; good enough as a generate source.

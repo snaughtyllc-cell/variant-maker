@@ -142,6 +142,30 @@ def test_proxy_upload_downscales_oversized(tmp_path: Path) -> None:
     assert dest.stat().st_size < src.stat().st_size
 
 
+def test_rotated_iphone_4k_proxy_targets_1080x1920() -> None:
+    """Coded landscape + 90° is a portrait phone clip — proxy must not be 1920×1080."""
+    from variant_maker.probe import _parse_ffprobe
+
+    info = _parse_ffprobe(
+        {
+            "streams": [{
+                "codec_type": "video", "width": 3840, "height": 2160,
+                "tags": {"rotate": "90"},
+                "color_range": "tv", "color_primaries": "bt709",
+                "color_transfer": "bt709", "color_space": "bt709",
+            }],
+            "format": {"duration": "16.5"},
+        },
+        "IMG_0683.MOV",
+        "h",
+    )
+    assert needs_size_proxy(info.width, info.height)
+    assert proxy_output_size(info.width, info.height) == (1080, 1920)
+    vf = _proxy_vf(info, hdr=False)
+    assert "scale=1080:1920" in vf
+    assert "scale=1920:1080" not in vf
+
+
 def test_ingest_proxy_filter_never_uses_tonemap() -> None:
     """Linear zscale/tonemap on 4K OOMs Railway and takes Studio down with it."""
     vf = _proxy_vf(_sdr_4k(), hdr=True)

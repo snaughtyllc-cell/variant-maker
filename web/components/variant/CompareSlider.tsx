@@ -100,7 +100,9 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
     inset: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    // contain: a 16:9 ingest proxy in this 9:16 pane must not crop-zoom
+    // (that made iPhone SOURCE look blocky vs a 1080×1920 variant).
+    objectFit: "contain",
     display: "block",
     pointerEvents: "none",
   };
