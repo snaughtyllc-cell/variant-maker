@@ -243,6 +243,50 @@ def login_profile_from_token(token_data: Mapping[str, Any]) -> tuple[str, str]:
     return email, name or email
 
 
+def fetch_userinfo_profile(
+    token_data: Mapping[str, Any],
+    *,
+    get_json: Callable[[str, Mapping[str, str]], Mapping[str, Any]] | None = None,
+) -> tuple[str, str]:
+    """Email + name from Google's userinfo endpoint using the access token."""
+    access = token_data.get("token") or token_data.get("access_token")
+    if not isinstance(access, str) or not access:
+        raise ValueError("Google login did not return an email")
+
+    def _get(url: str, headers: Mapping[str, str]) -> Mapping[str, Any]:
+        from urllib.request import Request, urlopen
+        req = Request(url, headers=dict(headers))
+        with urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode())
+        if not isinstance(raw, dict):
+            raise ValueError("Google login did not return an email")
+        return raw
+
+    body = (get_json or _get)(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {"Authorization": f"Bearer {access}"},
+    )
+    email = body.get("email") if isinstance(body.get("email"), str) else None
+    name = body.get("name") if isinstance(body.get("name"), str) else ""
+    if not name and isinstance(body.get("given_name"), str):
+        name = body["given_name"]
+    if not email:
+        raise ValueError("Google login did not return an email")
+    return email, name or email
+
+
+def resolve_login_profile(
+    token_data: Mapping[str, Any],
+    *,
+    get_json: Callable[[str, Mapping[str, str]], Mapping[str, Any]] | None = None,
+) -> tuple[str, str]:
+    """Prefer id_token / email fields; fall back to userinfo."""
+    try:
+        return login_profile_from_token(token_data)
+    except ValueError:
+        return fetch_userinfo_profile(token_data, get_json=get_json)
+
+
 def public_request_base(headers: Mapping[str, str], fallback: str) -> str:
     """Build public origin from RunPod / reverse-proxy forwarded headers when present."""
     proto = headers.get("x-forwarded-proto") or headers.get("X-Forwarded-Proto")
@@ -291,6 +335,10 @@ def exchange_code_for_token(
     # Ensure refresh_token key exists for headless refresh
     if not data.get("refresh_token") and creds.refresh_token:
         data["refresh_token"] = creds.refresh_token
+    # to_json() omits OpenID id_token — login needs it (or userinfo) for email.
+    id_token = getattr(creds, "id_token", None)
+    if id_token and not data.get("id_token"):
+        data["id_token"] = id_token
     return data
 
 

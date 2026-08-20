@@ -10,7 +10,11 @@ from fastapi.testclient import TestClient
 from tests.server.fakes import FakeRunner
 from variant_maker.server.app import create_app
 from variant_maker.server.drive_config import ENV_OAUTH_CLIENT_ID, ENV_OAUTH_CLIENT_SECRET
-from variant_maker.server.drive_oauth import login_profile_from_token, resolve_login_redirect_uri
+from variant_maker.server.drive_oauth import (
+    login_profile_from_token,
+    resolve_login_profile,
+    resolve_login_redirect_uri,
+)
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.sessions import COOKIE_NAME, VIEW_COOKIE_NAME
 from variant_maker.server.tenants import ADMIN_EMAIL_ENV
@@ -84,6 +88,14 @@ def test_login_profile_from_id_token():
     ).decode().rstrip("=")
     email, name = login_profile_from_token({"id_token": f"x.{payload}.y"})
     assert email == "a@b.com" and name == "Ann"
+
+
+def test_resolve_login_profile_falls_back_to_userinfo():
+    email, name = resolve_login_profile(
+        {"token": "ya29.access"},
+        get_json=lambda _url, _headers: {"email": "jeff@x.com", "name": "Jeff"},
+    )
+    assert email == "jeff@x.com" and name == "Jeff"
 
 
 def test_resolve_login_redirect_uri():

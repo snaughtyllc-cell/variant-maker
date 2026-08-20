@@ -47,7 +47,7 @@ from .drive_oauth import (
     build_authorization_url,
     exchange_code_for_token,
     fetch_connected_email,
-    login_profile_from_token,
+    resolve_login_profile,
     new_oauth_state,
     public_request_base,
     resolve_login_redirect_uri,
@@ -618,7 +618,7 @@ def create_app(
             code=code, client_id=client_id, client_secret=client_secret,
             redirect_uri=redirect_uri, scopes=LOGIN_SCOPES,
         )
-        email, name = login_profile_from_token(token_data)
+        email, name = resolve_login_profile(token_data)
         return {"email": email, "name": name, **token_data}
 
     def _sync_platform_result_to_sheet(source_id: str, index: int, result: str) -> None:
