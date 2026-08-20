@@ -31,10 +31,14 @@ def test_bits_from_ssim_math():
 
 
 def test_fast_gate_fits_medium_talking_head_headroom():
-    """Measured talking-head medium is ~27–30 bits; 32 lives in strong's band (~35–38)."""
-    talking_head_medium_floor = 27
-    assert uniqueness.TARGET_BITS <= talking_head_medium_floor
+    """Pass stays 24 bits (~38% UI). Medium talking-head should land ~32–38 bits (~50–60%).
+
+    Raising the *gate* to 32 previously escalated entire Fast 20-packs. Delivery is
+    stronger medium crop (not a higher floor, not a remapped %).
+    """
+    talking_head_medium_typical = 32
     assert uniqueness.TARGET_BITS == 24
+    assert uniqueness.TARGET_BITS < talking_head_medium_typical
 
 
 def test_similarity_is_one_minus_uniqueness():

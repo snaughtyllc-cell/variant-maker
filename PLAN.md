@@ -107,17 +107,20 @@ Status legend: ✅ done & verified · 🔨 to build
 
 ## Phase 10 — Content protection  ✅
 - `neural/protect.py`: mid-frame grab + face boxes (MediaPipe if present, else OpenCV Haar).
-  `apply_to_params` after `sample()` on Fast and HQ. No SAM download. No face → identity.
-  Face near an edge raises `crop_keep`; large coverage disables crop.
+  `apply_to_params` after `sample()` on **HQ only**. Fast skips face-protect: talking-head
+  Haar coverage ≥15% used to set `crop_keep=1.0` and land ~22 bits / all-esc. No SAM.
+  No face → identity. On HQ, face near an edge raises `crop_keep`; large coverage disables crop.
 
 ## Phase 11 — Auto-tune controller  ✅
 - Bisection on `sample(..., strength=…)` → uniqueness (SSIM bits/64, default
   `uniqueness.DEFAULT_TARGET` = 24/64). **Fast default on** (`stop_on_clear` so a pack
   stops at the first uniqueness+quality+peer hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
-- Fast gate is **24 bits vs source**, **24 vs peers**. Peer miss searches **stronger**
-  (not milder — quality `passed` is VMAF only). Over-budget `sample()` shrinks
-  color/encode first so crop/rotate survive. Color stays zero-mean. VMAF floor stays.
+- Fast *gate* is **24 bits vs source**, **24 vs peers** (~38% UI). Do not raise the gate
+  to 32. Medium crop is unbudgeted and sized so talking-head *scores* ~32–38 bits
+  (~50–60% UI) without escalate. Peer miss searches **stronger** (not milder — quality
+  `passed` is VMAF only). Over-budget `sample()` shrinks color/encode first; crop_keep
+  is fingerprint and does not shrink toward identity. Color stays zero-mean. VMAF floor stays.
   Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.
 - Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
 

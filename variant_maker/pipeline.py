@@ -19,12 +19,24 @@ from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
-# TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source is 24/64 so a medium
-# 20-pack of talking-head stays on medium; 32 lived in strong's band and escalated all 20.
+# TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
+# so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
+# Medium crop is sized so talking-head *scores* ~32–38 bits (~50–60% UI).
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
 DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
+
+
+def use_face_protect(quality_mode: str | None) -> bool:
+    """Face crop-gating is HQ-only.
+
+    Fast uniqueness is mostly crop. OpenCV Haar on a talking-head (≥15% face) sets
+    ``crop_keep=1.0``, which is how a Fast pack lands ~22 bits (~35% UI) and
+    escalates every file. Protect stays on for HQ so Real-ESRGAN does not punch
+    into faces.
+    """
+    return str(quality_mode or "fast").strip().lower() == "hq"
 
 
 def _ffmpeg_version() -> str:
@@ -119,7 +131,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
             )
-            params = protect.apply_to_params(params)
+            if use_face_protect(config.get("quality_mode")):
+                params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:
@@ -133,7 +146,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
     os.makedirs(out_dir, exist_ok=True)
     protect_frame = None
     from .neural import protect as protect_mod
-    if protect_mod.available():
+    if use_face_protect(config.get("quality_mode")) and protect_mod.available():
         protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
     run_meta["protect"] = protect_frame is not None
 
@@ -147,7 +160,6 @@ def run(config: dict, *, on_event=None) -> Manifest:
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
 
         def attempt(strength: float, use_preset) -> dict:
-            from .neural import protect
             nonlocal attempt_no, last_strength
             attempt_no += 1
             # Record the EFFECTIVE strength (post-clamp) — the value `sample` actually
@@ -159,7 +171,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s,
             )
-            params = protect.apply_to_params(params, frame_path=protect_frame)
+            if protect_frame is not None:
+                from .neural import protect
+                params = protect.apply_to_params(params, frame_path=protect_frame)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
             if hq:
