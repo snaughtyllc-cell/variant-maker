@@ -477,6 +477,67 @@ describe("admin API", () => {
   });
 });
 
+describe("drop ledger API", () => {
+  const sheet = {
+    spreadsheet_id: "sheet_1",
+    spreadsheet_url: "https://docs.google.com/spreadsheets/d/sheet_1",
+  };
+
+  it("getDropLedgerStatus GETs /api/drop-ledger/status", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        configured: false,
+        spreadsheet_id: null,
+        spreadsheet_url: null,
+        message: "Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
+      }), { status: 200 }),
+    );
+    const out = await api.getDropLedgerStatus();
+    expect(out.configured).toBe(false);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/drop-ledger/status");
+  });
+
+  it("ensureDropLedger POSTs /api/drop-ledger/ensure", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...sheet, created: true }), { status: 200 }),
+    );
+    const out = await api.ensureDropLedger();
+    expect(out.created).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/drop-ledger/ensure");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  it("syncDropLedger POSTs job_ids and ensure", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        ...sheet, job_ids: ["j1"], rows: 2, inserted: 2, updated: 0, unchanged: 0,
+      }), { status: 200 }),
+    );
+    const out = await api.syncDropLedger({ job_ids: ["j1"], ensure: true });
+    expect(out.inserted).toBe(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/drop-ledger/sync");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      job_ids: ["j1"],
+      ensure: true,
+    });
+  });
+
+  it("syncDropLedger defaults to ensure: true", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        ...sheet, job_ids: [], rows: 0, inserted: 0, updated: 0, unchanged: 0,
+      }), { status: 200 }),
+    );
+    await api.syncDropLedger();
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      ensure: true,
+    });
+  });
+});
+
 describe("workspace team API", () => {
   it("getWorkspaceTeam GETs /api/workspace/team", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

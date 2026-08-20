@@ -46,6 +46,8 @@ def test_drop_ledger_sync_seeds_rows(tmp_path):
 
     status = client.get("/api/drop-ledger/status").json()
     assert status["configured"] is False
+    assert "Ensure" in status["message"]
+    assert "POST /api" not in status["message"]
 
     sync = client.post("/api/drop-ledger/sync", json={
         "job_ids": ["jobaaa111222"], "ensure": True,
@@ -124,6 +126,15 @@ def test_post_url_writes_through_to_sheet(tmp_path):
     values = sheets.get_values(sheet_id, "A:U")
     assert values[0][-1] == "post_url"
     assert values[1][-1] == url
+
+
+def test_drop_ledger_status_asks_to_connect_google_when_sheets_missing(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    client = TestClient(create_app(store, sheets=None, sa_json_path="", hydrate=True))
+    status = client.get("/api/drop-ledger/status").json()
+    assert status["configured"] is False
+    assert "Connect Google" in status["message"]
+    assert "POST /api" not in status["message"]
 
 
 def test_hydrate_from_disk_restores_gallery(tmp_path):

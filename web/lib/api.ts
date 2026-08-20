@@ -8,6 +8,9 @@ import {
   Destination,
   DiagnosticsItem,
   DriveStatus,
+  DropLedgerEnsure,
+  DropLedgerStatus,
+  DropLedgerSync,
   DriveVideo,
   ExportJob,
   ExportVariantRef,
@@ -532,4 +535,22 @@ export async function removeWorkspaceMember(email: string): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const getDropLedgerStatus = () =>
+  fetch("/api/drop-ledger/status").then(json<DropLedgerStatus>);
+
+export function ensureDropLedger(): Promise<DropLedgerEnsure> {
+  return fetch("/api/drop-ledger/ensure", { method: "POST" }).then(json<DropLedgerEnsure>);
+}
+
+export function syncDropLedger(body?: {
+  job_ids?: string[];
+  ensure?: boolean;
+}): Promise<DropLedgerSync> {
+  return fetch("/api/drop-ledger/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? { ensure: true }),
+  }).then(json<DropLedgerSync>);
 }

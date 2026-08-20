@@ -137,6 +137,22 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           ⚠
         </span>
       )}
+      {variant.platform_result === "flagged" && (
+        <span
+          title="Flagged"
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#2c1018",
+            color: "#ff9aa8",
+            border: "1px solid #5a1a28",
+          }}
+        >
+          ⚑
+        </span>
+      )}
       {variant.post_url && (
         <span
           title={variant.post_url}

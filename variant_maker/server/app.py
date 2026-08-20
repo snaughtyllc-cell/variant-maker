@@ -1320,11 +1320,11 @@ def create_app(
         if _sheets() is None:
             return DropLedgerStatusOut(
                 configured=False,
-                message="Connect Google (Settings → Drive), then POST /api/drop-ledger/ensure",
+                message="Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
             )
         return DropLedgerStatusOut(
             configured=False,
-            message="No sheet yet — POST /api/drop-ledger/ensure to create VaryForge Drop Ledger",
+            message="No sheet yet — tap Ensure to create VaryForge Drop Ledger",
         )
 
     @app.post("/api/drop-ledger/ensure", response_model=DropLedgerEnsureOut)

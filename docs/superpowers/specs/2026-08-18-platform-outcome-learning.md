@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-18  
 **PLAN phase:** 12 (after 9–11; can be sliced in parallel with 9 if HQ is delayed)  
-**Status:** Noted — not built as a product loop yet  
+**Status:** 12a operator UX — Studio Ensure/Sync + Flagged label shipped; 12b folder matching and 12c learning store not started  
 **Product name:** VaryForge
 
 ## Why
@@ -17,8 +17,8 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 
 | Piece | Where | Gap |
 |---|---|---|
-| `platform_result` on each variant (`passed` / `duplicate_reject` / `flagged` / `unknown` / `null`) | Manifest, Gallery variant sheet, `POST /api/sources/{id}/variants/{index}/platform-result` | Manual, per-clip, easy to skip |
-| Drop Ledger Google Sheet | `variant_maker/server/drop_ledger.py`, `/api/drop-ledger/*` | API only — no Studio “open ledger / sync” UI; VAs don’t live in Sheets |
+| `platform_result` on each variant (`passed` / `duplicate_reject` / `flagged` / `unknown` / `null`) | Manifest, Gallery variant sheet, `POST /api/variants/{source_id}/{index}/platform-result` | Manual, per-clip; unlabeled = pass so VAs skip Passed |
+| Drop Ledger Google Sheet | `variant_maker/server/drop_ledger.py`, `/api/drop-ledger/*`, Studio **Settings → Drive → Drop Ledger** | 12a UI shipped: status + Ensure + Sync + open spreadsheet URL. VAs still don’t live in Sheets |
 | Drive export | Gallery → Send to Drive | Folder is the drop tray; **no automatic match** from “this file in the folder got flagged” back to the variant row |
 | Uniqueness / seed / strength on the ledger row | Sheet columns | Unused for bias until Phase 12 reads outcomes |
 
@@ -45,11 +45,11 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 
 ## Suggested slices (when we build)
 
-1. Studio: Drop Ledger status + **Ensure / Sync** (Drive OAuth is already live). Document `VARIANT_DROP_SHEET_ID`.
-2. Variant sheet: keep Passed / Duplicate rejected; add **Flagged**; treat empty as pass in any “win rate” view.
-3. On Send to Drive success, write `drop_url` / Drive file id onto the ledger row.
-4. Optional: “mark from folder” — pick a Drive file name, set `flagged`.
-5. Export or query: flagged rows → JSON/CSV for later tuner work. Promote to a small DB only if Sheets becomes the bottleneck.
+1. ~~Studio: Drop Ledger status + **Ensure / Sync** (Drive OAuth is already live).~~ **12a shipped** — Settings → Drive panel. `VARIANT_DROP_SHEET_ID` still documented in Drive OAuth ops.
+2. ~~Variant sheet: keep Passed / Duplicate rejected; add **Flagged**; treat empty as pass.~~ **12a shipped**
+3. On Send to Drive success, write `drop_url` / Drive file id onto the ledger row. **(12b)**
+4. Optional: “mark from folder” — pick a Drive file name, set `flagged`. **(12b)**
+5. Export or query: flagged rows → JSON/CSV for later tuner work. Promote to a small DB only if Sheets becomes the bottleneck. **(12c)**
 
 ## Filename / Repurpose.io
 

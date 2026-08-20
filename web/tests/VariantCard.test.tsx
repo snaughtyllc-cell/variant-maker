@@ -26,6 +26,37 @@ function variant(over: Partial<VariantOut> = {}): VariantOut {
   };
 }
 
+describe("VariantCard platform badges", () => {
+  it("does not show a pass badge when unlabeled", () => {
+    render(
+      <VariantCard
+        variant={variant({ platform_result: null })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.queryByText("✓")).not.toBeInTheDocument();
+    expect(screen.queryByText("⚠")).not.toBeInTheDocument();
+    expect(screen.queryByText("⚑")).not.toBeInTheDocument();
+  });
+
+  it("shows a flagged badge", () => {
+    render(
+      <VariantCard
+        variant={variant({ platform_result: "flagged" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const badge = screen.getByTitle("Flagged");
+    expect(badge).toHaveTextContent("⚑");
+  });
+});
+
 describe("VariantCard uniqueness", () => {
   it("shows uniqueness percent (higher = more different)", () => {
     render(

@@ -233,3 +233,26 @@ export interface AdminWorkspace {
   last_job_utc: string | null;
   last_error: string | null;
 }
+
+export interface DropLedgerStatus {
+  configured: boolean;
+  spreadsheet_id: string | null;
+  spreadsheet_url: string | null;
+  message: string;
+}
+
+export interface DropLedgerEnsure {
+  spreadsheet_id: string;
+  spreadsheet_url: string;
+  created: boolean;
+}
+
+export interface DropLedgerSync {
+  spreadsheet_id: string;
+  spreadsheet_url: string;
+  job_ids: string[];
+  rows: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+}

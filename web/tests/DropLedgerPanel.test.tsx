@@ -1,0 +1,100 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DropLedgerEnsure, DropLedgerStatus, DropLedgerSync } from "@/lib/types";
+
+vi.mock("@/lib/api", () => ({
+  getDropLedgerStatus: vi.fn(),
+  ensureDropLedger: vi.fn(),
+  syncDropLedger: vi.fn(),
+}));
+
+import { ensureDropLedger, getDropLedgerStatus, syncDropLedger } from "@/lib/api";
+import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
+
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/sheet_1";
+
+const notConnected: DropLedgerStatus = {
+  configured: false,
+  spreadsheet_id: null,
+  spreadsheet_url: null,
+  message: "Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
+};
+
+const noSheet: DropLedgerStatus = {
+  configured: false,
+  spreadsheet_id: null,
+  spreadsheet_url: null,
+  message: "No sheet yet — tap Ensure to create VaryForge Drop Ledger",
+};
+
+const configured: DropLedgerStatus = {
+  configured: true,
+  spreadsheet_id: "sheet_1",
+  spreadsheet_url: SHEET_URL,
+  message: "Drop Ledger configured",
+};
+
+const ensured: DropLedgerEnsure = {
+  spreadsheet_id: "sheet_1",
+  spreadsheet_url: SHEET_URL,
+  created: true,
+};
+
+const synced: DropLedgerSync = {
+  spreadsheet_id: "sheet_1",
+  spreadsheet_url: SHEET_URL,
+  job_ids: ["j1"],
+  rows: 4,
+  inserted: 3,
+  updated: 1,
+  unchanged: 0,
+};
+
+beforeEach(() => {
+  vi.mocked(getDropLedgerStatus).mockReset();
+  vi.mocked(ensureDropLedger).mockReset();
+  vi.mocked(syncDropLedger).mockReset();
+  vi.mocked(getDropLedgerStatus).mockResolvedValue(noSheet);
+  vi.mocked(ensureDropLedger).mockResolvedValue(ensured);
+  vi.mocked(syncDropLedger).mockResolvedValue(synced);
+});
+
+describe("DropLedgerPanel", () => {
+  it("prompts to Connect Google first and disables Ensure/Sync", async () => {
+    vi.mocked(getDropLedgerStatus).mockResolvedValue(notConnected);
+    render(<DropLedgerPanel />);
+    expect(await screen.findByText(/Connect Google first if Drive is not connected/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Connect Google above first \(Spreadsheets scope\)/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ensure" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sync" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Open spreadsheet" })).not.toBeInTheDocument();
+  });
+
+  it("creates VaryForge Drop Ledger on Ensure", async () => {
+    render(<DropLedgerPanel />);
+    const ensure = await screen.findByRole("button", { name: "Ensure" });
+    expect(ensure).not.toBeDisabled();
+    fireEvent.click(ensure);
+    await waitFor(() => {
+      expect(ensureDropLedger).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("Created VaryForge Drop Ledger")).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "Open spreadsheet" });
+    expect(link).toHaveAttribute("href", SHEET_URL);
+  });
+
+  it("syncs job rows and shows the spreadsheet URL", async () => {
+    vi.mocked(getDropLedgerStatus).mockResolvedValue(configured);
+    render(<DropLedgerPanel />);
+    expect(await screen.findByRole("link", { name: "Open spreadsheet" })).toHaveAttribute("href", SHEET_URL);
+    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    await waitFor(() => {
+      expect(syncDropLedger).toHaveBeenCalledWith({ ensure: true });
+    });
+    expect(await screen.findByText(/Synced 4 rows — 3 inserted, 1 updated, 0 unchanged/)).toBeInTheDocument();
+    expect(screen.getByText(/unlabeled rows count as pass/i)).toBeInTheDocument();
+    expect(screen.getByText(/do not live in sheets/i)).toBeInTheDocument();
+  });
+});

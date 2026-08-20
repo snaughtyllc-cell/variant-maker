@@ -1,5 +1,6 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
 import { CaptionBankPanel } from "@/components/drive/CaptionBankPanel";
+import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
 import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
 import { PasswordPanel } from "@/components/auth/PasswordPanel";
 
@@ -43,6 +44,8 @@ export default function DriveSettingsPage() {
         <DestinationsPanel />
         <div style={{ height: 28 }} />
         <CaptionBankPanel />
+        <div style={{ height: 28 }} />
+        <DropLedgerPanel />
       </div>
     </main>
   );
