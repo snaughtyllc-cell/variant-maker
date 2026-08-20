@@ -200,18 +200,19 @@ export function TopNav() {
         </div>
       )}
       <nav className="app-tab-bar" aria-label="Primary">
-        {PRIMARY.map(({ href, label, short }) => {
-          const active = linkActive(pathname, href);
+        {PRIMARY.map((item) => {
+          const active = linkActive(pathname, item.href);
+          const tabLabel = "short" in item ? item.short : item.label;
           return (
             <Link
-              key={href}
-              href={href}
-              aria-label={label}
+              key={item.href}
+              href={item.href}
+              aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className="app-tab-bar__item no-underline"
               style={{ color: active ? "#ffffff" : "#8a8aa0" }}
             >
-              {short ?? label}
+              {tabLabel}
             </Link>
           );
         })}
