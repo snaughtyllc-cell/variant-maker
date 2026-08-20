@@ -204,6 +204,30 @@ def test_crop_offset_and_trim_end_are_unbudgeted():
     assert total_distortion(MEDIUM, bumped) == base
 
 
+def test_crop_keep_is_unbudgeted_fingerprint():
+    """Crop is the vs-source uniqueness lever; VMAF already ignores it. Strength must not
+    shrink keep toward 1.0 when color/warp overspend — that is the 35% / all-esc look."""
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["crop_keep"] = MEDIUM.crop_keep.lo
+    assert total_distortion(MEDIUM, bumped) == base
+    seed = derive_seed(42, 7)
+    mild = sample(MEDIUM, seed, strength=0.25)["video"]["crop_keep"]
+    full = sample(MEDIUM, seed, strength=1.0)["video"]["crop_keep"]
+    strong = sample(MEDIUM, seed, strength=1.8)["video"]["crop_keep"]
+    assert mild == full == strong
+    assert MEDIUM.crop_keep.lo <= mild <= MEDIUM.crop_keep.hi
+
+
+def test_medium_crop_range_is_tighter_than_identity():
+    """Talking-head medium should land ~32–38 bits (~50–60% UI), not a 3% peek-crop."""
+    assert MEDIUM.crop_keep.lo == pytest.approx(0.86)
+    assert MEDIUM.crop_keep.hi == pytest.approx(0.94)
+    assert STRONG.crop_keep.lo < MEDIUM.crop_keep.lo
+    assert STRONG.crop_keep.lo == pytest.approx(0.80)
+
+
 def test_clamp_trims_keeps_half_of_a_short_clip():
     """Strong-range head+tail (~0.85+0.85) must not gut a 1s source."""
     start, end = clamp_trims(0.85, 0.85, 1.0)
@@ -221,7 +245,7 @@ def test_over_budget_shrink_kills_encode_before_look():
     """When over budget, shrink grain/unsharp/crf first; color AND crop both survive."""
     encode_names = {"grain", "unsharp", "crf"}
     look_names = {
-        "crop_keep", "rotate_deg", "warp_k1",
+        "rotate_deg", "warp_k1",
         "brightness", "contrast", "saturation", "gamma", "hue_deg",
     }
     encode_ds: list[float] = []

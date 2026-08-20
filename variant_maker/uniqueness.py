@@ -16,10 +16,11 @@ import subprocess
 import tempfile
 
 METRIC_VERSION = "ssim_bits_v1"
-# TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source is 24
-# bits (24/64 = 0.375): that is what medium actually delivers on talking-head
-# (~27–30 bits). 32 bits sits in strong's band on the same clips (~35–38) and
-# escalates a whole Fast 20-pack. Local uniqueness gate only — not a platform verdict.
+# TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
+# is 24 bits (24/64 = 0.375 ≈ 38% UI). Medium talking-head should *score*
+# ~32–38 bits (~50–60% UI) so packs clear without escalate. Raising the gate
+# to 32 previously forced strong on a whole Fast 20-pack. Local uniqueness
+# gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
