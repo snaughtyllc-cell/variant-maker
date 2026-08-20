@@ -1,21 +1,32 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
-import { showDiagnosticsNav } from "@/lib/navAccess";
+import { showDiagnosticsNav, showTeamNav } from "@/lib/navAccess";
 import { StatusStrip } from "./StatusStrip";
 
-const NAV_LINKS = [
+const PRIMARY = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
-  { href: "/workflows", label: "Workflows" },
+  { href: "/workflows", label: "Workflows", short: "Flows" },
   { href: "/settings/drive", label: "Drive" },
 ] as const;
+
+function linkActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+}
+
+const linkClass =
+  "text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0";
 
 export function TopNav() {
   const pathname = usePathname();
   const { data: me } = useAuthMe();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const diagnostics = showDiagnosticsNav(me);
+  const team = showTeamNav(me);
 
   async function handleLogout() {
     await logout();
@@ -27,85 +38,76 @@ export function TopNav() {
     window.location.reload();
   }
 
+  const extraLinks = (
+    <>
+      {diagnostics && (
+        <Link
+          href="/diagnostics"
+          className={linkClass}
+          style={
+            linkActive(pathname, "/diagnostics")
+              ? { color: "#ffffff", background: "#1b1b27" }
+              : { color: "#8a8aa0" }
+          }
+        >
+          Diagnostics
+        </Link>
+      )}
+      {team && (
+        <Link
+          href="/team"
+          className={linkClass}
+          style={
+            linkActive(pathname, "/team")
+              ? { color: "#ffffff", background: "#1b1b27" }
+              : { color: "#8a8aa0" }
+          }
+        >
+          Team
+        </Link>
+      )}
+      {me?.is_admin && (
+        <Link
+          href="/admin"
+          className={linkClass}
+          style={
+            linkActive(pathname, "/admin")
+              ? { color: "#ffffff", background: "#1b1b27" }
+              : { color: "#8a8aa0" }
+          }
+        >
+          Admin
+        </Link>
+      )}
+    </>
+  );
+
   return (
     <>
       <header
-        className="top-nav flex items-center gap-2.5 px-3 py-2.5 border-b border-line sm:gap-[18px] sm:px-[18px] sm:py-3"
+        className="top-nav flex items-center gap-2 px-3 py-2 border-b border-line sm:gap-[18px] sm:px-[18px] sm:py-3"
         style={{ background: "linear-gradient(180deg, #101018, #0c0c12)" }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2 font-extrabold text-[15px] tracking-[0.2px] text-text shrink-0">
-          <span
-            className="w-[18px] h-[18px] rounded-[6px] inline-block flex-none"
-            style={{
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              boxShadow: "0 0 12px #7c5cff66",
-            }}
-          />
-          <span className="hidden min-[400px]:inline">VaryForge</span>
+        <div className="top-nav__brand hidden sm:flex items-center gap-2 font-extrabold text-[15px] tracking-[0.2px] text-text shrink-0">
+          VaryForge
         </div>
 
-        {/* Nav links */}
-        <nav className="top-nav__links flex gap-1 ml-0 sm:ml-2 min-w-0">
-          {NAV_LINKS.map(({ href, label }) => {
-            const active =
-              href === "/"
-                ? pathname === "/"
-                : pathname === href || pathname.startsWith(href + "/");
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
-                style={
-                  active
-                    ? { color: "#ffffff", background: "#1b1b27" }
-                    : { color: "#8a8aa0" }
-                }
-              >
-                {label}
-              </Link>
-            );
-          })}
-          {showDiagnosticsNav(me) && (
+        <nav className="top-nav__links hidden sm:flex gap-1 ml-0 sm:ml-2 min-w-0">
+          {PRIMARY.map(({ href, label }) => (
             <Link
-              href="/diagnostics"
-              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
+              key={href}
+              href={href}
+              className={linkClass}
               style={
-                pathname === "/diagnostics" || pathname.startsWith("/diagnostics/")
+                linkActive(pathname, href)
                   ? { color: "#ffffff", background: "#1b1b27" }
                   : { color: "#8a8aa0" }
               }
             >
-              Diagnostics
+              {label}
             </Link>
-          )}
-          {(me?.role === "owner" || me?.is_admin) && (
-            <Link
-              href="/team"
-              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
-              style={
-                pathname === "/team" || pathname.startsWith("/team/")
-                  ? { color: "#ffffff", background: "#1b1b27" }
-                  : { color: "#8a8aa0" }
-              }
-            >
-              Team
-            </Link>
-          )}
-          {me?.is_admin && (
-            <Link
-              href="/admin"
-              className="text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0"
-              style={
-                pathname === "/admin" || pathname.startsWith("/admin/")
-                  ? { color: "#ffffff", background: "#1b1b27" }
-                  : { color: "#8a8aa0" }
-              }
-            >
-              Admin
-            </Link>
-          )}
+          ))}
+          {extraLinks}
         </nav>
 
         <div className="ml-auto shrink-0 flex items-center gap-2">
@@ -121,7 +123,7 @@ export function TopNav() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-[12px] font-semibold px-2.5 py-1.5 rounded-lg"
+                className="top-nav__logout hidden sm:inline text-[12px] font-semibold px-2.5 py-1.5 rounded-lg"
                 style={{
                   color: "#ececf4",
                   background: "#1b1b27",
@@ -131,19 +133,55 @@ export function TopNav() {
               >
                 Log out
               </button>
+              <button
+                type="button"
+                aria-expanded={moreOpen}
+                aria-label="More"
+                className="top-nav__more sm:hidden text-[12px] font-semibold px-2.5 py-1.5 rounded-lg"
+                style={{
+                  color: "#ececf4",
+                  background: "#1b1b27",
+                  border: "1px solid #23232f",
+                  cursor: "pointer",
+                }}
+                onClick={() => setMoreOpen((o) => !o)}
+              >
+                More
+              </button>
             </>
           )}
         </div>
       </header>
+      {moreOpen && me?.email && (
+        <div
+          className="sm:hidden px-3 py-2 border-b border-line flex flex-col gap-1"
+          style={{ background: "#101018" }}
+        >
+          {me.email && (
+            <div className="text-[11.5px] text-muted truncate px-1 py-1">{me.email}</div>
+          )}
+          <div className="flex flex-wrap gap-1">{extraLinks}</div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-[12px] font-semibold px-2.5 py-2 rounded-lg text-left"
+            style={{
+              color: "#ececf4",
+              background: "#1b1b27",
+              border: "1px solid #23232f",
+              cursor: "pointer",
+            }}
+          >
+            Log out
+          </button>
+        </div>
+      )}
       {me?.viewing_other && (
         <div
           className="flex items-center gap-3 px-3 py-2 sm:px-[18px] text-[13px]"
           style={{ background: "#1a1610", borderBottom: "1px solid #3a3020", color: "#ffd08a" }}
         >
-          <span>
-            Viewing {me.workspace_name || "another studio"} — Exit to your studio
-          </span>
-          <span style={{ opacity: 0.5 }}>·</span>
+          <span>Viewing {me.workspace_name || "another studio"} — Exit to your studio</span>
           <button
             type="button"
             onClick={handleExitView}
@@ -161,6 +199,23 @@ export function TopNav() {
           </button>
         </div>
       )}
+      <nav className="app-tab-bar" aria-label="Primary">
+        {PRIMARY.map(({ href, label, short }) => {
+          const active = linkActive(pathname, href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+              className="app-tab-bar__item no-underline"
+              style={{ color: active ? "#ffffff" : "#8a8aa0" }}
+            >
+              {short ?? label}
+            </Link>
+          );
+        })}
+      </nav>
     </>
   );
 }

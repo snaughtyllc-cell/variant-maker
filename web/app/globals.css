@@ -23,6 +23,7 @@
 :root {
   color-scheme: dark;
   --nav-h: 49px;
+  --tab-h: 0px;
 }
 html, body { background: #0a0a0e; color: #ececf4; }
 html { -webkit-text-size-adjust: 100%; }
@@ -37,7 +38,7 @@ input, select, textarea { font-size: 16px; }
 .studio-shell {
   display: grid;
   grid-template-columns: 1fr;
-  min-height: calc(100dvh - var(--nav-h));
+  min-height: calc(100dvh - var(--nav-h) - var(--tab-h));
   background: var(--color-bg);
 }
 .studio-cockpit {
@@ -74,7 +75,44 @@ input, select, textarea { font-size: 16px; }
   scrollbar-width: none;
 }
 .top-nav__links::-webkit-scrollbar { display: none; }
-.status-cpu { display: none; }
+.app-tab-bar {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  :root {
+    --nav-h: 44px;
+    --tab-h: calc(52px + env(safe-area-inset-bottom, 0px));
+  }
+  .app-tab-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 0;
+    padding: 4px 4px max(8px, env(safe-area-inset-bottom, 0px));
+    background: #101018;
+    border-top: 1px solid var(--color-line);
+  }
+  .app-tab-bar__item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .status-ready-text { display: none; }
+  .status-engine {
+    padding: 6px 8px;
+  }
+}
 
 .gallery-toolbar {
   display: flex;

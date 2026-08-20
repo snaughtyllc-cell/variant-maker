@@ -20,7 +20,7 @@ export function StatusStrip() {
     <div className="flex items-center gap-2.5 text-[11.5px] text-muted">
       {/* Engine status pill */}
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+        className="status-engine inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
         style={{ background: "#14141d" }}
       >
         <span
@@ -33,7 +33,7 @@ export function StatusStrip() {
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {loading ? "…" : ready && online ? "Ready" : "Offline"}
+        {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
       {queueLabel && (

@@ -43,7 +43,7 @@ beforeEach(() => {
 describe("TopNav", () => {
   it("shows Team for workspace owners", () => {
     render(<TopNav />);
-    expect(screen.getByRole("link", { name: "Team" })).toHaveAttribute("href", "/team");
+    expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
   });
 
@@ -56,8 +56,8 @@ describe("TopNav", () => {
   it("shows Team and Admin for the site admin", () => {
     me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
     render(<TopNav />);
-    expect(screen.getByRole("link", { name: "Team" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+    expect(screen.getAllByRole("link", { name: "Team" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Admin" })[0]).toHaveAttribute("href", "/admin");
   });
 
   it("hides Diagnostics for operators", () => {
@@ -68,7 +68,10 @@ describe("TopNav", () => {
   it("shows Diagnostics for the site admin", () => {
     me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
     render(<TopNav />);
-    expect(screen.getByRole("link", { name: "Diagnostics" })).toHaveAttribute("href", "/diagnostics");
+    expect(screen.getAllByRole("link", { name: "Diagnostics" })[0]).toHaveAttribute(
+      "href",
+      "/diagnostics",
+    );
   });
 
   it("keeps Diagnostics when login is off", () => {
@@ -80,6 +83,14 @@ describe("TopNav", () => {
       is_admin: false,
     };
     render(<TopNav />);
-    expect(screen.getByRole("link", { name: "Diagnostics" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Diagnostics" }).length).toBeGreaterThan(0);
+  });
+
+  it("exposes all four primary destinations", () => {
+    render(<TopNav />);
+    expect(screen.getAllByRole("link", { name: "Studio" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Gallery" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Workflows" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Drive" }).length).toBeGreaterThan(0);
   });
 });
