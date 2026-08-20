@@ -143,7 +143,7 @@ export function AdvancedPanel({
               >
                 Optimized for uniqueness while keeping a clean look. Even one
                 file is scored vs the original. Medium should land around
-                55–65%; the pass line is 38%. If medium misses that, one
+                50–60%; the pass line is 38%. If medium misses that, one
                 strong pass runs and the tile shows esc — that is not a fail.
               </span>
             </span>

@@ -25,7 +25,7 @@ to take the first outside operator.
 
 - Color correctness, zero-mean color, VMAF floor, audio sync.
 - Fast uniqueness **24 vs source / 24 vs peers** (~38% UI pass). Medium should
-  *score* ~55–65% on talking-head. Do not raise the gate to 55% / 32 bits.
+  *score* ~50–60% on talking-head. Do not raise the gate to 55% / 32 bits.
 - Escalate stays on. Do not skip the quality guard.
 - Fast = CPU libx264. HQ = GPU reconstructive. Do not split **one pack** across both.
 - Min workers stay **0** unless we explicitly buy a warm Fast CPU window.

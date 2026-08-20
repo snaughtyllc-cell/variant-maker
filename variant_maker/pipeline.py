@@ -21,7 +21,7 @@ from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
-# Medium crop + Fast pixel seed sized so talking-head *scores* ~35–42 bits (~55–65% UI).
+# Medium crop is sized so talking-head *scores* ~32–38 bits (~50–60% UI).
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]

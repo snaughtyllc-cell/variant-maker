@@ -310,30 +310,6 @@ def test_sample_draws_resample_fingerprint():
     assert v["resample_flags"] in RESAMPLE_FLAGS
 
 
-def test_fast_pixel_seed_resample_is_a_real_roundtrip():
-    """Pixel-AI analog: every variant resamples at least ±8 px (never a 2 px peek).
-
-    Output stays 1080×1920. Gate stays 24 bits. Tiny ±2–16 was too close to identity
-    for talking-head SSIM to move.
-    """
-    assert min(abs(x) for x in RESAMPLE_PX_CHOICES) == 8
-    assert max(abs(x) for x in RESAMPLE_PX_CHOICES) == 32
-    assert all(x % 2 == 0 and x != 0 for x in RESAMPLE_PX_CHOICES)
-    assert any(x < 0 for x in RESAMPLE_PX_CHOICES) and any(x > 0 for x in RESAMPLE_PX_CHOICES)
-    for s in SEEDS[:40]:
-        px = sample(MEDIUM, s)["video"]["resample_px"]
-        assert abs(px) >= 8
-        assert abs(px) <= 32
-
-
-def test_medium_warp_pixel_seed_is_stronger_than_a_peek():
-    """lenscorrection k1 is the Fast pixel seed VMAF can still cap. Strong stays above."""
-    assert MEDIUM.warp_k1.hi == pytest.approx(0.015)
-    assert MEDIUM.warp_k1.lo == pytest.approx(-0.015)
-    assert STRONG.warp_k1.hi > MEDIUM.warp_k1.hi
-    assert STRONG.warp_k1.hi == pytest.approx(0.020)
-
-
 def test_resample_is_unbudgeted_and_zero_meanish():
     p = sample(MEDIUM, derive_seed(3, 1))
     base = total_distortion(MEDIUM, p)

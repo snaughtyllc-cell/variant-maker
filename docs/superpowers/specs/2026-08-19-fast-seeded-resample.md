@@ -16,7 +16,7 @@ The Fast pixel thing we will ship (when asked) is a **seeded resample**, not
 scramble and not a random output size:
 
 1. After the Reels scale to 1080×1920, scale to a slightly different **even**
-   size (AR kept, ±8–32 px on width — never a 2 px peek).
+   size (AR kept, ~±4–16 px on width).
 2. Scale back to **1080×1920** with a seeded kernel (`lanczos` / `spline` /
    `bicubic`).
 3. Every pixel is a new sample. Instagram / Repurpose still get a normal Reel.
@@ -42,8 +42,8 @@ Fast pixel seed is a tiny zero-mean `lenscorrection` (`warp_k1`), VMAF-capped.
 
 TDD. `sample` and `filtergraph.build_*` stay **pure**.
 
-1. **Sampler** — each variant draws even `resample_px` from ±8–32
-   (never 0, never |px|<8) and `resample_flags` ∈ {`lanczos`, `spline`, `bicubic`}. Same
+1. **Sampler** — each variant draws even `resample_px` from about ±4–16
+   (never 0) and `resample_flags` ∈ {`lanczos`, `spline`, `bicubic`}. Same
    seed → same params. Unbudgeted (must not move `total_distortion`). Mix of
    smaller and larger intermediates so we do not systematically soften one way.
 2. **Filtergraph** — after `even_scale_filter(target_w, target_h)`:

@@ -18,7 +18,7 @@ import tempfile
 METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
 # is 24 bits (24/64 = 0.375 ≈ 38% UI). Medium talking-head should *score*
-# ~35–42 bits (~55–65% UI) so packs clear without escalate. Raising the gate
+# ~32–38 bits (~50–60% UI) so packs clear without escalate. Raising the gate
 # to 32 previously forced strong on a whole Fast 20-pack. Local uniqueness
 # gate only — not a platform verdict.
 TARGET_BITS = 24

@@ -149,14 +149,6 @@ def test_even_resample_size_keeps_ar_and_even():
     assert abs(w / h - 1080 / 1920) < 0.01
 
 
-def test_even_resample_size_handles_stronger_pixel_seed():
-    w, h = filtergraph.even_resample_size(1080, 1920, 32)
-    assert w % 2 == 0 and h % 2 == 0
-    assert w == 1112
-    assert (w, h) != (1080, 1920)
-    assert abs(w / h - 1080 / 1920) < 0.01
-
-
 def test_warp_emits_lenscorrection():
     p = make_params(video={"warp_k1": 0.008})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)

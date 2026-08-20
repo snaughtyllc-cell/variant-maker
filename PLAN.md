@@ -117,8 +117,8 @@ Status legend: ✅ done & verified · 🔨 to build
   stops at the first uniqueness+quality+peer hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
 - Fast *gate* is **24 bits vs source**, **24 vs peers** (~38% UI). Do not raise the gate
-  to 32. Medium crop is unbudgeted and sized so talking-head *scores* ~35–42 bits
-  (~55–65% UI) without escalate. Peer miss searches **stronger** (not milder — quality
+  to 32. Medium crop is unbudgeted and sized so talking-head *scores* ~32–38 bits
+  (~50–60% UI) without escalate. Peer miss searches **stronger** (not milder — quality
   `passed` is VMAF only). Over-budget `sample()` shrinks color/encode first; crop_keep
   is fingerprint and does not shrink toward identity. Color stays zero-mean. VMAF floor stays.
   Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.
@@ -165,12 +165,11 @@ Status legend: ✅ done & verified · 🔨 to build
 ## Phase 16 — Fast seeded resample + look (color + pixel seed)  ✅
 - Spec: `docs/superpowers/specs/2026-08-19-fast-seeded-resample.md`.
 - Fast analog of TikFusion Random Pixels **without** weird output size: unique even
-  intermediate → back to 1080×1920 with a seeded kernel. Round-trip is ±8–32 px
-  (never a 2 px peek).
+  intermediate → back to 1080×1920 with a seeded kernel.
 - Per-copy color **shows** (still zero-mean). Over-budget shrink kills grain/unsharp/crf
-  first so crop AND eq survive. Fast pixel seed is `lenscorrection` `warp_k1`
-  (medium ±0.015, VMAF sees it; quality fail → milder). HQ skips resample+warp (ESRGAN owns pixels).
-- Unbudgeted resample fingerprint. Color zero-mean. VMAF floor stays. Gates stay 24/24.
+  first so crop AND eq survive. Fast pixel seed is tiny `lenscorrection` `warp_k1`
+  (VMAF sees it; quality fail → milder). HQ skips resample+warp (ESRGAN owns pixels).
+- Unbudgeted resample fingerprint. Color zero-mean. VMAF floor stays. Gates stay 32/24.
 - Not named Smart Colors / Pixel AI scramble / fps jitter / random output dimensions.
 
 ## Studio UX — current-run only (note, not blocking 9–11)
