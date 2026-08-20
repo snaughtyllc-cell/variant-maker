@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
+import { ESCALATED_TITLE } from "@/lib/format";
 
 function variant(over: Partial<VariantOut> = {}): VariantOut {
   return {
@@ -51,6 +52,8 @@ describe("VariantCard uniqueness", () => {
       />,
     );
     expect(screen.getByText("50%")).toBeInTheDocument();
-    expect(screen.getByText("esc")).toBeInTheDocument();
+    const esc = screen.getByText("esc");
+    expect(esc).toBeInTheDocument();
+    expect(esc).toHaveAttribute("title", ESCALATED_TITLE);
   });
 });

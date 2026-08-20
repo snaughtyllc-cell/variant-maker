@@ -16,6 +16,13 @@ export function pct01(v: number): number {
   return Math.round(Math.min(1, Math.max(0, v)) * 100);
 }
 
+/** Short gallery badge. Not a quality fail. */
+export const ESCALATED_BADGE = "esc";
+
+/** Hover copy: escalate is one stronger uniqueness pass after medium missed 50%. */
+export const ESCALATED_TITLE =
+  "Used a stronger uniqueness pass (preset strong). Still quality-ok — not a fail.";
+
 export function diagnosticsReason(d: DiagnosticsItem): { title: string; metric: string; corrupt: boolean } {
   if (d.status === "corrupt" || d.quality.spatial_ok === false) {
     const sv = d.quality.spatial_vmaf ?? 0;

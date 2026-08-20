@@ -2,6 +2,7 @@
 import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
 import { isFileReady } from "@/lib/gallery";
+import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -64,6 +65,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       )}
       {variant.escalated && (
         <span
+          title={ESCALATED_TITLE}
           style={{
             fontSize: 8,
             fontWeight: 800,
@@ -75,7 +77,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             lineHeight: 1.4,
           }}
         >
-          esc
+          {ESCALATED_BADGE}
         </span>
       )}
       {/* Spatial tick — ONLY when spatial_ok === true */}

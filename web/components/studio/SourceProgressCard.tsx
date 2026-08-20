@@ -4,6 +4,7 @@ import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
 import { VideoThumb } from "@/components/common/VideoThumb";
 import { QualityMode, inFlightRenderingLabel } from "@/lib/hqWaitCopy";
+import { ESCALATED_TITLE } from "@/lib/format";
 
 interface SourceProgressCardProps {
   source: SourceProgress;
@@ -159,7 +160,11 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
                     {uniquenessPct != null && (
                       <Badge color={v.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
                     )}
-                    {v.escalated && <Badge color="cyan">⚡</Badge>}
+                    {v.escalated && (
+                      <span title={ESCALATED_TITLE}>
+                        <Badge color="cyan">⚡</Badge>
+                      </span>
+                    )}
                     {isBestEffort && <Badge color="amber">best effort</Badge>}
                   </div>
                 }

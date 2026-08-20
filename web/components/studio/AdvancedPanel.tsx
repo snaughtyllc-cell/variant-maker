@@ -141,8 +141,9 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Optimized for uniqueness while keeping a clean look — spends one
-                stronger-preset attempt if lighter passes don&apos;t clear the target.
+                Optimized for uniqueness while keeping a clean look. If the
+                lighter pass doesn&apos;t hit 50% vs the source, one strong
+                pass runs and the tile shows esc — that is not a fail.
               </span>
             </span>
             <input

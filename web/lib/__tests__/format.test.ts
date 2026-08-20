@@ -5,6 +5,8 @@ import {
   diagnosticsReason,
   similarityFromUniqueness,
   pct01,
+  ESCALATED_BADGE,
+  ESCALATED_TITLE,
 } from "@/lib/format";
 
 describe("formatDuration", () => {
@@ -29,6 +31,14 @@ describe("similarityFromUniqueness", () => {
     expect(similarityFromUniqueness(0.5)).toBe(0.5);
     expect(pct01(similarityFromUniqueness(0.5))).toBe(50);
     expect(pct01(0.5)).toBe(50); // uniqueness % (higher better)
+  });
+});
+
+describe("escalated copy", () => {
+  it("labels a uniqueness pass, not a fail", () => {
+    expect(ESCALATED_BADGE).toBe("esc");
+    expect(ESCALATED_TITLE.toLowerCase()).toContain("not a fail");
+    expect(ESCALATED_TITLE.toLowerCase()).toContain("strong");
   });
 });
 
