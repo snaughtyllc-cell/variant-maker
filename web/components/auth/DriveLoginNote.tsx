@@ -6,7 +6,9 @@ export function DriveLoginNote() {
   if (!data?.email) return null;
   return (
     <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 6, lineHeight: 1.45 }}>
-      Drive Connect is per workspace and separate from Studio login.
+      Drive Connect is per workspace and separate from Studio login. Connect
+      Google once for this studio, then add a destination folder — Workflows
+      and Send to Drive use it.
     </div>
   );
 }

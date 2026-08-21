@@ -218,6 +218,10 @@ export function DestinationsPanel() {
             <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
               {status?.message ?? "Checking Drive configuration…"}
             </div>
+            <div style={{ fontSize: 12, color: "var(--color-muted)", lineHeight: 1.45 }}>
+              Connect Google once for this studio, then add a destination folder.
+              Workflows and Send to Drive use it.
+            </div>
             {oauthAvailable ? (
               <a
                 href="/api/drive/oauth/start"
@@ -348,7 +352,7 @@ export function DestinationsPanel() {
             background: "#0d0d13",
           }}
         >
-          No destinations yet — add a Drive folder above.
+          No destinations yet — add a Drive folder above. Gallery Send to Drive uses it.
         </div>
       )}
 

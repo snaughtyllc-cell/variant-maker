@@ -85,7 +85,7 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
+                Daily packs are Fast (CPU). HQ is reconstructive GPU — slower, not the daily 20.
               </span>
             </span>
             <select

@@ -87,7 +87,23 @@ describe("Team page", () => {
     expect(await screen.findByText("va@example.com")).toBeInTheDocument();
     expect(screen.getByText("helper@example.com")).toBeInTheDocument();
     expect(screen.getByText(/join this workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/invite VAs here/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generate Fast \(CPU\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/not the daily 20/i)).toBeInTheDocument();
+    expect(screen.getByText(/uniqueness \(~38% floor\)/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Invite kind")).not.toBeInTheDocument();
+  });
+
+  it("empty members still says invite VAs here", async () => {
+    vi.mocked(getWorkspaceTeam).mockResolvedValue({
+      ...team,
+      members: [],
+      invites: [],
+    });
+    render(<TeamPage />);
+    expect(await screen.findByText(/no members yet/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/invite VAs here/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Generate Fast 20 and Send to Drive/i)).toBeInTheDocument();
   });
 
   it("invites a VA into this workspace", async () => {

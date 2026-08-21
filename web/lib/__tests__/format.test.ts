@@ -7,6 +7,7 @@ import {
   pct01,
   ESCALATED_BADGE,
   ESCALATED_TITLE,
+  UNIQUENESS_BADGE_TITLE,
 } from "@/lib/format";
 
 describe("formatDuration", () => {
@@ -42,6 +43,16 @@ describe("escalated copy", () => {
     expect(ESCALATED_TITLE).toMatch(/38%/);
     expect(ESCALATED_TITLE).toMatch(/55/);
     expect(ESCALATED_TITLE).toMatch(/65/);
+  });
+});
+
+describe("uniqueness badge title", () => {
+  it("says the tile % is uniqueness with a 24/24 ~38% floor", () => {
+    expect(UNIQUENESS_BADGE_TITLE).toMatch(/uniqueness/i);
+    expect(UNIQUENESS_BADGE_TITLE).toMatch(/24\/24/);
+    expect(UNIQUENESS_BADGE_TITLE).toMatch(/38%/);
+    expect(UNIQUENESS_BADGE_TITLE).toMatch(/talking-head/i);
+    expect(UNIQUENESS_BADGE_TITLE).not.toMatch(/fell short/i);
   });
 });
 
