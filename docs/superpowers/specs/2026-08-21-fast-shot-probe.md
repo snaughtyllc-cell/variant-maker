@@ -1,7 +1,7 @@
 # Fast look-first shot probe (Smart Repurpose analog, not a detector)
 
 **Date:** 2026-08-21  
-**Status:** In progress (engine)  
+**Status:** Shipped on lab and promoted to live Fast (`06526b9`, digest-pinned)  
 **Product name:** VaryForge  
 **Depends on:** `2026-08-21-fast-rebuild-scale.md`
 
@@ -13,9 +13,11 @@ face does not. TikFusion Smart Repurpose consistency is look-first: classify
 the shot, then pick a recipe. We do the same with ffmpeg, not OpenCV, and not
 a platform detector.
 
-Live after rebuild-scale (`4880c35`): clips that already passed 24 bits stayed
-**38–47%**. The 16–21-bit talking-head has not been re-run. Copy still says
-typical medium **55–65%**.
+Rebuild-scale (`4880c35`) left passing clips at **38–47%**. Copy still says
+typical medium **55–65%**. Lab `06526b9` talking-head landed all-medium
+**40/40/40 bits (62%)**, VMAF **98**, crop 0.84–0.88, caption upright. That
+digest is now pinned on live Fast (`j0b1q4iuunzhnq`). Lab
+(`xar25v77v3j27u`, `VF_LAB=1`) stays the experiment floor.
 
 ## Change
 
@@ -57,9 +59,28 @@ VMAF 98. Copy says typical **55–65%**, so medium chroma is **34–42**
 Missing file / ffmpeg miss → `shot=None` (do not crash the pack). HQ still
 strips rebuild. Fast still never face-protects (Haar must not zero crop).
 
+## Promoted (`06526b9`)
+
+Lab talking-head job `77bfac36`: shot `{kind: talking_head, self_bits: 17}`,
+all medium **40/40/40 bits (62%)**, VMAF **98.16 / 98.39 / 98.60**, crop
+0.88 / 0.88 / 0.84, chroma `c1s=39`, rotate 0, `status=ok`, no escalate,
+~22 MB under the 12M cap. Caption upright; shoulders in frame.
+
+Lab motion job `9141c13e`: shot motion, self_bits 49, **51–52 bits (~80%)**,
+VMAF 97.5–100, peer 50–52, luma `alls=7`.
+
+Live Fast template `ka043gryih` and lab template `876soa0cd2` both pin
+`ghcr.io/snaughtyllc-cell/variant-fast@sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
+Live: `VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600.
+Lab: same rev, `VF_LAB=1`, max 1, idle 120.
+Railway `RUNPOD_FAST_ENDPOINT_ID` stays `j0b1q4iuunzhnq`. Next experiments
+stay on lab — do not PATCH live to test.
+
 ## Do not
 
 - Raise `TARGET_BITS` / `MIN_PEER_BITS`
 - Clone Pixel AI scramble
 - Run OpenCV / `protect` on Fast
 - Fake uniqueness %
+- Point production Railway Fast at the lab endpoint
+- Recycle live workers to test a lab digest
