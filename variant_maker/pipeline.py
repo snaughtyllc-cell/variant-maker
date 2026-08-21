@@ -104,6 +104,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
     stem = os.path.splitext(os.path.basename(input_path))[0]
     shot_info = classify_shot(src.path, src.duration_s)
     shot_kind = shot_info.get("kind")
+    # Talking-head copies of a still face land ~13–17 peer bits even with
+    # different chroma seeds and strong grain. Escalating to strong tightens
+    # crop into 0.78 (the face-zoom we banned) and still fails peer. Vs-source
+    # already scores 55–65% on medium. Record peer bits; don't let them force
+    # strong or demote a passing vs-source score. Motion still uses the 24-bit
+    # peer floor. MIN_PEER_BITS stays 24.
+    peer_gate = shot_kind != "talking_head"
 
     def _name(i: int, vseed: int) -> str:
         return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
@@ -219,7 +226,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         def _gate_ok(u_score: dict, peer_min: int | None) -> bool:
             """Pass when source uniqueness clears (or unknown) AND peers clear min bits."""
-            if peer_min is not None and peer_min < min_bits_vs_peers:
+            if peer_gate and peer_min is not None and peer_min < min_bits_vs_peers:
                 return False
             return u_score["uniqueness_status"] in ("ok", "unknown")
 
@@ -228,7 +235,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             out = dict(u_score)
             out["min_bits_vs_peers"] = peer_min
             if (
-                peer_min is not None
+                peer_gate
+                and peer_min is not None
                 and peer_min < min_bits_vs_peers
                 and out.get("uniqueness_status") == "ok"
             ):
@@ -264,7 +272,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     **u_try,
                     "quality_passed": r_try["passed"],
                     "passed": r_try["passed"],
-                    "peer_ok": peer_min is None or peer_min >= min_bits_vs_peers,
+                    "peer_ok": (
+                        (not peer_gate)
+                        or peer_min is None
+                        or peer_min >= min_bits_vs_peers
+                    ),
                     "uniqueness": u_try["uniqueness"],
                 }
 

@@ -16,8 +16,8 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:58544eefcb2a49957ee47f37587c6829b74fc094f10cad34212df3d0802ad502`
-- `VF_ENGINE_REV=57aec3e` (chroma-only talking-head noise 38–50). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:868de0fdc7e21f8b592a82a219773be858c2ad06796988de87c6d09c4ce3e038`
+- `VF_ENGINE_REV=c1137ec` (chroma 38–50 + per-copy noise seed). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
 - Live Fast stays `j0b1q4iuunzhnq` / `VF_ENGINE_REV=4880c35` / digest `abecb191` — do not PATCH it for experiments.
 

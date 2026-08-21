@@ -443,3 +443,35 @@ def test_pipeline_passes_shot_into_sample(monkeypatch, tmp_path):
     assert all(s == "talking_head" for s in seen)
     assert manifest.run["shot"]["kind"] == "talking_head"
     assert manifest.run["shot"]["self_bits"] == 10
+
+
+def test_talking_head_peer_miss_does_not_escalate(monkeypatch, tmp_path):
+    """Still-face copies land ~13 peer bits; strong crop 0.78 is face-zoom and still fails."""
+    _stub_common(monkeypatch)
+    presets = []
+
+    def fake_sample(preset, seed, **kw):
+        presets.append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
+    monkeypatch.setattr(
+        pipeline, "classify_shot",
+        lambda *a, **k: {"kind": "talking_head", "self_bits": 17},
+    )
+    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 13)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.625, bits=40, status="ok"),
+    )
+    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    v1, v2 = manifest.variants
+    assert v1.preset_used == "medium"
+    assert v2.preset_used == "medium"
+    assert v1.escalated is False
+    assert v2.escalated is False
+    assert v1.uniqueness_status == "ok"
+    assert v2.uniqueness_status == "ok"
+    assert v2.quality.get("min_bits_vs_peers") == 13
+    assert "strong" not in presets

@@ -38,10 +38,13 @@ chroma; VMAF is mostly luma. Talking-head grain is therefore chroma-only
 crop + chroma 40/56 scored **35/43 bits (55/67% UI)**. Lab `57aec3e` medium
 copy 1: **40 bits (62.5%)**, VMAF **98**, caption upright. Copies 2–3
 escalated to strong because ffmpeg noise seed defaults to `-1` (same pattern
-→ peer bits 16–17). Per-copy `c1_seed`/`c2_seed` from the variant seed (no
-extra RNG) so the pack can stay on medium. Medium band **38–50** aims at
-typical 55–65%. Quality proxy still includes grain. Motion keeps luma
-`alls=…:allf=t+u`. No extra rotate (captions).
+→ peer bits 16–17). Per-copy `c1_seed`/`c2_seed` from the variant seed did
+**not** lift peer above 13–14. Strong then used crop 0.78 (the face-zoom we
+banned) and chroma 50–57 — still 13–14 peer bits. Talking-head therefore
+**does not peer-escalate**; vs-source 24/24 still gates, peer bits are
+recorded, `MIN_PEER_BITS` stays 24. Motion still uses the peer floor.
+Medium band **38–50** aims at typical 55–65%. Quality proxy still includes
+grain. Motion keeps luma `alls=…:allf=t+u`. No extra rotate (captions).
 
 | preset | default rebuild | talking_head rebuild | talking_head chroma grain | motion rebuild |
 |---|---|---|---|---|
