@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
 from .sheets import SheetsClient
@@ -397,6 +397,45 @@ def update_platform_result_cell(
         sheets, spreadsheet_id,
         job_id=job_id, source_id=source_id, index=index,
         column="platform_result", value=result,
+    )
+
+
+def persist_platform_result(
+    sheets: SheetsClient,
+    spreadsheet_id: str,
+    *,
+    job_id: str,
+    source_id: str,
+    index: int,
+    result: str,
+    rows: Sequence[DropRow] | None = None,
+) -> bool:
+    """Write platform_result. Updates an existing row, or upserts `rows` if missing.
+
+    Gallery labels must land on the sheet even if the operator has not synced yet.
+    """
+    if update_platform_result_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index, result=result,
+    ):
+        return True
+    if not rows:
+        return False
+    vid = variant_id(source_id, index)
+    incoming: list[DropRow] = []
+    found = False
+    for row in rows:
+        if row.job_id == job_id and row.variant_id == vid:
+            incoming.append(replace(row, platform_result=result))
+            found = True
+        else:
+            incoming.append(row)
+    if not found:
+        return False
+    sync_rows(sheets, spreadsheet_id, incoming)
+    return update_platform_result_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index, result=result,
     )
 
 

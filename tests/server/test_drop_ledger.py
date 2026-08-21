@@ -4,17 +4,21 @@ from __future__ import annotations
 import json
 
 from variant_maker.server.drop_ledger import (
+    ENV_SHEET_ID,
     HEADERS,
     DropRow,
     ensure_ledger,
     ledger_values_range,
     load_manifest_rows,
     merge_upsert,
+    persist_platform_result,
+    resolve_sheet_id,
     row_from_manifest_variant,
     sync_rows,
     update_platform_result_cell,
     update_post_url_cell,
     variant_id,
+    write_sheet_id_file,
 )
 from variant_maker.server.sheets import FakeSheets
 
@@ -111,6 +115,48 @@ def test_merge_upsert_explicit_label_overwrites():
     sheet2, stats = merge_upsert(sheet, [_row(platform_result="duplicate_reject")])
     assert sheet2[1][_COL_PLATFORM()] == "duplicate_reject"
     assert stats["updated"] == 1
+
+
+def test_merge_upsert_preserves_notes_and_flagged_on_blank_resync():
+    sheet, _ = merge_upsert([], [_row(platform_result="flagged", notes="IG took it down")])
+    notes_i = HEADERS.index("notes")
+    incoming = [_row(platform_result="", notes="", uniqueness="0.9")]
+    sheet2, _ = merge_upsert(sheet, incoming)
+    assert sheet2[1][_COL_PLATFORM()] == "flagged"
+    assert sheet2[1][notes_i] == "IG took it down"
+    assert sheet2[1][HEADERS.index("uniqueness")] == "0.9"
+
+
+def test_resolve_sheet_id_prefers_env_over_file(tmp_path):
+    cfg = tmp_path / "drive" / "drop_sheet.json"
+    write_sheet_id_file(str(cfg), "from-file")
+    assert resolve_sheet_id({}, str(cfg)) == "from-file"
+    assert resolve_sheet_id({ENV_SHEET_ID: " from-env "}, str(cfg)) == "from-env"
+
+
+def test_persist_platform_result_inserts_when_row_missing():
+    sheets = FakeSheets()
+    sid = ensure_ledger(sheets, None)
+    assert not update_platform_result_cell(
+        sheets, sid, job_id="j1", source_id="s1", index=1, result="flagged",
+    )
+    assert persist_platform_result(
+        sheets, sid,
+        job_id="j1", source_id="s1", index=1, result="flagged",
+        rows=[_row(platform_result="")],
+    )
+    values = sheets.get_values(sid, ledger_values_range())
+    assert values[1][_COL_PLATFORM()] == "flagged"
+
+
+def test_persist_platform_result_false_when_row_unknown():
+    sheets = FakeSheets()
+    sid = ensure_ledger(sheets, None)
+    assert persist_platform_result(
+        sheets, sid,
+        job_id="j1", source_id="s1", index=1, result="flagged",
+        rows=[],
+    ) is False
 
 
 def _COL_PLATFORM() -> int:
