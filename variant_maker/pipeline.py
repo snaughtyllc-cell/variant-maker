@@ -18,6 +18,7 @@ from .platforms import get_platform
 from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+from .shot import classify_shot
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
@@ -101,6 +102,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
     src = probe(input_path)
     stem = os.path.splitext(os.path.basename(input_path))[0]
+    shot_info = classify_shot(src.path, src.duration_s)
+    shot_kind = shot_info.get("kind")
 
     def _name(i: int, vseed: int) -> str:
         return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
@@ -114,6 +117,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "rubberband": bool(rubberband),
         "protect": False,
         "count": count,
+        "shot": shot_info,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
     }
@@ -130,6 +134,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             vseed, fname, path = _prep(i)
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
+                shot=shot_kind,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -169,7 +174,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             emit("rendering", index=i, attempt=attempt_no)
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
-                duration_s=src.duration_s,
+                duration_s=src.duration_s, shot=shot_kind,
             )
             if protect_frame is not None:
                 from .neural import protect

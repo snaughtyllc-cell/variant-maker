@@ -22,7 +22,8 @@ from __future__ import annotations
 import hashlib
 import random
 
-from .presets import Preset
+from .presets import Preset, Range
+from .shot import rebuild_range_for_shot
 
 # Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
 _MIN_REMAINING_S = 0.05
@@ -176,6 +177,17 @@ def clamp_strength(strength: float) -> float:
     return min(2.0, max(0.0, strength))
 
 
+def _remap_range(value: float, src: Range, dst: Range) -> float:
+    """Map ``value`` from ``src`` onto ``dst`` (same seed position, new band)."""
+    if src.lo == dst.lo and src.hi == dst.hi:
+        return value
+    span = src.hi - src.lo
+    if span <= 0:
+        return dst.lo
+    t = min(1.0, max(0.0, (value - src.lo) / span))
+    return dst.lo + t * (dst.hi - dst.lo)
+
+
 def disable_fast_pixel_ops(params: dict) -> dict:
     """HQ skip: ESRGAN already rebuilds pixels. Zeros resample/rebuild/warp, keeps the rest."""
     video = dict(params["video"])
@@ -192,6 +204,7 @@ def sample(
     rubberband: bool = False,
     strength: float = 1.0,
     duration_s: float | None = None,
+    shot: str | None = None,
 ) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
@@ -200,7 +213,8 @@ def sample(
     above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
     escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
     WHICH axes move; strength fixes how far. `duration_s` (when given) scales head/tail
-    trim so a short source keeps a usable remaining duration.
+    trim so a short source keeps a usable remaining duration. `shot` is a look-first
+    hint (`talking_head` / `motion`); None keeps the preset rebuild band so seeds match.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -215,6 +229,10 @@ def sample(
             raw[name] = ref + rng.uniform(-d, d)
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
+
+    raw["rebuild_scale"] = _remap_range(
+        raw["rebuild_scale"], preset.rebuild_scale, rebuild_range_for_shot(preset, shot),
+    )
 
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must

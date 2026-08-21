@@ -419,3 +419,27 @@ def test_hq_still_grabs_and_applies_face_protect(monkeypatch, tmp_path):
     ))
     assert calls["grab"] == 1
     assert calls["apply"] >= 1
+
+
+def test_pipeline_passes_shot_into_sample(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    seen = []
+
+    def fake_sample(preset, seed, **kw):
+        seen.append(kw.get("shot"))
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
+    monkeypatch.setattr(
+        pipeline, "classify_shot",
+        lambda *a, **k: {"kind": "talking_head", "self_bits": 10},
+    )
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    manifest = pipeline.run(_cfg(tmp_path, auto_tune=False, uniq_strengths=[1.0]))
+    assert seen
+    assert all(s == "talking_head" for s in seen)
+    assert manifest.run["shot"]["kind"] == "talking_head"
+    assert manifest.run["shot"]["self_bits"] == 10

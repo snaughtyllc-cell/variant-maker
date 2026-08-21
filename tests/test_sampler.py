@@ -430,3 +430,33 @@ def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
     assert out["video"]["warp_k1"] == 0.0
     assert p["video"]["rebuild_scale"] < 1.0
     assert out["video"]["crop_keep"] == p["video"]["crop_keep"]
+
+
+def test_shot_none_matches_omitted_shot():
+    s = derive_seed(42, 3)
+    assert sample(MEDIUM, s) == sample(MEDIUM, s, shot=None)
+
+
+def test_talking_head_uses_heavier_rebuild_keeps_crop():
+    """Look-first: a still face gets strong's rebuild band on medium. Crop stays."""
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert head["video"]["crop_keep"] == plain["video"]["crop_keep"]
+    assert 0.50 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.66 + 1e-9
+    assert head["video"]["rebuild_scale"] < plain["video"]["rebuild_scale"] + 1e-9
+    for s in SEEDS[:80]:
+        scale = sample(MEDIUM, s, shot="talking_head")["video"]["rebuild_scale"]
+        assert 0.50 - 1e-9 <= scale <= 0.66 + 1e-9
+    strong = sample(STRONG, seed, shot="talking_head")["video"]["rebuild_scale"]
+    assert 0.38 - 1e-9 <= strong <= 0.49 + 1e-9
+    assert strong < 0.50
+
+
+def test_motion_uses_gentler_rebuild():
+    for s in SEEDS[:80]:
+        scale = sample(MEDIUM, s, shot="motion")["video"]["rebuild_scale"]
+        assert 0.78 - 1e-9 <= scale <= 0.90 + 1e-9
+    for s in SEEDS[:40]:
+        scale = sample(STRONG, s, shot="motion")["video"]["rebuild_scale"]
+        assert 0.67 - 1e-9 <= scale <= 0.80 + 1e-9

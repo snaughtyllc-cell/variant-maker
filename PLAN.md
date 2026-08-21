@@ -174,7 +174,9 @@ Status legend: ✅ done & verified · 🔨 to build
   first so crop AND eq survive. `warp_k1` is **budgeted** (VMAF-capped); unbudgeted
   warp scored VMAF 53–80 and dropped Drive uploads. HQ skips rebuild+warp (ESRGAN owns pixels).
 - Unbudgeted rebuild fingerprint. Color zero-mean. VMAF floor stays. Gates stay 24/24.
-- Not named Smart Colors / Pixel AI scramble / fps jitter / random output dimensions.
+- Look-first shot probe (`docs/superpowers/specs/2026-08-21-fast-shot-probe.md`):
+  source 25% vs 75% self-bits < 24 → talking-head gets a heavier rebuild; motion
+  stays gentler. Not OpenCV. Not a detector.
 
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate is disabled until **New run**
