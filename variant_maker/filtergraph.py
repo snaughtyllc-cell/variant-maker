@@ -179,8 +179,14 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         g = round(v["grain"])
         if v.get("noise_chroma"):
             # Talking-head: SSIM All sees chroma; VMAF is mostly luma. Luma grain
-            # 40–52 scored 58% uniqueness but VMAF ~80 (harvest skip).
-            parts.append(f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u")
+            # 40–52 scored 58% uniqueness but VMAF ~80 (harvest skip). Per-copy
+            # seed keeps peer bits up so the pack stays on medium.
+            noise = f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u"
+            ns = v.get("noise_seed")
+            if ns is not None:
+                s = int(ns) & 0x7FFFFFFF
+                noise += f":c1_seed={s}:c2_seed={s}"
+            parts.append(noise)
         else:
             parts.append(f"noise=alls={g}:allf=t+u")
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.

@@ -35,9 +35,13 @@ Lab luma grain 40–52 scored 37–39 bits (~58–61%) but VMAF ~80 (`best_effor
 harvest skip). Luma 28–34 passed VMAF 91 but only **42–47%**. SSIM All sees
 chroma; VMAF is mostly luma. Talking-head grain is therefore chroma-only
 (`noise=c0s=0:c1s=g:c2s=g`, `video.noise_chroma=true`, no extra RNG). Local
-crop + chroma 40/56 scored **35/43 bits (55/67% UI)**. Medium band **38–50**
-aims at typical 55–65%. Quality proxy still includes grain — lab must prove
-VMAF ≥90. Motion keeps luma `alls=…:allf=t+u`. No extra rotate (captions).
+crop + chroma 40/56 scored **35/43 bits (55/67% UI)**. Lab `57aec3e` medium
+copy 1: **40 bits (62.5%)**, VMAF **98**, caption upright. Copies 2–3
+escalated to strong because ffmpeg noise seed defaults to `-1` (same pattern
+→ peer bits 16–17). Per-copy `c1_seed`/`c2_seed` from the variant seed (no
+extra RNG) so the pack can stay on medium. Medium band **38–50** aims at
+typical 55–65%. Quality proxy still includes grain. Motion keeps luma
+`alls=…:allf=t+u`. No extra rotate (captions).
 
 | preset | default rebuild | talking_head rebuild | talking_head chroma grain | motion rebuild |
 |---|---|---|---|---|

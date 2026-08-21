@@ -245,6 +245,9 @@ def sample(
         raw["grain"] = _remap_range(raw["grain"], preset.grain, shot_grain)
         work = replace(preset, grain=shot_grain)
         raw["noise_chroma"] = True
+        # ffmpeg noise seed defaults to -1 (same pattern on every copy). Derive
+        # from the variant seed — no extra RNG — so peers disagree at 576.
+        raw["noise_seed"] = int(seed) & 0x7FFFFFFF
 
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must

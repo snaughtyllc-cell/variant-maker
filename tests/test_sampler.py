@@ -453,11 +453,16 @@ def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
         assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
         assert 38 - 1e-9 <= v["grain"] <= 50 + 1e-9
         assert v.get("noise_chroma") is True
+        assert v.get("noise_seed") == s & 0x7FFFFFFF
     strong = sample(STRONG, seed, shot="talking_head")["video"]
     assert 0.85 - 1e-9 <= strong["rebuild_scale"] <= 0.94 + 1e-9
     assert 46 - 1e-9 <= strong["grain"] <= 58 + 1e-9
     assert strong.get("noise_chroma") is True
+    assert strong.get("noise_seed") == seed & 0x7FFFFFFF
     assert "noise_chroma" not in plain["video"]
+    assert "noise_seed" not in plain["video"]
+    other = sample(MEDIUM, seed + 1, shot="talking_head")["video"]
+    assert other["noise_seed"] != head["video"]["noise_seed"]
 
 
 def test_talking_head_grain_is_vmaf_shrinkable():
@@ -498,3 +503,5 @@ def test_motion_keeps_budgeted_grain():
     assert moved["video"]["crop_keep"] == plain["video"]["crop_keep"]
     assert "noise_chroma" not in moved["video"]
     assert "noise_chroma" not in plain["video"]
+    assert "noise_seed" not in moved["video"]
+    assert "noise_seed" not in plain["video"]
