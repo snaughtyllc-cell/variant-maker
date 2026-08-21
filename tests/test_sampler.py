@@ -451,7 +451,7 @@ def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head")["video"]
         assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
-        assert 38 - 1e-9 <= v["grain"] <= 50 + 1e-9
+        assert 34 - 1e-9 <= v["grain"] <= 42 + 1e-9
         assert v.get("noise_chroma") is True
         assert v.get("noise_seed") == s & 0x7FFFFFFF
     strong = sample(STRONG, seed, shot="talking_head")["video"]
@@ -475,11 +475,11 @@ def test_talking_head_grain_is_vmaf_shrinkable():
     for s in SEEDS[:80]:
         mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
         full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
-        assert 38 - 1e-9 <= mild <= 50 + 1e-9
-        assert 38 - 1e-9 <= full <= 50 + 1e-9
+        assert 34 - 1e-9 <= mild <= 42 + 1e-9
+        assert 34 - 1e-9 <= full <= 42 + 1e-9
         vals.append(full)
     assert min(vals) < max(vals)
-    assert max(vals) > 38 + 0.2
+    assert max(vals) > 34 + 0.2
     plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
     head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]
     assert head > plain + 1e-9

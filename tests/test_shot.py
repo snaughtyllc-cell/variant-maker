@@ -45,7 +45,7 @@ def test_talking_head_grain_band_is_heavier_than_preset():
 
     med = shot.grain_range_for_shot(MEDIUM, "talking_head")
     assert med is not None
-    assert (med.lo, med.hi) == (38, 50)
+    assert (med.lo, med.hi) == (34, 42)
     strong = shot.grain_range_for_shot(STRONG, "talking_head")
     assert strong is not None
     assert (strong.lo, strong.hi) == (46, 58)

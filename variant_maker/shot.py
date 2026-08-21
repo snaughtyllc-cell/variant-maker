@@ -26,7 +26,8 @@ SHOT_MOTION = "motion"
 # Grain 40–52 *luma* hit 37–39 bits (~58–61% UI) on lab but VMAF ~80
 # (best_effort, harvest skip). SSIM All sees chroma; VMAF is mostly luma.
 # Talking-head grain is chroma-only (noise_chroma). Local crop + chroma 40/56
-# scored 35/43 bits (55/67% UI). Band 38–50 aims at typical 55–65%.
+# scored 35/43 bits (55/67% UI). Lab chroma 40/45/48 scored 40/43/44 bits
+# (62/67/69% UI). Band 34–42 aims at typical 55–65% without overshoot.
 # Shrink does not collapse uniqueness grain to shot.lo when look overspends.
 # No extra rotate (captions go crooked). Crop/warp stay on the preset. Gate 24/24.
 _REBUILD_FOR_SHOT = {
@@ -39,7 +40,7 @@ _REBUILD_FOR_SHOT = {
 }
 _GRAIN_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(24, 36),
-    ("medium", SHOT_TALKING_HEAD): Range(38, 50),
+    ("medium", SHOT_TALKING_HEAD): Range(34, 42),
     ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
 

@@ -43,12 +43,14 @@ escalated to strong because ffmpeg noise seed defaults to `-1` (same pattern
 banned) and chroma 50–57 — still 13–14 peer bits. Talking-head therefore
 **does not peer-escalate**; vs-source 24/24 still gates, peer bits are
 recorded, `MIN_PEER_BITS` stays 24. Motion still uses the peer floor.
-Medium band **38–50** aims at typical 55–65%. Quality proxy still includes
-grain. Motion keeps luma `alls=…:allf=t+u`. No extra rotate (captions).
+Lab `b6c2c9c` all-medium pack: chroma 40/45/48 → **40/43/44 bits (62/67/69%)**,
+VMAF 98. Copy says typical **55–65%**, so medium chroma is **34–42**
+(lab chroma 40 = 62%). Quality proxy still includes grain. Motion keeps luma
+`alls=…:allf=t+u`. No extra rotate (captions).
 
 | preset | default rebuild | talking_head rebuild | talking_head chroma grain | motion rebuild |
 |---|---|---|---|---|
-| medium | 0.67–0.80 | **0.90–0.98** | **38–50** | 0.78–0.90 |
+| medium | 0.67–0.80 | **0.90–0.98** | **34–42** | 0.78–0.90 |
 | strong | 0.50–0.66 | **0.85–0.94** | **46–58** | 0.67–0.80 |
 | subtle | 0.90–0.98 | 0.94–0.99 | 24–36 | 0.94–0.99 |
 
