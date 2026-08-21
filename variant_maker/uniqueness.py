@@ -18,9 +18,10 @@ import tempfile
 METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
 # is 24 bits (24/64 = 0.375 ≈ 38% UI). Medium talking-head should *score*
-# ~35–42 bits (~55–65% UI) via a real crop punch (keep 0.74–0.82), not a higher
-# floor. Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
-# Local uniqueness gate only — not a platform verdict.
+# ~35–42 bits (~55–65% UI) via moderate crop (keep 0.84–0.90), unbudgeted warp,
+# and grain — not a face-only zoom (keep 0.72 scored *worse*). Raising the gate
+# to 32 previously forced strong on a whole Fast 20-pack. Local uniqueness
+# gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31

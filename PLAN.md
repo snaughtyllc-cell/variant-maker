@@ -117,9 +117,9 @@ Status legend: ✅ done & verified · 🔨 to build
   stops at the first uniqueness+quality+peer hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
 - Fast *gate* is **24 bits vs source**, **24 vs peers** (~38% UI). Do not raise the gate
-  to 32. Medium crop is unbudgeted and sized `0.74–0.82` so talking-head *scores*
-  ~35–42 bits (~55–65% UI) without escalate. Grain stays modest (4–8 / 6–10);
-  social delivery is capped at 12M. Peer miss searches **stronger** (not milder — quality
+  to 32. Medium crop is unbudgeted `0.84–0.90` (talking-head face-only zoom scored
+  *worse* SSIM). Warp is unbudgeted too so strong cannot land `warp≈0`. Grain is
+  uniqueness texture (7–12 / 10–16); social delivery is capped at 12M. Peer miss searches **stronger** (not milder — quality
   `passed` is VMAF only). Over-budget `sample()` shrinks color/encode first; crop_keep
   is fingerprint and does not shrink toward identity. Color stays zero-mean. VMAF floor stays.
   Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.

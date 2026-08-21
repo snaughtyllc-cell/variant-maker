@@ -12,8 +12,8 @@ Contract:
 The distortion model is the budget contract: each budgeted axis contributes a value in
 [0, 1] measuring how far it strays from its calm point, relative to its in-range reach.
 When the raw draw overspends, sample() shrinks ENCODE axes (grain/unsharp/crf) toward
-calm first so per-copy color AND warp can still show. crop_keep is unbudgeted (VMAF
-already ignores it; shrinking it toward 1.0 was the 35% uniqueness / all-esc bug).
+calm first so per-copy color can still show. crop_keep and warp_k1 are unbudgeted
+(VMAF already ignores crop; shrinking warp toward 0 was the talking-head 16-bit miss).
 Color stays zero-mean; bounds stay intact.
 """
 from __future__ import annotations
@@ -31,8 +31,9 @@ _REMAINING_CAP_S = 1.0
 # Axis model. kind "sym" => zero-mean around `ref` (a neutral value); kind "dir" => one-
 # directional, calm at the range end named by `ref` ("lo" or "hi"). `budgeted` axes share
 # the per-variant distortion budget; temporal axes (speed, trim) ride along unbudgeted.
-# crop_keep is unbudgeted: it is the vs-source uniqueness lever, VMAF already ignores it,
-# and shrinking it toward 1.0 when color/warp overspend is the 35% / all-esc failure mode.
+# crop_keep and warp_k1 are unbudgeted: vs-source uniqueness levers. VMAF already
+# ignores crop; warp is the Fast pixel seed. Shrinking either toward identity when
+# color overspends is the 35% / all-esc / warp≈0 failure mode.
 _SYM, _DIR = "sym", "dir"
 _VIDEO_AXES = (
     # (name,        kind,  ref,    budgeted)
@@ -46,16 +47,16 @@ _VIDEO_AXES = (
     ("grain",       _DIR,  "lo",   True),
     ("unsharp",     _DIR,  "lo",   True),
     ("crf",         _DIR,  "lo",   True),   # encoder degradation counts toward the budget
-    ("warp_k1",     _SYM,  0.0,    True),   # Fast pixel seed; VMAF sees it
+    ("warp_k1",     _SYM,  0.0,    False),  # Fast pixel seed; unbudgeted so shrink cannot zero it
     ("speed",       _SYM,  1.0,    False),  # temporal identity ops ride along unbudgeted
     ("trim_s",      _DIR,  "lo",   False),
 )
 # crf is output as an int (floored toward its calm 'lo' end, so its budget share never grows).
 _INT_AXES = frozenset({"crf"})
-# Over-budget shrink: collapse cheap-look encode first so color + warp still show.
+# Over-budget shrink: collapse cheap-look encode first so color still shows.
 _ENCODE_AXES = frozenset({"grain", "unsharp", "crf"})
 _LOOK_AXES = frozenset({
-    "rotate_deg", "warp_k1",
+    "rotate_deg",
     "brightness", "contrast", "saturation", "gamma", "hue_deg",
 })
 # Back-compat alias used by older tests/docs: encode + color (not geometry).
@@ -210,8 +211,9 @@ def sample(
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
 
-    # Fit the budget: shrink grain/unsharp/crf first so color AND warp show.
-    # crop_keep is unbudgeted (fingerprint) — strength must not pull it to identity.
+    # Fit the budget: shrink grain/unsharp/crf first so color shows.
+    # crop_keep and warp_k1 are unbudgeted fingerprints — strength must not
+    # pull keep to 1.0 or warp to 0.
     spent = _spent_on(raw, preset, _ENCODE_AXES | _LOOK_AXES)
     if spent > budget and spent > 0:
         look_spent = _spent_on(raw, preset, _LOOK_AXES)

@@ -221,28 +221,29 @@ def test_crop_keep_is_unbudgeted_fingerprint():
 
 
 def test_medium_crop_range_is_tighter_than_identity():
-    """Talking-head keep=0.858 still scored ~24 bits (~38% UI). Medium must always
-    punch ≥18% so packs land ~35–42 bits (~55–65%) without raising the 24-bit gate.
-    Escalate is strictly tighter so a miss is not another medium-sized crop.
+    """Talking-head keep=0.72 (face-only zoom) scored *worse* SSIM than 0.858.
+    Medium always punches ≥10% but keeps background in the 576×1024 uniqueness
+    frame. Escalate is a bit tighter. Gate stays 24.
     """
-    assert MEDIUM.crop_keep.lo == pytest.approx(0.74)
-    assert MEDIUM.crop_keep.hi == pytest.approx(0.82)
-    assert STRONG.crop_keep.hi <= MEDIUM.crop_keep.lo + 1e-9
-    assert STRONG.crop_keep.lo == pytest.approx(0.66)
+    assert MEDIUM.crop_keep.lo == pytest.approx(0.84)
+    assert MEDIUM.crop_keep.hi == pytest.approx(0.90)
+    assert STRONG.crop_keep.lo < MEDIUM.crop_keep.lo
+    assert STRONG.crop_keep.lo == pytest.approx(0.78)
+    assert STRONG.crop_keep.hi == pytest.approx(0.86)
     for s in SEEDS[:80]:
         keep = sample(MEDIUM, s)["video"]["crop_keep"]
-        assert keep <= 0.82 + 1e-9
-        assert keep >= 0.74 - 1e-9
+        assert keep <= 0.90 + 1e-9
+        assert keep >= 0.84 - 1e-9
 
 
-def test_grain_is_modest_so_esc_cannot_write_60mbps():
-    """Grain is a weak SSIM lever and a huge bitrate bomb. Strong 14–22 wrote
-    ~65 Mbps files; the 12M social cap is the ceiling, grain should not sit there.
+def test_grain_is_texture_under_the_social_cap():
+    """Grain moves talking-head SSIM; 14–22 without a cap wrote ~65 Mbps.
+    Social 12M is the file-size ceiling — grain can sit in the uniqueness band.
     """
-    assert MEDIUM.grain.lo == pytest.approx(4)
-    assert MEDIUM.grain.hi == pytest.approx(8)
-    assert STRONG.grain.lo == pytest.approx(6)
-    assert STRONG.grain.hi == pytest.approx(10)
+    assert MEDIUM.grain.lo == pytest.approx(7)
+    assert MEDIUM.grain.hi == pytest.approx(12)
+    assert STRONG.grain.lo == pytest.approx(10)
+    assert STRONG.grain.hi == pytest.approx(16)
     assert STRONG.grain.hi > MEDIUM.grain.hi
     assert MEDIUM.grain.lo >= SUBTLE.grain.lo
 
@@ -264,7 +265,7 @@ def test_over_budget_shrink_kills_encode_before_look():
     """When over budget, shrink grain/unsharp/crf first; color AND crop both survive."""
     encode_names = {"grain", "unsharp", "crf"}
     look_names = {
-        "rotate_deg", "warp_k1",
+        "rotate_deg",
         "brightness", "contrast", "saturation", "gamma", "hue_deg",
     }
     encode_ds: list[float] = []
@@ -364,13 +365,21 @@ def test_resample_is_unbudgeted_and_zero_meanish():
     assert abs(sum(pxs) / len(pxs)) < 2.0
 
 
-def test_warp_k1_is_budgeted_zero_mean():
+def test_warp_k1_is_unbudgeted_fingerprint_zero_mean():
+    """Pixel-seed warp must not shrink toward 0 when color/encode overspend.
+    Talking-head strong with budgeted warp landed warp≈0.001 and 16–20 bits.
+    """
     p = sample(MEDIUM, derive_seed(9, 2))
     base = total_distortion(MEDIUM, p)
     bumped = {"video": dict(p["video"])}
     bumped["video"]["warp_k1"] = MEDIUM.warp_k1.hi
-    if bumped["video"]["warp_k1"] != p["video"]["warp_k1"]:
-        assert total_distortion(MEDIUM, bumped) >= base
+    assert total_distortion(MEDIUM, bumped) == base
+    seed = derive_seed(42, 7)
+    mild = sample(MEDIUM, seed, strength=0.25)["video"]["warp_k1"]
+    full = sample(MEDIUM, seed, strength=1.0)["video"]["warp_k1"]
+    strong = sample(MEDIUM, seed, strength=1.8)["video"]["warp_k1"]
+    assert mild == full == strong
+    assert abs(mild) > 1e-6
     vals = [sample(MEDIUM, s)["video"]["warp_k1"] for s in SEEDS]
     mean = sum(vals) / len(vals)
     assert abs(mean) < 0.002
