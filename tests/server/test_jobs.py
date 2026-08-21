@@ -514,9 +514,6 @@ def test_gallery_keep_does_not_delete_a_running_job(tmp_path):
     )
     live = store.create_job([("live.mp4", b"x")], count=2)
     assert runner.v1_done.wait(timeout=5)
-    done = JobStore(
-        Workspace(str(tmp_path / "other")), FakeRunner({}), gallery_keep_jobs=1,
-    )
     # same store: finish two more jobs while live is held
     store._runner = FakeRunner({})
     a = store.create_job([("a.mp4", b"x")], count=1)
