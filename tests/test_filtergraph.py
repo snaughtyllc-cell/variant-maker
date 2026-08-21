@@ -234,6 +234,29 @@ def test_warp_omitted_when_near_zero():
     assert "lenscorrection=" not in vf
 
 
+def test_talking_head_chroma_noise_skips_luma():
+    """SSIM All sees chroma; VMAF is mostly luma. Default grain stays luma t+u."""
+    chroma = make_params(video={"grain": 40.0, "noise_chroma": True})
+    vf = filtergraph.build_video_filters(chroma, make_src(), REELS)
+    assert "noise=c0s=0:c0f=u:c1s=40:c1f=u:c2s=40:c2f=u" in vf
+    assert "alls=" not in vf
+    luma = make_params(video={"grain": 8.0})
+    vf_luma = filtergraph.build_video_filters(luma, make_src(), REELS)
+    assert "noise=alls=8:allf=t+u" in vf_luma
+    assert "c1s=" not in vf_luma
+
+
+def test_talking_head_sample_emits_chroma_noise():
+    from variant_maker.presets import MEDIUM
+    from variant_maker.sampler import derive_seed, sample
+
+    p = sample(MEDIUM, derive_seed(11, 5), shot="talking_head")
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert p["video"].get("noise_chroma") is True
+    assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
+    assert "alls=" not in vf
+
+
 # ---- no-op axes are omitted -------------------------------------------------
 
 def test_neutral_axes_are_omitted():

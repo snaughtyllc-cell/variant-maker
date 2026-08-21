@@ -23,9 +23,11 @@ SHOT_MOTION = "motion"
 # rebuild — AQMTp at 0.25–0.31 still scored 20–22 bits, and a local sweep of
 # rebuild 0.27 matched identity encode (8 bits). Grain is what 576 scores:
 # crop 0.86 + noise=alls=32/40/56 → 28/31/38 bits under the 12M cap.
-# Grain 40–52 hit 37–39 bits (~58–61% UI) on lab but VMAF ~80 (best_effort,
-# harvest skip). Band is 28–34 so VMAF can still clear 90. Shrink does not
-# collapse uniqueness grain to shot.lo when look already spent the budget.
+# Grain 40–52 *luma* hit 37–39 bits (~58–61% UI) on lab but VMAF ~80
+# (best_effort, harvest skip). SSIM All sees chroma; VMAF is mostly luma.
+# Talking-head grain is chroma-only (noise_chroma). Local crop + chroma 40/56
+# scored 35/43 bits (55/67% UI). Band 38–50 aims at typical 55–65%.
+# Shrink does not collapse uniqueness grain to shot.lo when look overspends.
 # No extra rotate (captions go crooked). Crop/warp stay on the preset. Gate 24/24.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
@@ -36,9 +38,9 @@ _REBUILD_FOR_SHOT = {
     ("strong", SHOT_MOTION): Range(0.67, 0.80),
 }
 _GRAIN_FOR_SHOT = {
-    ("subtle", SHOT_TALKING_HEAD): Range(18, 26),
-    ("medium", SHOT_TALKING_HEAD): Range(28, 34),
-    ("strong", SHOT_TALKING_HEAD): Range(32, 38),
+    ("subtle", SHOT_TALKING_HEAD): Range(24, 36),
+    ("medium", SHOT_TALKING_HEAD): Range(38, 50),
+    ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
 
 

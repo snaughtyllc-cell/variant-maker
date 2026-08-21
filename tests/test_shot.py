@@ -41,13 +41,16 @@ def test_gate_stays_twenty_four():
 
 
 def test_talking_head_grain_band_is_heavier_than_preset():
-    from variant_maker.presets import MEDIUM, STRONG
+    from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 
     med = shot.grain_range_for_shot(MEDIUM, "talking_head")
     assert med is not None
-    assert (med.lo, med.hi) == (28, 34)
+    assert (med.lo, med.hi) == (38, 50)
     strong = shot.grain_range_for_shot(STRONG, "talking_head")
     assert strong is not None
-    assert (strong.lo, strong.hi) == (32, 38)
+    assert (strong.lo, strong.hi) == (46, 58)
+    subtle = shot.grain_range_for_shot(SUBTLE, "talking_head")
+    assert subtle is not None
+    assert (subtle.lo, subtle.hi) == (24, 36)
     assert shot.grain_range_for_shot(MEDIUM, "motion") is None
     assert shot.grain_range_for_shot(MEDIUM, None) is None

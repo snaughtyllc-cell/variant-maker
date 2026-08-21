@@ -443,15 +443,21 @@ def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
     plain = sample(MEDIUM, seed)
     head = sample(MEDIUM, seed, shot="talking_head")
     assert head["video"]["crop_keep"] == plain["video"]["crop_keep"]
+    # noise_chroma is a flag, not an extra draw — fingerprint RNG stays aligned.
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
     assert 0.90 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.98 + 1e-9
     assert head["video"]["rebuild_scale"] > plain["video"]["rebuild_scale"] - 1e-9
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head")["video"]
         assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
-        assert 28 - 1e-9 <= v["grain"] <= 34 + 1e-9
+        assert 38 - 1e-9 <= v["grain"] <= 50 + 1e-9
+        assert v.get("noise_chroma") is True
     strong = sample(STRONG, seed, shot="talking_head")["video"]
     assert 0.85 - 1e-9 <= strong["rebuild_scale"] <= 0.94 + 1e-9
-    assert 32 - 1e-9 <= strong["grain"] <= 38 + 1e-9
+    assert 46 - 1e-9 <= strong["grain"] <= 58 + 1e-9
+    assert strong.get("noise_chroma") is True
+    assert "noise_chroma" not in plain["video"]
 
 
 def test_talking_head_grain_is_vmaf_shrinkable():
@@ -464,11 +470,11 @@ def test_talking_head_grain_is_vmaf_shrinkable():
     for s in SEEDS[:80]:
         mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
         full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
-        assert 28 - 1e-9 <= mild <= 34 + 1e-9
-        assert 28 - 1e-9 <= full <= 34 + 1e-9
+        assert 38 - 1e-9 <= mild <= 50 + 1e-9
+        assert 38 - 1e-9 <= full <= 50 + 1e-9
         vals.append(full)
     assert min(vals) < max(vals)
-    assert max(vals) > 28 + 0.2
+    assert max(vals) > 38 + 0.2
     plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
     head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]
     assert head > plain + 1e-9
@@ -490,3 +496,5 @@ def test_motion_keeps_budgeted_grain():
     moved = sample(MEDIUM, s, shot="motion")
     assert moved["video"]["grain"] == plain["video"]["grain"]
     assert moved["video"]["crop_keep"] == plain["video"]["crop_keep"]
+    assert "noise_chroma" not in moved["video"]
+    assert "noise_chroma" not in plain["video"]

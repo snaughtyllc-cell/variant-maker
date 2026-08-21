@@ -238,11 +238,13 @@ def sample(
     shot_grain = grain_range_for_shot(preset, shot)
     if shot_grain is not None:
         # Remap onto the shot band, then budget/VMAF shrink toward *shot.lo*
-        # (not preset.lo). Grain 40–52 scored 55–65% uniqueness but VMAF ~80
-        # and best_effort — harvest skipped those files. Shrink must be able
-        # to walk grain down so the quality guard can still fire.
+        # (not preset.lo). Luma grain 40–52 scored 55–65% uniqueness but VMAF
+        # ~80 and best_effort — harvest skipped those files. Chroma-only noise
+        # is the uniqueness lever (no extra RNG). Shrink must still be able to
+        # walk grain down so the quality guard can fire.
         raw["grain"] = _remap_range(raw["grain"], preset.grain, shot_grain)
         work = replace(preset, grain=shot_grain)
+        raw["noise_chroma"] = True
 
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must
