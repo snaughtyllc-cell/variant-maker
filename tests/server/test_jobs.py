@@ -13,6 +13,7 @@ from variant_maker.server.jobs import (
     JobSource,
     JobStore,
     VariantInfo,
+    gallery_keep_jobs,
     source_copy_status,
     source_files_ready,
     variant_on_disk,
@@ -488,3 +489,106 @@ def test_set_post_url_survives_hydrate(tmp_path):
     restored = store2.get(job.job_id).sources[0].variants[0]
     assert restored.post_url == url
     assert restored.platform_result is None
+
+
+def test_gallery_keep_boots_oldest_finished_job(tmp_path):
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,
+    )
+    ids = []
+    for name in ("a.mp4", "b.mp4", "c.mp4"):
+        job = store.create_job([(name, b"x")], count=1)
+        assert store.wait(job.job_id, timeout=5)
+        ids.append(job.job_id)
+    assert store.get(ids[0]) is None
+    assert not os.path.isdir(os.path.join(str(tmp_path), "jobs", ids[0]))
+    assert store.get(ids[1]) is not None
+    assert store.get(ids[2]) is not None
+    assert len(store.list()) == 2
+
+
+def test_gallery_keep_does_not_delete_a_running_job(tmp_path):
+    runner = _PausingRunner()
+    store = JobStore(
+        Workspace(str(tmp_path)), runner, gallery_keep_jobs=1,
+    )
+    live = store.create_job([("live.mp4", b"x")], count=2)
+    assert runner.v1_done.wait(timeout=5)
+    done = JobStore(
+        Workspace(str(tmp_path / "other")), FakeRunner({}), gallery_keep_jobs=1,
+    )
+    # same store: finish two more jobs while live is held
+    store._runner = FakeRunner({})
+    a = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(a.job_id, timeout=5)
+    b = store.create_job([("b.mp4", b"x")], count=1)
+    assert store.wait(b.job_id, timeout=5)
+    assert store.get(live.job_id) is not None
+    assert live.state == "running"
+    assert store.get(a.job_id) is None
+    assert store.get(b.job_id) is not None
+    runner.gate.set()
+    assert store.wait(live.job_id, timeout=5)
+    # three finished → keep 1 newest (live, last to finish) unless created_utc
+    # orders live first. Live was created first so it is the oldest finished
+    # after it completes — keep the newest finished job (b).
+    remaining = [j.job_id for j in store.list() if j.state != "running"]
+    assert live.job_id not in remaining
+    assert b.job_id in remaining
+    assert len(remaining) == 1
+
+
+def test_gallery_keep_jobs_env_default_and_disable(monkeypatch):
+    monkeypatch.delenv("VARIANT_GALLERY_KEEP_JOBS", raising=False)
+    assert gallery_keep_jobs() == 10
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "0")
+    assert gallery_keep_jobs() == 0
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "7")
+    assert gallery_keep_jobs() == 7
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "nope")
+    assert gallery_keep_jobs() == 10
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "-3")
+    assert gallery_keep_jobs() == 0
+
+
+def test_hydrate_prunes_to_gallery_keep(tmp_path):
+    seed = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=0,
+    )
+    ids = []
+    for name in ("a.mp4", "b.mp4", "c.mp4", "d.mp4"):
+        job = seed.create_job([(name, b"x")], count=1)
+        assert seed.wait(job.job_id, timeout=5)
+        ids.append(job.job_id)
+    assert len(seed.list()) == 4
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,
+    )
+    store.hydrate_from_disk()
+    assert store.get(ids[0]) is None
+    assert store.get(ids[1]) is None
+    assert store.get(ids[2]) is not None
+    assert store.get(ids[3]) is not None
+    assert not os.path.isdir(os.path.join(str(tmp_path), "jobs", ids[0]))
+
+
+def test_delete_job_drops_r2_prefixes(tmp_path):
+    from tests.server.fakes import FakeObjectStore
+
+    objects = FakeObjectStore()
+    blob = tmp_path / "blob.bin"
+    blob.write_bytes(b"x")
+    store = JobStore(
+        Workspace(str(tmp_path / "ws")), FakeRunner({}), object_store=objects,
+        gallery_keep_jobs=0,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    sid = job.sources[0].source_id
+    objects.put(f"inputs/{sid}/a.mp4", str(blob))
+    objects.put(f"outputs/{sid}/v01.mp4", str(blob))
+    objects.put("outputs/other/v01.mp4", str(blob))
+    assert store.delete_job(job.job_id) is True
+    assert objects.list_prefix(f"inputs/{sid}/") == []
+    assert objects.list_prefix(f"outputs/{sid}/") == []
+    assert objects.list_prefix("outputs/other/") == ["outputs/other/v01.mp4"]

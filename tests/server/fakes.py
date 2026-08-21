@@ -130,3 +130,11 @@ class FakeObjectStore:
 
     def list_prefix(self, prefix: str) -> list[str]:
         return [k for k in self._data if k.startswith(prefix)]
+
+    def delete_prefix(self, prefix: str) -> int:
+        if not prefix:
+            return 0
+        keys = [k for k in self._data if k.startswith(prefix)]
+        for k in keys:
+            del self._data[k]
+        return len(keys)

@@ -49,6 +49,16 @@ names). A Railway bucket is also S3-compatible — map its credentials to:
 
 Set the **same** four vars on the RunPod serverless endpoint.
 
+## 2b. Gallery keep (Railway volume)
+
+Studio keeps the last **10 finished Generate jobs per workspace** (one 8-pack
+= one job). Older finished jobs are deleted from the volume and from R2
+`inputs/{source_id}/` and `outputs/{source_id}/`. Running jobs are never
+deleted. Next Studio boot also prunes the backlog (`hydrate_from_disk`).
+
+Override with `VARIANT_GALLERY_KEEP_JOBS` (default `10`; `0` disables). Do not
+raise this to “keep everything” — the volume is the expensive part.
+
 ## 3. RunPod serverless (engine)
 
 Build on **amd64/NVIDIA** (not a Mac):

@@ -8,6 +8,7 @@ import shutil
 import threading
 import uuid
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -17,6 +18,9 @@ from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
+
+GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
+DEFAULT_GALLERY_KEEP_JOBS = 10
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
 COPY_FAILED_MSG = (
@@ -105,6 +109,7 @@ class Job:
     allow_creative_escalate: bool = True
     quality_mode: str = "fast"
     error: str | None = None
+    created_seq: int = 0
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -120,6 +125,19 @@ def _public_job_error(exc: BaseException) -> str:
             "If this keeps happening, set RunPod execution timeout to 3600s."
         )
     return raw or type(exc).__name__
+
+
+def gallery_keep_jobs(environ: Mapping[str, str] | None = None) -> int:
+    """Last N finished Generate jobs to keep per workspace. 0 disables pruning."""
+    env = os.environ if environ is None else environ
+    raw = env.get(GALLERY_KEEP_JOBS_ENV, str(DEFAULT_GALLERY_KEEP_JOBS))
+    try:
+        return max(0, int(str(raw).strip()))
+    except (TypeError, ValueError):
+        return DEFAULT_GALLERY_KEEP_JOBS
+
+
+_keep_from_env = gallery_keep_jobs
 
 
 def _now() -> str:
@@ -213,6 +231,7 @@ def _job_to_dict(job: Job) -> dict:
         "job_id": job.job_id,
         "count": job.count,
         "created_utc": job.created_utc,
+        "created_seq": job.created_seq,
         "state": job.state,
         "quality_mode": job.quality_mode,
         "allow_creative_escalate": job.allow_creative_escalate,
@@ -251,6 +270,10 @@ def _job_from_dict(data: dict) -> Job:
     for raw in data.get("events") or []:
         if isinstance(raw, dict):
             events.append(_event_from_dict(raw))
+    try:
+        created_seq = int(data.get("created_seq") or 0)
+    except (TypeError, ValueError):
+        created_seq = 0
     return Job(
         job_id=str(data.get("job_id") or ""),
         count=int(data.get("count") or max((s.requested for s in sources), default=0)),
@@ -261,6 +284,7 @@ def _job_from_dict(data: dict) -> Job:
         allow_creative_escalate=bool(data.get("allow_creative_escalate", True)),
         quality_mode=normalize_quality_mode(data.get("quality_mode")),
         error=data.get("error"),
+        created_seq=created_seq,
     )
 
 
@@ -280,9 +304,14 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
 
 
 class JobStore:
-    def __init__(self, workspace: Workspace, runner: Runner) -> None:
+    def __init__(self, workspace: Workspace, runner: Runner,
+                 object_store=None, gallery_keep_jobs: int | None = None) -> None:
         self._ws = workspace
         self._runner = runner
+        self._object_store = object_store
+        keep_n = gallery_keep_jobs
+        self._keep = _keep_from_env() if keep_n is None else max(0, int(keep_n))
+        self._seq = 0
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._done: dict[str, threading.Event] = {}
@@ -318,9 +347,13 @@ class JobStore:
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool,                     quality_mode: str = "fast") -> Job:
+        with self._lock:
+            self._seq += 1
+            created_seq = self._seq
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
-                   quality_mode=normalize_quality_mode(quality_mode))
+                   quality_mode=normalize_quality_mode(quality_mode),
+                   created_seq=created_seq)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -359,6 +392,7 @@ class JobStore:
             self._source_index.pop(source_id, None)
             if job is not None:
                 job.sources = [s for s in job.sources if s.source_id != source_id]
+        self._forget_objects([source_id])
         if job is None or not job.sources:
             return self.delete_job(job_id)
         self._persist(job)
@@ -371,6 +405,7 @@ class JobStore:
             return False
         if job.state == "running":
             self.cancel(job_id)
+        source_ids = [s.source_id for s in job.sources]
         with self._lock:
             self._jobs.pop(job_id, None)
             self._cancel.pop(job_id, None)
@@ -380,7 +415,43 @@ class JobStore:
             if ev is not None:
                 ev.set()
             self._ws.remove_job(job_id)
+        self._forget_objects(source_ids)
         return True
+
+    def _forget_objects(self, source_ids: list[str]) -> None:
+        """Drop R2/S3 inputs/{id}/ and outputs/{id}/ for deleted packs."""
+        store = self._object_store
+        delete = getattr(store, "delete_prefix", None) if store is not None else None
+        if not callable(delete):
+            return
+        for sid in source_ids:
+            if not sid or sid != os.path.basename(sid) or sid in (".", ".."):
+                continue
+            for kind in ("inputs", "outputs"):
+                try:
+                    delete(f"{kind}/{sid}/")
+                except Exception as exc:
+                    print(
+                        f"object store delete {kind}/{sid}/ failed: "
+                        f"{type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
+
+    def prune_finished_jobs(self) -> None:
+        """Boot oldest finished Generate jobs when we are over the keep cap.
+
+        Running jobs are never deleted. keep=0 disables. An 8-pack is one job.
+        """
+        keep = self._keep
+        if keep <= 0:
+            return
+        with self._lock:
+            finished = [j for j in self._jobs.values() if j.state != "running"]
+            finished.sort(key=lambda j: (j.created_utc or "", j.created_seq, j.job_id))
+            extra = finished[:-keep] if len(finished) > keep else []
+            ids = [j.job_id for j in extra]
+        for job_id in ids:
+            self.delete_job(job_id)
 
     def _persist(self, job: Job) -> None:
         """Write job.json so a Studio restart can restore Gallery + resume a live run."""
@@ -510,7 +581,10 @@ class JobStore:
                     self._pull_missing_outputs(source.source_id)
                 self._refresh_copy_error(job)
             self._persist(job)
-            self._done[job.job_id].set()
+            self.prune_finished_jobs()
+            ev = self._done.get(job.job_id)
+            if ev is not None:
+                ev.set()
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
@@ -530,6 +604,7 @@ class JobStore:
             job.state = "running"
         with self._lock:
             self._jobs[job.job_id] = job
+            self._seq = max(self._seq, int(job.created_seq or 0))
             self._done[job.job_id] = threading.Event()
             for source in job.sources:
                 self._source_index[source.source_id] = (job.job_id, source)
@@ -638,6 +713,7 @@ class JobStore:
             )
             self._install_hydrated_job(job)
             loaded += 1
+        self.prune_finished_jobs()
         return loaded
 
     def wait(self, job_id: str, timeout: float = 30.0) -> bool:

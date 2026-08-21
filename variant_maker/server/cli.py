@@ -13,7 +13,7 @@ from .jobs import JobStore
 from .runner import LocalRunner, RoutingRunner, Runner, fast_local_max_from_env
 from .runpod_client import HttpRunPodClient
 from .runpod_runner import RunPodServerlessRunner
-from .storage import S3ObjectStore
+from .storage import S3ObjectStore, object_store_from_env
 from .workspace import Workspace
 
 _RUNPOD_ENV = ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
@@ -35,14 +35,14 @@ def _fast_endpoint_id() -> str | None:
     return raw or None
 
 
-def make_runner(kind: str) -> Runner:
+def make_runner(kind: str, object_store: S3ObjectStore | None = None) -> Runner:
     if kind == "local":
         return LocalRunner()
     if kind == "runpod":
         missing = [k for k in _RUNPOD_ENV if not os.environ.get(k)]
         if missing:
             raise SystemExit(f"--runner runpod requires env vars: {', '.join(missing)}")
-        store = S3ObjectStore(
+        store = object_store if object_store is not None else S3ObjectStore(
             endpoint_url=os.environ["R2_ENDPOINT"], bucket=os.environ["R2_BUCKET"],
             access_key=os.environ["R2_ACCESS_KEY"], secret_key=os.environ["R2_SECRET_KEY"])
         api_key = os.environ["RUNPOD_API_KEY"]
@@ -68,8 +68,9 @@ def make_runner(kind: str) -> Runner:
 
 def build_app(data_dir: str, runner_kind: str = "local") -> FastAPI:
     ws = Workspace(data_dir)
+    objects = object_store_from_env()
     return create_app(
-        JobStore(ws, make_runner(runner_kind)),
+        JobStore(ws, make_runner(runner_kind, object_store=objects), object_store=objects),
         sa_json_path=os.environ.get(ENV_SA_JSON),
         oauth_token_path=ws.oauth_token_path(),
         enable_workflow_poller=True,

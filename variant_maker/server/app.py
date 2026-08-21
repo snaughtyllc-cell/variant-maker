@@ -370,7 +370,11 @@ def create_app(
         auth_dir = os.path.join(data_dir, "auth")
         os.makedirs(auth_dir, exist_ok=True)
         tenants = TenantStore(os.path.join(auth_dir, "tenants.json"))
-        hub = TenantHub(data_dir, fallback_store._runner)
+        hub = TenantHub(
+            data_dir, fallback_store._runner,
+            object_store=getattr(fallback_store, "_object_store", None),
+            gallery_keep_jobs=getattr(fallback_store, "_keep", None),
+        )
         auth_secret = load_or_create_secret(
             os.path.join(auth_dir, "secret"),
             environ=auth_env if auth_environ is not None else None,
