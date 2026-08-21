@@ -76,6 +76,10 @@ Lab: same rev, `VF_LAB=1`, max 1, idle 120.
 Railway `RUNPOD_FAST_ENDPOINT_ID` stays `j0b1q4iuunzhnq`. Next experiments
 stay on lab — do not PATCH live to test.
 
+Live verify (same sources on `j0b1q4iuunzhnq`): talking-head **39/39/39 bits
+(61%)**, VMAF **97.5 / 98.8 / 98.6**, crop 0.86–0.88, caption upright.
+Motion **53/51/51 bits (~80–83%)**, VMAF 100.
+
 ## Do not
 
 - Raise `TARGET_BITS` / `MIN_PEER_BITS`
