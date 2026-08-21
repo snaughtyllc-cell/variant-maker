@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.app import create_app
+from variant_maker.server.drop_ledger import ENV_SHEET_ID, HEADERS
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.sheets import FakeSheets
 from variant_maker.server.workspace import Workspace
@@ -46,7 +47,7 @@ def test_drop_ledger_sync_seeds_rows(tmp_path):
 
     status = client.get("/api/drop-ledger/status").json()
     assert status["configured"] is False
-    assert "Ensure" in status["message"]
+    assert "Ensure sheet" in status["message"]
     assert "POST /api" not in status["message"]
 
     sync = client.post("/api/drop-ledger/sync", json={
@@ -97,8 +98,82 @@ def test_platform_result_writes_through_to_sheet(tmp_path):
     sheet_id = client.get("/api/drop-ledger/status").json()["spreadsheet_id"]
     values = sheets.get_values(sheet_id, "A:U")
     # header + 1 data row
-    assert values[1][10] == "passed"  # platform_result column
+    assert values[1][HEADERS.index("platform_result")] == "passed"
     assert values[0][-1] == "post_url"
+
+
+def test_flagged_writes_through_without_prior_sync(tmp_path):
+    sheets = FakeSheets()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    client = TestClient(create_app(store, sheets=sheets, sa_json_path="", hydrate=False))
+
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+
+    ensure = client.post("/api/drop-ledger/ensure")
+    assert ensure.status_code == 200, ensure.text
+    sheet_id = ensure.json()["spreadsheet_id"]
+    assert len(sheets.get_values(sheet_id, "A:U")) == 1  # header only
+
+    resp = client.post(
+        f"/api/variants/{sid}/{index}/platform-result",
+        json={"result": "flagged"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["platform_result"] == "flagged"
+
+    values = sheets.get_values(sheet_id, "A:U")
+    assert len(values) >= 2
+    assert values[1][HEADERS.index("platform_result")] == "flagged"
+
+
+def test_sync_does_not_blank_sheet_labels(tmp_path):
+    sheets = FakeSheets()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    _seed_manifest(tmp_path, "jobaaa111222", "srcbbb333444", n=1)
+    client = TestClient(create_app(store, sheets=sheets, sa_json_path="", hydrate=True))
+
+    sync = client.post("/api/drop-ledger/sync", json={
+        "job_ids": ["jobaaa111222"], "ensure": True,
+    })
+    assert sync.status_code == 200, sync.text
+    sheet_id = sync.json()["spreadsheet_id"]
+    values = sheets.get_values(sheet_id, "A:U")
+    result_i = HEADERS.index("platform_result")
+    notes_i = HEADERS.index("notes")
+    values[1][result_i] = "duplicate_reject"
+    values[1][notes_i] = "VA typed this"
+    sheets.update_values(sheet_id, "A1", values)
+
+    sync2 = client.post("/api/drop-ledger/sync", json={
+        "job_ids": ["jobaaa111222"], "ensure": True,
+    })
+    assert sync2.status_code == 200, sync2.text
+    values2 = sheets.get_values(sheet_id, "A:U")
+    assert values2[1][result_i] == "duplicate_reject"
+    assert values2[1][notes_i] == "VA typed this"
+
+
+def test_drop_ledger_status_uses_env_sheet_id(tmp_path):
+    sheets = FakeSheets()
+    sid = sheets.create_spreadsheet("VaryForge Drop Ledger")
+    sheets.update_values(sid, "A1", [list(HEADERS)])
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    client = TestClient(create_app(
+        store, sheets=sheets, sa_json_path="", hydrate=True,
+        oauth_environ={ENV_SHEET_ID: sid},
+    ))
+    status = client.get("/api/drop-ledger/status").json()
+    assert status["configured"] is True
+    assert status["spreadsheet_id"] == sid
+    assert status["spreadsheet_url"].endswith(sid)
 
 
 def test_post_url_writes_through_to_sheet(tmp_path):
@@ -134,6 +209,7 @@ def test_drop_ledger_status_asks_to_connect_google_when_sheets_missing(tmp_path)
     status = client.get("/api/drop-ledger/status").json()
     assert status["configured"] is False
     assert "Connect Google" in status["message"]
+    assert "Ensure sheet" in status["message"]
     assert "POST /api" not in status["message"]
 
 

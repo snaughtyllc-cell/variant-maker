@@ -17,21 +17,21 @@ const notConnected: DropLedgerStatus = {
   configured: false,
   spreadsheet_id: null,
   spreadsheet_url: null,
-  message: "Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
+  message: "Connect Google first (Settings → Drive), then tap Ensure sheet to create VaryForge Drop Ledger",
 };
 
 const noSheet: DropLedgerStatus = {
   configured: false,
   spreadsheet_id: null,
   spreadsheet_url: null,
-  message: "No sheet yet — tap Ensure to create VaryForge Drop Ledger",
+  message: "No sheet yet — tap Ensure sheet to create VaryForge Drop Ledger",
 };
 
 const configured: DropLedgerStatus = {
   configured: true,
   spreadsheet_id: "sheet_1",
   spreadsheet_url: SHEET_URL,
-  message: "Drop Ledger configured",
+  message: "Drop Ledger is ready",
 };
 
 const ensured: DropLedgerEnsure = {
@@ -60,41 +60,41 @@ beforeEach(() => {
 });
 
 describe("DropLedgerPanel", () => {
-  it("prompts to Connect Google first and disables Ensure/Sync", async () => {
+  it("prompts to Connect Google first and disables Ensure sheet / Sync from Studio", async () => {
     vi.mocked(getDropLedgerStatus).mockResolvedValue(notConnected);
     render(<DropLedgerPanel />);
-    expect(await screen.findByText(/Connect Google first if Drive is not connected/i)).toBeInTheDocument();
-    expect(
-      await screen.findByText(/Connect Google above first \(Spreadsheets scope\)/i),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ensure" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Sync" })).toBeDisabled();
-    expect(screen.queryByRole("link", { name: "Open spreadsheet" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/does not change uniqueness/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Connect Google above first/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ensure sheet" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sync from Studio" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Open sheet" })).not.toBeInTheDocument();
   });
 
-  it("creates VaryForge Drop Ledger on Ensure", async () => {
+  it("creates VaryForge Drop Ledger on Ensure sheet", async () => {
     render(<DropLedgerPanel />);
-    const ensure = await screen.findByRole("button", { name: "Ensure" });
+    const ensure = await screen.findByRole("button", { name: "Ensure sheet" });
     expect(ensure).not.toBeDisabled();
     fireEvent.click(ensure);
     await waitFor(() => {
       expect(ensureDropLedger).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("Created VaryForge Drop Ledger")).toBeInTheDocument();
-    const link = await screen.findByRole("link", { name: "Open spreadsheet" });
+    const link = await screen.findByRole("link", { name: "Open sheet" });
     expect(link).toHaveAttribute("href", SHEET_URL);
   });
 
-  it("syncs job rows and shows the spreadsheet URL", async () => {
+  it("syncs from Studio and shows the sheet URL", async () => {
     vi.mocked(getDropLedgerStatus).mockResolvedValue(configured);
     render(<DropLedgerPanel />);
-    expect(await screen.findByRole("link", { name: "Open spreadsheet" })).toHaveAttribute("href", SHEET_URL);
-    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    expect(await screen.findByRole("link", { name: "Open sheet" })).toHaveAttribute("href", SHEET_URL);
+    fireEvent.click(screen.getByRole("button", { name: "Sync from Studio" }));
     await waitFor(() => {
       expect(syncDropLedger).toHaveBeenCalledWith({ ensure: true });
     });
-    expect(await screen.findByText(/Synced 4 rows — 3 inserted, 1 updated, 0 unchanged/)).toBeInTheDocument();
-    expect(screen.getByText(/unlabeled rows count as pass/i)).toBeInTheDocument();
-    expect(screen.getByText(/do not live in sheets/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Synced 4 clips — 3 new, 1 updated, 0 unchanged/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/existing labels were kept/i)).toBeInTheDocument();
+    expect(screen.getByText(/unlabeled clips count as pass/i)).toBeInTheDocument();
   });
 });

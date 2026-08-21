@@ -135,7 +135,34 @@ Non-admins never see the Admin page or anyone else’s packs. Uninvited emails
 get “ask the operator to add you.” Invited people can use email + password
 or Google.
 
-**Platform flags:** Gallery variant sheet can mark Passed / Duplicate rejected
+**Platform flags:** Gallery can mark Passed / Duplicate rejected / Flagged
 (`platform_result`). Unlabeled clips count as pass. Drop Ledger (Google Sheet)
-is the durable log — API exists; Studio “ensure/sync” UX is Phase 12. See
-`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`.
+is the durable log — see §6.
+
+## 6. Drop Ledger (`VARIANT_DROP_SHEET_ID`)
+
+A Google Sheet named **VaryForge Drop Ledger** stores Passed / Duplicate
+rejected / Flagged per clip so labels survive Pod wipes. It does **not**
+auto-tune uniqueness.
+
+**Operators (Jeff / VAs)**
+
+1. Studio → **Settings → Drive → Connect Google** (must allow Google Sheets).
+2. **Ensure sheet** — creates the sheet if it is missing (or uses the pinned id).
+3. **Sync from Studio** — writes current jobs into the sheet. Labels already in
+   the sheet stay put.
+4. Gallery → open a variant → **Passed upload** / **Duplicate rejected** /
+   **Flagged**. Unlabeled = pass. Labels write through to the sheet.
+
+**Railway env (optional but recommended)**
+
+```
+VARIANT_DROP_SHEET_ID=<spreadsheet id from the sheet URL>
+```
+
+If unset, Ensure sheet creates a spreadsheet and stores the id on the volume
+(`{DATA_DIR}/drive/drop_sheet.json`). Pin the id so every deploy uses the same
+sheet. Enable the **Google Sheets API** on the same Google Cloud project as
+Drive OAuth.
+
+This is not a posting tracker (drops board is a later spec).

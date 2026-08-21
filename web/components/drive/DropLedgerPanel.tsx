@@ -48,10 +48,10 @@ export function DropLedgerPanel() {
         spreadsheet_url: out.spreadsheet_url,
         message: out.created
           ? "Created VaryForge Drop Ledger"
-          : "Drop Ledger configured",
+          : "Drop Ledger is ready",
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to ensure Drop Ledger");
+      setError(err instanceof Error ? err.message : "Failed to create the Drop Ledger sheet");
     } finally {
       setEnsuring(false);
     }
@@ -68,10 +68,10 @@ export function DropLedgerPanel() {
         configured: true,
         spreadsheet_id: out.spreadsheet_id,
         spreadsheet_url: out.spreadsheet_url,
-        message: "Drop Ledger configured",
+        message: "Drop Ledger is ready",
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sync Drop Ledger");
+      setError(err instanceof Error ? err.message : "Failed to sync from Studio");
     } finally {
       setSyncing(false);
     }
@@ -81,11 +81,9 @@ export function DropLedgerPanel() {
     <div>
       <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Drop Ledger</div>
       <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 640, lineHeight: 1.45 }}>
-        Connect Google first if Drive is not connected. Ensure creates a Google Sheet named
-        “VaryForge Drop Ledger”. Sync upserts job rows by job_id + variant_id (Drive file id
-        when present — not the caption filename). Unlabeled rows count as pass — you do not
-        need to click Passed on every clip. Do not live in Sheets for daily work; Gallery
-        labels still count.
+        A Google Sheet of Passed / Duplicate rejected / Flagged for each clip, so labels
+        survive a wipe. Mark results in the Gallery — unlabeled clips count as pass.
+        You do not need to live in the sheet. This does not change uniqueness.
       </div>
 
       <div
@@ -116,8 +114,7 @@ export function DropLedgerPanel() {
               lineHeight: 1.45,
             }}
           >
-            Connect Google above first (Spreadsheets scope). Then tap Ensure to create
-            VaryForge Drop Ledger.
+            Connect Google above first. Then tap Ensure sheet to create VaryForge Drop Ledger.
           </div>
         )}
 
@@ -148,8 +145,8 @@ export function DropLedgerPanel() {
               lineHeight: 1.45,
             }}
           >
-            Synced {syncResult.rows} rows — {syncResult.inserted} inserted, {syncResult.updated}{" "}
-            updated, {syncResult.unchanged} unchanged.
+            Synced {syncResult.rows} clips — {syncResult.inserted} new, {syncResult.updated}{" "}
+            updated, {syncResult.unchanged} unchanged. Existing labels were kept.
           </div>
         )}
 
@@ -160,7 +157,7 @@ export function DropLedgerPanel() {
             disabled={actionsDisabled}
             style={primaryBtn(actionsDisabled)}
           >
-            {ensuring ? "Ensuring…" : "Ensure"}
+            {ensuring ? "Creating sheet…" : "Ensure sheet"}
           </button>
           <button
             type="button"
@@ -168,7 +165,7 @@ export function DropLedgerPanel() {
             disabled={actionsDisabled}
             style={secondaryBtn(actionsDisabled)}
           >
-            {syncing ? "Syncing…" : "Sync"}
+            {syncing ? "Syncing…" : "Sync from Studio"}
           </button>
           {sheetUrl && (
             <a
@@ -182,7 +179,7 @@ export function DropLedgerPanel() {
                 padding: "7px 12px",
               }}
             >
-              Open spreadsheet
+              Open sheet
             </a>
           )}
         </div>

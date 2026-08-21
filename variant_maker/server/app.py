@@ -60,10 +60,10 @@ from .drop_ledger import (
     ensure_ledger,
     list_job_ids_on_disk,
     load_manifest_rows,
+    persist_platform_result,
     resolve_sheet_id,
     spreadsheet_url,
     sync_rows,
-    update_platform_result_cell,
     update_post_url_cell,
     write_sheet_id_file,
 )
@@ -675,9 +675,10 @@ def create_app(
             return
         job_id, _ = loc
         try:
-            update_platform_result_cell(
+            persist_platform_result(
                 sheets_client, sid,
                 job_id=job_id, source_id=source_id, index=index, result=result,
+                rows=load_manifest_rows(store._ws.root, job_id),
             )
         except Exception as exc:
             print(f"drop ledger platform_result write failed: {exc}", flush=True)
@@ -1315,16 +1316,16 @@ def create_app(
             return DropLedgerStatusOut(
                 configured=True, spreadsheet_id=sid,
                 spreadsheet_url=spreadsheet_url(sid),
-                message="Drop Ledger configured",
+                message="Drop Ledger is ready",
             )
         if _sheets() is None:
             return DropLedgerStatusOut(
                 configured=False,
-                message="Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
+                message="Connect Google first (Settings → Drive), then tap Ensure sheet to create VaryForge Drop Ledger",
             )
         return DropLedgerStatusOut(
             configured=False,
-            message="No sheet yet — tap Ensure to create VaryForge Drop Ledger",
+            message="No sheet yet — tap Ensure sheet to create VaryForge Drop Ledger",
         )
 
     @app.post("/api/drop-ledger/ensure", response_model=DropLedgerEnsureOut)

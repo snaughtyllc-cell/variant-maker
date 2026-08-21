@@ -489,7 +489,7 @@ describe("drop ledger API", () => {
         configured: false,
         spreadsheet_id: null,
         spreadsheet_url: null,
-        message: "Connect Google first (Settings → Drive), then tap Ensure to create VaryForge Drop Ledger",
+        message: "Connect Google first (Settings → Drive), then tap Ensure sheet to create VaryForge Drop Ledger",
       }), { status: 200 }),
     );
     const out = await api.getDropLedgerStatus();
