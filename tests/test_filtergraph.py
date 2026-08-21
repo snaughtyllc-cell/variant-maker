@@ -1,5 +1,5 @@
 from variant_maker import filtergraph
-from variant_maker.platforms import get_platform
+from variant_maker.platforms import get_platform, resolve_platform
 from variant_maker.probe import ColorTags, SourceInfo
 
 
@@ -186,6 +186,21 @@ def test_rebuild_omitted_on_none_platform():
     vf = filtergraph.build_video_filters(p, make_src(), NONE)
     assert "flags=spline" not in vf
     assert "scale=" not in vf
+
+
+def test_landscape_platform_scales_to_1920x1080_not_portrait():
+    """16:9 source must not be squeezed into 1080×1920."""
+    plat = resolve_platform("tiktok", 1920, 1080)
+    vf = filtergraph.build_video_filters(
+        make_params(), make_src(w=1920, h=1080), plat,
+    )
+    assert "scale=1920:1080:force_original_aspect_ratio=disable" in vf
+    assert "scale=1080:1920" not in vf
+    p = make_params(video={"rebuild_scale": 0.72, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(w=1920, h=1080), plat)
+    w, h = filtergraph.even_rebuild_size(1920, 1080, 0.72)
+    assert f"scale={w}:{h}:flags=spline" in vf
+    assert "scale=1920:1080:flags=spline" in vf
 
 
 def test_rebuild_wins_over_tiny_resample():

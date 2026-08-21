@@ -53,7 +53,7 @@ export function AdvancedPanel({
             fontSize: 11.5,
           }}
         >
-          Output: Vertical 1080×1920 ▾
+          Output: Matches source
         </span>
       </div>
       {open && (
@@ -68,9 +68,21 @@ export function AdvancedPanel({
             color: "var(--color-muted)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Output format</span>
-            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Output format</span>
+              <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Matches source</span>
+            </div>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: "var(--color-muted2)",
+              }}
+            >
+              Auto — 9:16 → 1080×1920, 16:9 → 1920×1080.
+            </p>
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12, gap: 10, flexWrap: "wrap" }}>

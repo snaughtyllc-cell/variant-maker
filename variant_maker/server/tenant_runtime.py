@@ -37,11 +37,13 @@ class TenantHub:
     """Lazy JobStore per workspace_id. Same runner (Fast/HQ) for every tenant."""
 
     def __init__(self, data_dir: str, runner: Runner,
-                 object_store=None, gallery_keep_jobs: int | None = None) -> None:
+                 object_store=None, gallery_keep_jobs: int | None = None,
+                 gallery_keep_hours: float | None = None) -> None:
         self.data_dir = os.path.abspath(data_dir)
         self._runner = runner
         self._object_store = object_store
         self._gallery_keep_jobs = gallery_keep_jobs
+        self._gallery_keep_hours = gallery_keep_hours
         self._lock = threading.Lock()
         self._bundles: dict[str, TenantBundle] = {}
 
@@ -56,6 +58,7 @@ class TenantHub:
                 ws, self._runner,
                 object_store=self._object_store,
                 gallery_keep_jobs=self._gallery_keep_jobs,
+                gallery_keep_hours=self._gallery_keep_hours,
             )
             store.hydrate_from_disk()
             built = TenantBundle(

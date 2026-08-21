@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Callable
 
 from tests.server.fakes import FakeRunner
@@ -13,6 +14,7 @@ from variant_maker.server.jobs import (
     JobSource,
     JobStore,
     VariantInfo,
+    gallery_keep_hours,
     gallery_keep_jobs,
     source_copy_status,
     source_files_ready,
@@ -494,6 +496,7 @@ def test_set_post_url_survives_hydrate(tmp_path):
 def test_gallery_keep_boots_oldest_finished_job(tmp_path):
     store = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,
+        gallery_keep_hours=0,
     )
     ids = []
     for name in ("a.mp4", "b.mp4", "c.mp4"):
@@ -511,6 +514,7 @@ def test_gallery_keep_does_not_delete_a_running_job(tmp_path):
     runner = _PausingRunner()
     store = JobStore(
         Workspace(str(tmp_path)), runner, gallery_keep_jobs=1,
+        gallery_keep_hours=0,
     )
     live = store.create_job([("live.mp4", b"x")], count=2)
     assert runner.v1_done.wait(timeout=5)
@@ -537,20 +541,34 @@ def test_gallery_keep_does_not_delete_a_running_job(tmp_path):
 
 def test_gallery_keep_jobs_env_default_and_disable(monkeypatch):
     monkeypatch.delenv("VARIANT_GALLERY_KEEP_JOBS", raising=False)
-    assert gallery_keep_jobs() == 10
+    assert gallery_keep_jobs() == 0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "0")
     assert gallery_keep_jobs() == 0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "7")
     assert gallery_keep_jobs() == 7
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "nope")
-    assert gallery_keep_jobs() == 10
+    assert gallery_keep_jobs() == 0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_JOBS", "-3")
     assert gallery_keep_jobs() == 0
+
+
+def test_gallery_keep_hours_env_default_and_disable(monkeypatch):
+    monkeypatch.delenv("VARIANT_GALLERY_KEEP_HOURS", raising=False)
+    assert gallery_keep_hours() == 24.0
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "0")
+    assert gallery_keep_hours() == 0.0
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "12")
+    assert gallery_keep_hours() == 12.0
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "nope")
+    assert gallery_keep_hours() == 24.0
+    monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "-3")
+    assert gallery_keep_hours() == 0.0
 
 
 def test_hydrate_prunes_to_gallery_keep(tmp_path):
     seed = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=0,
+        gallery_keep_hours=0,
     )
     ids = []
     for name in ("a.mp4", "b.mp4", "c.mp4", "d.mp4"):
@@ -560,6 +578,7 @@ def test_hydrate_prunes_to_gallery_keep(tmp_path):
     assert len(seed.list()) == 4
     store = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,
+        gallery_keep_hours=0,
     )
     store.hydrate_from_disk()
     assert store.get(ids[0]) is None
@@ -567,6 +586,103 @@ def test_hydrate_prunes_to_gallery_keep(tmp_path):
     assert store.get(ids[2]) is not None
     assert store.get(ids[3]) is not None
     assert not os.path.isdir(os.path.join(str(tmp_path), "jobs", ids[0]))
+
+
+def test_gallery_age_keeps_twelve_recent_finished_jobs(tmp_path):
+    """Failed retries in a busy day must not boot a good pack (no count cap)."""
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=24,
+    )
+    ids = []
+    for i in range(12):
+        job = store.create_job([(f"c{i:02d}.mp4", b"x")], count=1)
+        assert store.wait(job.job_id, timeout=5)
+        ids.append(job.job_id)
+    assert all(store.get(jid) is not None for jid in ids)
+    assert len(store.list()) == 12
+
+
+def test_gallery_age_prunes_finished_job_after_24h(tmp_path, monkeypatch):
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=24,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(job.job_id, timeout=5)
+    job_id = job.job_id
+    job_dir = os.path.join(str(tmp_path), "jobs", job_id)
+    assert store.get(job_id) is not None
+    assert os.path.isdir(job_dir)
+
+    clock["now"] = t0 + timedelta(hours=25)
+    store.prune_finished_jobs()
+    assert store.get(job_id) is None
+    assert not os.path.isdir(job_dir)
+
+
+def test_gallery_age_keeps_finished_job_inside_24h(tmp_path, monkeypatch):
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=24,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(job.job_id, timeout=5)
+
+    clock["now"] = t0 + timedelta(hours=1)
+    store.prune_finished_jobs()
+    assert store.get(job.job_id) is not None
+    assert os.path.isdir(os.path.join(str(tmp_path), "jobs", job.job_id))
+
+
+def test_gallery_age_does_not_delete_a_running_job(tmp_path, monkeypatch):
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    runner = _PausingRunner()
+    store = JobStore(
+        Workspace(str(tmp_path)), runner,
+        gallery_keep_jobs=0, gallery_keep_hours=24,
+    )
+    live = store.create_job([("live.mp4", b"x")], count=2)
+    assert runner.v1_done.wait(timeout=5)
+    job_dir = os.path.join(str(tmp_path), "jobs", live.job_id)
+
+    clock["now"] = t0 + timedelta(hours=25)
+    store.prune_finished_jobs()
+    assert store.get(live.job_id) is not None
+    assert live.state == "running"
+    assert os.path.isdir(job_dir)
+
+    runner.gate.set()
+    assert store.wait(live.job_id, timeout=5)
+
+
+def test_gallery_list_prunes_aged_finished_job(tmp_path, monkeypatch):
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=24,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(job.job_id, timeout=5)
+    job_id = job.job_id
+    job_dir = os.path.join(str(tmp_path), "jobs", job_id)
+    assert store.get(job_id) is not None
+
+    clock["now"] = t0 + timedelta(hours=25)
+    remaining = store.list()
+    assert remaining == []
+    assert store.get(job_id) is None
+    assert not os.path.isdir(job_dir)
 
 
 def test_delete_job_drops_r2_prefixes(tmp_path):

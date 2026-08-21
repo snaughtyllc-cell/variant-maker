@@ -374,6 +374,7 @@ def create_app(
             data_dir, fallback_store._runner,
             object_store=getattr(fallback_store, "_object_store", None),
             gallery_keep_jobs=getattr(fallback_store, "_keep", None),
+            gallery_keep_hours=getattr(fallback_store, "_keep_hours", None),
         )
         auth_secret = load_or_create_secret(
             os.path.join(auth_dir, "secret"),

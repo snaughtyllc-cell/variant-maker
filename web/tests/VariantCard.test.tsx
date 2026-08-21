@@ -101,3 +101,39 @@ describe("VariantCard uniqueness", () => {
     expect(screen.getByText("link")).toBeInTheDocument();
   });
 });
+
+describe("VariantCard aspect", () => {
+  it("lets VideoThumb own the frame instead of a hardcoded 9:16 card", () => {
+    const { container } = render(
+      <VariantCard
+        variant={variant()}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const card = screen.getByText("v01").parentElement as HTMLElement;
+    expect(card.style.aspectRatio).toBe("");
+    expect(card.style.position).toBe("relative");
+    const thumb = container.querySelector("video")?.parentElement as HTMLElement;
+    expect(thumb.className).not.toMatch(/absolute/);
+    expect(thumb.className).not.toMatch(/inset-0/);
+    expect(thumb.style.aspectRatio).toBe("9 / 16");
+  });
+
+  it("keeps a 9:16 box for variants that are not on Studio", () => {
+    render(
+      <VariantCard
+        variant={variant({ file_ready: false })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const placeholder = screen.getByText("Not on Studio");
+    expect(placeholder.style.aspectRatio).toBe("9 / 16");
+    expect(placeholder.className).not.toMatch(/absolute/);
+  });
+});
