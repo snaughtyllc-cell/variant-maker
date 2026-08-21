@@ -16,15 +16,18 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:2baeaaf111cb2d6ce286c482e2d06a41e67b8f2a575861572ec1fc48cfc8615d`
-- `VF_ENGINE_REV=4260b1a` (sharp rebuild + grain 40–52). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:0fe4c2eff7f17c8413e7be6a203972887f351c4058f309b93b4ba76cf9cb3fc9`
+- `VF_ENGINE_REV=2add1fb` (sharp rebuild + grain 28–34). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
 - Live Fast stays `j0b1q4iuunzhnq` / `VF_ENGINE_REV=4880c35` / digest `abecb191` — do not PATCH it for experiments.
 
 Lab packs:
 
-- Motion on older shot-probe (`fee92961`): **51–52 bits (~80%)**, VMAF 99–100, no escalate
-- Talking-head `441b38a` (`6a6f0301`): rebuild 0.25–0.31 + grain 15–18 → **20–22 bits**, VMAF 95–97, `below_target`
-- Talking-head `4260b1a` (`dbf204f4`): grain 40–52 → **37–39 bits (~58–61% UI)** but VMAF **80–83**, `best_effort` / harvest skip
+| Rev | Talking-head AQMTp | Motion |
+|---|---|---|
+| older shot-probe | 17–18 bits, VMAF 97 | **51–52 bits (~80%)**, VMAF 99–100 |
+| `441b38a` rebuild 0.25 + grain 15–18 | 20–22 bits, VMAF 95–97, below gate | — |
+| `4260b1a` grain 40–52 | 37–39 bits (~58–61%) but VMAF 80–83, `best_effort` | — |
+| **`2add1fb` grain 28–34** (`af4a9e52` / `a170e8ee`) | **27–30 bits (~42–47%)**, VMAF **91–92**, medium, `ok`, no escalate | **51–54 bits (~80–84%)**, VMAF 100, `ok` |
 
-Next pin: grain **28–34**, VMAF-shrinkable (do not collapse uniqueness grain when look overspends).
+Do **not** promote until someone eyes the talking-head files (12 Mbps under the cap, extra grain, caption still upright). Copy still says typical medium 55–65%; this clip honest-lands **42–47%**.
