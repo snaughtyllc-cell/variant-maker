@@ -1,7 +1,7 @@
 # Medium uniqueness + file size (crop, grain, unbudgeted warp)
 
 **Date:** 2026-08-21
-**Status:** In progress (engine)
+**Status:** Shipped (crop/grain). Warp unbudgeted superseded by `2026-08-21-fast-rebuild-scale.md`.
 **Product name:** VaryForge
 **Depends on:** `2026-08-20-medium-uniqueness-delivery.md`, `2026-08-20-medium-pixel-seed.md`, `2026-08-20-fast-social-bitrate-cap.md`
 

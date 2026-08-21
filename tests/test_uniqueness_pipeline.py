@@ -320,13 +320,13 @@ def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch,
 
 
 def test_hq_strips_fast_pixel_ops(monkeypatch, tmp_path):
-    """ESRGAN already rebuilds pixels — resample/warp must not ride the neural-pre render."""
+    """ESRGAN already rebuilds pixels — resample/rebuild/warp must not ride the neural-pre render."""
     _stub_common(monkeypatch)
     seen = []
 
     def fake_upscale(src, params, path, platform=None):
         v = params["video"]
-        seen.append((v.get("resample_px"), v.get("warp_k1")))
+        seen.append((v.get("resample_px"), v.get("rebuild_scale"), v.get("warp_k1")))
         open(path, "w").close()
         return path, "cmd", []
 
@@ -341,8 +341,9 @@ def test_hq_strips_fast_pixel_ops(monkeypatch, tmp_path):
     cfg = _cfg(tmp_path, quality_mode="hq", auto_tune=False, uniq_strengths=[1.0])
     pipeline.run(cfg)
     assert seen
-    for px, k1 in seen:
+    for px, rebuild, k1 in seen:
         assert px == 0
+        assert rebuild == 1.0
         assert k1 == 0.0
 
 

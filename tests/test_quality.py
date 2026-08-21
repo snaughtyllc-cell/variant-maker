@@ -23,8 +23,8 @@ def _neutral_params():
     }
 
 
-def test_quality_render_strips_resample_keeps_warp(monkeypatch, tmp_path):
-    """Resample is fingerprint (neutralize). Warp is the VMAF-capped pixel seed (keep)."""
+def test_quality_render_strips_rebuild_keeps_warp(monkeypatch, tmp_path):
+    """Rebuild/resample are fingerprint (neutralize). Warp stays so VMAF can cap it."""
     captured = {}
 
     def fake_render(src, params, platform, path, dry_run=False):
@@ -39,10 +39,14 @@ def test_quality_render_strips_resample_keeps_warp(monkeypatch, tmp_path):
         ColorTags("tv", "bt709", "bt709", "bt709"),
     )
     params = _neutral_params()
-    params["video"].update({"resample_px": -8, "resample_flags": "spline", "warp_k1": 0.008})
+    params["video"].update({
+        "resample_px": -8, "resample_flags": "spline",
+        "rebuild_scale": 0.72, "warp_k1": 0.008,
+    })
     quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
     assert captured["platform"] == "none"
     assert captured["video"]["resample_px"] == 0
+    assert captured["video"]["rebuild_scale"] == 1.0
     assert captured["video"]["warp_k1"] == 0.008
 
 

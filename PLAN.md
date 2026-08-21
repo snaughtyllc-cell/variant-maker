@@ -165,13 +165,15 @@ Status legend: ✅ done & verified · 🔨 to build
 
 ## Phase 16 — Fast seeded resample + look (color + pixel seed)  ✅
 - Spec: `docs/superpowers/specs/2026-08-19-fast-seeded-resample.md`.
-- Fast analog of TikFusion Random Pixels **without** weird output size: unique even
-  intermediate → back to 1080×1920 with a seeded kernel. Round-trip is ±8–32 px
-  (never a 2 px peek).
+- Fast analog of TikFusion Random Pixels **without** weird output size. ±8–32 px
+  was invisible at the 576×1024 uniqueness frame (talking-head 25–33%).
+- **Now:** reconstructive `rebuild_scale` (medium 0.67–0.80 → ~720–864 then back
+  to 1080×1920; strong 0.50–0.66 so escalate is a heavier rebuild). Spec:
+  `docs/superpowers/specs/2026-08-21-fast-rebuild-scale.md`.
 - Per-copy color **shows** (still zero-mean). Over-budget shrink kills grain/unsharp/crf
-  first so crop AND eq survive. Fast pixel seed is `lenscorrection` `warp_k1`
-  (medium ±0.015, VMAF sees it; quality fail → milder). HQ skips resample+warp (ESRGAN owns pixels).
-- Unbudgeted resample fingerprint. Color zero-mean. VMAF floor stays. Gates stay 24/24.
+  first so crop AND eq survive. `warp_k1` is **budgeted** (VMAF-capped); unbudgeted
+  warp scored VMAF 53–80 and dropped Drive uploads. HQ skips rebuild+warp (ESRGAN owns pixels).
+- Unbudgeted rebuild fingerprint. Color zero-mean. VMAF floor stays. Gates stay 24/24.
 - Not named Smart Colors / Pixel AI scramble / fps jitter / random output dimensions.
 
 ## Studio UX — current-run only (note, not blocking 9–11)

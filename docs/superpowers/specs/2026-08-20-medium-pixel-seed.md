@@ -1,7 +1,7 @@
 # Medium Fast pixel seed (higher uniqueness, not Pixel AI scramble)
 
 **Date:** 2026-08-20  
-**Status:** Shipped (engine + Studio copy)  
+**Status:** Shipped; ±32 px superseded by reconstructive rebuild (`2026-08-21-fast-rebuild-scale.md`).  
 **Product name:** VaryForge  
 **Depends on:** `2026-08-19-fast-seeded-resample.md`, `2026-08-20-medium-uniqueness-delivery.md`
 

@@ -1,9 +1,9 @@
 """Phase 4. params -> (-vf, -af) strings. PURE (unit-tested; --dry-run prints).
 
 Video filter ORDER is load-bearing:
-  trim -> crop -> scale(even, range-aware) -> [seeded resample] -> [rotate w/ fill] ->
-  [lenscorrection warp] -> eq(color) -> hue -> unsharp -> grain -> fps -> setpts(tempo)
-  -> format=yuv420p
+  trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
+  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
+  unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   equalizer -> loudnorm.
 
@@ -14,7 +14,8 @@ streams mirror the identical trim window, keeping video/audio in sync. Crop punc
 also carries an x/y offset fraction (fingerprint axis; 0.5/0.5 == centered). The resize
 uses color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
 if the output target ever differs from the carried source tags. NEVER let a naive scale
-reinterpret color range.
+reinterpret color range. Fast uniqueness is a reconstructive rebuild (down to
+`rebuild_scale` then back to the platform canvas) — not a ±32 px peek.
 """
 from __future__ import annotations
 
@@ -91,6 +92,23 @@ def even_resample_size(target_w: int, target_h: int, px: int) -> tuple[int, int]
     return w, h
 
 
+def even_rebuild_size(target_w: int, target_h: int, scale: float) -> tuple[int, int]:
+    """Even intermediate size for a reconstructive down-then-up.
+
+    Height follows AR. Never returns the identity size when ``scale`` is not ~1.
+    """
+    tw, th = int(target_w), int(target_h)
+    s = float(scale)
+    if tw <= 0 or th <= 0 or abs(s - 1.0) < _EPS or s <= 0:
+        return tw, th
+    w = max(round(tw * s) // 2 * 2, 2)
+    h = max(round(w * th / tw) // 2 * 2, 2)
+    if w == tw and h == th:
+        w = max(tw - 2 if s < 1.0 else tw + 2, 2)
+        h = max(round(w * th / tw) // 2 * 2, 2)
+    return w, h
+
+
 def _resample_flags(raw: object) -> str:
     s = str(raw or "lanczos")
     return s if s in _RESAMPLE_FLAGS else "lanczos"
@@ -125,12 +143,19 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
             parts.append(conv)
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
-        px = int(v.get("resample_px") or 0)
-        if px != 0:
-            flags = _resample_flags(v.get("resample_flags"))
-            rw, rh = even_resample_size(platform.width, platform.height, px)
-            parts.append(f"scale={rw}:{rh}:flags={flags}")
-            parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
+        flags = _resample_flags(v.get("resample_flags"))
+        rebuild = float(v.get("rebuild_scale") or 1.0)
+        if abs(rebuild - 1.0) >= _EPS:
+            rw, rh = even_rebuild_size(platform.width, platform.height, rebuild)
+            if (rw, rh) != (platform.width, platform.height):
+                parts.append(f"scale={rw}:{rh}:flags={flags}")
+                parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
+        else:
+            px = int(v.get("resample_px") or 0)
+            if px != 0:
+                rw, rh = even_resample_size(platform.width, platform.height, px)
+                parts.append(f"scale={rw}:{rh}:flags={flags}")
+                parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
 
     # rotation (tiny angles; corner fill — proper inscribed-crop is a later refinement)
     if abs(v.get("rotate_deg", 0.0)) >= _ROTATE_MIN_DEG:

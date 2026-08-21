@@ -73,7 +73,7 @@ ruff check .                    # lint
 | `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). Medium should *score* ~55–65% on talking-head. Do not raise the gate to 32. |
 | `cli.py` | ✅ done | options + `pipeline.run` |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
-| Fast resample | ✅ done | seeded even round-trip + `warp_k1`; HQ skipped |
+| Fast resample | ✅ done | reconstructive `rebuild_scale` + VMAF-capped `warp_k1`; HQ skipped |
 
 ## Environment notes
 - ffmpeg must be built with **libvmaf** for the Phase-6 VMAF guard (`ffmpeg -filters | grep vmaf`).

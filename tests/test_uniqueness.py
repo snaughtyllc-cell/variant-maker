@@ -34,8 +34,8 @@ def test_fast_gate_fits_medium_talking_head_headroom():
     """Pass stays 24 bits (~38% UI). Medium talking-head should land ~35–42 bits (~55–65%).
 
     Raising the *gate* to 32 previously escalated entire Fast 20-packs. Delivery is
-    a moderate crop (not a face-only zoom), unbudgeted warp, and grain under the
-    12M cap — not a higher floor.
+    a reconstructive rebuild-scale (not ±32 px, not a face-only zoom), VMAF-capped
+    warp, and grain under the 12M cap — not a higher floor.
     """
     talking_head_medium_typical = 35
     assert uniqueness.TARGET_BITS == 24

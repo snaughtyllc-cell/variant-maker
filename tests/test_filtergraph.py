@@ -157,6 +157,63 @@ def test_even_resample_size_handles_stronger_pixel_seed():
     assert abs(w / h - 1080 / 1920) < 0.01
 
 
+def test_rebuild_roundtrip_after_reels_scale():
+    """Visible reconstructive round-trip: ~720p intermediate, then back to 1080×1920."""
+    p = make_params(video={"rebuild_scale": 0.72, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.72)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert w < 1080
+    assert f"scale={w}:{h}:flags=spline" in vf
+    assert "scale=1080:1920:flags=spline" in vf
+    assert vf.index(f"scale={w}:{h}:flags=spline") < vf.index("scale=1080:1920:flags=spline")
+    # Platform even-scale happens first; rebuild is the uniqueness pass after it.
+    even = "scale=1080:1920:force_original_aspect_ratio=disable"
+    assert vf.index(even) < vf.index(f"scale={w}:{h}:flags=spline")
+
+
+def test_rebuild_omitted_when_scale_is_identity():
+    vf = filtergraph.build_video_filters(
+        make_params(video={"rebuild_scale": 1.0, "resample_flags": "lanczos"}),
+        make_src(), REELS,
+    )
+    assert ":flags=lanczos" not in vf
+
+
+def test_rebuild_omitted_on_none_platform():
+    p = make_params(video={"rebuild_scale": 0.67, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), NONE)
+    assert "flags=spline" not in vf
+    assert "scale=" not in vf
+
+
+def test_rebuild_wins_over_tiny_resample():
+    """±32 px is invisible at uniqueness resolution; rebuild is the fingerprint."""
+    p = make_params(video={
+        "rebuild_scale": 0.70, "resample_px": 32, "resample_flags": "bicubic",
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.70)
+    assert f"scale={w}:{h}:flags=bicubic" in vf
+    rw, rh = filtergraph.even_resample_size(1080, 1920, 32)
+    assert f"scale={rw}:{rh}:flags=bicubic" not in vf
+
+
+def test_even_rebuild_size_keeps_ar_even_never_identity():
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.67)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert 700 <= w <= 740
+    assert abs(w / h - 1080 / 1920) < 0.01
+    ident = filtergraph.even_rebuild_size(1080, 1920, 1.0)
+    assert ident == (1080, 1920)
+    medium = filtergraph.even_rebuild_size(1080, 1920, 0.80)
+    assert medium[0] == 864
+    strong = filtergraph.even_rebuild_size(1080, 1920, 0.50)
+    assert strong[0] == 540
+
+
 def test_warp_emits_lenscorrection():
     p = make_params(video={"warp_k1": 0.008})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)
