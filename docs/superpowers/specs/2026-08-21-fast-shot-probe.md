@@ -26,15 +26,18 @@ After `probe`, once per source:
 3. `self_bits < 24` → `talking_head`; else → `motion`.
 4. Pass `shot=` into `sample()` (pure). `shot=None` is today’s recipe.
 
-Rebuild ranges (crop/warp unchanged; gate **24/24**). Lab AQMTp at 0.41–0.47
-still scored 17–18 bits (source self-bits 17). Talking-head rebuild goes
-lower and grain is remapped after budget shrink:
+Rebuild ranges (crop/warp unchanged; gate **24/24**). Lab AQMTp at rebuild
+0.25–0.31 still scored 20–22 bits. A local sweep on that clip showed rebuild
+0.27 = identity encode (8 bits) on the 576 canvas; crop 0.86 + `noise=alls=32/40/56`
+scored **28/31/38 bits (44/48/59% UI)** under the 12M cap. Talking-head therefore
+keeps a *sharp* rebuild and remaps grain after budget shrink. No extra rotate
+(captions go crooked).
 
 | preset | default rebuild | talking_head rebuild | talking_head grain | motion rebuild |
 |---|---|---|---|---|
-| medium | 0.67–0.80 | **0.32–0.48** | **10–16** | 0.78–0.90 |
-| strong | 0.50–0.66 | **0.22–0.31** | **14–20** | 0.67–0.80 |
-| subtle | 0.90–0.98 | 0.70–0.85 | 5–10 | 0.94–0.99 |
+| medium | 0.67–0.80 | **0.90–0.98** | **40–52** | 0.78–0.90 |
+| strong | 0.50–0.66 | **0.85–0.94** | **48–60** | 0.67–0.80 |
+| subtle | 0.90–0.98 | 0.94–0.99 | 20–28 | 0.94–0.99 |
 
 Missing file / ffmpeg miss → `shot=None` (do not crash the pack). HQ still
 strips rebuild. Fast still never face-protects (Haar must not zero crop).

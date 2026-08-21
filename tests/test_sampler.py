@@ -437,22 +437,21 @@ def test_shot_none_matches_omitted_shot():
     assert sample(MEDIUM, s) == sample(MEDIUM, s, shot=None)
 
 
-def test_talking_head_uses_heavier_rebuild_keeps_crop():
-    """Look-first: a still face rebuilds smaller than 576 so the canvas can see it. Crop stays."""
+def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
+    """Look-first: 576 sees grain on a still face, not a mushy rebuild. Crop stays."""
     seed = derive_seed(11, 5)
     plain = sample(MEDIUM, seed)
     head = sample(MEDIUM, seed, shot="talking_head")
     assert head["video"]["crop_keep"] == plain["video"]["crop_keep"]
-    assert 0.32 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.48 + 1e-9
-    assert head["video"]["rebuild_scale"] < plain["video"]["rebuild_scale"] + 1e-9
+    assert 0.90 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.98 + 1e-9
+    assert head["video"]["rebuild_scale"] > plain["video"]["rebuild_scale"] - 1e-9
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head")["video"]
-        assert 0.32 - 1e-9 <= v["rebuild_scale"] <= 0.48 + 1e-9
-        assert 10 - 1e-9 <= v["grain"] <= 16 + 1e-9
+        assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
+        assert 40 - 1e-9 <= v["grain"] <= 52 + 1e-9
     strong = sample(STRONG, seed, shot="talking_head")["video"]
-    assert 0.22 - 1e-9 <= strong["rebuild_scale"] <= 0.31 + 1e-9
-    assert 14 - 1e-9 <= strong["grain"] <= 20 + 1e-9
-    assert strong["rebuild_scale"] < 0.32
+    assert 0.85 - 1e-9 <= strong["rebuild_scale"] <= 0.94 + 1e-9
+    assert 48 - 1e-9 <= strong["grain"] <= 60 + 1e-9
 
 
 def test_talking_head_grain_survives_budget_shrink():
@@ -460,7 +459,7 @@ def test_talking_head_grain_survives_budget_shrink():
     for s in SEEDS[:80]:
         mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
         full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
-        assert 10 - 1e-9 <= mild <= 16 + 1e-9
+        assert 40 - 1e-9 <= mild <= 52 + 1e-9
         assert abs(mild - full) < 1e-9
     plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
     head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]

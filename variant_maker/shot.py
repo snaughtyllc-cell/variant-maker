@@ -18,22 +18,25 @@ TALKING_HEAD_SELF_BITS = uniqueness.TARGET_BITS  # 24: source wouldn't pass vs i
 SHOT_TALKING_HEAD = "talking_head"
 SHOT_MOTION = "motion"
 
-# Heavier rebuild for still faces; gentler for clips that already score from motion.
-# Lab talking-head (AQMTp) at 0.41–0.47 still scored 17–18 bits — same as source
-# self-bits. 576×1024 still sees the face. Go lower, and add grain the probe can see.
-# Crop/warp stay on the preset. Gate stays 24/24.
+# Look-first: motion already scores from movement, so rebuild stays gentle.
+# Talking-head on the uniqueness canvas (576×1024) does NOT see reconstructive
+# rebuild — AQMTp at 0.25–0.31 still scored 20–22 bits, and a local sweep of
+# rebuild 0.27 matched identity encode (8 bits). Grain is what 576 scores:
+# crop 0.86 + noise=alls=32/40/56 → 28/31/38 bits (44/48/59% UI) under the
+# 12M cap. Rotate is skipped (captions go crooked). Crop/warp stay on the
+# preset. Gate stays 24/24.
 _REBUILD_FOR_SHOT = {
-    ("subtle", SHOT_TALKING_HEAD): Range(0.70, 0.85),
+    ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
-    ("medium", SHOT_TALKING_HEAD): Range(0.32, 0.48),
+    ("medium", SHOT_TALKING_HEAD): Range(0.90, 0.98),
     ("medium", SHOT_MOTION): Range(0.78, 0.90),
-    ("strong", SHOT_TALKING_HEAD): Range(0.22, 0.31),
+    ("strong", SHOT_TALKING_HEAD): Range(0.85, 0.94),
     ("strong", SHOT_MOTION): Range(0.67, 0.80),
 }
 _GRAIN_FOR_SHOT = {
-    ("subtle", SHOT_TALKING_HEAD): Range(5, 10),
-    ("medium", SHOT_TALKING_HEAD): Range(10, 16),
-    ("strong", SHOT_TALKING_HEAD): Range(14, 20),
+    ("subtle", SHOT_TALKING_HEAD): Range(20, 28),
+    ("medium", SHOT_TALKING_HEAD): Range(40, 52),
+    ("strong", SHOT_TALKING_HEAD): Range(48, 60),
 }
 
 
