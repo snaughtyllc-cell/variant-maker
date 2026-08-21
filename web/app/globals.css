@@ -182,9 +182,6 @@ input, select, textarea { font-size: 16px; }
   padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
 }
 .compare-slider {
-  aspect-ratio: 9 / 16;
-  width: min(100%, calc(46dvh * 9 / 16));
-  max-height: 46dvh;
   margin-inline: auto;
   overflow: hidden;
   transform: translateZ(0);
@@ -227,9 +224,5 @@ input, select, textarea { font-size: 16px; }
     left: auto !important;
     width: 430px !important;
     border-left: 1px solid var(--color-line2) !important;
-  }
-  .compare-slider {
-    width: 100%;
-    max-height: none;
   }
 }

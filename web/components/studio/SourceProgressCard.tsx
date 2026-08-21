@@ -139,6 +139,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(6, 1fr)",
+            alignItems: "start",
             gap: 6,
             marginTop: 11,
           }}
@@ -172,11 +173,13 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
             );
           })}
 
-          {/* Show in-flight slot if currently processing */}
+          {/* Unknown aspect until the file exists — keep a 9:16 dashed slot */}
           {inFlight && (
             <div
               style={{
                 aspectRatio: "9 / 16",
+                width: "100%",
+                alignSelf: "start",
                 borderRadius: 6,
                 background: "#14141d",
                 border: "1px dashed var(--color-line2)",

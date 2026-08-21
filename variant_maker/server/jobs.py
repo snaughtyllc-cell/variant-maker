@@ -20,7 +20,11 @@ from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
-DEFAULT_GALLERY_KEEP_JOBS = 10
+GALLERY_KEEP_HOURS_ENV = "VARIANT_GALLERY_KEEP_HOURS"
+# Age is the default: a busy day of failed retries must not boot a good pack.
+# Count cap is optional (0 = off). 0 hours disables age prune.
+DEFAULT_GALLERY_KEEP_JOBS = 0
+DEFAULT_GALLERY_KEEP_HOURS = 24.0
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
 COPY_FAILED_MSG = (
@@ -128,7 +132,7 @@ def _public_job_error(exc: BaseException) -> str:
 
 
 def gallery_keep_jobs(environ: Mapping[str, str] | None = None) -> int:
-    """Last N finished Generate jobs to keep per workspace. 0 disables pruning."""
+    """Optional count cap on finished Generate jobs. 0 = no count cap (age is the default)."""
     env = os.environ if environ is None else environ
     raw = env.get(GALLERY_KEEP_JOBS_ENV, str(DEFAULT_GALLERY_KEEP_JOBS))
     try:
@@ -137,12 +141,41 @@ def gallery_keep_jobs(environ: Mapping[str, str] | None = None) -> int:
         return DEFAULT_GALLERY_KEEP_JOBS
 
 
+def gallery_keep_hours(environ: Mapping[str, str] | None = None) -> float:
+    """Hours to keep a finished Generate job. Default 24. 0 disables age prune."""
+    env = os.environ if environ is None else environ
+    raw = env.get(GALLERY_KEEP_HOURS_ENV, str(DEFAULT_GALLERY_KEEP_HOURS))
+    try:
+        return max(0.0, float(str(raw).strip()))
+    except (TypeError, ValueError):
+        return DEFAULT_GALLERY_KEEP_HOURS
+
+
 _keep_from_env = gallery_keep_jobs
+_hours_from_env = gallery_keep_hours
+
+
+def _utc_now() -> _dt.datetime:
+    return _dt.datetime.now(_dt.UTC)
 
 
 def _now() -> str:
-    return (_dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
-            .isoformat().replace("+00:00", "Z"))
+    return (_utc_now().replace(microsecond=0).isoformat().replace("+00:00", "Z"))
+
+
+def _parse_utc(value: str | None) -> _dt.datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = _dt.datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.UTC)
+    return dt.astimezone(_dt.UTC)
 
 
 def _variant_to_dict(v: VariantInfo) -> dict:
@@ -305,12 +338,17 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
 
 class JobStore:
     def __init__(self, workspace: Workspace, runner: Runner,
-                 object_store=None, gallery_keep_jobs: int | None = None) -> None:
+                 object_store=None, gallery_keep_jobs: int | None = None,
+                 gallery_keep_hours: float | None = None) -> None:
         self._ws = workspace
         self._runner = runner
         self._object_store = object_store
         keep_n = gallery_keep_jobs
         self._keep = _keep_from_env() if keep_n is None else max(0, int(keep_n))
+        hours = gallery_keep_hours
+        self._keep_hours = (
+            _hours_from_env() if hours is None else max(0.0, float(hours))
+        )
         self._seq = 0
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
@@ -438,18 +476,32 @@ class JobStore:
                     )
 
     def prune_finished_jobs(self) -> None:
-        """Boot oldest finished Generate jobs when we are over the keep cap.
+        """Drop finished Generate jobs past the age window and/or over a count cap.
 
-        Running jobs are never deleted. keep=0 disables. An 8-pack is one job.
+        Default is 24 hours, no count cap — failed retries in a busy day must not
+        boot a good pack. Running jobs are never deleted. hours=0 and keep=0
+        disables. An 8-pack is one job.
         """
         keep = self._keep
-        if keep <= 0:
+        hours = self._keep_hours
+        if keep <= 0 and hours <= 0:
             return
+        now = _utc_now()
         with self._lock:
             finished = [j for j in self._jobs.values() if j.state != "running"]
-            finished.sort(key=lambda j: (j.created_utc or "", j.created_seq, j.job_id))
-            extra = finished[:-keep] if len(finished) > keep else []
-            ids = [j.job_id for j in extra]
+            drop: set[str] = set()
+            if hours > 0:
+                cutoff = now - _dt.timedelta(hours=hours)
+                for job in finished:
+                    created = _parse_utc(job.created_utc)
+                    if created is not None and created < cutoff:
+                        drop.add(job.job_id)
+            remain = [j for j in finished if j.job_id not in drop]
+            if keep > 0 and len(remain) > keep:
+                remain.sort(key=lambda j: (j.created_utc or "", j.created_seq, j.job_id))
+                for job in remain[:-keep]:
+                    drop.add(job.job_id)
+            ids = list(drop)
         for job_id in ids:
             self.delete_job(job_id)
 
@@ -590,6 +642,8 @@ class JobStore:
         return self._jobs.get(job_id)
 
     def list(self) -> list[Job]:
+        # Opening Gallery is the 24h sweep — packs expire even if nobody generates.
+        self.prune_finished_jobs()
         return list(self._jobs.values())
 
     def queue(self) -> dict:

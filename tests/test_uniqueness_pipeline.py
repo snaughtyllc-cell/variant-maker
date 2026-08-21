@@ -11,6 +11,8 @@ class FakeSrc:
     path = "src.mp4"
     sha256 = "deadbeef"
     duration_s = 1.0
+    width = 1080
+    height = 1920
 
     def to_dict(self):
         return {"path": self.path, "sha256": self.sha256}
@@ -419,3 +421,37 @@ def test_hq_still_grabs_and_applies_face_protect(monkeypatch, tmp_path):
     ))
     assert calls["grab"] == 1
     assert calls["apply"] >= 1
+
+
+def test_pipeline_resolves_landscape_tiktok_to_1920x1080(monkeypatch, tmp_path):
+    """16:9 ingest must render 1920×1080, not stretch to 1080×1920."""
+    _stub_common(monkeypatch)
+
+    class LandscapeSrc:
+        path = "src.mp4"
+        sha256 = "deadbeef"
+        duration_s = 1.0
+        width = 3840
+        height = 2160
+
+        def to_dict(self):
+            return {"path": self.path, "width": self.width, "height": self.height}
+
+    monkeypatch.setattr(pipeline, "probe", lambda p: LandscapeSrc())
+    captured = {}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        captured["size"] = (platform.width, platform.height)
+        captured["name"] = platform.name
+        open(path, "w").close()
+        return (path, "ffmpeg -y fake")
+
+    monkeypatch.setattr(pipeline, "render_variant", fake_render)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    manifest = pipeline.run(_cfg(tmp_path, platform="tiktok"))
+    assert captured["size"] == (1920, 1080)
+    assert captured["name"] == "tiktok"
+    assert manifest.run["canvas"] == [1920, 1080]

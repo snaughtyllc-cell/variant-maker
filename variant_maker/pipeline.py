@@ -14,14 +14,15 @@ from concurrent.futures import ThreadPoolExecutor
 from . import autotune, quality, uniqueness
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
-from .platforms import get_platform
+from .platforms import resolve_platform
 from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
-# Medium crop + reconstructive rebuild_scale sized so talking-head *scores* ~35–42 bits (~55–65% UI).
+# Medium talking-head should *score* ~35–42 bits (~55–65% UI) on a matching
+# canvas (portrait 1080×1920 or landscape 1920×1080) — not a stretched frame.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
@@ -51,7 +52,6 @@ def run(config: dict, *, on_event=None) -> Manifest:
     input_path = config["input"]
     count = config["count"]
     preset = get_preset(config["preset"])
-    platform = get_platform(config["platform"])
     out_dir = config["out"]
     floor = config.get("quality_floor", 90.0)
     # Spatial-corruption floor. Calibrated on a real clip across BOTH upscale backends (GPU
@@ -100,6 +100,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
     hq = neural is not None and neural.available()
 
     src = probe(input_path)
+    platform = resolve_platform(
+        config["platform"],
+        getattr(src, "width", None),
+        getattr(src, "height", None),
+    )
     stem = os.path.splitext(os.path.basename(input_path))[0]
 
     def _name(i: int, vseed: int) -> str:
@@ -109,6 +114,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "master_seed": master_seed,
         "preset": preset.name,
         "platform": platform.name,
+        "canvas": (
+            [platform.width, platform.height]
+            if platform.width and platform.height else None
+        ),
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),

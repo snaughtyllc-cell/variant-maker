@@ -100,6 +100,29 @@ def test_bits_vs_helper():
         assert uniqueness.bits_vs(a, b) >= uniqueness.TARGET_BITS
 
 
+def test_ssim_canvas_matches_source_orientation():
+    assert uniqueness.ssim_canvas(1080, 1920) == (576, 1024)
+    assert uniqueness.ssim_canvas(3840, 2160) == (1024, 576)
+    assert uniqueness.ssim_canvas(1080, 1080) == (576, 576)
+    assert uniqueness.ssim_canvas(0, 0) == (576, 1024)
+    vf = uniqueness.ssim_scale_filter(1024, 576)
+    assert "scale=1024:576:force_original_aspect_ratio=decrease" in vf
+    assert "pad=1024:576" in vf
+
+
+def test_landscape_identical_clips_stay_low_bits():
+    """16:9 twins must not look unique because an old 9:16 pad letterboxed them."""
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        b = os.path.join(d, "b.mp4")
+        pattern = "testsrc=size=320x180:rate=25:duration=1"
+        _tiny_mp4(a, lavfi=pattern)
+        _tiny_mp4(b, lavfi=pattern)
+        r = uniqueness.score_uniqueness(a, b, target=uniqueness.DEFAULT_TARGET)
+        assert r["bits"] is not None and r["bits"] < 8
+        assert r["uniqueness_status"] == "below_target"
+
+
 def test_missing_file_unknown():
     r = uniqueness.score_uniqueness("/nope/a.mp4", "/nope/b.mp4")
     assert r["uniqueness"] is None and r["uniqueness_status"] == "unknown"
