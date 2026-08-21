@@ -720,6 +720,34 @@ def test_make_runner_runpod_wires_overflow_fast_endpoint(monkeypatch):
     assert [c["endpoint_id"] for c in clients] == ["ep-gpu", "ep-fast", "ep-fast-2"]
 
 
+def test_make_runner_ignores_blank_and_duplicate_overflow_fast(monkeypatch):
+    from variant_maker.server import cli
+    from variant_maker.server.runner import RoutingRunner
+
+    def _wire(**extra):
+        clients = []
+        monkeypatch.setattr(cli, "S3ObjectStore", lambda **kw: object())
+        monkeypatch.setattr(cli, "HttpRunPodClient", lambda **kw: clients.append(kw) or object())
+        env = {"RUNPOD_ENDPOINT_ID": "ep-gpu", "RUNPOD_API_KEY": "k",
+               "RUNPOD_FAST_ENDPOINT_ID": "ep-fast",
+               "R2_ENDPOINT": "https://r2", "R2_BUCKET": "b",
+               "R2_ACCESS_KEY": "a", "R2_SECRET_KEY": "s"}
+        env.update(extra)
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+        runner = cli.make_runner("runpod")
+        assert isinstance(runner, RoutingRunner)
+        return runner, clients
+
+    runner, clients = _wire(RUNPOD_FAST_ENDPOINT_ID_2="   ")
+    assert len(runner._fast_remotes) == 1
+    assert [c["endpoint_id"] for c in clients] == ["ep-gpu", "ep-fast"]
+
+    runner, clients = _wire(RUNPOD_FAST_ENDPOINT_ID_2="ep-fast")
+    assert len(runner._fast_remotes) == 1
+    assert [c["endpoint_id"] for c in clients] == ["ep-gpu", "ep-fast"]
+
+
 def test_make_runner_runpod_missing_env_exits(monkeypatch):
     from variant_maker.server import cli
     for k in ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",

@@ -488,3 +488,111 @@ def test_set_post_url_survives_hydrate(tmp_path):
     restored = store2.get(job.job_id).sources[0].variants[0]
     assert restored.post_url == url
     assert restored.platform_result is None
+
+
+class _OccupancyFake(FakeRunner):
+    """Records which Fast CPU was used. Optional hold on the first run() keeps the lease."""
+
+    def __init__(self, *, hold_first: bool = False) -> None:
+        super().__init__({})
+        self.calls: list[dict] = []
+        self.started = threading.Event()
+        self.gate = threading.Event()
+        self._seen = 0
+        if not hold_first:
+            self.gate.set()
+
+    def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True, quality_mode: str = "fast",
+            cancel_token=None) -> SourceResult:
+        self._seen += 1
+        self.calls.append({
+            "count": count, "quality_mode": quality_mode, "source_id": source_id,
+        })
+        if self._seen == 1 and not self.gate.is_set():
+            self.started.set()
+            if not self.gate.wait(timeout=5):
+                raise TimeoutError("occupancy hold")
+        else:
+            self.started.set()
+        return super().run(
+            source_path, count=count, out_dir=out_dir, source_id=source_id,
+            on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode, cancel_token=cancel_token,
+        )
+
+
+def _occupancy_pair(tmp_path, *, hold_primary: bool = False, hold_gpu: bool = False):
+    from variant_maker.server.runner import RoutingRunner
+
+    local, gpu = _OccupancyFake(), _OccupancyFake(hold_first=hold_gpu)
+    fast, fast2 = _OccupancyFake(hold_first=hold_primary), _OccupancyFake()
+    router = RoutingRunner(local, gpu, fast_remotes=[fast, fast2], max_local_fast=3)
+    store_a = JobStore(Workspace(str(tmp_path / "jeff")), router, workspace_id="ws_jeff")
+    store_b = JobStore(Workspace(str(tmp_path / "partner")), router, workspace_id="ws_partner")
+    return store_a, store_b, local, gpu, fast, fast2
+
+
+def test_jobstore_second_workspace_fast_uses_overflow_cpu(tmp_path):
+    """Workspace A holding Fast → workspace B boots the overflow CPU. Pack stays sticky."""
+    store_a, store_b, local, gpu, fast, fast2 = _occupancy_pair(tmp_path, hold_primary=True)
+    job_a = store_a.create_job([("a1.mp4", b"x"), ("a2.mp4", b"y")], count=8)
+    assert fast.started.wait(timeout=5)
+    job_b = store_b.create_job([("b1.mp4", b"z")], count=8)
+    assert store_b.wait(job_b.job_id, timeout=5)
+    assert [c["count"] for c in fast2.calls] == [8]
+    assert not gpu.calls and not local.calls
+    fast.gate.set()
+    assert store_a.wait(job_a.job_id, timeout=5)
+    assert [c["count"] for c in fast.calls] == [8, 8]
+    assert len(fast2.calls) == 1
+
+
+def test_jobstore_same_workspace_second_job_stays_on_primary(tmp_path):
+    store_a, _store_b, _local, gpu, fast, fast2 = _occupancy_pair(tmp_path, hold_primary=True)
+    job1 = store_a.create_job([("a.mp4", b"x")], count=8)
+    assert fast.started.wait(timeout=5)
+    job2 = store_a.create_job([("a2.mp4", b"y")], count=8)
+    assert store_a.wait(job2.job_id, timeout=5)
+    assert all(c["count"] == 8 for c in fast.calls)
+    assert len(fast.calls) >= 2
+    assert not fast2.calls and not gpu.calls
+    fast.gate.set()
+    assert store_a.wait(job1.job_id, timeout=5)
+
+
+def test_jobstore_one_studio_stays_on_primary_fast(tmp_path):
+    store_a, _store_b, _local, gpu, fast, fast2 = _occupancy_pair(tmp_path)
+    job = store_a.create_job([("a.mp4", b"x")], count=8)
+    assert store_a.wait(job.job_id, timeout=5)
+    assert [c["count"] for c in fast.calls] == [8]
+    assert not fast2.calls and not gpu.calls
+
+
+def test_jobstore_hq_does_not_take_fast_overflow_slot(tmp_path):
+    store_a, store_b, _local, gpu, fast, fast2 = _occupancy_pair(tmp_path, hold_gpu=True)
+    job_hq = store_a.create_job([("hq.mp4", b"x")], count=1, quality_mode="hq")
+    assert gpu.started.wait(timeout=5)
+    job_fast = store_b.create_job([("fast.mp4", b"y")], count=8)
+    assert store_b.wait(job_fast.job_id, timeout=5)
+    assert [c["count"] for c in fast.calls] == [8]
+    assert not fast2.calls
+    gpu.gate.set()
+    assert store_a.wait(job_hq.job_id, timeout=5)
+
+
+def test_jobstore_regenerate_uses_overflow_when_other_workspace_busy(tmp_path):
+    store_a, store_b, _local, gpu, fast, fast2 = _occupancy_pair(tmp_path, hold_primary=True)
+    job_a = store_a.create_job([("a.mp4", b"x")], count=8)
+    assert fast.started.wait(timeout=5)
+    job_b = store_b.create_job([("b.mp4", b"y")], count=8)
+    assert store_b.wait(job_b.job_id, timeout=5)
+    overflow_n = len(fast2.calls)
+    src = job_b.sources[0]
+    store_b.regenerate(src.source_id, 2)
+    assert len(fast2.calls) == overflow_n + 1
+    assert fast2.calls[-1]["count"] == 2
+    assert not gpu.calls
+    fast.gate.set()
+    assert store_a.wait(job_a.job_id, timeout=5)

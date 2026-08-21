@@ -262,6 +262,33 @@ def test_routing_runner_sends_second_workspace_fast_to_overflow():
     router.release_fast("ws_partner")
 
 
+def test_routing_runner_one_workspace_stays_on_primary_fast():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu, fast, fast2 = Fake(), Fake(), Fake(), Fake()
+    router = RoutingRunner(local, gpu, fast_remotes=[fast, fast2], max_local_fast=3)
+    router.acquire_fast("ws_jeff")
+    router.run(
+        "s.mp4", count=8, out_dir="o", source_id="s1", on_event=lambda e: None,
+        quality_mode="fast", workspace_id="ws_jeff",
+    )
+    router.run(
+        "s.mp4", count=8, out_dir="o", source_id="s2", on_event=lambda e: None,
+        quality_mode="fast", workspace_id="ws_jeff",
+    )
+    assert [c["count"] for c in fast.calls] == [8, 8]
+    assert not fast2.calls and not gpu.calls
+    router.release_fast("ws_jeff")
+
+
 def test_routing_runner_resume_tries_overflow_fast_when_primary_misses():
     from variant_maker.server.runner import RoutingRunner, SourceResult
 
