@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, DragEvent } from "react";
+import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
 import { accepts } from "@/lib/files";
 
 interface DropZoneProps {
@@ -71,30 +72,45 @@ export function DropZone({ onFiles }: DropZoneProps) {
       >
         ⬆
       </div>
-      <b style={{ fontSize: 14 }}>Drop video(s) here</b>
+      <b style={{ fontSize: 14 }}>{dropZoneTitle()}</b>
       <span
         style={{
           display: "block",
           fontSize: 12,
           color: "var(--color-muted)",
           marginTop: 4,
+          lineHeight: 1.45,
+          padding: "0 8px",
         }}
       >
-        MP4 / MOV — drop several to batch them
+        {dropZoneSubcopy()}
+      </span>
+      <span
+        style={{
+          display: "block",
+          fontSize: 11,
+          color: "var(--color-muted)",
+          marginTop: 8,
+          lineHeight: 1.4,
+          padding: "0 8px",
+        }}
+      >
+        {dropZoneHint()}
       </span>
       <div
         style={{
           marginTop: 12,
           display: "inline-block",
-          fontSize: 12,
+          fontSize: 13,
+          fontWeight: 600,
           color: "var(--color-violet-l)",
           border: "1px solid #2c2748",
-          padding: "6px 12px",
+          padding: "10px 16px",
           borderRadius: 8,
           background: "#15101f",
         }}
       >
-        or browse files
+        {dropZoneBrowse()}
       </div>
       <input
         ref={inputRef}

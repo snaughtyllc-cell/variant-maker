@@ -3,17 +3,32 @@ worker. Source/variants move through object storage; progress streams back as ch
 from __future__ import annotations
 
 import os
-from typing import Callable
+from collections.abc import Callable
 
 from .events import VariantEvent
-from .runner import SourceResult, VariantResult
+from .runner import (
+    DEFAULT_PLATFORM,
+    DEFAULT_PRESET,
+    MAX_REGEN,
+    MIN_BITS_VS_PEERS,
+    UNIQ_STRENGTHS,
+    UNIQUENESS_TARGET,
+    SourceResult,
+    VariantResult,
+    encode_jobs_for_worker,
+    hq_job_limits,
+    normalize_quality_mode,
+)
 from .runpod_client import RunPodClient
 from .storage import ObjectStore
 
-DEFAULT_PRESET = "medium"
-DEFAULT_PLATFORM = "tiktok"
 DEFAULT_QUALITY_MODE = "hq"   # Tier-2 neural upscale on the GPU
-MAX_REGEN = 3
+
+
+def _quality_mode() -> str:
+    """VARIANT_QUALITY_MODE=fast skips Real-ESRGAN (team speed); default hq."""
+    mode = os.environ.get("VARIANT_QUALITY_MODE", DEFAULT_QUALITY_MODE).strip().lower()
+    return mode if mode in ("fast", "hq") else DEFAULT_QUALITY_MODE
 
 
 class RunPodServerlessRunner:
@@ -22,20 +37,55 @@ class RunPodServerlessRunner:
         self._client = client
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
-            on_event: Callable[[VariantEvent], None]) -> SourceResult:
+            on_event: Callable[[VariantEvent], None],
+            allow_creative_escalate: bool = True,
+            quality_mode: str | None = None,
+            cancel_token=None) -> SourceResult:
         basename = os.path.basename(source_path)
         source_key = f"inputs/{source_id}/{basename}"
         self._store.put(source_key, source_path)
 
+        quality_mode = normalize_quality_mode(quality_mode, default=_quality_mode())
+        limits = hq_job_limits(quality_mode)
         payload = {"input": {
             "source_key": source_key, "source_id": source_id, "count": count,
             "preset": DEFAULT_PRESET, "platform": DEFAULT_PLATFORM,
-            "quality_mode": DEFAULT_QUALITY_MODE, "max_regen": MAX_REGEN,
+            "quality_mode": quality_mode,
+            "max_regen": limits.get("max_regen", MAX_REGEN),
+            "allow_creative_escalate": limits.get(
+                "allow_creative_escalate", allow_creative_escalate,
+            ),
+            "uniqueness_target": UNIQUENESS_TARGET,
+            "uniq_strengths": limits.get("uniq_strengths", list(UNIQ_STRENGTHS)),
+            "min_bits_vs_peers": MIN_BITS_VS_PEERS,
+            "auto_tune": limits.get("auto_tune", True),
+            "jobs": encode_jobs_for_worker(quality_mode, count),
         }}
+        return self._consume_stream(
+            self._client.stream_run(payload, cancel_token=cancel_token),
+            out_dir=out_dir, source_id=source_id, on_event=on_event,
+        )
 
+    def resume_run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+                   on_event: Callable[[VariantEvent], None],
+                   allow_creative_escalate: bool = True,
+                   quality_mode: str | None = None,
+                   cancel_token=None, runpod_job_id: str) -> SourceResult:
+        """Reconnect to an in-flight RunPod job after Studio restart (no new /run)."""
+        del source_path, count, allow_creative_escalate, quality_mode
+        resume = getattr(self._client, "stream_resume", None)
+        if not callable(resume):
+            raise TypeError("RunPod client cannot resume a cloud job")
+        return self._consume_stream(
+            resume(runpod_job_id, cancel_token=cancel_token),
+            out_dir=out_dir, source_id=source_id, on_event=on_event,
+        )
+
+    def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
+                        on_event: Callable[[VariantEvent], None]) -> SourceResult:
         variants_meta: list[dict] = []
         manifest_key = None
-        for chunk in self._client.stream_run(payload):
+        for chunk in chunks:
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 on_event(VariantEvent(
@@ -61,9 +111,39 @@ class RunPodServerlessRunner:
         for v in variants_meta:
             local = os.path.join(out_dir, v["filename"])
             self._store.get(v["key"], local)
-            variants.append(VariantResult(index=v["index"], filename=v["filename"],
-                                          status=v["status"], quality=v["quality"], path=local))
+            variants.append(VariantResult(
+                index=v["index"], filename=v["filename"],
+                status=v["status"], quality=v["quality"], path=local,
+                uniqueness=v.get("uniqueness"),
+                uniqueness_status=v.get("uniqueness_status"),
+                uniqueness_metric=v.get("uniqueness_metric"),
+                uniqueness_target=v.get("uniqueness_target"),
+                preset_used=v.get("preset_used"),
+                strength_final=v.get("strength_final"),
+                escalated=bool(v.get("escalated", False)),
+                platform_result=v.get("platform_result"),
+            ))
         manifest_path = os.path.join(out_dir, "manifest.json")
         if manifest_key:
             self._store.get(manifest_key, manifest_path)
         return SourceResult(variants=variants, manifest_path=manifest_path)
+
+    def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str]) -> int:
+        """Pull variant files already in object storage (GPU finished, Studio missed the copy)."""
+        os.makedirs(out_dir, exist_ok=True)
+        got = 0
+        for raw in filenames:
+            name = os.path.basename(raw)
+            if not name or name in (".", ".."):
+                continue
+            dest = os.path.join(out_dir, name)
+            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+                got += 1
+                continue
+            try:
+                self._store.get(f"outputs/{source_id}/{name}", dest)
+            except Exception:
+                continue
+            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+                got += 1
+        return got

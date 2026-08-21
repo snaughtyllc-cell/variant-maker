@@ -89,10 +89,134 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
         return M()
 
     monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    monkeypatch.setattr(runner_mod.os, "cpu_count", lambda: 16)
     LocalRunner().run("src.mp4", count=5, out_dir=str(tmp_path), source_id="s", on_event=lambda e: None)
     assert captured["quality_mode"] == "fast"
     assert captured["preset"] == "medium"
     assert captured["platform"] == "tiktok"
     assert captured["max_regen"] == 3
-    assert captured["jobs"] == 1
+    assert captured["jobs"] == 5
     assert captured["count"] == 5
+    assert captured["auto_tune"] is True
+
+
+def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
+    from variant_maker.server import runner as runner_mod
+    captured = {}
+
+    def fake_run(config, *, on_event=None):
+        captured.update(config)
+        open(f"{config['out']}/manifest.json", "w").close()
+
+        class M:
+            variants = []
+
+        return M()
+
+    monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    monkeypatch.setattr(runner_mod.os, "cpu_count", lambda: 16)
+    LocalRunner().run(
+        "src.mp4", count=5, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="hq",
+    )
+    assert captured["quality_mode"] == "hq"
+    assert captured["auto_tune"] is False
+    assert captured["jobs"] == 1
+
+
+def test_encode_jobs_hq_serial_fast_parallel():
+    from variant_maker.server.runner import (
+        DEFAULT_FAST_JOBS,
+        encode_jobs,
+        encode_jobs_for_worker,
+    )
+
+    assert encode_jobs("hq", 20, cpu_count=16) == 1
+    assert encode_jobs("hq", 1, cpu_count=16) == 1
+    assert encode_jobs("fast", 20, cpu_count=16) == DEFAULT_FAST_JOBS
+    assert encode_jobs("fast", 20, cpu_count=4) == 4
+    assert encode_jobs("fast", 3, cpu_count=16) == 3
+    assert encode_jobs("fast", 20, requested=1, cpu_count=16) == 1
+    assert encode_jobs("fast", 20, requested=8, cpu_count=4) == 4
+    # Studio (2 vCPU) must not shrink the GPU payload.
+    assert encode_jobs_for_worker("fast", 20) == DEFAULT_FAST_JOBS
+    assert encode_jobs_for_worker("hq", 20) == 1
+
+
+def test_should_run_fast_local_only_tiny_fast_packs():
+    from variant_maker.server.runner import should_run_fast_local
+
+    assert should_run_fast_local("fast", 1) is True
+    assert should_run_fast_local("fast", 3) is True
+    assert should_run_fast_local("fast", 4) is False
+    assert should_run_fast_local("fast", 20) is False
+    assert should_run_fast_local("hq", 1) is False
+    assert should_run_fast_local("hq", 3) is False
+    assert should_run_fast_local("fast", 3, max_local_fast=0) is False
+
+
+def test_routing_runner_sends_tiny_fast_to_local_else_remote():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, remote = Fake("local"), Fake("remote")
+    router = RoutingRunner(local, remote, max_local_fast=3)
+    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    assert len(local.calls) == 1 and local.calls[0]["count"] == 3
+    assert [c["count"] for c in remote.calls] == [20, 1]
+    assert remote.calls[1]["quality_mode"] == "hq"
+
+
+def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+            self.resumes = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+        def resume_run(self, *args, **kw):
+            self.resumes.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu, fast = Fake("local"), Fake("gpu"), Fake("fast")
+    router = RoutingRunner(local, gpu, fast_remote=fast, max_local_fast=3)
+    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    assert not local.calls
+    assert [c["count"] for c in fast.calls] == [3, 20]
+    assert gpu.calls[0]["count"] == 1 and gpu.calls[0]["quality_mode"] == "hq"
+    router.resume_run(
+        "s.mp4", count=20, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="fast", runpod_job_id="rp1",
+    )
+    router.resume_run(
+        "s.mp4", count=1, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="hq", runpod_job_id="rp2",
+    )
+    assert fast.resumes and fast.resumes[0]["runpod_job_id"] == "rp1"
+    assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
+
+
+def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):
+    from variant_maker.server.runner import encode_jobs_for_worker
+
+    monkeypatch.setattr("variant_maker.server.runner.os.cpu_count", lambda: 1)
+    assert encode_jobs_for_worker("fast", 20, requested=8) == 8
+    assert encode_jobs_for_worker("hq", 20, requested=8) == 1

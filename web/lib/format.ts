@@ -16,6 +16,13 @@ export function pct01(v: number): number {
   return Math.round(Math.min(1, Math.max(0, v)) * 100);
 }
 
+/** Short gallery badge. Not a quality fail. */
+export const ESCALATED_BADGE = "esc";
+
+/** Hover copy: escalate is one stronger vs-source pass after medium missed ~38%. */
+export const ESCALATED_TITLE =
+  "Medium is supposed to land around 55–65% vs the original. This one missed on the first pass, so it used a stronger encode. Visual score is still OK — not a fail. Pass is ~38% vs the source, even for a single file.";
+
 export function diagnosticsReason(d: DiagnosticsItem): { title: string; metric: string; corrupt: boolean } {
   if (d.status === "corrupt" || d.quality.spatial_ok === false) {
     const sv = d.quality.spatial_vmaf ?? 0;

@@ -4,7 +4,7 @@ import pytest
 
 from variant_maker import ffmpeg
 from variant_maker.probe import ColorTags, SourceInfo, probe
-from variant_maker.platforms import get_platform
+from variant_maker.platforms import SOCIAL_BUFSIZE, SOCIAL_MAXRATE, get_platform
 from variant_maker.sampler import derive_seed, sample
 from variant_maker.presets import MEDIUM
 from conftest import HAS_FFMPEG, mean_saturation
@@ -48,6 +48,18 @@ def test_cmd_has_color_metadata_and_codec_flags():
     # explicit output color tagging (the wash-out fix carried to the encoder)
     assert _sublist(["-color_range", "tv"], cmd)
     assert _sublist(["-colorspace", "bt709"], cmd)
+    # Constrained VBR: CRF still picks quality; maxrate stops grain bombs (~60 Mbps).
+    assert _sublist(["-maxrate", SOCIAL_MAXRATE], cmd)
+    assert _sublist(["-bufsize", SOCIAL_BUFSIZE], cmd)
+    assert "-b:v" not in cmd
+
+
+def test_cmd_does_not_cap_bitrate_on_none_platform():
+    none = get_platform("none")
+    cmd = ffmpeg.build_render_cmd(make_src(), make_params(), none, "out.mp4")
+    assert _sublist(["-crf", "21"], cmd)
+    assert "-maxrate" not in cmd
+    assert "-bufsize" not in cmd
 
 
 def test_cmd_wires_audio_when_present():
@@ -61,6 +73,61 @@ def test_cmd_drops_audio_when_absent():
     cmd = ffmpeg.build_render_cmd(make_src(has_audio=False), make_params(), REELS, "out.mp4")
     assert "-an" in cmd
     assert "-af" not in cmd and "-c:a" not in cmd
+
+
+def test_has_rubberband_true_when_filter_listed(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        listing = (
+            "Filters:\n"
+            " ..C atempo            A->A       Adjust audio tempo.\n"
+            " ..C rubberband        A->A       Time-stretch and pitch-shift audio.\n"
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=listing, stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is True
+    assert ffmpeg._rubberband_cached is True
+
+
+def test_has_rubberband_false_when_filter_absent(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        listing = (
+            "Filters:\n"
+            " ..C atempo            A->A       Adjust audio tempo.\n"
+            " ..C loudnorm          A->A       EBU R128 loudness normalization.\n"
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=listing, stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is False
+    assert ffmpeg._rubberband_cached is False
+
+
+def test_has_rubberband_false_when_ffmpeg_missing(monkeypatch):
+    ffmpeg._rubberband_cached = None
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is False
+
+
+def test_has_rubberband_uses_cached_result(monkeypatch):
+    ffmpeg._rubberband_cached = True
+    calls = {"n": 0}
+
+    def fake_run(cmd, **kwargs):
+        calls["n"] += 1
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", fake_run)
+    assert ffmpeg.has_rubberband() is True
+    assert calls["n"] == 0
 
 
 def test_render_variant_dry_run_returns_cmd_without_running():

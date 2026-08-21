@@ -11,23 +11,36 @@ import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from . import quality, uniqueness
-from .ffmpeg import render_variant
+from . import autotune, quality, uniqueness
+from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import get_platform
 from .presets import get_preset
 from .probe import probe
-from .sampler import clamp_strength, derive_seed, sample
+from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 
-# Top-tail vs TikFusion's ~18-bit floor: default target 24/64 ≈ 0.375.
+# TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
+# so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
+# Medium crop + reconstructive rebuild_scale sized so talking-head *scores* ~35–42 bits (~55–65% UI).
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
-# Wider ladder so medium can clear 24 bits before the one creative escalate.
+# Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
 DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 
 
+def use_face_protect(quality_mode: str | None) -> bool:
+    """Face crop-gating is HQ-only.
+
+    Fast uniqueness is mostly crop. OpenCV Haar on a talking-head (≥15% face) sets
+    ``crop_keep=1.0``, which is how a Fast pack lands ~22 bits (~35% UI) and
+    escalates every file. Protect stays on for HQ so Real-ESRGAN does not punch
+    into faces.
+    """
+    return str(quality_mode or "fast").strip().lower() == "hq"
+
+
 def _ffmpeg_version() -> str:
-    out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+    out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
     line = out.stdout.splitlines()[0] if out.stdout else ""
     parts = line.split()
     return parts[2] if len(parts) >= 3 else "unknown"
@@ -53,6 +66,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
 
+    rubberband = config.get("rubberband")
+    if rubberband is None:
+        rubberband = has_rubberband()
+        config = {**config, "rubberband": rubberband}
+
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
     # attempt on the strong preset.
@@ -60,6 +78,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
+    # Fast is the daily pack: auto-tune on unless the caller opts out. HQ stays
+    # one-pass (Real-ESRGAN) so bisection cannot blow the GPU time cap.
+    auto_tune = config.get("auto_tune")
+    if auto_tune is None:
+        auto_tune = config.get("quality_mode", "fast") != "hq"
 
     master_seed = config.get("seed")
     if master_seed is None:
@@ -87,6 +110,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "preset": preset.name,
         "platform": platform.name,
         "quality_mode": config.get("quality_mode", "fast"),
+        "auto_tune": bool(auto_tune),
+        "rubberband": bool(rubberband),
+        "protect": False,
         "count": count,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
@@ -98,12 +124,19 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
     # --dry-run: print the plan + commands, render nothing, write nothing.
     if dry_run:
+        from .neural import protect
         records = []
         for i in range(1, count + 1):
             vseed, fname, path = _prep(i)
-            params = sample(preset, vseed)
+            params = sample(
+                preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
+            )
+            if use_face_protect(config.get("quality_mode")):
+                params = protect.apply_to_params(params)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
+            if hq:
+                params = disable_fast_pixel_ops(params)
             _, cmd = render_variant(src, params, platform, path, dry_run=True)
             print(f"[{i}/{count}] {fname}\n  {cmd}")
             records.append(VariantRecord(index=i, filename=fname, seed=vseed,
@@ -111,8 +144,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
         return Manifest(source=src.to_dict(), run=run_meta, variants=records)
 
     os.makedirs(out_dir, exist_ok=True)
+    protect_frame = None
+    from .neural import protect as protect_mod
+    if use_face_protect(config.get("quality_mode")) and protect_mod.available():
+        protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
+    run_meta["protect"] = protect_frame is not None
 
     def _render_one(i: int) -> VariantRecord:
+        token = config.get("cancel_token")
+        if token is not None and token.is_set():
+            from .server.cancel import JobCancelled
+            raise JobCancelled()
         vseed, fname, path = _prep(i)
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
@@ -125,9 +167,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
             effective_strength = clamp_strength(strength)
             last_strength = effective_strength
             emit("rendering", index=i, attempt=attempt_no)
-            params = sample(use_preset, vseed, strength=effective_strength)
+            params = sample(
+                use_preset, vseed, strength=effective_strength, rubberband=rubberband,
+                duration_s=src.duration_s,
+            )
+            if protect_frame is not None:
+                from .neural import protect
+                params = protect.apply_to_params(params, frame_path=protect_frame)
             if rotate_off:
                 params["video"]["rotate_deg"] = 0.0
+            if hq:
+                params = disable_fast_pixel_ops(params)
             if hq:
                 _, cmd, nops = neural.upscale_clip(src, params, path, platform=platform)
             else:
@@ -172,9 +222,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
             """Record peer distance; demote ok → below_target when peers are too close."""
             out = dict(u_score)
             out["min_bits_vs_peers"] = peer_min
-            if peer_min is not None and peer_min < min_bits_vs_peers:
-                if out.get("uniqueness_status") == "ok":
-                    out["uniqueness_status"] = "below_target"
+            if (
+                peer_min is not None
+                and peer_min < min_bits_vs_peers
+                and out.get("uniqueness_status") == "ok"
+            ):
+                out["uniqueness_status"] = "below_target"
             return out
 
         # Uniqueness gate: light preset at rising strengths, quality regen inside each
@@ -190,23 +243,53 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "bits": None, "min_bits_vs_peers": None,
         }
         prev_effective = None
-        for strength in uniq_strengths:
-            # Belt-and-suspenders: if two ladder rungs clamp to the same effective
-            # strength, the second render would be byte-for-byte identical spend —
-            # skip it rather than pay for a duplicate render.
-            effective = clamp_strength(strength)
-            if r is not None and effective == prev_effective:
-                continue
-            prev_effective = effective
-            r = regen(preset, strength)
-            emit("uniqueness", index=i)
-            u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-            peer_min = _peer_bits(path)
-            u = _apply_peer_status(u, peer_min)
-            if r["passed"] and _gate_ok(u, peer_min):
-                break
-        else:
-            if allow_creative_escalate:
+        if auto_tune:
+            def _tune_attempt(strength: float) -> dict:
+                r_try = regen(preset, strength)
+                emit("uniqueness", index=i)
+                u_try = uniqueness.score_uniqueness(
+                    src.path, path, target=uniqueness_target,
+                )
+                peer_min = _peer_bits(path)
+                u_try = _apply_peer_status(u_try, peer_min)
+                # Quality `passed` is VMAF/histogram only. Peer miss is too-similar
+                # (search stronger), not too-strong (search milder).
+                return {
+                    **r_try,
+                    **u_try,
+                    "quality_passed": r_try["passed"],
+                    "passed": r_try["passed"],
+                    "peer_ok": peer_min is None or peer_min >= min_bits_vs_peers,
+                    "uniqueness": u_try["uniqueness"],
+                }
+
+            tuned = autotune.tune(
+                _tune_attempt, target=uniqueness_target, stop_on_clear=True,
+            )
+            r = {
+                "params": tuned["params"],
+                "cmd": tuned["cmd"],
+                "neural_ops": tuned["neural_ops"],
+                "vmaf": tuned["vmaf"],
+                "histogram_ok": tuned["histogram_ok"],
+                "regen_count": tuned["regen_count"],
+                "passed": tuned["quality_passed"],
+            }
+            u = {
+                "uniqueness": tuned["uniqueness"],
+                "uniqueness_status": tuned["uniqueness_status"],
+                "uniqueness_metric": tuned["uniqueness_metric"],
+                "uniqueness_target": tuned["uniqueness_target"],
+                "bits": tuned.get("bits"),
+                "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
+            }
+            cleared = (
+                tuned.get("quality_passed")
+                and tuned.get("uniqueness") is not None
+                and tuned["uniqueness"] >= uniqueness_target
+                and tuned.get("peer_ok", True)
+            )
+            if not cleared and allow_creative_escalate:
                 emit("escalating", index=i)
                 strong = get_preset("strong")
                 r = regen(strong, 1.0)
@@ -216,6 +299,33 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 u = _apply_peer_status(u, peer_min)
                 preset_used = strong.name
                 escalated = True
+        else:
+            for strength in uniq_strengths:
+                # Belt-and-suspenders: if two ladder rungs clamp to the same effective
+                # strength, the second render would be byte-for-byte identical spend —
+                # skip it rather than pay for a duplicate render.
+                effective = clamp_strength(strength)
+                if r is not None and effective == prev_effective:
+                    continue
+                prev_effective = effective
+                r = regen(preset, strength)
+                emit("uniqueness", index=i)
+                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
+                peer_min = _peer_bits(path)
+                u = _apply_peer_status(u, peer_min)
+                if r["passed"] and _gate_ok(u, peer_min):
+                    break
+            else:
+                if allow_creative_escalate:
+                    emit("escalating", index=i)
+                    strong = get_preset("strong")
+                    r = regen(strong, 1.0)
+                    emit("uniqueness", index=i)
+                    u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
+                    peer_min = _peer_bits(path)
+                    u = _apply_peer_status(u, peer_min)
+                    preset_used = strong.name
+                    escalated = True
 
         info = probe(path)
 

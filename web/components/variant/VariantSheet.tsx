@@ -72,6 +72,7 @@ export function VariantSheet({
         {/* Panel — right-docked slide-over */}
         <Dialog.Content
           aria-describedby={undefined}
+          className="variant-sheet"
           style={{
             position: "fixed",
             top: 0,
@@ -95,25 +96,17 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "14px 16px",
-              borderBottom: "1px solid var(--color-line)",
-              flexShrink: 0,
-            }}
-          >
+          {/* Header — above the video layer; padded out of the iPhone status bar */}
+          <div className="variant-sheet__header">
             {/* Prev */}
             <button
+              type="button"
               onClick={() => onNav(-1)}
               disabled={isFirst}
               aria-label="Previous variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "#16161f",
                 border: "1px solid var(--color-line)",
@@ -121,7 +114,7 @@ export function VariantSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 color: isFirst ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isFirst ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isFirst ? 0.4 : 1,
@@ -162,12 +155,13 @@ export function VariantSheet({
 
             {/* Next */}
             <button
+              type="button"
               onClick={() => onNav(+1)}
               disabled={isLast}
               aria-label="Next variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "#16161f",
                 border: "1px solid var(--color-line)",
@@ -175,7 +169,7 @@ export function VariantSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 color: isLast ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isLast ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isLast ? 0.4 : 1,
@@ -186,10 +180,11 @@ export function VariantSheet({
 
             {/* Close */}
             <Dialog.Close
+              type="button"
               aria-label="Close"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "transparent",
                 border: "none",
@@ -206,14 +201,8 @@ export function VariantSheet({
             </Dialog.Close>
           </div>
 
-          {/* Body — scrollable */}
-          <div
-            style={{
-              overflow: "auto",
-              padding: 16,
-              flex: 1,
-            }}
-          >
+          {/* Body — scrollable; minHeight 0 so iOS actually scrolls past the video */}
+          <div className="variant-sheet__body">
             {/* Compare slider — beforeRef/afterRef wired in from sheet */}
             <CompareSlider
               beforeSrc={sourceUrl(sourceId)}

@@ -1,9 +1,24 @@
 "use client";
+import { useState } from "react";
 import { useRun } from "@/lib/runStore";
+import { cancelJob } from "@/lib/api";
+import { runDeliveredNone } from "@/lib/progress";
+import { liveRunSubcopy } from "@/lib/hqWaitCopy";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete } = useRun();
+  const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const [cancelling, setCancelling] = useState(false);
+
+  async function handleCancel() {
+    if (!jobId || complete || cancelling) return;
+    setCancelling(true);
+    try {
+      await cancelJob(jobId);
+    } catch {
+      // Poll will still close the job; keep the button from double-firing.
+    }
+  }
 
   // Empty state — no job running
   if (!jobId) {
@@ -55,13 +70,32 @@ export function ProgressPanel() {
             maxWidth: 200,
           }}
         >
-          Drop a video and hit Generate — progress shows here
+          Add a video and Generate — live tiles show here
         </p>
       </div>
     );
   }
 
   const sources = Object.values(progress.bySource);
+  const emptyFail = runDeliveredNone(progress);
+  const failed = progress.failed;
+  const cancelled = Boolean(failed && /cancelled/i.test(failed));
+  const headline = failed
+    ? cancelled
+      ? "Cancelled"
+      : "Run lost"
+    : complete
+      ? emptyFail
+        ? "No variants"
+        : "Complete"
+      : "Generating…";
+  const sub = failed
+    ? failed
+    : complete
+      ? emptyFail
+        ? "The job ended without any playable variants. Try Fast (not HQ) and a smaller 1080p file."
+        : "All variants done — open Gallery, or New run for another pack"
+      : liveRunSubcopy(qualityMode);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -73,54 +107,92 @@ export function ProgressPanel() {
           justifyContent: "space-between",
           marginBottom: 14,
           flexShrink: 0,
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
-            {complete ? "Complete" : "Generating…"}
+            {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2 }}>
-            {complete
-              ? "All variants done"
-              : "Live status updates every second"}
+          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
+            {sub}
           </div>
         </div>
 
-        {/* Live / done pill */}
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: "#14141d",
-            border: "1px solid var(--color-line)",
-            fontSize: 11.5,
-            color: "var(--color-muted)",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {jobId && !complete && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelling}
+              style={{
+                background: "#2a0e0e",
+                border: "1px solid #5a1a1a",
+                color: "var(--color-red)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontSize: 13,
+                minHeight: 44,
+                cursor: cancelling ? "wait" : "pointer",
+              }}
+            >
+              {cancelling ? "Stopping…" : "Cancel"}
+            </button>
+          )}
+          {jobId && (
+            <button
+              type="button"
+              onClick={clear}
+              style={{
+                background: "#16161f",
+                border: "1px solid var(--color-line)",
+                color: "var(--color-text)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontSize: 13,
+                minHeight: 44,
+                cursor: "pointer",
+              }}
+            >
+              New run
+            </button>
+          )}
           <span
             style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: complete ? "var(--color-green)" : "var(--color-cyan)",
-              boxShadow: complete
-                ? "0 0 8px #22c55e88"
-                : "0 0 8px #22d3ee99",
-              display: "inline-block",
-              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 999,
+              background: "#14141d",
+              border: "1px solid var(--color-line)",
+              fontSize: 11.5,
+              color: "var(--color-muted)",
             }}
-          />
-          {complete ? "done" : "live"}
-        </span>
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: complete ? "var(--color-green)" : "var(--color-cyan)",
+                boxShadow: complete
+                  ? "0 0 8px #22c55e88"
+                  : "0 0 8px #22d3ee99",
+                display: "inline-block",
+                flexShrink: 0,
+              }}
+            />
+            {complete ? "done" : "live"}
+          </span>
+        </div>
       </div>
 
       {/* Source cards — scrollable */}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {sources.map((source) => (
-          <SourceProgressCard key={source.source_id} source={source} />
+          <SourceProgressCard key={source.source_id} source={source} qualityMode={qualityMode} />
         ))}
       </div>
     </div>

@@ -1,12 +1,16 @@
 "use client";
 import useSWR from "swr";
 import { getHealth } from "../../lib/api";
+import { useQueue } from "../../lib/useQueue";
+import { queueStripLabel } from "../../lib/queue";
 
 export function StatusStrip() {
   const { data, error } = useSWR("/api/health", () => getHealth(), {
     refreshInterval: 10000,
     revalidateOnFocus: false,
   });
+  const { data: queue } = useQueue();
+  const queueLabel = queueStripLabel(queue);
 
   const online = !error && data?.status === "ok";
   const ready = data !== undefined && !error;
@@ -16,7 +20,7 @@ export function StatusStrip() {
     <div className="flex items-center gap-2.5 text-[11.5px] text-muted">
       {/* Engine status pill */}
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+        className="status-engine inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
         style={{ background: "#14141d" }}
       >
         <span
@@ -29,12 +33,22 @@ export function StatusStrip() {
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {loading ? "Connecting…" : ready && online ? "Engine ready" : "Engine offline"}
+        {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
-      {/* Local mode pill */}
+      {queueLabel && (
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+          style={{ background: "#1a1610", color: "var(--color-amber)", borderColor: "#3a3020" }}
+          title="Live packs on this shared Studio URL"
+        >
+          {queueLabel}
+        </span>
+      )}
+
+      {/* Local mode pill — desktop only; phones hide it to keep the bar usable */}
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+        className="status-cpu inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
         style={{ background: "#14141d" }}
       >
         Local&nbsp;·&nbsp;CPU&nbsp;<strong className="text-text font-semibold">fast</strong>

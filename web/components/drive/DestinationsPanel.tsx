@@ -9,7 +9,7 @@ import {
   testDestination,
   updateDestination,
 } from "@/lib/api";
-import { truncateFolderId } from "@/lib/drive";
+import { oauthErrorMessage, truncateFolderId } from "@/lib/drive";
 import type { Destination, DriveStatus } from "@/lib/types";
 
 type TestResult = { ok: boolean; message: string };
@@ -33,6 +33,7 @@ export function DestinationsPanel() {
 
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [oauthBanner, setOauthBanner] = useState<string | null>(null);
 
   async function refresh() {
     setIsLoading(true);
@@ -48,6 +49,10 @@ export function DestinationsPanel() {
   }
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("oauth") === "error") {
+      setOauthBanner(oauthErrorMessage(q.get("reason")));
+    }
     refresh();
   }, []);
 
@@ -153,6 +158,21 @@ export function DestinationsPanel() {
 
   return (
     <div>
+      {oauthBanner && (
+        <div
+          style={{
+            padding: "12px 16px",
+            marginBottom: 18,
+            background: "#1c1608",
+            border: "1px solid #3a2c10",
+            borderRadius: 12,
+            fontSize: 12.5,
+            color: "#ffd08a",
+          }}
+        >
+          {oauthBanner}
+        </div>
+      )}
       {/* Connection card */}
       <div
         style={{

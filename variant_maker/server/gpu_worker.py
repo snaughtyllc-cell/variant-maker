@@ -8,9 +8,18 @@ from __future__ import annotations
 import os
 import queue
 import threading
-from typing import Iterator
+from collections.abc import Iterator
 
 from .. import pipeline
+from .runner import (
+    DEFAULT_PLATFORM,
+    DEFAULT_PRESET,
+    MAX_REGEN,
+    MIN_BITS_VS_PEERS,
+    UNIQ_STRENGTHS,
+    UNIQUENESS_TARGET,
+    encode_jobs_for_worker,
+)
 from .storage import ObjectStore
 
 
@@ -20,6 +29,14 @@ def _progress_chunk(state: str, kw: dict) -> dict:
         "attempt": kw.get("attempt", 0), "max_attempts": kw.get("max_attempts", 0),
         "status": kw.get("status"), "quality": kw.get("quality"),
         "filename": kw.get("filename"),
+        "uniqueness": kw.get("uniqueness"),
+        "uniqueness_status": kw.get("uniqueness_status"),
+        "uniqueness_metric": kw.get("uniqueness_metric"),
+        "uniqueness_target": kw.get("uniqueness_target"),
+        "escalated": bool(kw.get("escalated", False)),
+        "preset_used": kw.get("preset_used"),
+        "strength_final": kw.get("strength_final"),
+        "platform_result": kw.get("platform_result"),
     }}
 
 
@@ -34,12 +51,25 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     out_dir = os.path.join(work_dir, "out")
     os.makedirs(out_dir, exist_ok=True)
 
+    quality_mode = job_input.get("quality_mode", "hq")
+    auto_tune = job_input.get("auto_tune")
+    if auto_tune is None:
+        auto_tune = quality_mode != "hq"
     config = {
         "input": in_path, "out": out_dir, "count": count,
-        "preset": job_input.get("preset", "medium"),
-        "platform": job_input.get("platform", "tiktok"),
-        "quality_mode": job_input.get("quality_mode", "hq"),
-        "max_regen": job_input.get("max_regen", 3), "jobs": 1,
+        "preset": job_input.get("preset", DEFAULT_PRESET),
+        "platform": job_input.get("platform", DEFAULT_PLATFORM),
+        "quality_mode": quality_mode,
+        "max_regen": job_input.get("max_regen", MAX_REGEN),
+            "jobs": encode_jobs_for_worker(
+                quality_mode, count, requested=job_input.get("jobs"),
+            ),
+        "uniqueness_target": job_input.get("uniqueness_target", UNIQUENESS_TARGET),
+        "uniq_strengths": job_input.get("uniq_strengths", list(UNIQ_STRENGTHS)),
+        "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),
+        "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
+        "auto_tune": auto_tune,
+        "rubberband": job_input.get("rubberband"),
     }
 
     q: queue.Queue = queue.Queue()
@@ -73,8 +103,18 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     for v in manifest.variants:
         key = f"outputs/{source_id}/{v.filename}"
         store.put(key, os.path.join(out_dir, v.filename))
-        variants.append({"index": v.index, "filename": v.filename,
-                         "status": v.status, "quality": v.quality, "key": key})
+        variants.append({
+            "index": v.index, "filename": v.filename,
+            "status": v.status, "quality": v.quality, "key": key,
+            "uniqueness": getattr(v, "uniqueness", None),
+            "uniqueness_status": getattr(v, "uniqueness_status", None),
+            "uniqueness_metric": getattr(v, "uniqueness_metric", None),
+            "uniqueness_target": getattr(v, "uniqueness_target", None),
+            "preset_used": getattr(v, "preset_used", None),
+            "strength_final": getattr(v, "strength_final", None),
+            "escalated": bool(getattr(v, "escalated", False)),
+            "platform_result": getattr(v, "platform_result", None),
+        })
     manifest_key = f"outputs/{source_id}/manifest.json"
     store.put(manifest_key, os.path.join(out_dir, "manifest.json"))
     yield {"type": "result", "variants": variants, "manifest_key": manifest_key}

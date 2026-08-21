@@ -1,0 +1,48 @@
+name: Build VaryForge control-plane image
+
+on:
+  push:
+    branches:
+      - cursor/railway-runpod-split-c975
+    paths:
+      # Image copies the Python engine in. Protect / trim / uniqueness live
+      # in variant_maker/*.py + neural/, not only deploy/runpod/.
+      - deploy/runpod/**
+      - variant_maker/*.py
+      - variant_maker/server/**
+      - variant_maker/neural/**
+      - pyproject.toml
+      - .github/workflows/build-variant-cp.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # The CUDA devel base expands beyond the free space on a stock GitHub runner.
+      # These are preinstalled toolchains on the ephemeral runner, not repository data.
+      - name: Free runner disk for the CUDA image
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          sudo apt-get clean
+          docker system prune --all --force || true
+          df -h /
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push control-plane worker
+        run: |
+          docker build -f deploy/runpod/Dockerfile -t ghcr.io/snaughtyllc-cell/variant-cp:latest .
+          docker push ghcr.io/snaughtyllc-cell/variant-cp:latest

@@ -25,6 +25,10 @@ from . import __version__
 @click.option("--flip", default="never", type=click.Choice(["never", "always"]), show_default=True)
 @click.option("--jobs", default=1, show_default=True)
 @click.option("--dry-run", is_flag=True, help="print plan + commands, render nothing")
+@click.option(
+    "--auto-tune/--no-auto-tune", default=None,
+    help="bisect strength to the uniqueness target (default: on for Fast, off for HQ)",
+)
 @click.option("-v", "--verbose", is_flag=True)
 @click.version_option(version=__version__)
 def main(**config):

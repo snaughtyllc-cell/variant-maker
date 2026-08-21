@@ -2,36 +2,50 @@
 import { useState, useCallback } from "react";
 import { DropZone } from "@/components/studio/DropZone";
 import { FileList } from "@/components/studio/FileList";
+import { DrivePickList } from "@/components/studio/DrivePickList";
+import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePickerModal";
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
+import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
+import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
-import { readDurations } from "@/lib/files";
-import { createJob } from "@/lib/api";
+import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
+import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
+import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
+import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
 
 export default function StudioPage() {
   const { start, jobId, complete } = useRun();
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
-  const [perVideo, setPerVideo] = useState(5);
+  const [drivePicks, setDrivePicks] = useState<DrivePick[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [perVideo, setPerVideo] = useState(DEFAULT_PER_VIDEO);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
+  const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // A run is "active" when there's a jobId and it's not yet complete
-  const runActive = !!jobId && !complete;
+  const sourceCount = files.length + drivePicks.length;
+  const driveDestinationId = drivePicks[0]?.destinationId ?? null;
 
   const handleFiles = useCallback(async (incoming: File[]) => {
+    const blocked = incoming.map(tooLargeMessage).find(Boolean);
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
+    setError(null);
     setFiles((prev) => {
       const combined = [...prev, ...incoming];
-      // fire-and-forget duration reads for the new batch
       readDurations(combined).then(setDurations);
       return combined;
     });
   }, []);
 
-  function handleRemove(index: number) {
+  function handleRemoveFile(index: number) {
     setFiles((prev) => {
       const next = prev.filter((_, i) => i !== index);
       readDurations(next).then(setDurations);
@@ -39,13 +53,42 @@ export default function StudioPage() {
     });
   }
 
+  function handleRemoveDrivePick(index: number) {
+    setDrivePicks((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleDriveConfirm(picks: DrivePick[]) {
+    if (picks.length === 0) return;
+    const destId = picks[0].destinationId;
+    setDrivePicks((prev) => {
+      if (prev.length === 0 || prev[0].destinationId !== destId) return picks;
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const p of picks) byId.set(p.id, p);
+      return Array.from(byId.values());
+    });
+    setError(null);
+  }
+
   async function handleGenerate() {
-    if (busy || runActive || files.length === 0) return;
+    if (busy || jobId || sourceCount === 0) return;
+    if (files.length > 0 && drivePicks.length > 0) {
+      setError("Use either phone files or Drive clips in one run — not both.");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
-      const resp = await createJob(files, perVideo, allowCreativeEscalate);
-      start(resp);
+      const resp =
+        drivePicks.length > 0
+          ? await createJobFromDrive({
+              destinationId: drivePicks[0].destinationId,
+              fileIds: drivePicks.map((p) => p.id),
+              count: perVideo,
+              qualityMode,
+              allowCreativeEscalate,
+            })
+          : await createJob(files, perVideo, allowCreativeEscalate, qualityMode);
+      start(resp, qualityMode);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
@@ -54,21 +97,8 @@ export default function StudioPage() {
   }
 
   return (
-    <main
-      style={{
-        display: "grid",
-        gridTemplateColumns: "0.95fr 1.05fr",
-        minHeight: "calc(100vh - 49px)", // subtract top nav height
-        background: "var(--color-bg)",
-      }}
-    >
-      {/* LEFT — cockpit */}
-      <div
-        style={{
-          padding: "22px",
-          borderRight: "1px solid var(--color-line)",
-        }}
-      >
+    <main className={studioShellClass(!!jobId)}>
+      <div className="studio-cockpit">
         <p
           style={{
             fontSize: 11,
@@ -82,23 +112,52 @@ export default function StudioPage() {
           1 · Source videos
         </p>
 
+        <EngineWaitNote />
+        <StudioQueue qualityMode={qualityMode} jobId={jobId} />
+
         <DropZone onFiles={handleFiles} />
 
-        <FileList files={files} durations={durations} onRemove={handleRemove} />
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          disabled={!!jobId}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: "var(--color-text)",
+            background: "var(--color-panel2)",
+            border: "1px solid var(--color-line)",
+            padding: "10px 14px",
+            borderRadius: 10,
+            cursor: jobId ? "not-allowed" : "pointer",
+            opacity: jobId ? 0.6 : 1,
+          }}
+        >
+          From Google Drive
+        </button>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "stretch", marginTop: 20 }}>
+        <FileList files={files} durations={durations} onRemove={handleRemoveFile} />
+        <DrivePickList picks={drivePicks} onRemove={handleRemoveDrivePick} />
+
+        <div className="studio-actions">
           <VariantStepper
             value={perVideo}
             onChange={setPerVideo}
             min={1}
-            fileCount={files.length}
+            max={MAX_PER_VIDEO}
+            fileCount={sourceCount}
+            qualityMode={qualityMode}
           />
           <GenerateButton
-            fileCount={files.length}
+            fileCount={sourceCount}
             perVideo={perVideo}
             onClick={handleGenerate}
-            disabled={runActive}
+            disabled={!!jobId}
             busy={busy}
+            jobId={jobId}
+            complete={complete}
           />
         </div>
 
@@ -121,21 +180,23 @@ export default function StudioPage() {
         <AdvancedPanel
           allowCreativeEscalate={allowCreativeEscalate}
           onAllowCreativeEscalateChange={setAllowCreativeEscalate}
+          qualityMode={qualityMode}
+          onQualityModeChange={setQualityMode}
+          totalVariants={totalVariants(sourceCount, perVideo)}
         />
       </div>
 
-      {/* RIGHT — live progress (Task 6) */}
-      <div
-        style={{
-          padding: "18px 20px",
-          background: "#0c0c11",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
+      <div className={studioProgressIdleClass(!!jobId)}>
         <ProgressPanel />
       </div>
+
+      {pickerOpen && (
+        <DrivePickerModal
+          existingDestinationId={driveDestinationId}
+          onConfirm={handleDriveConfirm}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </main>
   );
 }

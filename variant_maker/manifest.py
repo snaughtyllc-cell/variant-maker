@@ -26,6 +26,8 @@ class VariantRecord:
     status: str = "ok"
     # None | "passed" | "duplicate_reject" | "unknown" — the detector bridge
     platform_result: str | None = None
+    # Live permalink the VA pasted after posting (not a Drive file id).
+    post_url: str | None = None
     uniqueness: float | None = None
     uniqueness_status: str | None = None  # ok|below_target|unknown
     uniqueness_metric: str | None = None

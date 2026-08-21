@@ -1,7 +1,18 @@
 import pytest
 
-from variant_maker.sampler import clamp_strength, derive_seed, sample, total_distortion
-from variant_maker.presets import SUBTLE, MEDIUM, STRONG
+from variant_maker.presets import MEDIUM, STRONG, SUBTLE
+from variant_maker.sampler import (
+    _VIDEO_AXES,
+    _axis_distortion,
+    clamp_strength,
+    clamp_trims,
+    derive_seed,
+    disable_fast_pixel_ops,
+    sample,
+    total_distortion,
+    RESAMPLE_FLAGS,
+    RESAMPLE_PX_CHOICES,
+)
 
 # A deterministic spread of per-variant seeds for distribution tests.
 SEEDS = [derive_seed(20260627, i) for i in range(400)]
@@ -14,11 +25,13 @@ ZERO_MEAN_AXES = {
     "gamma": 1.0,
     "hue_deg": 0.0,
     "rotate_deg": 0.0,
+    "warp_k1": 0.0,
 }
 
 VIDEO_RANGE_AXES = (
     "crop_keep", "rotate_deg", "brightness", "contrast", "saturation",
-    "gamma", "hue_deg", "grain", "unsharp", "speed", "trim_s",
+    "gamma", "hue_deg", "grain", "unsharp", "warp_k1", "rebuild_scale",
+    "speed", "trim_s",
 )
 
 
@@ -190,3 +203,230 @@ def test_crop_offset_and_trim_end_are_unbudgeted():
     bumped = {"video": dict(p["video"])}
     bumped["video"].update({"crop_x_frac": 0.0, "crop_y_frac": 1.0, "trim_end_s": 5.0})
     assert total_distortion(MEDIUM, bumped) == base
+
+
+def test_crop_keep_is_unbudgeted_fingerprint():
+    """Crop is the vs-source uniqueness lever; VMAF already ignores it. Strength must not
+    shrink keep toward 1.0 when color/warp overspend — that is the 35% / all-esc look."""
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["crop_keep"] = MEDIUM.crop_keep.lo
+    assert total_distortion(MEDIUM, bumped) == base
+    seed = derive_seed(42, 7)
+    mild = sample(MEDIUM, seed, strength=0.25)["video"]["crop_keep"]
+    full = sample(MEDIUM, seed, strength=1.0)["video"]["crop_keep"]
+    strong = sample(MEDIUM, seed, strength=1.8)["video"]["crop_keep"]
+    assert mild == full == strong
+    assert MEDIUM.crop_keep.lo <= mild <= MEDIUM.crop_keep.hi
+
+
+def test_medium_crop_range_is_tighter_than_identity():
+    """Talking-head keep=0.72 (face-only zoom) scored *worse* SSIM than 0.858.
+    Medium always punches ≥10% but keeps background in the 576×1024 uniqueness
+    frame. Escalate is a bit tighter. Gate stays 24.
+    """
+    assert MEDIUM.crop_keep.lo == pytest.approx(0.84)
+    assert MEDIUM.crop_keep.hi == pytest.approx(0.90)
+    assert STRONG.crop_keep.lo < MEDIUM.crop_keep.lo
+    assert STRONG.crop_keep.lo == pytest.approx(0.78)
+    assert STRONG.crop_keep.hi == pytest.approx(0.86)
+    for s in SEEDS[:80]:
+        keep = sample(MEDIUM, s)["video"]["crop_keep"]
+        assert keep <= 0.90 + 1e-9
+        assert keep >= 0.84 - 1e-9
+
+
+def test_grain_is_texture_under_the_social_cap():
+    """Grain moves talking-head SSIM; 14–22 without a cap wrote ~65 Mbps.
+    Social 12M is the file-size ceiling — grain can sit in the uniqueness band.
+    """
+    assert MEDIUM.grain.lo == pytest.approx(7)
+    assert MEDIUM.grain.hi == pytest.approx(12)
+    assert STRONG.grain.lo == pytest.approx(10)
+    assert STRONG.grain.hi == pytest.approx(16)
+    assert STRONG.grain.hi > MEDIUM.grain.hi
+    assert MEDIUM.grain.lo >= SUBTLE.grain.lo
+
+
+def test_clamp_trims_keeps_half_of_a_short_clip():
+    """Strong-range head+tail (~0.85+0.85) must not gut a 1s source."""
+    start, end = clamp_trims(0.85, 0.85, 1.0)
+    assert start + end == pytest.approx(0.5)
+    assert start == pytest.approx(end)
+    assert start > 0.0
+
+
+def test_clamp_trims_leaves_long_clips_alone():
+    start, end = clamp_trims(0.2, 0.5, 10.0)
+    assert (start, end) == (0.2, 0.5)
+
+
+def test_over_budget_shrink_kills_encode_before_look():
+    """When over budget, shrink grain/unsharp/crf first; color AND crop both survive."""
+    encode_names = {"grain", "unsharp", "crf"}
+    look_names = {
+        "rotate_deg",
+        "brightness", "contrast", "saturation", "gamma", "hue_deg",
+        "warp_k1",
+    }
+    encode_ds: list[float] = []
+    look_ds: list[float] = []
+    for s in SEEDS:
+        params = sample(MEDIUM, s)
+        assert total_distortion(MEDIUM, params) <= MEDIUM.budget + 1e-9
+        v = params["video"]
+        for name, kind, ref, budgeted in _VIDEO_AXES:
+            if not budgeted:
+                continue
+            d = _axis_distortion(
+                kind, ref, getattr(MEDIUM, name).lo, getattr(MEDIUM, name).hi, v[name],
+            )
+            if name in encode_names:
+                encode_ds.append(d)
+            elif name in look_names:
+                look_ds.append(d)
+    mean_encode = sum(encode_ds) / len(encode_ds)
+    mean_look = sum(look_ds) / len(look_ds)
+    assert mean_look > mean_encode + 0.05, (
+        f"look (color+geo) should retain more than grain/encode: "
+        f"look={mean_look:.4f} encode={mean_encode:.4f}"
+    )
+
+
+def test_sample_with_duration_scales_trims_on_short_clips():
+    p = sample(STRONG, derive_seed(7, 1), duration_s=1.0)
+    v = p["video"]
+    remaining = 1.0 - v["trim_s"] - v["trim_end_s"]
+    assert remaining >= 0.5 - 1e-9
+    unbounded = sample(STRONG, derive_seed(7, 1))
+    assert unbounded["video"]["trim_s"] + unbounded["video"]["trim_end_s"] > (
+        v["trim_s"] + v["trim_end_s"]
+    )
+
+
+def test_overbudget_shrink_is_encode_first_look_survives():
+    """Tight budget collapses grain; saturation and crop_keep still move (look shows)."""
+    grains_at_calm = 0
+    sat_off = 0
+    crop_off = 0
+    for s in SEEDS[:200]:
+        tight = sample(MEDIUM, s, strength=0.25)["video"]
+        if abs(tight["grain"] - MEDIUM.grain.lo) < 1e-6:
+            grains_at_calm += 1
+        if abs(tight["saturation"] - 1.0) > 1e-4:
+            sat_off += 1
+        if abs(tight["crop_keep"] - MEDIUM.crop_keep.hi) > 1e-4:
+            crop_off += 1
+    assert grains_at_calm > 150, f"grain at calm on {grains_at_calm}/200"
+    assert sat_off > 50, f"saturation still showing on {sat_off}/200"
+    assert crop_off > 50, f"crop still showing on {crop_off}/200"
+
+
+def test_sample_draws_resample_fingerprint():
+    p = sample(MEDIUM, derive_seed(11, 2))
+    v = p["video"]
+    assert v["resample_px"] in RESAMPLE_PX_CHOICES
+    assert v["resample_px"] != 0
+    assert v["resample_px"] % 2 == 0
+    assert v["resample_flags"] in RESAMPLE_FLAGS
+
+
+def test_fast_pixel_seed_resample_is_a_real_roundtrip():
+    """Legacy ±px leftover: still drawn, but uniqueness now uses rebuild_scale.
+
+    Tiny ±8–32 on 1080 is invisible at the 576×1024 uniqueness frame.
+    """
+    assert min(abs(x) for x in RESAMPLE_PX_CHOICES) == 8
+    assert max(abs(x) for x in RESAMPLE_PX_CHOICES) == 32
+    assert all(x % 2 == 0 and x != 0 for x in RESAMPLE_PX_CHOICES)
+    assert any(x < 0 for x in RESAMPLE_PX_CHOICES) and any(x > 0 for x in RESAMPLE_PX_CHOICES)
+    for s in SEEDS[:40]:
+        px = sample(MEDIUM, s)["video"]["resample_px"]
+        assert abs(px) >= 8
+        assert abs(px) <= 32
+
+
+def test_medium_rebuild_scale_is_a_visible_roundtrip():
+    """Fast analog of Pixel AI: downscale to ~720–864 then back to 1080×1920.
+
+    Talking-head ±32 px scored 25–33%. Gate stays 24. Escalate rebuild is heavier
+    (strong.hi < medium.lo) — not a louder crop.
+    """
+    assert MEDIUM.rebuild_scale.lo == pytest.approx(0.67)
+    assert MEDIUM.rebuild_scale.hi == pytest.approx(0.80)
+    assert STRONG.rebuild_scale.lo == pytest.approx(0.50)
+    assert STRONG.rebuild_scale.hi == pytest.approx(0.66)
+    assert STRONG.rebuild_scale.hi < MEDIUM.rebuild_scale.lo
+    assert SUBTLE.rebuild_scale.lo == pytest.approx(0.90)
+    assert SUBTLE.rebuild_scale.hi == pytest.approx(0.98)
+    for s in SEEDS:
+        scale = sample(MEDIUM, s)["video"]["rebuild_scale"]
+        assert MEDIUM.rebuild_scale.lo - 1e-9 <= scale <= MEDIUM.rebuild_scale.hi + 1e-9
+        assert scale < 1.0
+    for s in SEEDS[:80]:
+        scale = sample(STRONG, s)["video"]["rebuild_scale"]
+        assert STRONG.rebuild_scale.lo - 1e-9 <= scale <= STRONG.rebuild_scale.hi + 1e-9
+
+
+def test_rebuild_scale_is_unbudgeted_fingerprint():
+    """Rebuild is the vs-source uniqueness lever the 576×1024 frame can see.
+    Strength / VMAF shrink must not pull it to identity.
+    """
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["rebuild_scale"] = MEDIUM.rebuild_scale.lo
+    assert total_distortion(MEDIUM, bumped) == base
+    seed = derive_seed(42, 7)
+    mild = sample(MEDIUM, seed, strength=0.25)["video"]["rebuild_scale"]
+    full = sample(MEDIUM, seed, strength=1.0)["video"]["rebuild_scale"]
+    strong = sample(MEDIUM, seed, strength=1.8)["video"]["rebuild_scale"]
+    assert mild == full == strong
+    assert MEDIUM.rebuild_scale.lo <= mild <= MEDIUM.rebuild_scale.hi
+
+
+def test_medium_warp_pixel_seed_is_stronger_than_a_peek():
+    """lenscorrection k1 is the Fast pixel seed VMAF can still cap. Strong stays above."""
+    assert MEDIUM.warp_k1.hi == pytest.approx(0.015)
+    assert MEDIUM.warp_k1.lo == pytest.approx(-0.015)
+    assert STRONG.warp_k1.hi > MEDIUM.warp_k1.hi
+    assert STRONG.warp_k1.hi == pytest.approx(0.020)
+
+
+def test_resample_is_unbudgeted_and_zero_meanish():
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["resample_px"] = 16
+    bumped["video"]["resample_flags"] = "bicubic"
+    assert total_distortion(MEDIUM, bumped) == base
+    pxs = [sample(MEDIUM, s)["video"]["resample_px"] for s in SEEDS]
+    assert abs(sum(pxs) / len(pxs)) < 2.0
+
+
+def test_warp_k1_is_budgeted_zero_mean():
+    """Warp stays VMAF-capped. Unbudgeted warp on talking-head scored VMAF 53–80
+    → best_effort → Drive dropped the files. Rebuild_scale is the uniqueness lever.
+    """
+    p = sample(MEDIUM, derive_seed(9, 2))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    if abs(p["video"]["warp_k1"]) < MEDIUM.warp_k1.hi - 1e-9:
+        bumped["video"]["warp_k1"] = MEDIUM.warp_k1.hi
+        assert total_distortion(MEDIUM, bumped) > base
+    vals = [sample(MEDIUM, s)["video"]["warp_k1"] for s in SEEDS]
+    mean = sum(vals) / len(vals)
+    assert abs(mean) < 0.002
+    assert MEDIUM.warp_k1.hi == pytest.approx(0.015)
+    assert STRONG.warp_k1.hi == pytest.approx(0.020)
+
+
+def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
+    p = sample(MEDIUM, derive_seed(1, 4))
+    out = disable_fast_pixel_ops(p)
+    assert out["video"]["resample_px"] == 0
+    assert out["video"]["rebuild_scale"] == 1.0
+    assert out["video"]["warp_k1"] == 0.0
+    assert p["video"]["rebuild_scale"] < 1.0
+    assert out["video"]["crop_keep"] == p["video"]["crop_keep"]

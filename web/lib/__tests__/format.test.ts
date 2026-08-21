@@ -5,6 +5,8 @@ import {
   diagnosticsReason,
   similarityFromUniqueness,
   pct01,
+  ESCALATED_BADGE,
+  ESCALATED_TITLE,
 } from "@/lib/format";
 
 describe("formatDuration", () => {
@@ -24,11 +26,22 @@ describe("vmafPass", () => {
 
 describe("similarityFromUniqueness", () => {
   it("mirrors uniqueness on the SSIM-bits scale", () => {
-    // Default gate 24/64 ≈ 0.375 unique → similarity ≤ 0.625 (62.5%)
+    // Similarity is 1 − uniqueness on the same SSIM-bits scale.
     expect(similarityFromUniqueness(24 / 64)).toBeCloseTo(40 / 64);
     expect(similarityFromUniqueness(0.5)).toBe(0.5);
-    expect(pct01(similarityFromUniqueness(0.375))).toBe(63);
-    expect(pct01(0.375)).toBe(38); // uniqueness % (higher better)
+    expect(pct01(similarityFromUniqueness(0.5))).toBe(50);
+    expect(pct01(0.5)).toBe(50); // uniqueness % (higher better)
+  });
+});
+
+describe("escalated copy", () => {
+  it("labels a uniqueness pass, not a fail", () => {
+    expect(ESCALATED_BADGE).toBe("esc");
+    expect(ESCALATED_TITLE.toLowerCase()).toContain("not a fail");
+    expect(ESCALATED_TITLE.toLowerCase()).toContain("original");
+    expect(ESCALATED_TITLE).toMatch(/38%/);
+    expect(ESCALATED_TITLE).toMatch(/55/);
+    expect(ESCALATED_TITLE).toMatch(/65/);
   });
 });
 

@@ -1,6 +1,8 @@
 "use client";
 import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
+import { isFileReady } from "@/lib/gallery";
+import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -11,6 +13,7 @@ interface VariantCardProps {
 }
 
 export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCardProps) {
+  const ready = isFileReady(variant);
   const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
   const spatialOk = variant.quality?.spatial_ok === true;
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
@@ -60,6 +63,23 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           {uniquenessPct}%
         </span>
       )}
+      {variant.escalated && (
+        <span
+          title={ESCALATED_TITLE}
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#1e1740",
+            color: "#c7b8ff",
+            border: "1px solid #362a68",
+            lineHeight: 1.4,
+          }}
+        >
+          {ESCALATED_BADGE}
+        </span>
+      )}
       {/* Spatial tick — ONLY when spatial_ok === true */}
       {spatialOk && (
         <span
@@ -87,22 +107,6 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         zIndex: 2,
       }}
     >
-      {variant.escalated && (
-        <span
-          style={{
-            fontSize: 8,
-            fontWeight: 800,
-            padding: "1px 5px",
-            borderRadius: 5,
-            background: "#1e1740",
-            color: "#c7b8ff",
-            border: "1px solid #362a68",
-            textShadow: "0 1px 2px #000",
-          }}
-        >
-          ⚡
-        </span>
-      )}
       {variant.platform_result === "passed" && (
         <span
           style={{
@@ -133,21 +137,54 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           ⚠
         </span>
       )}
+      {variant.platform_result === "flagged" && (
+        <span
+          title="Flagged"
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#2c1018",
+            color: "#ff9aa8",
+            border: "1px solid #5a1a28",
+          }}
+        >
+          ⚑
+        </span>
+      )}
+      {variant.post_url && (
+        <span
+          title={variant.post_url}
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#072830",
+            color: "#22d3ee",
+            border: "1px solid #0c3d47",
+          }}
+        >
+          link
+        </span>
+      )}
     </div>
   );
 
   return (
     <div
-      onClick={onOpen}
+      onClick={ready ? onOpen : undefined}
       style={{
         aspectRatio: "9 / 16",
         borderRadius: 9,
         position: "relative",
         overflow: "hidden",
-        cursor: "pointer",
+        cursor: ready ? "pointer" : "default",
         border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
         boxShadow: selected ? "0 0 0 2px #7c5cff44" : undefined,
         transition: "transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease",
+        opacity: ready ? 1 : 0.7,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
@@ -163,10 +200,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       {/* Selection checkbox */}
       <input
         type="checkbox"
+        disabled={!ready}
         checked={selected}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => {
           e.stopPropagation();
+          if (!ready) return;
           onToggle();
         }}
         aria-label={`Select v${String(variant.index).padStart(2, "0")}`}
@@ -199,7 +238,26 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       >
         v{String(variant.index).padStart(2, "0")}
       </span>
-      <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
+      {ready ? (
+        <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "#14141d",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 8,
+            textAlign: "center",
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#ffd08a",
+          }}
+        >
+          Not on Studio
+        </div>
+      )}
       {/* Overlay with badges */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {topBadges}

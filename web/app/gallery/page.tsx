@@ -3,10 +3,17 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
-import { filterSources, sortSources } from "@/lib/gallery";
-import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
+import { filterSources, sortSources, filesReadyCount } from "@/lib/gallery";
+import {
+  okVariantKeys,
+  okVariantRefs,
+  selectAllLabel,
+  selectionHasAllOk,
+  sendDisabledReason,
+  withOkSelection,
+} from "@/lib/drive";
 import { getDriveStatus, listDestinations } from "@/lib/api";
-import type { Destination, DriveStatus } from "@/lib/types";
+import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
@@ -102,10 +109,40 @@ function GalleryContent() {
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
-  const totalVariants = allSources.reduce((acc, s) => acc + s.delivered, 0);
+  const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
   const okRefs = okVariantRefs(allSources, selected);
+  const selectedJobIds = [
+    ...new Set(
+      okRefs
+        .map((r) => allSources.find((s) => s.source_id === r.source_id)?.job_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const splitJobId = selectedJobIds.length === 1 ? selectedJobIds[0] : undefined;
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
+  const visibleOkCount = okVariantKeys(sorted).length;
+  const allVisibleSelected = selectionHasAllOk(selected, sorted);
+
+  function handleSelectAllVisible() {
+    setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
+  }
+
+  function handleToggleSelectSource(source: SourceOut, select: boolean) {
+    setSelected((prev) => withOkSelection(prev, [source], select));
+  }
+
+  function handleRemoveSource(source: SourceOut) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const prefix = `${source.source_id}:`;
+      for (const key of [...next]) {
+        if (key.startsWith(prefix)) next.delete(key);
+      }
+      return next;
+    });
+    mutate();
+  }
 
   function handleSendModalClose() {
     setSendModalOpen(false);
@@ -121,13 +158,16 @@ function GalleryContent() {
         onFilter={setFilterMode}
         sort={sort}
         onSort={setSort}
-        selectedCount={selected.size}
+        selectedCount={okRefs.length}
         sendDisabledReason={disabledReason}
         onSend={() => setSendModalOpen(true)}
+        selectAllLabel={selectAllLabel(allVisibleSelected, visibleOkCount)}
+        selectAllDisabled={visibleOkCount === 0}
+        onSelectAll={handleSelectAllVisible}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div style={{ padding: "8px 20px 22px" }}>
+      <div style={{ padding: "8px 16px 22px" }}>
         {isLoading && (
           <div
             style={{
@@ -163,7 +203,7 @@ function GalleryContent() {
             <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
               {filterMode === "shortfall"
                 ? "All sources have delivered their full requested count."
-                : "Start a run in the Studio — results appear here after each source completes."}
+                : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
             </div>
           </div>
         )}
@@ -176,6 +216,8 @@ function GalleryContent() {
             onRegenerate={() => mutate()}
             selected={selected}
             onToggleVariant={handleToggleVariant}
+            onToggleSelectSource={handleToggleSelectSource}
+            onRemove={() => handleRemoveSource(source)}
           />
         ))}
       </div>
@@ -198,6 +240,7 @@ function GalleryContent() {
         <SendToDriveModal
           refs={okRefs}
           destinations={destinations}
+          jobId={splitJobId}
           onClose={handleSendModalClose}
         />
       )}

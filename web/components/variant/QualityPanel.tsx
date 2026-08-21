@@ -1,6 +1,6 @@
 "use client";
 import { Quality } from "@/lib/types";
-import { pct01, similarityFromUniqueness, vmafPass } from "@/lib/format";
+import { ESCALATED_TITLE, pct01, similarityFromUniqueness, vmafPass } from "@/lib/format";
 
 interface QualityPanelProps {
   quality: Quality;
@@ -138,6 +138,7 @@ export function QualityPanel({
         <span>Quality</span>
         {escalated && (
           <span
+            title={ESCALATED_TITLE}
             style={{
               fontSize: 9.5,
               fontWeight: 800,
@@ -150,7 +151,7 @@ export function QualityPanel({
               border: "1px solid #362a68",
             }}
           >
-            ⚡ escalated
+            ⚡ stronger uniqueness pass
           </span>
         )}
       </div>
@@ -180,7 +181,7 @@ export function QualityPanel({
         </div>
       )}
 
-      {/* Uniqueness — higher better */}
+      {/* Uniqueness — higher better; vs original even for n=1. Typical medium ~55–65%; pass ~38%. */}
       <QRow label="Uniqueness">
         {uniquenessPct != null ? (
           <>
@@ -220,7 +221,7 @@ export function QualityPanel({
             margin: "-4px 2px 8px",
           }}
         >
-          target ≥ {pct01(uniquenessTarget)}% (higher better)
+          target ≥ {pct01(uniquenessTarget)}% vs the original · typical medium ~55–65%
         </div>
       )}
 

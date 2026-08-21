@@ -1,0 +1,103 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { VariantCard } from "@/components/gallery/VariantCard";
+import type { VariantOut } from "@/lib/types";
+import { ESCALATED_TITLE } from "@/lib/format";
+
+function variant(over: Partial<VariantOut> = {}): VariantOut {
+  return {
+    index: 1,
+    filename: "v01.mp4",
+    status: "ok",
+    quality: {
+      vmaf: 95,
+      histogram_ok: true,
+      regen_count: 0,
+      passed: true,
+      spatial_vmaf: null,
+      spatial_ok: null,
+    },
+    file_url: "/files/v01.mp4",
+    uniqueness: 0.5,
+    uniqueness_status: "ok",
+    uniqueness_target: 32 / 64,
+    escalated: false,
+    ...over,
+  };
+}
+
+describe("VariantCard platform badges", () => {
+  it("does not show a pass badge when unlabeled", () => {
+    render(
+      <VariantCard
+        variant={variant({ platform_result: null })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.queryByText("✓")).not.toBeInTheDocument();
+    expect(screen.queryByText("⚠")).not.toBeInTheDocument();
+    expect(screen.queryByText("⚑")).not.toBeInTheDocument();
+  });
+
+  it("shows a flagged badge", () => {
+    render(
+      <VariantCard
+        variant={variant({ platform_result: "flagged" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const badge = screen.getByTitle("Flagged");
+    expect(badge).toHaveTextContent("⚑");
+  });
+});
+
+describe("VariantCard uniqueness", () => {
+  it("shows uniqueness percent (higher = more different)", () => {
+    render(
+      <VariantCard
+        variant={variant()}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.queryByText("esc")).not.toBeInTheDocument();
+  });
+
+  it("shows an esc badge next to uniqueness when escalated", () => {
+    render(
+      <VariantCard
+        variant={variant({ escalated: true })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    const esc = screen.getByText("esc");
+    expect(esc).toBeInTheDocument();
+    expect(esc).toHaveAttribute("title", ESCALATED_TITLE);
+  });
+
+  it("marks a variant that has a pasted live post link", () => {
+    render(
+      <VariantCard
+        variant={variant({ post_url: "https://www.instagram.com/reel/AbC/" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("link")).toBeInTheDocument();
+  });
+});

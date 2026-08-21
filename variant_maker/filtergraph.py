@@ -1,8 +1,9 @@
 """Phase 4. params -> (-vf, -af) strings. PURE (unit-tested; --dry-run prints).
 
 Video filter ORDER is load-bearing:
-  trim -> crop -> scale(even, range-aware) -> [rotate w/ fill+crop] ->
-  eq(color) -> hue -> unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
+  trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
+  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
+  unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   equalizer -> loudnorm.
 
@@ -13,7 +14,8 @@ streams mirror the identical trim window, keeping video/audio in sync. Crop punc
 also carries an x/y offset fraction (fingerprint axis; 0.5/0.5 == centered). The resize
 uses color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
 if the output target ever differs from the carried source tags. NEVER let a naive scale
-reinterpret color range.
+reinterpret color range. Fast uniqueness is a reconstructive rebuild (down to
+`rebuild_scale` then back to the platform canvas) — not a ±32 px peek.
 """
 from __future__ import annotations
 
@@ -27,9 +29,12 @@ from .color import (
 )
 from .platforms import Platform
 from .probe import SourceInfo
+from .sampler import clamp_trims
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
+_WARP_MIN = 1e-4
+_RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
 _LOUDNORM_MIN_S = 3.0
@@ -39,8 +44,7 @@ _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 def _remaining_duration_s(v: dict, duration_s: float) -> float:
     """Wall-clock seconds left after start/end trim (before speed change)."""
-    start_s = v.get("trim_s", 0.0)
-    end_s = v.get("trim_end_s", 0.0)
+    start_s, end_s = clamp_trims(v.get("trim_s", 0.0), v.get("trim_end_s", 0.0), duration_s)
     return max(0.0, duration_s - start_s - end_s)
 
 
@@ -49,10 +53,10 @@ def _trim_expr(v: dict, duration_s: float) -> str:
 
     Start trim (`trim_s`) and end trim (`trim_end_s`, a fingerprint micro-trim off the
     tail) are independent axes; end trim needs the source duration since ffmpeg's `trim`
-    end is an absolute timestamp, not an offset from the end.
+    end is an absolute timestamp, not an offset from the end. Combined trims are scaled
+    via clamp_trims so a short source cannot emit end <= start.
     """
-    start_s = v.get("trim_s", 0.0)
-    end_s = v.get("trim_end_s", 0.0)
+    start_s, end_s = clamp_trims(v.get("trim_s", 0.0), v.get("trim_end_s", 0.0), duration_s)
     has_start = start_s > _EPS
     has_end = end_s > _EPS
     if not has_start and not has_end:
@@ -62,6 +66,52 @@ def _trim_expr(v: dict, duration_s: float) -> str:
     if has_start:
         return f"trim=start={start_s:.3f}"
     return f"trim=end={duration_s - end_s:.3f}"
+
+
+def even_resample_size(target_w: int, target_h: int, px: int) -> tuple[int, int]:
+    """Even intermediate size: ``target_w + px`` (even), height follows AR, even.
+
+    Never returns the identity size when ``px != 0``.
+    """
+    tw, th = int(target_w), int(target_h)
+    if px == 0 or tw <= 0 or th <= 0:
+        return tw, th
+    w = (tw + int(px)) // 2 * 2
+    if w < 2:
+        w = 2
+    h = int(round(w * th / tw)) // 2 * 2
+    if h < 2:
+        h = 2
+    if w == tw and h == th:
+        w = tw + (-2 if px < 0 else 2)
+        if w < 2:
+            w = 2
+        h = int(round(w * th / tw)) // 2 * 2
+        if h < 2:
+            h = 2
+    return w, h
+
+
+def even_rebuild_size(target_w: int, target_h: int, scale: float) -> tuple[int, int]:
+    """Even intermediate size for a reconstructive down-then-up.
+
+    Height follows AR. Never returns the identity size when ``scale`` is not ~1.
+    """
+    tw, th = int(target_w), int(target_h)
+    s = float(scale)
+    if tw <= 0 or th <= 0 or abs(s - 1.0) < _EPS or s <= 0:
+        return tw, th
+    w = max(round(tw * s) // 2 * 2, 2)
+    h = max(round(w * th / tw) // 2 * 2, 2)
+    if w == tw and h == th:
+        w = max(tw - 2 if s < 1.0 else tw + 2, 2)
+        h = max(round(w * th / tw) // 2 * 2, 2)
+    return w, h
+
+
+def _resample_flags(raw: object) -> str:
+    s = str(raw or "lanczos")
+    return s if s in _RESAMPLE_FLAGS else "lanczos"
 
 
 def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> str:
@@ -93,10 +143,27 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
             parts.append(conv)
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
+        flags = _resample_flags(v.get("resample_flags"))
+        rebuild = float(v.get("rebuild_scale") or 1.0)
+        if abs(rebuild - 1.0) >= _EPS:
+            rw, rh = even_rebuild_size(platform.width, platform.height, rebuild)
+            if (rw, rh) != (platform.width, platform.height):
+                parts.append(f"scale={rw}:{rh}:flags={flags}")
+                parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
+        else:
+            px = int(v.get("resample_px") or 0)
+            if px != 0:
+                rw, rh = even_resample_size(platform.width, platform.height, px)
+                parts.append(f"scale={rw}:{rh}:flags={flags}")
+                parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
 
     # rotation (tiny angles; corner fill — proper inscribed-crop is a later refinement)
     if abs(v.get("rotate_deg", 0.0)) >= _ROTATE_MIN_DEG:
         parts.append(f"rotate={math.radians(v['rotate_deg']):.6f}:fillcolor=black")
+
+    warp = float(v.get("warp_k1") or 0.0)
+    if abs(warp) >= _WARP_MIN:
+        parts.append(f"lenscorrection=cx=0.5:cy=0.5:k1={warp:.6f}:k2=0")
 
     # color (always emitted — this is the color stage)
     parts.append(
@@ -109,14 +176,14 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS:
-        parts.append(f"noise=alls={int(round(v['grain']))}:allf=t+u")
-    if platform.fps:
-        parts.append(f"fps={platform.fps:g}")
-
-    # tempo (one speed factor; audio mirrors it via atempo)
-    speed = v.get("speed", 1.0)
-    if abs(speed - 1.0) > _EPS:
-        parts.append(f"setpts={1.0 / speed:.6f}*PTS")
+        parts.append(f"noise=alls={round(v['grain'])}:allf=t+u")
+    # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
+    if not v.get("defer_tempo"):
+        if platform.fps:
+            parts.append(f"fps={platform.fps:g}")
+        speed = v.get("speed", 1.0)
+        if abs(speed - 1.0) > _EPS:
+            parts.append(f"setpts={1.0 / speed:.6f}*PTS")
 
     parts.append("format=yuv420p")
     return ",".join(parts)

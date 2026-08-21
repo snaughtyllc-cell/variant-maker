@@ -1,6 +1,6 @@
 from variant_maker import filtergraph
-from variant_maker.probe import ColorTags, SourceInfo
 from variant_maker.platforms import get_platform
+from variant_maker.probe import ColorTags, SourceInfo
 
 
 def make_params(**overrides):
@@ -60,6 +60,19 @@ def test_audio_filters_golden():
     assert filtergraph.build_audio_filters(make_params(), make_src(), has_audio=True) == EXPECTED_AF
 
 
+def test_defer_tempo_omits_fps_and_speed_setpts_keeps_trim_setpts():
+    """HQ RIFE owns fps/tempo; ffmpeg must not also drop/dupe. Audio atempo is unchanged."""
+    p = make_params(video={"defer_tempo": True})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "fps=" not in vf
+    assert "setpts=0.980392*PTS" not in vf
+    assert "setpts=PTS-STARTPTS" in vf
+    assert vf == EXPECTED_VF.replace("fps=30,setpts=0.980392*PTS,", "")
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert af == EXPECTED_AF
+    assert "atempo=1.020000" in af
+
+
 # ---- structural invariants --------------------------------------------------
 
 def test_filter_order_is_load_bearing():
@@ -90,6 +103,128 @@ def test_none_platform_keeps_geometry_no_scale_no_fps():
     vf = filtergraph.build_video_filters(make_params(), make_src(), NONE)
     assert "scale=" not in vf
     assert "fps=" not in vf
+
+
+def test_resample_roundtrip_after_reels_scale():
+    p = make_params(video={"resample_px": -8, "resample_flags": "lanczos"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_resample_size(1080, 1920, -8)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert f"scale={w}:{h}:flags=lanczos" in vf
+    assert "scale=1080:1920:flags=lanczos" in vf
+    # Final output is still the Reels canvas, not a random size.
+    assert vf.index(f"scale={w}:{h}:flags=lanczos") < vf.index("scale=1080:1920:flags=lanczos")
+
+
+def test_resample_omitted_when_px_zero_or_missing():
+    vf0 = filtergraph.build_video_filters(
+        make_params(video={"resample_px": 0, "resample_flags": "lanczos"}),
+        make_src(), REELS,
+    )
+    assert ":flags=lanczos" not in vf0
+    vf_missing = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert ":flags=lanczos" not in vf_missing
+
+
+def test_resample_omitted_on_none_platform():
+    p = make_params(video={"resample_px": 8, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), NONE)
+    assert "flags=spline" not in vf
+    assert "scale=" not in vf
+
+
+def test_resample_unknown_flags_fall_back_to_lanczos():
+    p = make_params(video={"resample_px": 6, "resample_flags": "neighbor"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "flags=lanczos" in vf
+    assert "flags=neighbor" not in vf
+
+
+def test_even_resample_size_keeps_ar_and_even():
+    w, h = filtergraph.even_resample_size(1080, 1920, -8)
+    assert w % 2 == 0 and h % 2 == 0
+    assert w != 1080
+    # AR close to 9:16
+    assert abs(w / h - 1080 / 1920) < 0.01
+
+
+def test_even_resample_size_handles_stronger_pixel_seed():
+    w, h = filtergraph.even_resample_size(1080, 1920, 32)
+    assert w % 2 == 0 and h % 2 == 0
+    assert w == 1112
+    assert (w, h) != (1080, 1920)
+    assert abs(w / h - 1080 / 1920) < 0.01
+
+
+def test_rebuild_roundtrip_after_reels_scale():
+    """Visible reconstructive round-trip: ~720p intermediate, then back to 1080×1920."""
+    p = make_params(video={"rebuild_scale": 0.72, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.72)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert w < 1080
+    assert f"scale={w}:{h}:flags=spline" in vf
+    assert "scale=1080:1920:flags=spline" in vf
+    assert vf.index(f"scale={w}:{h}:flags=spline") < vf.index("scale=1080:1920:flags=spline")
+    # Platform even-scale happens first; rebuild is the uniqueness pass after it.
+    even = "scale=1080:1920:force_original_aspect_ratio=disable"
+    assert vf.index(even) < vf.index(f"scale={w}:{h}:flags=spline")
+
+
+def test_rebuild_omitted_when_scale_is_identity():
+    vf = filtergraph.build_video_filters(
+        make_params(video={"rebuild_scale": 1.0, "resample_flags": "lanczos"}),
+        make_src(), REELS,
+    )
+    assert ":flags=lanczos" not in vf
+
+
+def test_rebuild_omitted_on_none_platform():
+    p = make_params(video={"rebuild_scale": 0.67, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(), NONE)
+    assert "flags=spline" not in vf
+    assert "scale=" not in vf
+
+
+def test_rebuild_wins_over_tiny_resample():
+    """±32 px is invisible at uniqueness resolution; rebuild is the fingerprint."""
+    p = make_params(video={
+        "rebuild_scale": 0.70, "resample_px": 32, "resample_flags": "bicubic",
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.70)
+    assert f"scale={w}:{h}:flags=bicubic" in vf
+    rw, rh = filtergraph.even_resample_size(1080, 1920, 32)
+    assert f"scale={rw}:{rh}:flags=bicubic" not in vf
+
+
+def test_even_rebuild_size_keeps_ar_even_never_identity():
+    w, h = filtergraph.even_rebuild_size(1080, 1920, 0.67)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) != (1080, 1920)
+    assert 700 <= w <= 740
+    assert abs(w / h - 1080 / 1920) < 0.01
+    ident = filtergraph.even_rebuild_size(1080, 1920, 1.0)
+    assert ident == (1080, 1920)
+    medium = filtergraph.even_rebuild_size(1080, 1920, 0.80)
+    assert medium[0] == 864
+    strong = filtergraph.even_rebuild_size(1080, 1920, 0.50)
+    assert strong[0] == 540
+
+
+def test_warp_emits_lenscorrection():
+    p = make_params(video={"warp_k1": 0.008})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "lenscorrection=" in vf
+    assert "k1=0.008000" in vf
+
+
+def test_warp_omitted_when_near_zero():
+    p = make_params(video={"warp_k1": 0.00001})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "lenscorrection=" not in vf
 
 
 # ---- no-op axes are omitted -------------------------------------------------
@@ -162,6 +297,15 @@ def test_trim_start_and_end_together():
     p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.5})
     vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
     assert "trim=start=0.200:end=9.500" in vf
+
+
+def test_trim_overspend_on_short_clip_is_scaled():
+    """Filtergraph must not emit trim=start:end with end <= start on a 1s clip."""
+    p = make_params(video={"trim_s": 0.85, "trim_end_s": 0.85})
+    vf = filtergraph.build_video_filters(p, make_src(duration=1.0), REELS)
+    assert "trim=start=0.250:end=0.750" in vf
+    af = filtergraph.build_audio_filters(p, make_src(duration=1.0), has_audio=True)
+    assert "atrim=start=0.250:end=0.750" in af
 
 
 def test_trim_end_mirrors_on_audio():

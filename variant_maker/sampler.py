@@ -2,7 +2,7 @@
 
 Contract:
   derive_seed(master, index) -> stable per-variant seed
-  sample(preset, seed, *, rubberband=False) -> Params {"video": {...}, "audio": {...}}
+  sample(preset, seed, *, rubberband=False, duration_s=None) -> Params {"video": {...}, "audio": {...}}
     - every axis drawn from preset ranges via a seeded RNG
     - color/geometry axes are ZERO-MEAN (straddle neutral) — no systematic shift
     - transform axes scaled down so total normalized distortion <= preset.budget
@@ -11,8 +11,11 @@ Contract:
 
 The distortion model is the budget contract: each budgeted axis contributes a value in
 [0, 1] measuring how far it strays from its calm point, relative to its in-range reach.
-sample() shrinks every budgeted axis toward its calm point by one shared factor when the
-raw draw overspends, which keeps zero-mean symmetry and the [lo, hi] bounds intact.
+When the raw draw overspends, sample() shrinks ENCODE axes (grain/unsharp/crf) toward
+calm first so per-copy color can still show. crop_keep and rebuild_scale are unbudgeted
+(VMAF already ignores both). warp_k1 is budgeted again so the quality loop can cap it —
+unbudgeted warp on talking-head scored VMAF 53–80 and dropped Drive uploads.
+Color stays zero-mean; bounds stay intact.
 """
 from __future__ import annotations
 
@@ -21,27 +24,55 @@ import random
 
 from .presets import Preset
 
+# Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
+_MIN_REMAINING_S = 0.05
+_REMAINING_FRACTION = 0.5
+_REMAINING_CAP_S = 1.0
+
 # Axis model. kind "sym" => zero-mean around `ref` (a neutral value); kind "dir" => one-
 # directional, calm at the range end named by `ref` ("lo" or "hi"). `budgeted` axes share
 # the per-variant distortion budget; temporal axes (speed, trim) ride along unbudgeted.
+# crop_keep and rebuild_scale are unbudgeted: vs-source uniqueness levers. VMAF
+# already ignores both (quality proxy is platform=none + identity rebuild).
+# warp_k1 is budgeted so VMAF regen can shrink it; unbudgeted warp wrote
+# best_effort files that harvest skipped.
 _SYM, _DIR = "sym", "dir"
 _VIDEO_AXES = (
-    # (name,        kind,  ref,    budgeted)
-    ("crop_keep",   _DIR,  "hi",   True),
-    ("rotate_deg",  _SYM,  0.0,    True),
-    ("brightness",  _SYM,  0.0,    True),
-    ("contrast",    _SYM,  1.0,    True),
-    ("saturation",  _SYM,  1.0,    True),
-    ("gamma",       _SYM,  1.0,    True),
-    ("hue_deg",     _SYM,  0.0,    True),
-    ("grain",       _DIR,  "lo",   True),
-    ("unsharp",     _DIR,  "lo",   True),
-    ("crf",         _DIR,  "lo",   True),   # encoder degradation counts toward the budget
-    ("speed",       _SYM,  1.0,    False),  # temporal identity ops ride along unbudgeted
-    ("trim_s",      _DIR,  "lo",   False),
+    # (name,           kind,  ref,    budgeted)
+    ("crop_keep",      _DIR,  "hi",   False),
+    ("rebuild_scale",  _DIR,  "hi",   False),  # reconstructive round-trip; 1.0 = skip
+    ("rotate_deg",     _SYM,  0.0,    True),
+    ("brightness",     _SYM,  0.0,    True),
+    ("contrast",       _SYM,  1.0,    True),
+    ("saturation",     _SYM,  1.0,    True),
+    ("gamma",          _SYM,  1.0,    True),
+    ("hue_deg",        _SYM,  0.0,    True),
+    ("grain",          _DIR,  "lo",   True),
+    ("unsharp",        _DIR,  "lo",   True),
+    ("crf",            _DIR,  "lo",   True),   # encoder degradation counts toward the budget
+    ("warp_k1",        _SYM,  0.0,    True),   # VMAF-capped pixel seed
+    ("speed",          _SYM,  1.0,    False),  # temporal identity ops ride along unbudgeted
+    ("trim_s",         _DIR,  "lo",   False),
 )
 # crf is output as an int (floored toward its calm 'lo' end, so its budget share never grows).
 _INT_AXES = frozenset({"crf"})
+# Over-budget shrink: collapse cheap-look encode first so color still shows.
+_ENCODE_AXES = frozenset({"grain", "unsharp", "crf"})
+_LOOK_AXES = frozenset({
+    "rotate_deg",
+    "brightness", "contrast", "saturation", "gamma", "hue_deg",
+    "warp_k1",
+})
+# Back-compat alias used by older tests/docs: encode + color (not geometry).
+_COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
+    "brightness", "contrast", "saturation", "gamma", "hue_deg",
+})
+_GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1", "rebuild_scale"})
+
+# Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
+# Mix of smaller and larger intermediates so we do not systematically soften one way.
+RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
+RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
 
 
 def derive_seed(master_seed: int, index: int) -> int:
@@ -71,6 +102,28 @@ def _axis_distortion(kind, ref, lo: float, hi: float, value: float) -> float:
     return abs(value - _calm_point(kind, ref, lo, hi)) / reach
 
 
+def _spent_on(raw: dict[str, float], preset: Preset, names: frozenset[str]) -> float:
+    total = 0.0
+    for name, kind, ref, budgeted in _VIDEO_AXES:
+        if not budgeted or name not in names:
+            continue
+        r = getattr(preset, name)
+        total += _axis_distortion(kind, ref, r.lo, r.hi, raw[name])
+    return total
+
+
+def _shrink_toward_calm(
+    raw: dict[str, float], preset: Preset, names: frozenset[str], factor: float,
+) -> None:
+    """Scale named axes toward their calm point. factor=0 collapses to calm; 1 keeps raw."""
+    for name, kind, ref, budgeted in _VIDEO_AXES:
+        if not budgeted or name not in names:
+            continue
+        r = getattr(preset, name)
+        calm = _calm_point(kind, ref, r.lo, r.hi)
+        raw[name] = calm + factor * (raw[name] - calm)
+
+
 def total_distortion(preset: Preset, params: dict) -> float:
     """Sum of normalized distortion across budgeted axes (the budget metric)."""
     v = params["video"]
@@ -81,6 +134,34 @@ def total_distortion(preset: Preset, params: dict) -> float:
         r = getattr(preset, name)
         total += _axis_distortion(kind, ref, r.lo, r.hi, v[name])
     return total
+
+
+def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[float, float]:
+    """Scale head/tail trims so a short clip keeps a usable remaining duration.
+
+    Fingerprint trims are drawn from preset ranges that assume a typical social clip.
+    On a 1s source, STRONG's 0.30–0.85s per end would otherwise consume the whole file.
+    Long clips are unchanged: the cap only fires when start+end would leave less than
+    max(50ms, half the duration), capped at 1s remaining.
+    """
+    start = max(0.0, float(trim_s))
+    end = max(0.0, float(trim_end_s))
+    if duration_s <= 0:
+        return 0.0, 0.0
+    remaining_floor = min(
+        _REMAINING_CAP_S,
+        max(_MIN_REMAINING_S, duration_s * _REMAINING_FRACTION),
+        duration_s,
+    )
+    budget = max(0.0, duration_s - remaining_floor)
+    total = start + end
+    if total > budget and total > 0:
+        scale = budget / total
+        start *= scale
+        end *= scale
+    start = min(start, budget)
+    end = min(end, max(0.0, duration_s - start - remaining_floor))
+    return round(start, 4), round(end, 4)
 
 
 def clamp_strength(strength: float) -> float:
@@ -95,14 +176,31 @@ def clamp_strength(strength: float) -> float:
     return min(2.0, max(0.0, strength))
 
 
-def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: float = 1.0) -> dict:
+def disable_fast_pixel_ops(params: dict) -> dict:
+    """HQ skip: ESRGAN already rebuilds pixels. Zeros resample/rebuild/warp, keeps the rest."""
+    video = dict(params["video"])
+    video["resample_px"] = 0
+    video["rebuild_scale"] = 1.0
+    video["warp_k1"] = 0.0
+    return {**params, "video": video}
+
+
+def sample(
+    preset: Preset,
+    seed: int,
+    *,
+    rubberband: bool = False,
+    strength: float = 1.0,
+    duration_s: float | None = None,
+) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
     `strength` in [0, 2] is the lever the auto-tune controller / quality guard drives: it
     caps total distortion at `strength * preset.budget`. 1.0 spends the full budget; values
     above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
     escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
-    WHICH axes move; strength fixes how far.
+    WHICH axes move; strength fixes how far. `duration_s` (when given) scales head/tail
+    trim so a short source keeps a usable remaining duration.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -118,19 +216,22 @@ def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: flo
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
 
-    # Fit the budget: shrink every budgeted axis toward its calm point by one factor.
-    spent = sum(
-        _axis_distortion(kind, ref, getattr(preset, name).lo, getattr(preset, name).hi, raw[name])
-        for name, kind, ref, b in _VIDEO_AXES if b
-    )
+    # Fit the budget: shrink grain/unsharp/crf first so color shows.
+    # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must
+    # not pull keep to 1.0 or rebuild to identity. Warp shrinks with look.
+    spent = _spent_on(raw, preset, _ENCODE_AXES | _LOOK_AXES)
     if spent > budget and spent > 0:
-        factor = budget / spent
-        for name, kind, ref, b in _VIDEO_AXES:
-            if not b:
-                continue
-            r = getattr(preset, name)
-            calm = _calm_point(kind, ref, r.lo, r.hi)
-            raw[name] = calm + factor * (raw[name] - calm)
+        look_spent = _spent_on(raw, preset, _LOOK_AXES)
+        leftover = budget - look_spent
+        if leftover >= 0:
+            enc_spent = _spent_on(raw, preset, _ENCODE_AXES)
+            if enc_spent > 0:
+                _shrink_toward_calm(raw, preset, _ENCODE_AXES, leftover / enc_spent)
+        else:
+            _shrink_toward_calm(raw, preset, _ENCODE_AXES, 0.0)
+            look_spent = _spent_on(raw, preset, _LOOK_AXES)
+            if look_spent > 0:
+                _shrink_toward_calm(raw, preset, _LOOK_AXES, budget / look_spent)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
@@ -140,6 +241,12 @@ def sample(preset: Preset, seed: int, *, rubberband: bool = False, strength: flo
     raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
     raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
+    raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
+    raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)
+    if duration_s is not None:
+        raw["trim_s"], raw["trim_end_s"] = clamp_trims(
+            raw["trim_s"], raw["trim_end_s"], duration_s,
+        )
 
     gop = rng.choice(preset.gop_choices)
 

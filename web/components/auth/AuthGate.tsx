@@ -1,0 +1,38 @@
+"use client";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { TopNav } from "@/components/nav/TopNav";
+import { useAuthMe } from "@/lib/useAuthMe";
+
+export function AuthGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { data, isLoading } = useAuthMe();
+  const isLogin = pathname === "/login";
+  const needsLogin = Boolean(data?.auth_required && !data.email);
+  const loggedIn = Boolean(data?.email);
+
+  useEffect(() => {
+    if (!data) return;
+    if (needsLogin && !isLogin) {
+      router.replace("/login");
+    } else if (loggedIn && isLogin) {
+      router.replace("/");
+    }
+  }, [data, needsLogin, isLogin, loggedIn, router]);
+
+  if (isLoading && !data) {
+    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+  }
+
+  if (needsLogin && !isLogin) {
+    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+  }
+
+  return (
+    <>
+      {!isLogin && <TopNav />}
+      {isLogin ? children : <div className="app-main">{children}</div>}
+    </>
+  );
+}

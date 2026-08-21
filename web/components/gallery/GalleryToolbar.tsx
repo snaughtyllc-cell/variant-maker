@@ -13,6 +13,9 @@ interface GalleryToolbarProps {
   selectedCount: number;
   sendDisabledReason: string | null;
   onSend: () => void;
+  selectAllLabel: string;
+  selectAllDisabled?: boolean;
+  onSelectAll: () => void;
 }
 
 export function GalleryToolbar({
@@ -25,6 +28,9 @@ export function GalleryToolbar({
   selectedCount,
   sendDisabledReason,
   onSend,
+  selectAllLabel,
+  selectAllDisabled,
+  onSelectAll,
 }: GalleryToolbarProps) {
   const sendDisabled = sendDisabledReason != null;
   const chipBase: React.CSSProperties = {
@@ -32,7 +38,7 @@ export function GalleryToolbar({
     color: "var(--color-muted)",
     background: "#14141d",
     border: "1px solid var(--color-line)",
-    padding: "6px 11px",
+    padding: "10px 11px",
     borderRadius: 8,
     cursor: "pointer",
     userSelect: "none",
@@ -46,19 +52,12 @@ export function GalleryToolbar({
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "16px 20px 6px",
-        gap: 14,
-      }}
-    >
+    <div className="gallery-toolbar">
       <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
         <b style={{ color: "var(--color-text)" }}>{count}</b> sources ·{" "}
         <b style={{ color: "var(--color-text)" }}>{variantCount}</b> variants delivered
       </div>
-      <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+      <div className="gallery-toolbar__actions">
         <span
           style={filterMode === "all" ? chipOn : chipBase}
           onClick={() => onFilter("all")}
@@ -77,7 +76,21 @@ export function GalleryToolbar({
         >
           Sort: {sort === "newest" ? "Newest" : "Newest"} ▾
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onSelectAll}
+            disabled={selectAllDisabled}
+            style={{
+              ...chipBase,
+              minHeight: 44,
+              fontWeight: 700,
+              opacity: selectAllDisabled ? 0.5 : 1,
+              cursor: selectAllDisabled ? "not-allowed" : "pointer",
+            }}
+          >
+            {selectAllLabel}
+          </button>
           <button
             onClick={onSend}
             disabled={sendDisabled}
@@ -88,7 +101,8 @@ export function GalleryToolbar({
               color: "#fff",
               background: sendDisabled ? "#3a2c5c" : "linear-gradient(135deg, #7c5cff, #ff4d8d)",
               border: "none",
-              padding: "7px 14px",
+              padding: "10px 14px",
+              minHeight: 44,
               borderRadius: 8,
               cursor: sendDisabled ? "not-allowed" : "pointer",
               opacity: sendDisabled ? 0.6 : 1,

@@ -16,7 +16,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline, "probe", lambda p: FakeSrc())
     monkeypatch.setattr(pipeline, "_ffmpeg_version", lambda: "test")
-    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, strength=1.0: {
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, **_kw: {
         "video": {"rotate_deg": 0.0}, "audio": {},
     })
 
@@ -61,6 +61,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
     cfg = {
         "input": "src.mp4", "count": 2, "preset": "medium", "platform": "none",
         "out": str(tmp_path), "quality_mode": "fast", "jobs": 1, "max_regen": 3,
+        "auto_tune": False,
     }
     pipeline.run(cfg, on_event=record)
 

@@ -18,7 +18,9 @@ from variant_maker.server.workspace import Workspace
 def test_workspace_oauth_token_path(tmp_path):
     ws = Workspace(str(tmp_path))
     path = ws.oauth_token_path()
-    assert path.endswith("drive/oauth_token.json") or path.endswith("drive\\oauth_token.json")
+    assert path.endswith(("drive/oauth_token.json", "drive\\oauth_token.json"))
+    pending = ws.oauth_pending_path()
+    assert pending.endswith(("drive/oauth_pending.json", "drive\\oauth_pending.json"))
 
 
 def test_oauth_token_store_roundtrip(tmp_path):
@@ -161,6 +163,35 @@ def test_oauth_start_503_when_client_not_configured(tmp_path):
     client = TestClient(create_app(store, drive=None, sa_json_path="", oauth_environ={}))
     resp = client.get("/api/drive/oauth/start", follow_redirects=False)
     assert resp.status_code == 503
+
+
+def test_oauth_callback_missing_code_redirects_with_reason(tmp_path):
+    client, _ = _oauth_app(tmp_path)
+    resp = client.get("/api/drive/oauth/callback?state=abc", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    loc = resp.headers["location"]
+    assert "oauth=error" in loc
+    assert "missing_code" in loc
+    assert loc.startswith("http")  # absolute, so Next.js proxy cannot resolve against :8000
+
+
+def test_oauth_state_survives_process_restart(tmp_path):
+    """Railway/Next can hit a new FastAPI process on callback; memory-only CSRF fails."""
+    def fake_exchange(**_kwargs):
+        return {"token": "access-1", "refresh_token": "refresh-1"}
+
+    client1, ws = _oauth_app(tmp_path, exchange=fake_exchange, fetch_email=lambda _: "ops@company.com")
+    start = client1.get("/api/drive/oauth/start", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+
+    client2, _ = _oauth_app(tmp_path, exchange=fake_exchange, fetch_email=lambda _: "ops@company.com")
+    resp = client2.get(
+        f"/api/drive/oauth/callback?code=auth-code-1&state={state}",
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 307)
+    assert "oauth=connected" in resp.headers["location"]
+    assert OAuthTokenStore(ws.oauth_token_path()).exists()
 
 
 def test_oauth_callback_saves_token_and_redirects(tmp_path):

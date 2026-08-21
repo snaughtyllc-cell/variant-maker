@@ -10,6 +10,7 @@ import itertools
 import os
 import shutil
 import tempfile
+import threading
 
 from variant_maker.farm.drive import FOLDER_MIME, DriveClient, DriveFile
 
@@ -20,20 +21,24 @@ class FakeDrive(DriveClient):
         # id -> node dict: {name, mime_type, parent, blob_path|None}
         self._nodes: dict[str, dict] = {}
         self._store = tempfile.mkdtemp(prefix="fakedrive_")
+        self._lock = threading.Lock()
 
     # ---- test setup helpers ----
     def make_folder(self, name: str, parent: str | None = None) -> str:
-        fid = next(self._ids)
-        self._nodes[fid] = {"name": name, "mime_type": FOLDER_MIME, "parent": parent, "blob": None}
-        return fid
+        with self._lock:
+            fid = next(self._ids)
+            self._nodes[fid] = {"name": name, "mime_type": FOLDER_MIME, "parent": parent, "blob": None}
+            return fid
 
     def put_file(self, name: str, local_path: str, parent: str, mime_type: str = "video/mp4") -> str:
         return self._store_file(name, local_path, parent, mime_type)
 
     # ---- DriveClient interface ----
     def list_files(self, folder_id: str) -> list[DriveFile]:
+        with self._lock:
+            items = list(self._nodes.items())
         out = []
-        for fid, n in self._nodes.items():
+        for fid, n in items:
             if n["parent"] != folder_id:
                 continue
             md5 = self._md5(n["blob"]) if n["blob"] else None
@@ -69,11 +74,12 @@ class FakeDrive(DriveClient):
 
     # ---- internals ----
     def _store_file(self, name: str, local_path: str, parent: str, mime_type: str) -> str:
-        fid = next(self._ids)
-        blob = os.path.join(self._store, fid)
-        shutil.copyfile(local_path, blob)
-        self._nodes[fid] = {"name": name, "mime_type": mime_type, "parent": parent, "blob": blob}
-        return fid
+        with self._lock:
+            fid = next(self._ids)
+            blob = os.path.join(self._store, fid)
+            shutil.copyfile(local_path, blob)
+            self._nodes[fid] = {"name": name, "mime_type": mime_type, "parent": parent, "blob": blob}
+            return fid
 
     @staticmethod
     def _md5(path: str) -> str:

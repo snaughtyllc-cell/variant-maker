@@ -5,12 +5,15 @@ same `GoogleDrive(oauth_token=…)` path used by the farm works without an SA ke
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
 import tempfile
-from typing import Any, Callable, Mapping
-from urllib.parse import urlencode
+import time
+from collections.abc import Callable, Mapping
+from typing import Any
+from urllib.parse import urlencode, urlparse
 
 # Enough to upload into folders the signed-in user can already access (paste-folder flow).
 # drive.file alone cannot write to arbitrary folder IDs the app did not create.
@@ -20,6 +23,14 @@ OAUTH_SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
 ]
+
+# Login only — Drive Connect stays a second consent with OAUTH_SCOPES.
+LOGIN_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+ENV_LOGIN_REDIRECT_URI = "VARIANT_AUTH_OAUTH_REDIRECT_URI"
 
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
@@ -106,6 +117,74 @@ def new_oauth_state() -> str:
     return secrets.token_urlsafe(24)
 
 
+_PENDING_TTL_S = 15 * 60
+
+
+class OAuthPendingStore:
+    """CSRF states on disk so Connect Google survives a new API process / replica."""
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def add(self, state: str) -> None:
+        data = self._load()
+        now = time.time()
+        data = {k: ts for k, ts in data.items() if now - ts < _PENDING_TTL_S}
+        data[state] = now
+        self._save(data)
+
+    def consume(self, state: str) -> bool:
+        data = self._load()
+        now = time.time()
+        data = {k: ts for k, ts in data.items() if now - ts < _PENDING_TTL_S}
+        if state not in data:
+            self._save(data)
+            return False
+        del data[state]
+        self._save(data)
+        return True
+
+    def _load(self) -> dict[str, float]:
+        if not os.path.isfile(self._path):
+            return {}
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, float] = {}
+        for k, v in raw.items():
+            if isinstance(k, str) and isinstance(v, (int, float)):
+                out[k] = float(v)
+        return out
+
+    def _save(self, data: Mapping[str, float]) -> None:
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".oauth-pending-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(dict(data), f)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+
+def studio_origin_from_redirect_uri(redirect_uri: str, fallback: str) -> str:
+    """Public Studio origin for post-OAuth redirects (not the FastAPI bind host)."""
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return fallback.rstrip("/")
+
+
 def resolve_redirect_uri(
     environ: Mapping[str, str],
     *,
@@ -121,6 +200,91 @@ def resolve_redirect_uri(
     if request_base:
         return f"{request_base.rstrip('/')}/api/drive/oauth/callback"
     return "http://127.0.0.1:8000/api/drive/oauth/callback"
+
+
+def resolve_login_redirect_uri(
+    environ: Mapping[str, str],
+    *,
+    request_base: str | None = None,
+    explicit: str | None = None,
+) -> str:
+    """Prefer VARIANT_AUTH_OAUTH_REDIRECT_URI; else `{origin}/api/auth/google/callback`."""
+    if explicit:
+        return explicit.rstrip("/")
+    env_uri = environ.get(ENV_LOGIN_REDIRECT_URI)
+    if env_uri:
+        return env_uri.rstrip("/")
+    if request_base:
+        return f"{request_base.rstrip('/')}/api/auth/google/callback"
+    return "http://127.0.0.1:8000/api/auth/google/callback"
+
+
+def login_profile_from_token(token_data: Mapping[str, Any]) -> tuple[str, str]:
+    """Email + name from a Google token dict (`email`/`name` or `id_token` claims)."""
+    email = token_data.get("email") if isinstance(token_data.get("email"), str) else None
+    name = token_data.get("name") if isinstance(token_data.get("name"), str) else ""
+    id_token = token_data.get("id_token")
+    if isinstance(id_token, str) and id_token.count(".") >= 2:
+        payload_b64 = id_token.split(".")[1]
+        pad = "=" * (-len(payload_b64) % 4)
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64 + pad))
+        except (OSError, json.JSONDecodeError, ValueError):
+            payload = {}
+        if isinstance(payload, dict):
+            if not email and isinstance(payload.get("email"), str):
+                email = payload["email"]
+            if not name and isinstance(payload.get("name"), str):
+                name = payload["name"]
+            elif not name and isinstance(payload.get("given_name"), str):
+                name = payload["given_name"]
+    if not email:
+        raise ValueError("Google login did not return an email")
+    return email, name or email
+
+
+def fetch_userinfo_profile(
+    token_data: Mapping[str, Any],
+    *,
+    get_json: Callable[[str, Mapping[str, str]], Mapping[str, Any]] | None = None,
+) -> tuple[str, str]:
+    """Email + name from Google's userinfo endpoint using the access token."""
+    access = token_data.get("token") or token_data.get("access_token")
+    if not isinstance(access, str) or not access:
+        raise ValueError("Google login did not return an email")
+
+    def _get(url: str, headers: Mapping[str, str]) -> Mapping[str, Any]:
+        from urllib.request import Request, urlopen
+        req = Request(url, headers=dict(headers))
+        with urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode())
+        if not isinstance(raw, dict):
+            raise ValueError("Google login did not return an email")
+        return raw
+
+    body = (get_json or _get)(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {"Authorization": f"Bearer {access}"},
+    )
+    email = body.get("email") if isinstance(body.get("email"), str) else None
+    name = body.get("name") if isinstance(body.get("name"), str) else ""
+    if not name and isinstance(body.get("given_name"), str):
+        name = body["given_name"]
+    if not email:
+        raise ValueError("Google login did not return an email")
+    return email, name or email
+
+
+def resolve_login_profile(
+    token_data: Mapping[str, Any],
+    *,
+    get_json: Callable[[str, Mapping[str, str]], Mapping[str, Any]] | None = None,
+) -> tuple[str, str]:
+    """Prefer id_token / email fields; fall back to userinfo."""
+    try:
+        return login_profile_from_token(token_data)
+    except ValueError:
+        return fetch_userinfo_profile(token_data, get_json=get_json)
 
 
 def public_request_base(headers: Mapping[str, str], fallback: str) -> str:
@@ -143,6 +307,7 @@ def exchange_code_for_token(
     client_id: str,
     client_secret: str,
     redirect_uri: str,
+    scopes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Exchange auth code for tokens; returns authorized-user dict for GoogleDrive."""
     from google_auth_oauthlib.flow import Flow
@@ -156,15 +321,24 @@ def exchange_code_for_token(
                 "token_uri": TOKEN_URI,
             }
         },
-        scopes=OAUTH_SCOPES,
+        scopes=list(scopes or OAUTH_SCOPES),
         redirect_uri=redirect_uri,
     )
+    # Google often returns a slightly different granted-scope set than we asked
+    # for (drive + drive.file + sheets). Default oauthlib then raises and Studio
+    # looks like Connect never happened.
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+    os.environ.setdefault("OAUTHLIB_IGNORE_SCOPE_CHANGE", "1")
     flow.fetch_token(code=code)
     creds = flow.credentials
     data = json.loads(creds.to_json())
     # Ensure refresh_token key exists for headless refresh
     if not data.get("refresh_token") and creds.refresh_token:
         data["refresh_token"] = creds.refresh_token
+    # to_json() omits OpenID id_token — login needs it (or userinfo) for email.
+    id_token = getattr(creds, "id_token", None)
+    if id_token and not data.get("id_token"):
+        data["id_token"] = id_token
     return data
 
 

@@ -14,12 +14,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 # ffmpeg WITH libvmaf — the spatial-corruption guard needs the libvmaf filter, which the
-# distro ffmpeg lacks. The johnvansickle static build bundles it (verified on the GPU box).
-RUN cd /tmp && wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
-    tar xf ffmpeg-release-amd64-static.tar.xz && \
-    cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/ && \
-    rm -rf /tmp/ffmpeg-* && \
+# distro ffmpeg lacks. Use BtbN's GPL static build: it is reachable from CI, unlike the
+# John Van Sickle host, and bundles libvmaf. BtbN GPL is expected to include rubberband
+# (Phase 13 pitch); do not hard-fail the image if that filter is missing.
+RUN cd /tmp && wget -q -O ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
+    tar xf ffmpeg.tar.xz && \
+    cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ && \
+    rm -rf /tmp/ffmpeg* && \
     test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
+RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband || echo "WARN: no rubberband filter"
+
+# RIFE path only — do not wget the ~411MB ubuntu zip. Bake rife-ncnn-vulkan + rife-v4.6
+# models here later; until then interpolate.available() is False and HQ uses ffmpeg tempo.
+RUN mkdir -p /opt/rife
+ENV VARIANT_MAKER_RIFE_DIR=/opt/rife
 
 # Real-ESRGAN stack. CRITICAL: pin numpy<2 — installing realesrgan/basicsr pulls numpy 2.x,
 # which torch 2.1 (built against numpy 1.x) cannot use ("Numpy is not available"). Then patch
@@ -49,7 +58,7 @@ RUN mkdir -p /app/weights && \
 # The [serverless] extra adds boto3 for the control-plane worker's (cp_handler.py) object
 # storage (S3ObjectStore). Both extras are installed so one image serves both handlers.
 COPY . /app
-RUN pip install --no-cache-dir "/app[farm,serverless]"
+RUN pip install --no-cache-dir -c /app/deploy/runpod/constraints.txt "/app[farm,serverless]"
 
 # cuda backend + our name-preserving infer script + persistent ledger on the mounted volume.
 ENV VARIANT_MAKER_UPSCALE_BACKEND=cuda \

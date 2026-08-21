@@ -50,7 +50,17 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       }
     }
   }
-  if (detail.state === "done") next = reduceEvent(next, { state: "job-done" });
+  if (detail.state === "done" || detail.state === "cancelled") {
+    const cleared: RunProgress = {
+      ...next,
+      complete: true,
+      failed: detail.error || next.failed || null,
+      bySource: Object.fromEntries(
+        Object.entries(next.bySource).map(([id, s]) => [id, { ...s, inFlight: undefined }]),
+      ),
+    };
+    next = reduceEvent(cleared, { state: "job-done" });
+  }
   return next;
 }
 
@@ -91,9 +101,19 @@ export function useJobProgress(
         const next = applyJobDetail(runRef.current, detail);
         runRef.current = next;
         setRun(next);
-        if (detail.state === "done") es.close();
-      } catch {
-        // ignore transient proxy errors
+        if (detail.state === "done" || detail.state === "cancelled") es.close();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.startsWith("404")) {
+          const next: RunProgress = {
+            ...runRef.current,
+            complete: true,
+            failed: "This run is gone (Studio restarted or the job never saved). Generate again.",
+          };
+          runRef.current = next;
+          setRun(next);
+          es.close();
+        }
       }
     };
     poll();

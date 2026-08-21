@@ -18,16 +18,32 @@ def _tiny_mp4(path, *, color="black", extra_vf=None, lavfi=None):
 def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0) == 0
     assert uniqueness.bits_from_ssim(0.0) == 64
-    # TikFusion floor ≈ 18 bits; VaryForge default hard gate is 24 (~37.5% unique).
+    # TikFusion floor ≈ 18 bits. Fast vs-source gate is 24 (medium 20-pack headroom).
+    # Local uniqueness only — not a platform verdict.
     assert uniqueness.bits_from_ssim(1.0 - 18 / 64) == 18
-    assert uniqueness.bits_from_ssim(1.0 - 24 / 64) == 24
+    assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
     assert uniqueness.TARGET_BITS == 24
-    assert uniqueness.DEFAULT_TARGET == 24 / 64
-    assert uniqueness.MIN_PEER_BITS == 10
+    assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
+    # Sibling floor matches vs-source: 24 bits so a Fast 20-pack stays on medium.
+    assert uniqueness.MIN_PEER_BITS == 24
+    assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
+    assert uniqueness.MAX_PASSES == 3
+
+
+def test_fast_gate_fits_medium_talking_head_headroom():
+    """Pass stays 24 bits (~38% UI). Medium talking-head should land ~35–42 bits (~55–65%).
+
+    Raising the *gate* to 32 previously escalated entire Fast 20-packs. Delivery is
+    a reconstructive rebuild-scale (not ±32 px, not a face-only zoom), VMAF-capped
+    warp, and grain under the 12M cap — not a higher floor.
+    """
+    talking_head_medium_typical = 35
+    assert uniqueness.TARGET_BITS == 24
+    assert uniqueness.TARGET_BITS < talking_head_medium_typical
 
 
 def test_similarity_is_one_minus_uniqueness():
-    assert uniqueness.similarity_from_uniqueness(0.375) == 0.625
+    assert uniqueness.similarity_from_uniqueness(uniqueness.DEFAULT_TARGET) == 1.0 - uniqueness.DEFAULT_TARGET
     assert uniqueness.similarity_from_uniqueness(0.0) == 1.0
     assert uniqueness.similarity_from_uniqueness(1.0) == 0.0
 

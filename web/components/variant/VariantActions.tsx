@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
+import { PostLinkField } from "./PostLinkField";
 
 interface VariantActionsProps {
   sourceId: string;
@@ -51,12 +52,19 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
       uniqueness_status: variant.uniqueness_status,
       escalated: variant.escalated,
       platform_result: variant.platform_result,
+      post_url: variant.post_url,
     },
     null,
     2,
   );
 
   const currentResult = variant.platform_result ?? "unknown";
+  const resultBadge =
+    currentResult === "passed"
+      ? { text: "✓ Passed upload", color: "#7bf2a8", background: "#0c2c1a", border: "#16502f" }
+      : currentResult === "flagged"
+        ? { text: "⚑ Flagged", color: "#ff9aa8", background: "#2c1018", border: "#5a1a28" }
+        : { text: "⚠ Duplicate rejected", color: "#ffd08a", background: "#2c2210", border: "#5a4416" };
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -76,6 +84,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
         <span>Actions</span>
         {currentResult !== "unknown" && (
           <span
+            data-testid="platform-result-badge"
             style={{
               fontSize: 10,
               fontWeight: 800,
@@ -83,23 +92,26 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
               borderRadius: 999,
               textTransform: "none",
               letterSpacing: 0,
-              ...(currentResult === "passed"
-                ? { color: "#7bf2a8", background: "#0c2c1a", border: "1px solid #16502f" }
-                : { color: "#ffd08a", background: "#2c2210", border: "1px solid #5a4416" }),
+              color: resultBadge.color,
+              background: resultBadge.background,
+              border: `1px solid ${resultBadge.border}`,
             }}
           >
-            {currentResult === "passed" ? "✓ Passed upload" : "⚠ Duplicate rejected"}
+            {resultBadge.text}
           </span>
         )}
       </div>
+
+      {/* VA-pasted live permalink — Studio does not post */}
+      <PostLinkField sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
 
       {/* Platform outcome — records what the real platform did with this upload */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "1fr 1fr 1fr",
           gap: 9,
-          marginBottom: 9,
+          marginBottom: 6,
         }}
       >
         <button
@@ -144,6 +156,37 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
         >
           ⚠ {resultBusy === "duplicate_reject" ? "Saving…" : "Duplicate rejected"}
         </button>
+        <button
+          onClick={() => handleSetResult("flagged")}
+          disabled={!!resultBusy}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
+            fontSize: 12.5,
+            fontWeight: 700,
+            padding: "10px",
+            borderRadius: 10,
+            background: currentResult === "flagged" ? "#2c1018" : "#16161f",
+            border: `1px solid ${currentResult === "flagged" ? "#5a1a28" : "var(--color-line)"}`,
+            color: currentResult === "flagged" ? "#ff9aa8" : "var(--color-text)",
+            cursor: resultBusy ? "not-allowed" : "pointer",
+            opacity: resultBusy && resultBusy !== "flagged" ? 0.6 : 1,
+          }}
+        >
+          ⚑ {resultBusy === "flagged" ? "Saving…" : "Flagged"}
+        </button>
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--color-muted)",
+          lineHeight: 1.45,
+          marginBottom: 9,
+        }}
+      >
+        Unlabeled = pass. Only mark duplicate or flagged when the platform took it down.
       </div>
 
       <div

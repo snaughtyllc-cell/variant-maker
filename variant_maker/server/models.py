@@ -20,10 +20,16 @@ class VariantOut(BaseModel):
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    post_url: str | None = None
+    file_ready: bool = True
 
 
 class PlatformResultIn(BaseModel):
     result: Literal["passed", "duplicate_reject", "flagged", "unknown"]
+
+
+class PostUrlIn(BaseModel):
+    url: str = ""
 
 
 class InFlightOut(BaseModel):
@@ -42,8 +48,12 @@ class SourceOut(BaseModel):
     shortfall: int
     variants: list[VariantOut] = []
     in_flight: InFlightOut | None = None
-    job_state: str | None = None  # "running" | "done" — drives shortfall copy
+    job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt count (Diagnostics population)
+    created_utc: str | None = None
+    files_ready: int = 0          # ok variants whose mp4 is on Studio disk
+    copy_status: Literal["ok", "copying", "missing"] = "ok"
+    job_id: str | None = None
 
 
 class JobSummary(BaseModel):
@@ -54,12 +64,34 @@ class JobSummary(BaseModel):
     source_count: int
 
 
+class QueueItemOut(BaseModel):
+    job_id: str
+    quality_mode: str
+    state: str
+    created_utc: str
+    count: int
+    source_count: int
+    filenames: list[str]
+    delivered: int
+    requested: int
+    position: int
+
+
+class QueueOut(BaseModel):
+    """Live generating packs on this Studio URL — filenames only, no video."""
+    running: int
+    fast: int = 0
+    hq: int = 0
+    jobs: list[QueueItemOut] = []
+
+
 class JobDetail(BaseModel):
     job_id: str
     count: int
     created_utc: str
     state: str
     sources: list[SourceOut] = []
+    error: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):
@@ -111,11 +143,44 @@ class DestinationUpdateIn(BaseModel):
 class ExportVariantRefIn(BaseModel):
     source_id: str
     index: int
+    caption: str | None = None
 
 
 class ExportCreateIn(BaseModel):
     destination_id: str
     variants: list[ExportVariantRefIn]
+    consume_bank: bool = False
+    caption_bank_id: str | None = None
+
+
+class ExportSplitDestIn(BaseModel):
+    destination_id: str
+    label: str | None = None
+    count: int | None = None
+
+
+class ExportSplitIn(BaseModel):
+    job_id: str | None = None
+    selected: list[ExportVariantRefIn] | None = None
+    variants: list[ExportVariantRefIn] | None = None
+    destinations: list[ExportSplitDestIn] | None = None
+    destination_ids: list[str] | None = None
+    consume_bank: bool = False
+    caption_bank_id: str | None = None
+
+
+class SplitExportJobOut(BaseModel):
+    id: str
+    dest: str
+    files: list[str]
+    count: int
+    label: str | None = None
+
+
+class SplitExportOut(BaseModel):
+    ok: bool = True
+    jobs: list[SplitExportJobOut] = []
+    split: list[list[int]] = []
 
 
 class ExportFileOut(BaseModel):
@@ -162,3 +227,192 @@ class DropLedgerEnsureOut(BaseModel):
     spreadsheet_id: str
     spreadsheet_url: str
     created: bool
+
+
+class DriveVideoOut(BaseModel):
+    id: str
+    name: str
+    mime_type: str
+    md5: str | None = None
+
+
+class DriveVideosOut(BaseModel):
+    videos: list[DriveVideoOut] = []
+
+
+class JobFromDriveIn(BaseModel):
+    destination_id: str
+    file_ids: list[str]
+    count: int
+    quality_mode: str = "fast"
+    allow_creative_escalate: bool = True
+
+
+class WorkflowSummaryOut(BaseModel):
+    queued: int = 0
+    exported: int = 0
+    skipped: int = 0
+    failed: int = 0
+    running: int = 0
+    job_ids: list[str] = []
+    error: str | None = None
+
+
+class WorkflowOut(BaseModel):
+    id: str
+    name: str
+    inbox_destination_id: str
+    output_destination_id: str
+    count: int
+    quality_mode: str
+    allow_creative_escalate: bool
+    enabled: bool
+    poll_seconds: int
+    last_sweep_at: str | None = None
+    last_summary: WorkflowSummaryOut | None = None
+    auto_caption: bool = False
+    caption_bank_id: str | None = None
+
+
+class WorkflowCreateIn(BaseModel):
+    name: str
+    inbox_destination_id: str
+    output_destination_id: str
+    count: int = 20
+    quality_mode: str = "fast"
+    allow_creative_escalate: bool = True
+    enabled: bool = False
+    poll_seconds: int = 120
+    auto_caption: bool = False
+    caption_bank_id: str | None = None
+
+
+class WorkflowUpdateIn(BaseModel):
+    name: str | None = None
+    inbox_destination_id: str | None = None
+    output_destination_id: str | None = None
+    count: int | None = None
+    quality_mode: str | None = None
+    allow_creative_escalate: bool | None = None
+    enabled: bool | None = None
+    poll_seconds: int | None = None
+    auto_caption: bool | None = None
+    caption_bank_id: str | None = None
+
+
+class CaptionOut(BaseModel):
+    id: str
+    text: str
+
+
+class CaptionBankFolderOut(BaseModel):
+    id: str
+    name: str
+    is_default: bool = False
+    count: int = 0
+    remaining: int = 0
+    cursor: int = 0
+    low: bool = False
+
+
+class CaptionBankOut(BaseModel):
+    cursor: int = 0
+    items: list[CaptionOut] = []
+    bank_id: str = ""
+    bank_name: str = ""
+    count: int = 0
+    remaining: int = 0
+    low: bool = False
+    is_default: bool = False
+
+
+class CaptionCreateIn(BaseModel):
+    text: str
+    bank_id: str | None = None
+
+
+class CaptionBulkIn(BaseModel):
+    raw: str
+    bank_id: str | None = None
+
+
+class CaptionAdvanceIn(BaseModel):
+    n: int
+    bank_id: str | None = None
+
+
+class CaptionFolderCreateIn(BaseModel):
+    name: str
+
+
+class CaptionPreviewOut(BaseModel):
+    captions: list[str] = []
+
+
+class AuthMeOut(BaseModel):
+    auth_required: bool
+    email: str | None = None
+    name: str | None = None
+    workspace_id: str | None = None
+    workspace_name: str | None = None
+    home_workspace_id: str | None = None
+    viewing_other: bool = False
+    role: Literal["owner", "member"] | None = None
+    is_admin: bool = False
+    has_password: bool = False
+
+
+class PasswordLoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class PasswordSetIn(BaseModel):
+    password: str
+
+
+class InviteCreateIn(BaseModel):
+    email: str
+    kind: Literal["join", "new_workspace"]
+
+
+class InviteOut(BaseModel):
+    id: str
+    email: str
+    kind: Literal["join", "new_workspace"]
+    workspace_id: str | None = None
+    created_utc: str
+
+
+class AdminMemberOut(BaseModel):
+    email: str
+    name: str
+    role: Literal["owner", "member"]
+
+
+class AdminWorkspaceOut(BaseModel):
+    id: str
+    name: str
+    owner_email: str | None = None
+    member_count: int = 0
+    members: list[AdminMemberOut] = []
+    running: int = 0
+    fast: int = 0
+    hq: int = 0
+    last_job_utc: str | None = None
+    last_error: str | None = None
+
+
+class WorkspaceInviteIn(BaseModel):
+    email: str
+
+
+class TeamOut(BaseModel):
+    workspace_id: str
+    workspace_name: str | None = None
+    members: list[AdminMemberOut] = []
+    invites: list[InviteOut] = []
+
+
+class AdminViewIn(BaseModel):
+    workspace_id: str | None = None

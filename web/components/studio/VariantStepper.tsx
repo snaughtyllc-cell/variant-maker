@@ -1,33 +1,44 @@
 "use client";
 import { totalVariants } from "@/lib/files";
+import { MAX_PER_VIDEO, variantStepperHint } from "@/lib/variantStepperCopy";
 
 interface VariantStepperProps {
   value: number;
   onChange: (val: number) => void;
   min?: number;
+  max?: number;
   fileCount: number;
+  qualityMode?: "fast" | "hq";
 }
 
-export function VariantStepper({ value, onChange, min = 1, fileCount }: VariantStepperProps) {
+export function VariantStepper({
+  value,
+  onChange,
+  min = 1,
+  max = MAX_PER_VIDEO,
+  fileCount,
+  qualityMode = "fast",
+}: VariantStepperProps) {
   const total = totalVariants(fileCount, value);
+  const hint = variantStepperHint(qualityMode);
 
   function decrement() {
     if (value > min) onChange(value - 1);
   }
   function increment() {
-    onChange(value + 1);
+    if (value < max) onChange(value + 1);
   }
 
   const btnStyle: React.CSSProperties = {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     background: "#1c1c28",
     border: "1px solid var(--color-line)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 16,
+    fontSize: 20,
     color: "var(--color-text)",
     cursor: "pointer",
     userSelect: "none",
@@ -72,6 +83,7 @@ export function VariantStepper({ value, onChange, min = 1, fileCount }: VariantS
         {fileCount > 0
           ? `per video · ${fileCount} clip${fileCount !== 1 ? "s" : ""} → ${total} total`
           : "per video · add clips above"}
+        {hint ? ` · ${hint}` : ""}
       </div>
     </div>
   );

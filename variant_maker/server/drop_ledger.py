@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
 from .sheets import SheetsClient
@@ -40,12 +40,30 @@ HEADERS = [
     "escalated",
     "source_id",
     "variant_index",
+    "post_url",
 ]
 
 # Columns we never overwrite with blank on upsert if the sheet already has a value.
-_PRESERVE_IF_SET = frozenset({"platform_result", "notes", "drop_url", "platform"})
+_PRESERVE_IF_SET = frozenset({"platform_result", "notes", "drop_url", "platform", "post_url"})
 
 _COL = {name: i for i, name in enumerate(HEADERS)}
+
+
+def _a1_col(n: int) -> str:
+    """1-based column index → A, B, … Z, AA."""
+    letters = ""
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
+
+
+def ledger_values_range() -> str:
+    return f"A:{_a1_col(len(HEADERS))}"
+
+
+def ledger_header_range() -> str:
+    return f"A1:{_a1_col(len(HEADERS))}1"
 
 
 @dataclass(frozen=True)
@@ -70,6 +88,7 @@ class DropRow:
     escalated: str
     source_id: str
     variant_index: str
+    post_url: str
 
     def as_list(self) -> list[str]:
         return [
@@ -93,6 +112,7 @@ class DropRow:
             self.escalated,
             self.source_id,
             self.variant_index,
+            self.post_url,
         ]
 
 
@@ -178,6 +198,7 @@ def row_from_manifest_variant(
         escalated=_fmt(variant.get("escalated")),
         source_id=source_id,
         variant_index=str(index),
+        post_url=_fmt(variant.get("post_url")),
     )
 
 
@@ -304,9 +325,10 @@ def merge_upsert(
 def ensure_ledger(sheets: SheetsClient, spreadsheet_id: str | None) -> str:
     """Return a usable spreadsheet id; create + header if needed."""
     if spreadsheet_id:
-        values = sheets.get_values(spreadsheet_id, f"{TAB}!A1:T1")
-        if not values or values[0][:3] != HEADERS[:3]:
-            # Tab may be missing or empty — write header at A1 (default first sheet).
+        values = sheets.get_values(spreadsheet_id, f"{TAB}!{ledger_header_range()}")
+        header = values[0] if values else []
+        if list(header[:len(HEADERS)]) != list(HEADERS):
+            # Tab may be missing, empty, or an older column set — write header.
             try:
                 sheets.update_values(spreadsheet_id, "A1", [HEADERS])
             except Exception:
@@ -323,13 +345,42 @@ def sync_rows(
     rows: Sequence[DropRow],
 ) -> dict[str, int]:
     """Upsert rows into the ledger. Returns insert/update/unchanged counts."""
+    rng = ledger_values_range()
     try:
-        existing = sheets.get_values(spreadsheet_id, "A:T")
+        existing = sheets.get_values(spreadsheet_id, rng)
     except Exception:
-        existing = sheets.get_values(spreadsheet_id, f"{TAB}!A:T")
+        existing = sheets.get_values(spreadsheet_id, f"{TAB}!{rng}")
     merged, stats = merge_upsert(existing, rows)
     sheets.update_values(spreadsheet_id, "A1", merged)
     return stats
+
+
+def _update_ledger_cell(
+    sheets: SheetsClient,
+    spreadsheet_id: str,
+    *,
+    job_id: str,
+    source_id: str,
+    index: int,
+    column: str,
+    value: str,
+) -> bool:
+    rng = ledger_values_range()
+    try:
+        existing = sheets.get_values(spreadsheet_id, rng)
+    except Exception:
+        existing = sheets.get_values(spreadsheet_id, f"{TAB}!{rng}")
+    if not existing:
+        return False
+    width = len(HEADERS)
+    key = f"{job_id}|{variant_id(source_id, index)}"
+    for i, row in enumerate(existing[1:], start=2):  # 1-indexed sheet rows; skip header
+        cells = _pad(row, width)
+        if _row_key(cells) == key:
+            cells[_COL[column]] = value
+            sheets.update_values(spreadsheet_id, f"A{i}", [cells])
+            return True
+    return False
 
 
 def update_platform_result_cell(
@@ -342,21 +393,67 @@ def update_platform_result_cell(
     result: str,
 ) -> bool:
     """Set platform_result for an existing row. Returns False if row missing."""
-    try:
-        existing = sheets.get_values(spreadsheet_id, "A:T")
-    except Exception:
-        existing = sheets.get_values(spreadsheet_id, f"{TAB}!A:T")
-    if not existing:
+    return _update_ledger_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index,
+        column="platform_result", value=result,
+    )
+
+
+def persist_platform_result(
+    sheets: SheetsClient,
+    spreadsheet_id: str,
+    *,
+    job_id: str,
+    source_id: str,
+    index: int,
+    result: str,
+    rows: Sequence[DropRow] | None = None,
+) -> bool:
+    """Write platform_result. Updates an existing row, or upserts `rows` if missing.
+
+    Gallery labels must land on the sheet even if the operator has not synced yet.
+    """
+    if update_platform_result_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index, result=result,
+    ):
+        return True
+    if not rows:
         return False
-    width = len(HEADERS)
-    key = f"{job_id}|{variant_id(source_id, index)}"
-    for i, row in enumerate(existing[1:], start=2):  # 1-indexed sheet rows; skip header
-        cells = _pad(row, width)
-        if _row_key(cells) == key:
-            cells[_COL["platform_result"]] = result
-            sheets.update_values(spreadsheet_id, f"A{i}", [cells])
-            return True
-    return False
+    vid = variant_id(source_id, index)
+    incoming: list[DropRow] = []
+    found = False
+    for row in rows:
+        if row.job_id == job_id and row.variant_id == vid:
+            incoming.append(replace(row, platform_result=result))
+            found = True
+        else:
+            incoming.append(row)
+    if not found:
+        return False
+    sync_rows(sheets, spreadsheet_id, incoming)
+    return update_platform_result_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index, result=result,
+    )
+
+
+def update_post_url_cell(
+    sheets: SheetsClient,
+    spreadsheet_id: str,
+    *,
+    job_id: str,
+    source_id: str,
+    index: int,
+    url: str,
+) -> bool:
+    """Set post_url (live permalink) for an existing row. Distinct from Drive drop_url."""
+    return _update_ledger_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index,
+        column="post_url", value=url,
+    )
 
 
 def read_sheet_id_file(path: str) -> str | None:

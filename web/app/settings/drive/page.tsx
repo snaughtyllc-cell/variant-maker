@@ -1,4 +1,8 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
+import { CaptionBankPanel } from "@/components/drive/CaptionBankPanel";
+import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
+import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
+import { PasswordPanel } from "@/components/auth/PasswordPanel";
 
 export default function DriveSettingsPage() {
   return (
@@ -29,13 +33,19 @@ export default function DriveSettingsPage() {
               marginTop: 2,
             }}
           >
-            Manage the Google Drive folders variants can be exported to.
+            Manage the Google Drive folders variants can be exported to. Studio import and Workflows use the same saved folders.
+            <DriveLoginNote />
           </div>
         </div>
       </div>
 
       <div style={{ padding: "14px 20px 22px" }}>
+        <PasswordPanel />
         <DestinationsPanel />
+        <div style={{ height: 28 }} />
+        <CaptionBankPanel />
+        <div style={{ height: 28 }} />
+        <DropLedgerPanel />
       </div>
     </main>
   );
