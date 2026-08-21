@@ -221,11 +221,30 @@ def test_crop_keep_is_unbudgeted_fingerprint():
 
 
 def test_medium_crop_range_is_tighter_than_identity():
-    """Talking-head medium should land ~32–38 bits (~50–60% UI), not a 3% peek-crop."""
-    assert MEDIUM.crop_keep.lo == pytest.approx(0.86)
-    assert MEDIUM.crop_keep.hi == pytest.approx(0.94)
-    assert STRONG.crop_keep.lo < MEDIUM.crop_keep.lo
-    assert STRONG.crop_keep.lo == pytest.approx(0.80)
+    """Talking-head keep=0.858 still scored ~24 bits (~38% UI). Medium must always
+    punch ≥18% so packs land ~35–42 bits (~55–65%) without raising the 24-bit gate.
+    Escalate is strictly tighter so a miss is not another medium-sized crop.
+    """
+    assert MEDIUM.crop_keep.lo == pytest.approx(0.74)
+    assert MEDIUM.crop_keep.hi == pytest.approx(0.82)
+    assert STRONG.crop_keep.hi <= MEDIUM.crop_keep.lo + 1e-9
+    assert STRONG.crop_keep.lo == pytest.approx(0.66)
+    for s in SEEDS[:80]:
+        keep = sample(MEDIUM, s)["video"]["crop_keep"]
+        assert keep <= 0.82 + 1e-9
+        assert keep >= 0.74 - 1e-9
+
+
+def test_grain_is_modest_so_esc_cannot_write_60mbps():
+    """Grain is a weak SSIM lever and a huge bitrate bomb. Strong 14–22 wrote
+    ~65 Mbps files; the 12M social cap is the ceiling, grain should not sit there.
+    """
+    assert MEDIUM.grain.lo == pytest.approx(4)
+    assert MEDIUM.grain.hi == pytest.approx(8)
+    assert STRONG.grain.lo == pytest.approx(6)
+    assert STRONG.grain.hi == pytest.approx(10)
+    assert STRONG.grain.hi > MEDIUM.grain.hi
+    assert MEDIUM.grain.lo >= SUBTLE.grain.lo
 
 
 def test_clamp_trims_keeps_half_of_a_short_clip():

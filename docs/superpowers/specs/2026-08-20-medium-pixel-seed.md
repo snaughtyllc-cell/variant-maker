@@ -27,7 +27,7 @@ Do **not** copy secret noise / DCT / named Smart Colors / fps jitter / scramble.
 | medium `warp_k1` | ±0.012 | **±0.015** |
 | strong `warp_k1` | ±0.016 | **±0.020** (escalate still punches harder) |
 
-Crop stays `0.86–0.94` medium. Gate stays **24 vs source / 24 vs peers**.
+Crop is now `0.74–0.82` medium (`2026-08-21-medium-crop-grain.md`). Gate stays **24 vs source / 24 vs peers**.
 Escalate on. VMAF on. Color zero-mean. HQ still strips resample+warp.
 
 ## Copy
