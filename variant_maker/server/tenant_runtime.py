@@ -49,7 +49,7 @@ class TenantHub:
                 return existing
             root = tenant_root(self.data_dir, workspace_id)
             ws = Workspace(root)
-            store = JobStore(ws, self._runner)
+            store = JobStore(ws, self._runner, workspace_id=workspace_id)
             store.hydrate_from_disk()
             built = TenantBundle(
                 workspace_id=workspace_id,

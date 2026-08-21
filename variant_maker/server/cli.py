@@ -19,6 +19,7 @@ from .workspace import Workspace
 _RUNPOD_ENV = ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
                "R2_ACCESS_KEY", "R2_SECRET_KEY")
 FAST_ENDPOINT_ENV = "RUNPOD_FAST_ENDPOINT_ID"
+FAST_ENDPOINT_2_ENV = "RUNPOD_FAST_ENDPOINT_ID_2"
 
 
 def resolve_runner(kind: str | None) -> str:
@@ -30,9 +31,14 @@ def resolve_runner(kind: str | None) -> str:
     return "local"
 
 
-def _fast_endpoint_id() -> str | None:
-    raw = (os.environ.get(FAST_ENDPOINT_ENV) or "").strip()
-    return raw or None
+def _fast_endpoint_ids() -> list[str]:
+    """Primary Fast CPU, then overflow. Same image; occupancy picks among them."""
+    ids: list[str] = []
+    for key in (FAST_ENDPOINT_ENV, FAST_ENDPOINT_2_ENV):
+        raw = (os.environ.get(key) or "").strip()
+        if raw and raw not in ids:
+            ids.append(raw)
+    return ids
 
 
 def make_runner(kind: str) -> Runner:
@@ -50,17 +56,15 @@ def make_runner(kind: str) -> Runner:
             store,
             HttpRunPodClient(endpoint_id=os.environ["RUNPOD_ENDPOINT_ID"], api_key=api_key),
         )
-        fast_id = _fast_endpoint_id()
-        fast = None
-        if fast_id:
-            fast = RunPodServerlessRunner(
-                store,
-                HttpRunPodClient(endpoint_id=fast_id, api_key=api_key),
-            )
+        fast_runners = [
+            RunPodServerlessRunner(store, HttpRunPodClient(endpoint_id=eid, api_key=api_key))
+            for eid in _fast_endpoint_ids()
+        ]
         return RoutingRunner(
             LocalRunner(),
             gpu,
-            fast_remote=fast,
+            fast_remote=fast_runners[0] if fast_runners else None,
+            fast_remotes=fast_runners,
             max_local_fast=fast_local_max_from_env(),
         )
     raise SystemExit(f"unknown runner: {kind!r}")

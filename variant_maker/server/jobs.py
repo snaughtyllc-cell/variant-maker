@@ -8,6 +8,7 @@ import shutil
 import threading
 import uuid
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -280,9 +281,10 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
 
 
 class JobStore:
-    def __init__(self, workspace: Workspace, runner: Runner) -> None:
+    def __init__(self, workspace: Workspace, runner: Runner, *, workspace_id: str | None = None) -> None:
         self._ws = workspace
         self._runner = runner
+        self._workspace_id = workspace_id
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._done: dict[str, threading.Event] = {}
@@ -331,6 +333,31 @@ class JobStore:
         self._persist(job)
         threading.Thread(target=self._run_job, args=(job, token), daemon=True).start()
         return job
+
+    def _workspace_runner_kw(self) -> dict:
+        if self._workspace_id and hasattr(self._runner, "acquire_fast"):
+            return {"workspace_id": self._workspace_id}
+        return {}
+
+    @contextmanager
+    def _fast_slot(self, quality_mode: str):
+        """Sticky Fast CPU for this workspace. HQ does not take a Fast slot."""
+        acquire = getattr(self._runner, "acquire_fast", None)
+        leased = False
+        if (
+            callable(acquire)
+            and self._workspace_id
+            and normalize_quality_mode(quality_mode) != "hq"
+        ):
+            acquire(self._workspace_id)
+            leased = True
+        try:
+            yield
+        finally:
+            if leased:
+                release = getattr(self._runner, "release_fast", None)
+                if callable(release) and self._workspace_id:
+                    release(self._workspace_id)
 
     def cancel(self, job_id: str) -> Job | None:
         """Stop a running job. Finished jobs are returned unchanged (204-style no-op)."""
@@ -400,96 +427,8 @@ class JobStore:
 
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
         try:
-            def on_event(e: VariantEvent) -> None:
-                job.events.append(e)
-                if token.runpod_job_id:
-                    for source in job.sources:
-                        if source.source_id == e.source_id:
-                            source.runpod_job_id = token.runpod_job_id
-                            break
-                # Record finished variants immediately so polling clients (and
-                # proxies that buffer SSE) can see progress before the source ends.
-                if e.state == "done" and e.filename and e.status and e.quality is not None:
-                    for source in job.sources:
-                        if source.source_id != e.source_id:
-                            continue
-                        if any(v.index == e.index for v in source.variants):
-                            break
-                        source.variants.append(VariantInfo(
-                            source_id=e.source_id, index=e.index, filename=e.filename,
-                            status=e.status, quality=e.quality,
-                            uniqueness=e.uniqueness, uniqueness_status=e.uniqueness_status,
-                            uniqueness_metric=e.uniqueness_metric,
-                            uniqueness_target=e.uniqueness_target,
-                            preset_used=e.preset_used, strength_final=e.strength_final,
-                            escalated=e.escalated, platform_result=e.platform_result,
-                        ))
-                        break
-                if e.state == "done" or token.runpod_job_id:
-                    self._persist(job)
-
-            for source in job.sources:
-                if token.is_set():
-                    raise JobCancelled()
-                if skip_finished:
-                    self._pull_missing_outputs(source.source_id)
-                if skip_finished and _source_finished(
-                    source, ws=self._ws, job_id=job.job_id,
-                ):
-                    continue
-                in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
-                proxied = maybe_normalize_upload(in_path)
-                new_name = os.path.basename(proxied)
-                if new_name != source.filename:
-                    source.filename = new_name
-                    self._persist(job)
-                in_path = proxied
-                out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
-                resume = getattr(self._runner, "resume_run", None)
-                if skip_finished and callable(resume) and source.runpod_job_id:
-                    try:
-                        result = resume(
-                            in_path, count=job.count, out_dir=out_dir,
-                            source_id=source.source_id, on_event=on_event,
-                            allow_creative_escalate=job.allow_creative_escalate,
-                            quality_mode=job.quality_mode,
-                            cancel_token=token,
-                            runpod_job_id=source.runpod_job_id,
-                        )
-                    except Exception as exc:
-                        print(
-                            f"job {job.job_id} resume {source.runpod_job_id} failed "
-                            f"({type(exc).__name__}: {exc}); re-running source",
-                            flush=True,
-                        )
-                        result = self._runner.run(
-                            in_path, count=job.count, out_dir=out_dir,
-                            source_id=source.source_id, on_event=on_event,
-                            allow_creative_escalate=job.allow_creative_escalate,
-                            quality_mode=job.quality_mode,
-                            cancel_token=token,
-                        )
-                else:
-                    result = self._runner.run(
-                        in_path, count=job.count, out_dir=out_dir,
-                        source_id=source.source_id, on_event=on_event,
-                        allow_creative_escalate=job.allow_creative_escalate,
-                        quality_mode=job.quality_mode,
-                        cancel_token=token,
-                    )
-                source.variants = [
-                    VariantInfo(
-                        source_id=source.source_id, index=v.index, filename=v.filename,
-                        status=v.status, quality=v.quality,
-                        uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
-                        uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
-                        preset_used=v.preset_used, strength_final=v.strength_final,
-                        escalated=v.escalated, platform_result=v.platform_result,
-                    )
-                    for v in result.variants
-                ]
-                source.runpod_job_id = None
-                self._persist(job)
+            with self._fast_slot(job.quality_mode):
+                self._render_job_sources(job, token, skip_finished=skip_finished)
         except JobCancelled:
             job.error = USER_CANCEL_MSG
         except Exception as exc:
@@ -511,6 +450,101 @@ class JobStore:
                 self._refresh_copy_error(job)
             self._persist(job)
             self._done[job.job_id].set()
+
+    def _render_job_sources(self, job: Job, token: CancelToken, *, skip_finished: bool) -> None:
+        def on_event(e: VariantEvent) -> None:
+            job.events.append(e)
+            if token.runpod_job_id:
+                for source in job.sources:
+                    if source.source_id == e.source_id:
+                        source.runpod_job_id = token.runpod_job_id
+                        break
+            # Record finished variants immediately so polling clients (and
+            # proxies that buffer SSE) can see progress before the source ends.
+            if e.state == "done" and e.filename and e.status and e.quality is not None:
+                for source in job.sources:
+                    if source.source_id != e.source_id:
+                        continue
+                    if any(v.index == e.index for v in source.variants):
+                        break
+                    source.variants.append(VariantInfo(
+                        source_id=e.source_id, index=e.index, filename=e.filename,
+                        status=e.status, quality=e.quality,
+                        uniqueness=e.uniqueness, uniqueness_status=e.uniqueness_status,
+                        uniqueness_metric=e.uniqueness_metric,
+                        uniqueness_target=e.uniqueness_target,
+                        preset_used=e.preset_used, strength_final=e.strength_final,
+                        escalated=e.escalated, platform_result=e.platform_result,
+                    ))
+                    break
+            if e.state == "done" or token.runpod_job_id:
+                self._persist(job)
+
+        for source in job.sources:
+            if token.is_set():
+                raise JobCancelled()
+            if skip_finished:
+                self._pull_missing_outputs(source.source_id)
+            if skip_finished and _source_finished(
+                source, ws=self._ws, job_id=job.job_id,
+            ):
+                continue
+            in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
+            proxied = maybe_normalize_upload(in_path)
+            new_name = os.path.basename(proxied)
+            if new_name != source.filename:
+                source.filename = new_name
+                self._persist(job)
+            in_path = proxied
+            out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
+            resume = getattr(self._runner, "resume_run", None)
+            if skip_finished and callable(resume) and source.runpod_job_id:
+                try:
+                    result = resume(
+                        in_path, count=job.count, out_dir=out_dir,
+                        source_id=source.source_id, on_event=on_event,
+                        allow_creative_escalate=job.allow_creative_escalate,
+                        quality_mode=job.quality_mode,
+                        cancel_token=token,
+                        runpod_job_id=source.runpod_job_id,
+                        **self._workspace_runner_kw(),
+                    )
+                except Exception as exc:
+                    print(
+                        f"job {job.job_id} resume {source.runpod_job_id} failed "
+                        f"({type(exc).__name__}: {exc}); re-running source",
+                        flush=True,
+                    )
+                    result = self._runner.run(
+                        in_path, count=job.count, out_dir=out_dir,
+                        source_id=source.source_id, on_event=on_event,
+                        allow_creative_escalate=job.allow_creative_escalate,
+                        quality_mode=job.quality_mode,
+                        cancel_token=token,
+                        **self._workspace_runner_kw(),
+                    )
+            else:
+                result = self._runner.run(
+                    in_path, count=job.count, out_dir=out_dir,
+                    source_id=source.source_id, on_event=on_event,
+                    allow_creative_escalate=job.allow_creative_escalate,
+                    quality_mode=job.quality_mode,
+                    cancel_token=token,
+                    **self._workspace_runner_kw(),
+                )
+            source.variants = [
+                VariantInfo(
+                    source_id=source.source_id, index=v.index, filename=v.filename,
+                    status=v.status, quality=v.quality,
+                    uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
+                    uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
+                    preset_used=v.preset_used, strength_final=v.strength_final,
+                    escalated=v.escalated, platform_result=v.platform_result,
+                )
+                for v in result.variants
+            ]
+            source.runpod_job_id = None
+            self._persist(job)
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
@@ -743,12 +777,14 @@ class JobStore:
         job = self._jobs.get(job_id)
         allow_creative_escalate = job.allow_creative_escalate if job else True
         quality_mode = job.quality_mode if job else "fast"
-        result = self._runner.run(
-            self._ws.source_in_path(job_id, source_id, source.filename),
-            count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
-            allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
-        )
+        with self._fast_slot(quality_mode):
+            result = self._runner.run(
+                self._ws.source_in_path(job_id, source_id, source.filename),
+                count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
+                allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode,
+                **self._workspace_runner_kw(),
+            )
         for v in result.variants:
             source.variants.append(VariantInfo(
                 source_id=source_id, index=start + v.index, filename=v.filename,
