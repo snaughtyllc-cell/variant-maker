@@ -448,19 +448,27 @@ def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head")["video"]
         assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
-        assert 40 - 1e-9 <= v["grain"] <= 52 + 1e-9
+        assert 28 - 1e-9 <= v["grain"] <= 34 + 1e-9
     strong = sample(STRONG, seed, shot="talking_head")["video"]
     assert 0.85 - 1e-9 <= strong["rebuild_scale"] <= 0.94 + 1e-9
-    assert 48 - 1e-9 <= strong["grain"] <= 60 + 1e-9
+    assert 32 - 1e-9 <= strong["grain"] <= 38 + 1e-9
 
 
-def test_talking_head_grain_survives_budget_shrink():
-    """Encode-first shrink must not pin talking-head uniqueness grain at strong.lo."""
+def test_talking_head_grain_is_vmaf_shrinkable():
+    """Talking-head uniqueness grain stays in the shot band (not preset.lo, not 40–52).
+
+    Look-overspend must not collapse it to shot.lo — that pinned every copy at 28
+    and made VMAF strength a no-op. The band itself is the VMAF ceiling.
+    """
+    vals = []
     for s in SEEDS[:80]:
         mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
         full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
-        assert 40 - 1e-9 <= mild <= 52 + 1e-9
-        assert abs(mild - full) < 1e-9
+        assert 28 - 1e-9 <= mild <= 34 + 1e-9
+        assert 28 - 1e-9 <= full <= 34 + 1e-9
+        vals.append(full)
+    assert min(vals) < max(vals)
+    assert max(vals) > 28 + 0.2
     plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
     head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]
     assert head > plain + 1e-9

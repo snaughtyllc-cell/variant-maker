@@ -22,9 +22,11 @@ SHOT_MOTION = "motion"
 # Talking-head on the uniqueness canvas (576×1024) does NOT see reconstructive
 # rebuild — AQMTp at 0.25–0.31 still scored 20–22 bits, and a local sweep of
 # rebuild 0.27 matched identity encode (8 bits). Grain is what 576 scores:
-# crop 0.86 + noise=alls=32/40/56 → 28/31/38 bits (44/48/59% UI) under the
-# 12M cap. Rotate is skipped (captions go crooked). Crop/warp stay on the
-# preset. Gate stays 24/24.
+# crop 0.86 + noise=alls=32/40/56 → 28/31/38 bits under the 12M cap.
+# Grain 40–52 hit 37–39 bits (~58–61% UI) on lab but VMAF ~80 (best_effort,
+# harvest skip). Band is 28–34 so VMAF can still clear 90. Shrink does not
+# collapse uniqueness grain to shot.lo when look already spent the budget.
+# No extra rotate (captions go crooked). Crop/warp stay on the preset. Gate 24/24.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -34,9 +36,9 @@ _REBUILD_FOR_SHOT = {
     ("strong", SHOT_MOTION): Range(0.67, 0.80),
 }
 _GRAIN_FOR_SHOT = {
-    ("subtle", SHOT_TALKING_HEAD): Range(20, 28),
-    ("medium", SHOT_TALKING_HEAD): Range(40, 52),
-    ("strong", SHOT_TALKING_HEAD): Range(48, 60),
+    ("subtle", SHOT_TALKING_HEAD): Range(18, 26),
+    ("medium", SHOT_TALKING_HEAD): Range(28, 34),
+    ("strong", SHOT_TALKING_HEAD): Range(32, 38),
 }
 
 

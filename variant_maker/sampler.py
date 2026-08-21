@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+from dataclasses import replace
 
 from .presets import Preset, Range
 from .shot import grain_range_for_shot, rebuild_range_for_shot
@@ -233,30 +234,37 @@ def sample(
     raw["rebuild_scale"] = _remap_range(
         raw["rebuild_scale"], preset.rebuild_scale, rebuild_range_for_shot(preset, shot),
     )
-    grain_draw = raw["grain"]
+    work = preset
+    shot_grain = grain_range_for_shot(preset, shot)
+    if shot_grain is not None:
+        # Remap onto the shot band, then budget/VMAF shrink toward *shot.lo*
+        # (not preset.lo). Grain 40–52 scored 55–65% uniqueness but VMAF ~80
+        # and best_effort — harvest skipped those files. Shrink must be able
+        # to walk grain down so the quality guard can still fire.
+        raw["grain"] = _remap_range(raw["grain"], preset.grain, shot_grain)
+        work = replace(preset, grain=shot_grain)
 
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must
     # not pull keep to 1.0 or rebuild to identity. Warp shrinks with look.
-    spent = _spent_on(raw, preset, _ENCODE_AXES | _LOOK_AXES)
+    spent = _spent_on(raw, work, _ENCODE_AXES | _LOOK_AXES)
     if spent > budget and spent > 0:
-        look_spent = _spent_on(raw, preset, _LOOK_AXES)
+        look_spent = _spent_on(raw, work, _LOOK_AXES)
         leftover = budget - look_spent
+        enc = _ENCODE_AXES
+        if shot_grain is not None:
+            # Uniqueness grain is the talking-head lever; don't collapse it to
+            # shot.lo just because color/warp already spent the look budget.
+            enc = _ENCODE_AXES - {"grain"}
         if leftover >= 0:
-            enc_spent = _spent_on(raw, preset, _ENCODE_AXES)
+            enc_spent = _spent_on(raw, work, enc)
             if enc_spent > 0:
-                _shrink_toward_calm(raw, preset, _ENCODE_AXES, leftover / enc_spent)
+                _shrink_toward_calm(raw, work, enc, leftover / enc_spent)
         else:
-            _shrink_toward_calm(raw, preset, _ENCODE_AXES, 0.0)
-            look_spent = _spent_on(raw, preset, _LOOK_AXES)
+            _shrink_toward_calm(raw, work, enc, 0.0)
+            look_spent = _spent_on(raw, work, _LOOK_AXES)
             if look_spent > 0:
-                _shrink_toward_calm(raw, preset, _LOOK_AXES, budget / look_spent)
-
-    shot_grain = grain_range_for_shot(preset, shot)
-    if shot_grain is not None:
-        # Remap the *pre-shrink* draw onto the shot grain band so encode-first
-        # budget shrink cannot pin talking-head uniqueness grain at strong.lo.
-        raw["grain"] = _remap_range(grain_draw, preset.grain, shot_grain)
+                _shrink_toward_calm(raw, work, _LOOK_AXES, budget / look_spent)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
