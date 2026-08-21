@@ -438,19 +438,33 @@ def test_shot_none_matches_omitted_shot():
 
 
 def test_talking_head_uses_heavier_rebuild_keeps_crop():
-    """Look-first: a still face gets strong's rebuild band on medium. Crop stays."""
+    """Look-first: a still face rebuilds smaller than 576 so the canvas can see it. Crop stays."""
     seed = derive_seed(11, 5)
     plain = sample(MEDIUM, seed)
     head = sample(MEDIUM, seed, shot="talking_head")
     assert head["video"]["crop_keep"] == plain["video"]["crop_keep"]
-    assert 0.50 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.66 + 1e-9
+    assert 0.32 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.48 + 1e-9
     assert head["video"]["rebuild_scale"] < plain["video"]["rebuild_scale"] + 1e-9
     for s in SEEDS[:80]:
-        scale = sample(MEDIUM, s, shot="talking_head")["video"]["rebuild_scale"]
-        assert 0.50 - 1e-9 <= scale <= 0.66 + 1e-9
-    strong = sample(STRONG, seed, shot="talking_head")["video"]["rebuild_scale"]
-    assert 0.38 - 1e-9 <= strong <= 0.49 + 1e-9
-    assert strong < 0.50
+        v = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert 0.32 - 1e-9 <= v["rebuild_scale"] <= 0.48 + 1e-9
+        assert 10 - 1e-9 <= v["grain"] <= 16 + 1e-9
+    strong = sample(STRONG, seed, shot="talking_head")["video"]
+    assert 0.22 - 1e-9 <= strong["rebuild_scale"] <= 0.31 + 1e-9
+    assert 14 - 1e-9 <= strong["grain"] <= 20 + 1e-9
+    assert strong["rebuild_scale"] < 0.32
+
+
+def test_talking_head_grain_survives_budget_shrink():
+    """Encode-first shrink must not pin talking-head uniqueness grain at strong.lo."""
+    for s in SEEDS[:80]:
+        mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
+        full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
+        assert 10 - 1e-9 <= mild <= 16 + 1e-9
+        assert abs(mild - full) < 1e-9
+    plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
+    head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]
+    assert head > plain + 1e-9
 
 
 def test_motion_uses_gentler_rebuild():
@@ -460,3 +474,12 @@ def test_motion_uses_gentler_rebuild():
     for s in SEEDS[:40]:
         scale = sample(STRONG, s, shot="motion")["video"]["rebuild_scale"]
         assert 0.67 - 1e-9 <= scale <= 0.80 + 1e-9
+
+
+def test_motion_keeps_budgeted_grain():
+    """Motion already scores from movement; don't remap grain off the preset."""
+    s = derive_seed(42, 3)
+    plain = sample(MEDIUM, s)
+    moved = sample(MEDIUM, s, shot="motion")
+    assert moved["video"]["grain"] == plain["video"]["grain"]
+    assert moved["video"]["crop_keep"] == plain["video"]["crop_keep"]

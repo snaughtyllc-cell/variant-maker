@@ -38,3 +38,16 @@ def test_classify_missing_file_is_neutral():
 def test_gate_stays_twenty_four():
     assert TARGET_BITS == 24
     assert shot.TALKING_HEAD_SELF_BITS == 24
+
+
+def test_talking_head_grain_band_is_heavier_than_preset():
+    from variant_maker.presets import MEDIUM, STRONG
+
+    med = shot.grain_range_for_shot(MEDIUM, "talking_head")
+    assert med is not None
+    assert (med.lo, med.hi) == (10, 16)
+    strong = shot.grain_range_for_shot(STRONG, "talking_head")
+    assert strong is not None
+    assert (strong.lo, strong.hi) == (14, 20)
+    assert shot.grain_range_for_shot(MEDIUM, "motion") is None
+    assert shot.grain_range_for_shot(MEDIUM, None) is None

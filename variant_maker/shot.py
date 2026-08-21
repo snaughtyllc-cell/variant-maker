@@ -19,14 +19,21 @@ SHOT_TALKING_HEAD = "talking_head"
 SHOT_MOTION = "motion"
 
 # Heavier rebuild for still faces; gentler for clips that already score from motion.
-# Crop/grain/warp stay on the preset. Gate stays 24/24.
+# Lab talking-head (AQMTp) at 0.41–0.47 still scored 17–18 bits — same as source
+# self-bits. 576×1024 still sees the face. Go lower, and add grain the probe can see.
+# Crop/warp stay on the preset. Gate stays 24/24.
 _REBUILD_FOR_SHOT = {
-    ("subtle", SHOT_TALKING_HEAD): Range(0.80, 0.90),
+    ("subtle", SHOT_TALKING_HEAD): Range(0.70, 0.85),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
-    ("medium", SHOT_TALKING_HEAD): Range(0.50, 0.66),
+    ("medium", SHOT_TALKING_HEAD): Range(0.32, 0.48),
     ("medium", SHOT_MOTION): Range(0.78, 0.90),
-    ("strong", SHOT_TALKING_HEAD): Range(0.38, 0.49),
+    ("strong", SHOT_TALKING_HEAD): Range(0.22, 0.31),
     ("strong", SHOT_MOTION): Range(0.67, 0.80),
+}
+_GRAIN_FOR_SHOT = {
+    ("subtle", SHOT_TALKING_HEAD): Range(5, 10),
+    ("medium", SHOT_TALKING_HEAD): Range(10, 16),
+    ("strong", SHOT_TALKING_HEAD): Range(14, 20),
 }
 
 
@@ -35,6 +42,13 @@ def rebuild_range_for_shot(preset, shot: str | None) -> Range:
     if not shot:
         return preset.rebuild_scale
     return _REBUILD_FOR_SHOT.get((preset.name, shot), preset.rebuild_scale)
+
+
+def grain_range_for_shot(preset, shot: str | None) -> Range | None:
+    """Talking-head grain band, or None to keep the budgeted draw."""
+    if not shot:
+        return None
+    return _GRAIN_FOR_SHOT.get((preset.name, shot))
 
 
 def _duration(path: str, given: float | None) -> float:

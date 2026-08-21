@@ -23,7 +23,7 @@ import hashlib
 import random
 
 from .presets import Preset, Range
-from .shot import rebuild_range_for_shot
+from .shot import grain_range_for_shot, rebuild_range_for_shot
 
 # Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
 _MIN_REMAINING_S = 0.05
@@ -233,6 +233,7 @@ def sample(
     raw["rebuild_scale"] = _remap_range(
         raw["rebuild_scale"], preset.rebuild_scale, rebuild_range_for_shot(preset, shot),
     )
+    grain_draw = raw["grain"]
 
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must
@@ -250,6 +251,12 @@ def sample(
             look_spent = _spent_on(raw, preset, _LOOK_AXES)
             if look_spent > 0:
                 _shrink_toward_calm(raw, preset, _LOOK_AXES, budget / look_spent)
+
+    shot_grain = grain_range_for_shot(preset, shot)
+    if shot_grain is not None:
+        # Remap the *pre-shrink* draw onto the shot grain band so encode-first
+        # budget shrink cannot pin talking-head uniqueness grain at strong.lo.
+        raw["grain"] = _remap_range(grain_draw, preset.grain, shot_grain)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats

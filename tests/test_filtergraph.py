@@ -214,6 +214,17 @@ def test_even_rebuild_size_keeps_ar_even_never_identity():
     assert strong[0] == 540
 
 
+def test_talking_head_rebuild_is_below_uniqueness_canvas():
+    """0.41 still matched source self-bits; the 576 canvas must see a smaller intermediate."""
+    from variant_maker.uniqueness import SSIM_WIDTH
+
+    w, _h = filtergraph.even_rebuild_size(1080, 1920, 0.32)
+    assert w < SSIM_WIDTH
+    assert w % 2 == 0
+    lo = filtergraph.even_rebuild_size(1080, 1920, 0.22)
+    assert lo[0] < w
+
+
 def test_warp_emits_lenscorrection():
     p = make_params(video={"warp_k1": 0.008})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)
