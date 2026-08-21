@@ -17,7 +17,7 @@ Studio is live at https://varyforge-studio-production.up.railway.app
 
 ## Operator setup
 
-First operator path (Connect Drive, Team invites, Fast 20, Send to Drive) is
+VA sheet (login, Drive, Generate Fast, uniqueness % vs shortfall) is
 [`operator-onboarding.md`](operator-onboarding.md). This page stays the
 Railway / RunPod runbook.
 

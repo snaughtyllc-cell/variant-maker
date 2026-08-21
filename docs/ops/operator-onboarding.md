@@ -1,66 +1,66 @@
-# Operator onboarding — VaryForge Studio
+# VaryForge Studio — VA sheet
 
-First paid day: Connect Drive, invite a VA on **Team**, Generate **Fast 20**, **Send to Drive**. You do not need a call for that.
+Studio: https://varyforge-studio-production.up.railway.app
 
-Studio URL: https://varyforge-studio-production.up.railway.app
+Forward this. Invite-only; there is no public signup.
 
-## Invite-only
+## Cheat sheet
 
-VaryForge is invite-only. There is no public signup.
+1. Open the Studio URL. Sign in with the **invited email** plus a password you choose (first visit **sets** it, 8+ characters) or **Continue with Google** with that same email.
+2. **Drive** → **Connect Google**, then **add a destination** (paste a Drive folder link). **Send to Drive** needs a saved folder.
+3. Studio → drop a clip → **Generate Fast**. Fast CPU is the daily pack (usual **20**). Stay on the page until tiles show.
+4. **Uniqueness %** is the small badge on each **Gallery** tile (higher = more different from the original). Look-first uniqueness is live on Fast. Talking-head medium typically **55–65%** with high VMAF; motion often **~80%**. The pass gate is still **24 bits (37.5%)**.
+5. Yellow **“N variants fell short after auto-retry”** is a quality/VMAF fail (`best_effort`), not the uniqueness number. A 55–65% tile is a normal Fast pack. Do not treat that banner as a uniqueness miss.
+6. **`esc`** on a tile is one stronger uniqueness pass, not a fail.
+7. Skip **HQ** unless asked. HQ is Real-ESRGAN on the 4090, one-at-a-time, optional/slow.
+8. Unlabeled Gallery clips count as **pass**. Mark **Duplicate rejected** only when the real platform said duplicate.
 
-- **New workspace** comes from the **site admin**. That is your empty studio (your gallery, your Drive).
-- **Team** (this studio) is how **you** add VAs. That invite is **join this studio** — they share your gallery, captions, and Drive.
-- VAs do **not** get a new empty studio. Do not ask them to “sign up.”
+## Login
 
-You cannot mint another empty workspace from Team. Ask the site admin.
+Use the invited email. Uninvited emails get “ask the operator to add you.” You cannot sign up.
 
-## Sign in
-
-Open the Studio URL. Use the invited email.
-
-- **Email + password** — first visit **sets** that password (8+ characters). Later visits use the same one.
-- Or **Continue with Google** with that same invited email.
-
-Uninvited emails get “ask the operator to add you.”
+Drive Connect is **not** Studio login. If you use Google for both, connect both: sign-in, then Drive → Connect Google.
 
 ## Drive
 
-Settings → **Drive** → **Connect Google**. That consent is **Drive**, not Studio login — connect both if you use Google for sign-in.
+Settings → **Drive** → **Connect Google** → add a destination folder. Workflows and Send to Drive use those saved folders. No folder → nothing to export to.
 
-Then **add a destination**: paste a Drive folder link. Workflows and **Send to Drive** use those saved folders. No folder saved → nothing to export to.
-
-Drive Connect is per studio. Your VAs in this studio share it.
+Drive is per studio. VAs on a **join** invite share the operator’s gallery, captions, and Drive.
 
 ## Fast vs HQ
 
-On Studio **Generate** (Advanced → Quality):
+On Studio **Generate** (Advanced → Quality). Leave uniqueness and quality checks on.
 
-| | **Fast** | **HQ** |
+| | **Fast** (what VAs use) | **HQ** (optional) |
 |---|---|---|
-| Use for | Daily packs (usual **20**) | Optional hero takes (1–3) |
-| How | CPU, libx264 | GPU, 1080 reconstructive upscale |
-| Feel | Minutes for a 20, not seconds | Slower; one variant at a time |
+| Use for | Daily packs (usual **20**) | Hero takes (1–3) |
+| How | CPU | Real-ESRGAN on the 4090, one-at-a-time |
+| Feel | Minutes for a 20, not seconds | Slow; do not run a 20 |
 
-Stay on **Fast** unless you specifically want HQ. Quality checks (VMAF) and uniqueness stay on for both — leave them.
+Stay on **Fast**.
 
-## Workflow vs one-off Generate
+## Uniqueness % vs shortfall
 
-- **Workflows** (Drive inbox → output folder) can sit in the background. That path is allowed to be slow.
-- **Waiting** is the interactive 1–2 clips (or a Fast 20) on Studio **Generate**. Stay on that page until tiles show; Gallery stays empty until a variant finishes.
-- Do not expect Telegram-bot seconds.
+- Read uniqueness on the **small % badge** on each Gallery tile. Open a tile for the uniqueness meter (typical medium ~55–65%; pass line ~38%).
+- The yellow Gallery banner **“N variants fell short after auto-retry”** is a **quality/VMAF** fail after auto-retry (`best_effort`). It is **not** the uniqueness score. Ignore it when you are checking uniqueness %.
+- Regenerating fills a quality shortfall. It does not mean the uniqueness badge failed.
 
-## Gallery labels
+## Team (operators inviting VAs)
 
-VaryForge is **not** a detector. The real platform is the oracle.
+- **Team** invite = **join this studio** (same as Admin **Join my workspace**). They land in your gallery on purpose.
+- **New workspace** is site Admin only — an empty studio + their own Drive Connect. VAs do **not** get this. Do not ask them to “sign up.”
 
-- Unlabeled clips count as **pass**. You do not have to click Passed on every file.
-- Mark **Duplicate rejected** only when the real platform said duplicate.
-- **Flagged** comes later — same rule: only when the real platform said so.
+## Workflow vs Generate
 
-## First-day checklist
+- **Waiting** = Studio **Generate** (1–2 clips or a Fast 20). Stay until tiles show; Gallery stays empty until a variant finishes.
+- **Workflows** (Drive inbox → output folder) can sit in the background.
 
-1. Sign in at the Studio URL (invited email + password or Google).
-2. Drive → Connect Google → add a destination folder.
-3. **Team** → invite VA (join this studio).
-4. Studio → Generate **Fast 20**.
-5. Gallery → **Send to Drive**.
+## First day
+
+Operators: **Team** → invite VA (join this studio). Then the VA:
+
+1. Signs in (invited email + password or Google).
+2. Drive → Connect Google → add a destination.
+3. Generate **Fast 20**.
+4. Reads uniqueness % on Gallery tiles. Ignores yellow shortfall when reading that %.
+5. Sends to Drive.
