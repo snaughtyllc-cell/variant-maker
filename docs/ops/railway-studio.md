@@ -161,8 +161,9 @@ VARIANT_DROP_SHEET_ID=<spreadsheet id from the sheet URL>
 ```
 
 If unset, Ensure sheet creates a spreadsheet and stores the id on the volume
-(`{DATA_DIR}/drive/drop_sheet.json`). Pin the id so every deploy uses the same
-sheet. Enable the **Google Sheets API** on the same Google Cloud project as
-Drive OAuth.
+(`{DATA_DIR}/tenants/<workspace_id>/drive/drop_sheet.json`). Pin the id only
+for a single company sheet; leave it unset so each workspace keeps its own
+ledger after Connect Google. Enable the **Google Sheets API** on the same
+Google Cloud project as Drive OAuth.
 
 This is not a posting tracker (drops board is a later spec).

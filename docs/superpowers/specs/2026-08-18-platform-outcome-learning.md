@@ -18,7 +18,7 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 | Piece | Where | Gap |
 |---|---|---|
 | `platform_result` on each variant (`passed` / `duplicate_reject` / `flagged` / `unknown` / `null`) | Manifest, Gallery variant sheet, `POST /api/variants/{source_id}/{index}/platform-result` | Manual, per-clip; unlabeled = pass so VAs skip Passed |
-| Drop Ledger Google Sheet | `variant_maker/server/drop_ledger.py`, `/api/drop-ledger/*`, Studio **Settings → Drive → Drop Ledger** | 12a UI shipped: status + Ensure + Sync + open spreadsheet URL. VAs still don’t live in Sheets |
+| Drop Ledger Google Sheet | `variant_maker/server/drop_ledger.py`, `/api/drop-ledger/*`, Studio **Settings → Drive → Drop Ledger** | 12a UI shipped: status + **Ensure sheet** + **Sync from Studio** + **Open sheet**. VAs still don’t live in Sheets |
 | Drive export | Gallery → Send to Drive | Folder is the drop tray; **no automatic match** from “this file in the folder got flagged” back to the variant row |
 | Uniqueness / seed / strength on the ledger row | Sheet columns | Unused for bias until Phase 12 reads outcomes |
 
@@ -45,7 +45,7 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 
 ## Suggested slices (when we build)
 
-1. ~~Studio: Drop Ledger status + **Ensure / Sync** (Drive OAuth is already live).~~ **12a shipped** — Settings → Drive panel. `VARIANT_DROP_SHEET_ID` still documented in Drive OAuth ops.
+1. ~~Studio: Drop Ledger status + **Ensure sheet / Sync from Studio** (Drive OAuth is already live).~~ **12a shipped** — Settings → Drive panel. `VARIANT_DROP_SHEET_ID` still documented in Railway + Drive OAuth ops.
 2. ~~Variant sheet: keep Passed / Duplicate rejected; add **Flagged**; treat empty as pass.~~ **12a shipped**
 3. On Send to Drive success, write `drop_url` / Drive file id onto the ledger row. **(12b)**
 4. Optional: “mark from folder” — pick a Drive file name, set `flagged`. **(12b)**

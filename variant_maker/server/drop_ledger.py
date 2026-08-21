@@ -433,7 +433,10 @@ def persist_platform_result(
     if not found:
         return False
     sync_rows(sheets, spreadsheet_id, incoming)
-    return True
+    return update_platform_result_cell(
+        sheets, spreadsheet_id,
+        job_id=job_id, source_id=source_id, index=index, result=result,
+    )
 
 
 def update_post_url_cell(

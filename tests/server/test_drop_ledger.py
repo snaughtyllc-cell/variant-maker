@@ -149,6 +149,16 @@ def test_persist_platform_result_inserts_when_row_missing():
     assert values[1][_COL_PLATFORM()] == "flagged"
 
 
+def test_persist_platform_result_false_when_row_unknown():
+    sheets = FakeSheets()
+    sid = ensure_ledger(sheets, None)
+    assert persist_platform_result(
+        sheets, sid,
+        job_id="j1", source_id="s1", index=1, result="flagged",
+        rows=[],
+    ) is False
+
+
 def _COL_PLATFORM() -> int:
     return HEADERS.index("platform_result")
 

@@ -17,6 +17,7 @@ export function DropLedgerPanel() {
 
   async function refresh() {
     setLoading(true);
+    setError(null);
     try {
       const next = await getDropLedgerStatus();
       setStatus(next);

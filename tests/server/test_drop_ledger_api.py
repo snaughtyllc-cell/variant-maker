@@ -39,6 +39,26 @@ def _seed_manifest(ws_root, job_id: str, source_id: str, n: int = 2) -> None:
     }))
 
 
+def test_drop_ledger_ensure_creates_and_is_idempotent(tmp_path):
+    sheets = FakeSheets()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    client = TestClient(create_app(store, sheets=sheets, sa_json_path="", hydrate=True))
+
+    first = client.post("/api/drop-ledger/ensure")
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["created"] is True
+    assert body["spreadsheet_id"]
+    assert body["spreadsheet_url"].startswith("https://docs.google.com/spreadsheets/d/")
+    assert sheets.created_titles == ["VaryForge Drop Ledger"]
+    assert sheets.get_values(body["spreadsheet_id"], "A:U")[0] == list(HEADERS)
+
+    second = client.post("/api/drop-ledger/ensure").json()
+    assert second["created"] is False
+    assert second["spreadsheet_id"] == body["spreadsheet_id"]
+    assert len(sheets.created_titles) == 1
+
+
 def test_drop_ledger_sync_seeds_rows(tmp_path):
     sheets = FakeSheets()
     store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
@@ -173,7 +193,7 @@ def test_drop_ledger_status_uses_env_sheet_id(tmp_path):
     status = client.get("/api/drop-ledger/status").json()
     assert status["configured"] is True
     assert status["spreadsheet_id"] == sid
-    assert status["spreadsheet_url"].endswith(sid)
+    assert f"/d/{sid}/" in status["spreadsheet_url"]
 
 
 def test_post_url_writes_through_to_sheet(tmp_path):
