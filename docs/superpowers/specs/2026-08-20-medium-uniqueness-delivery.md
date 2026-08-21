@@ -48,8 +48,8 @@ Raising `TARGET_BITS` / `MIN_PEER_BITS` to 32 previously escalated entire Fast
   faces.
 - `crop_keep` is **unbudgeted** (same class as resample / crop offset). Same seed
   → same keep at strength 0.25, 1.0, or 1.8.
-- Medium crop `0.86–0.94`, warp `±0.012`. Strong stays `0.80–0.92` so escalate
-  can still punch in harder.
+- Medium crop `0.74–0.82` (was 0.86–0.94; talking-head keep=0.858 still scored
+  ~38%). Strong `0.66–0.74` so escalate is always tighter.
 - Gate stays **24 vs source / 24 vs peers**. Escalate stays on. VMAF stays on.
 
 ## Copy
