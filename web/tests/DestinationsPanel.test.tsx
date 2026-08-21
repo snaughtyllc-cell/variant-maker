@@ -44,14 +44,14 @@ describe("DestinationsPanel empty copy", () => {
     vi.mocked(getDriveStatus).mockResolvedValue(READY);
     render(<DestinationsPanel />);
     expect(await screen.findByText(/no destinations yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/Workflows and Send to Drive use it/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gallery Send to Drive uses it/i)).toBeInTheDocument();
   });
 
   it("connect state tells operators to add a destination folder", async () => {
     vi.mocked(getDriveStatus).mockResolvedValue(NOT_CONNECTED);
     render(<DestinationsPanel />);
     expect(
-      await screen.findByText(/Connect Google, then add a destination folder/i),
+      await screen.findByText(/Connect Google once for this studio, then add a destination folder/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connect Google" })).toHaveAttribute(
       "href",

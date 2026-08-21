@@ -27,6 +27,9 @@ describe("shortfallCopy", () => {
 
   it("does not send operators to Diagnostics when variants failed", () => {
     const msg = shortfallCopy(base({ job_state: "done", failed: 2, shortfall: 2 }));
+    expect(msg).toMatch(/fell short after auto-retry/i);
+    expect(msg).toMatch(/VMAF/i);
+    expect(msg).toMatch(/not the uniqueness/i);
     expect(msg).toMatch(/regenerat/i);
     expect(msg).not.toMatch(/Diagnostics/i);
   });

@@ -16,6 +16,10 @@ export function pct01(v: number): number {
   return Math.round(Math.min(1, Math.max(0, v)) * 100);
 }
 
+/** Hover on the small Gallery tile %. Not the yellow VMAF shortfall banner. */
+export const UNIQUENESS_BADGE_TITLE =
+  "Uniqueness vs the original (higher = more different). Gate stays 24/24 (~38% floor). Medium talking-head often scores higher.";
+
 /** Short gallery badge. Not a quality fail. */
 export const ESCALATED_BADGE = "esc";
 

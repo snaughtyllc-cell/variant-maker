@@ -30,7 +30,7 @@ beforeEach(() => {
 describe("DriveLoginNote", () => {
   it("tells operators to Connect Google and add a destination", () => {
     render(<DriveLoginNote />);
-    expect(screen.getByText(/Connect Google/i)).toBeInTheDocument();
+    expect(screen.getByText(/Connect Google once for this studio/i)).toBeInTheDocument();
     expect(screen.getByText(/destination folder/i)).toBeInTheDocument();
     expect(screen.getByText(/Send to Drive/i)).toBeInTheDocument();
   });

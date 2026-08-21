@@ -17,9 +17,9 @@ Studio is live at https://varyforge-studio-production.up.railway.app
 
 ## Operator setup
 
-VA sheet (login, Drive, Generate Fast, uniqueness % vs shortfall) is
-[`operator-onboarding.md`](operator-onboarding.md). This page stays the
-Railway / RunPod runbook.
+First operator path (Connect Drive, Team invites, Fast 20, uniqueness % vs
+VMAF shortfall, Send to Drive) is [`operator-onboarding.md`](operator-onboarding.md).
+This page stays the Railway / RunPod runbook.
 
 Until RunPod + object-store env is set, Studio still works: the start script
 falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is

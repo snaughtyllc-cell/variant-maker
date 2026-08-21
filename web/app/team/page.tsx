@@ -122,7 +122,9 @@ export default function TeamPage() {
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
           Invite VAs here — they join{" "}
           <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{studioName}</strong>
-          {" "}(gallery, captions, Drive), not a new empty studio.
+          {" "}(gallery, captions, Drive), not a new empty studio. Daily packs are
+          Generate Fast (CPU). The small Gallery tile % is uniqueness (~38% floor).
+          HQ is reconstructive GPU — slower, not the daily 20.
         </div>
       </div>
 
@@ -177,7 +179,7 @@ export default function TeamPage() {
             <div style={{ padding: 14, fontSize: 12.5, color: "var(--color-muted)" }}>Loading…</div>
           ) : (team?.members ?? []).length === 0 ? (
             <div style={{ padding: 14, fontSize: 12.5, color: "var(--color-muted)" }}>
-              No members yet. Invite VAs here — they join this studio.
+              No members yet. Invite VAs here — they join this studio, then Generate Fast 20 and Send to Drive.
             </div>
           ) : (
             (team?.members ?? []).map((m) => {
@@ -278,6 +280,8 @@ export default function TeamPage() {
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
           They sign in at this Studio URL with that email plus a password they choose, or with Google.
           First password sign-in sets it. This is a join invite — they land in your studio, not a new one.
+          Tell them: Generate Fast 20, read uniqueness on the tile %, Send to Drive.
+          Yellow “fell short after auto-retry” is VMAF, not uniqueness.
         </div>
 
         <div
