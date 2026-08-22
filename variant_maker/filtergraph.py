@@ -53,8 +53,8 @@ _CHROMA_CLOUD_FACTOR = 9
 _CHROMA_CLOUD_STRENGTH_MAX = 7
 _CHROMA_CLOUD_BLUR = 4.0
 # 720 talking-head luma dust. Cap leftover 14–20 (`softdust815a` c0s 15–17
-# read as a little much). Luma-only — alls= would restack chroma snow.
-_LUMA_DUST_MAX = 12
+# read as a little much) at 13 so we cannot redraw that pack. Luma-only.
+_LUMA_DUST_MAX = 13
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 

@@ -42,8 +42,10 @@ SHOT_MOTION = "motion"
 # those, but live SaveInta still read as chroma. Band is 4–7; filtergraph
 # caps at 7 and gblurs sigma=4. Soft cloud on SaveInta (`softestd3ce5`)
 # landed 24/24 bits (38%) — look approved, uniqueness too low. 720 luma
-# dust 14–20 (c0s 15–17 on `softdust815a`) read as a little much. Band is
-# 8–12; filtergraph caps leftover 14–20. Luma-only, not stacked c1s.
+# dust 14–20 (c0s 15–17 on `softdust815a`) read as a little much. 8–12
+# (`quietdustmed`, c0s=9) was usable but scored 23 bits. Band is 11–13
+# so copies sit near c0s=12 to clear the 24-bit gate without redrawing
+# 15–17. Filtergraph caps leftover 14–20 at 13. Luma-only, not stacked c1s.
 # 1080 talking-head stays 34–42. Derived from grain — no extra RNG.
 # Gate stays 24. Do not expect 55% on a still 720 face.
 _REBUILD_FOR_SHOT = {
@@ -60,10 +62,10 @@ _GRAIN_FOR_SHOT = {
     ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
 _CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
-# 720-calibrated luma (not 1080 grain × 2.5). Unscaled 14–20 on SaveInta
-# (`softdust815a`, c0s 15–17) was a little much. 8–12 is under that pack.
-# Luma-only so we do not restack the c1s 12–15 snow Jeff rejected.
-_LUMA_DUST_FOR_SHOT = Range(8, 12)
+# 720-calibrated luma. Unscaled 14–20 (`softdust815a` c0s 15–17) was a
+# little much. 8–12 (`quietdustmed` c0s=9) was usable but 23 bits. 11–13
+# aims at the 24-bit gate. Luma-only so we do not restack c1s 12–15 snow.
+_LUMA_DUST_FOR_SHOT = Range(11, 13)
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:
