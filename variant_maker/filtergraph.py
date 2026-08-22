@@ -38,13 +38,38 @@ _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
 _LOUDNORM_MIN_S = 3.0
+# Sampler grain bands are calibrated on 1080×1920. ffmpeg noise is per-pixel, so a
+# 720p talking-head that inherits chroma 34–42 looks like glitter. Scale strength
+# with the short edge; never go above the 1080 calibration (4K downscales stay 1.0).
+_GRAIN_REF_SHORT_EDGE = 1080
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 
-def _noise_filter(v: dict) -> str:
+def grain_scale_for_size(width: int | None, height: int | None) -> float:
+    """Linear scale vs 1080p short edge. Capped at 1 so we never add 1080+ glitter."""
+    if not width or not height:
+        return 1.0
+    try:
+        short = min(int(width), int(height))
+    except (TypeError, ValueError):
+        return 1.0
+    if short <= 0:
+        return 1.0
+    return min(short / _GRAIN_REF_SHORT_EDGE, 1.0)
+
+
+def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> int:
+    """1080-calibrated grain → integer ffmpeg noise strength on this pixel grid."""
+    g = float(grain or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, round(g * grain_scale_for_size(width, height)))
+
+
+def _noise_filter(v: dict, width: int | None = None, height: int | None = None) -> str:
     """ffmpeg noise. Talking-head chroma-only keeps VMAF (luma) while SSIM All still moves."""
-    g = round(float(v.get("grain") or 0.0))
+    g = apply_canvas_grain(v.get("grain") or 0.0, width, height)
     if v.get("noise_chroma"):
         noise = f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u"
         ns = v.get("noise_seed")
@@ -154,10 +179,10 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         conv = zscale_convert_filter(out)
         if conv:
             parts.append(conv)
-    # Talking-head chroma grain BEFORE the 720→1080 upscale. Same uniqueness
-    # chroma, but speckles scale with the frame instead of landing as 1080 glitter.
+    # Talking-head chroma grain on the source grid (before platform scale). Strength
+    # follows the short edge so 720p does not inherit 1080 chroma 34–42 glitter.
     if v.get("grain", 0.0) > _EPS and v.get("noise_chroma"):
-        parts.append(_noise_filter(v))
+        parts.append(_noise_filter(v, src.width, src.height))
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
         flags = _resample_flags(v.get("resample_flags"))
@@ -193,7 +218,10 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
-        parts.append(_noise_filter(v))
+        # Motion luma grain sits on the output canvas (after scale).
+        ow = platform.width or src.width
+        oh = platform.height or src.height
+        parts.append(_noise_filter(v, ow, oh))
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
     if not v.get("defer_tempo"):
         if platform.fps:

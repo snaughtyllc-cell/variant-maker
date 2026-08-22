@@ -11,9 +11,11 @@ class FakeSrc:
     path = "src.mp4"
     sha256 = "deadbeef"
     duration_s = 1.0
+    width = 1080
+    height = 1920
 
     def to_dict(self):
-        return {"path": self.path, "sha256": self.sha256}
+        return {"path": self.path, "sha256": self.sha256, "width": self.width, "height": self.height}
 
 
 def _stub_common(monkeypatch):
@@ -475,3 +477,56 @@ def test_talking_head_peer_miss_does_not_escalate(monkeypatch, tmp_path):
     assert v2.uniqueness_status == "ok"
     assert v2.quality.get("min_bits_vs_peers") == 13
     assert "strong" not in presets
+
+
+class _Src720(FakeSrc):
+    width = 720
+    height = 1280
+
+
+def test_fast_keeps_720p_inside_tiktok_canvas(monkeypatch, tmp_path):
+    """Naive 720→1080 is glitter until Real-ESRGAN exists. Fast stays native."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "probe", lambda p: _Src720())
+    seen = []
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        seen.append(platform)
+        open(path, "w").close()
+        return (path, "ffmpeg -y fake")
+
+    monkeypatch.setattr(pipeline, "render_variant", fake_render)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    pipeline.run(_cfg(tmp_path, platform="tiktok", auto_tune=False, uniq_strengths=[1.0]))
+    assert seen
+    assert all(p.width == 720 and p.height == 1280 for p in seen)
+
+
+def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
+    """HQ Real-ESRGAN is the true upscaler — keep the 1080×1920 social canvas."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "probe", lambda p: _Src720())
+    seen = []
+
+    def fake_upscale(src, params, path, platform=None):
+        seen.append(platform)
+        open(path, "w").close()
+        return path, "cmd", []
+
+    import variant_maker.neural.upscale as upscale_mod
+
+    monkeypatch.setattr(upscale_mod, "available", lambda: True)
+    monkeypatch.setattr(upscale_mod, "upscale_clip", fake_upscale)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    pipeline.run(_cfg(
+        tmp_path, platform="tiktok", quality_mode="hq",
+        auto_tune=False, uniq_strengths=[1.0],
+    ))
+    assert seen
+    assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)
