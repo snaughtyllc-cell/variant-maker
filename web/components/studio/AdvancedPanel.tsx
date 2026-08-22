@@ -154,9 +154,10 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Medium should land around
-                55–65%; the pass line is 38%. If medium misses that, one
-                strong pass runs and the tile shows esc — that is not a fail.
+                file is scored vs the original. Pass is 38%. 1080 medium often
+                lands 55–65%. 720 Fast with a clean look lands ~40–50% — still
+                a pass. If medium misses 38%, one strong pass runs and the tile
+                shows esc — that is not a fail.
               </span>
             </span>
             <input

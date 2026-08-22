@@ -3,6 +3,7 @@ from variant_maker.platforms import (
     SOCIAL_BUFSIZE,
     SOCIAL_MAXRATE,
     Platform,
+    fit_platform_to_source,
     frame_orientation,
     get_platform,
     resolve_platform,
@@ -58,3 +59,37 @@ def test_resolve_platform_landscape_does_not_stretch_to_9x16():
     assert (square.width, square.height) == (1080, 1080)
     none = resolve_platform("none", 3840, 2160)
     assert none.width is None and none.height is None
+
+
+def test_fit_keeps_720p_portrait_inside_tiktok_canvas():
+    fitted = fit_platform_to_source(get_platform("tiktok"), 720, 1280)
+    assert fitted.width == 720
+    assert fitted.height == 1280
+    assert fitted.maxrate == SOCIAL_MAXRATE
+    assert fitted.name == "tiktok"
+
+
+def test_fit_evens_odd_source_dims():
+    fitted = fit_platform_to_source(get_platform("reels"), 721, 1281)
+    assert fitted.width == 720
+    assert fitted.height == 1280
+
+
+def test_fit_leaves_1080p_and_4k_on_the_social_canvas():
+    same = fit_platform_to_source(get_platform("tiktok"), 1080, 1920)
+    assert same.width == 1080 and same.height == 1920
+    down = fit_platform_to_source(get_platform("tiktok"), 2160, 3840)
+    assert down.width == 1080 and down.height == 1920
+
+
+def test_fit_does_not_touch_none():
+    none = get_platform("none")
+    fitted = fit_platform_to_source(none, 640, 360)
+    assert fitted.width is None and fitted.height is None
+
+
+def test_fit_keeps_720p_landscape_inside_16x9_canvas():
+    canvas = resolve_platform("tiktok", 1280, 720)
+    fitted = fit_platform_to_source(canvas, 1280, 720)
+    assert canvas.width == 1920 and canvas.height == 1080
+    assert fitted.width == 1280 and fitted.height == 720

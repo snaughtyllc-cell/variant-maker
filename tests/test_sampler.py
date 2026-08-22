@@ -430,3 +430,101 @@ def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
     assert out["video"]["warp_k1"] == 0.0
     assert p["video"]["rebuild_scale"] < 1.0
     assert out["video"]["crop_keep"] == p["video"]["crop_keep"]
+
+
+def test_shot_none_matches_omitted_shot():
+    s = derive_seed(42, 3)
+    assert sample(MEDIUM, s) == sample(MEDIUM, s, shot=None)
+
+
+def test_talking_head_uses_heavier_grain_keeps_crop_and_sharp_rebuild():
+    """Look-first: 576 sees grain on a still face, not a mushy rebuild. Crop stays."""
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert head["video"]["crop_keep"] == plain["video"]["crop_keep"]
+    # noise_chroma is a flag, not an extra draw — fingerprint RNG stays aligned.
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    assert 0.90 - 1e-9 <= head["video"]["rebuild_scale"] <= 0.98 + 1e-9
+    assert head["video"]["rebuild_scale"] > plain["video"]["rebuild_scale"] - 1e-9
+    for s in SEEDS[:80]:
+        v = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert 0.90 - 1e-9 <= v["rebuild_scale"] <= 0.98 + 1e-9
+        assert 34 - 1e-9 <= v["grain"] <= 42 + 1e-9
+        assert v.get("noise_chroma") is True
+        assert v.get("noise_seed") == s & 0x7FFFFFFF
+    strong = sample(STRONG, seed, shot="talking_head")["video"]
+    assert 0.85 - 1e-9 <= strong["rebuild_scale"] <= 0.94 + 1e-9
+    assert 46 - 1e-9 <= strong["grain"] <= 58 + 1e-9
+    assert strong.get("noise_chroma") is True
+    assert strong.get("noise_seed") == seed & 0x7FFFFFFF
+    assert "noise_chroma" not in plain["video"]
+    assert "noise_seed" not in plain["video"]
+    other = sample(MEDIUM, seed + 1, shot="talking_head")["video"]
+    assert other["noise_seed"] != head["video"]["noise_seed"]
+
+
+def test_talking_head_grain_is_vmaf_shrinkable():
+    """Talking-head uniqueness grain stays in the shot band (not preset.lo, not 40–52).
+
+    Look-overspend must not collapse it to shot.lo — that pinned every copy at 28
+    and made VMAF strength a no-op. The band itself is the VMAF ceiling.
+    """
+    vals = []
+    for s in SEEDS[:80]:
+        mild = sample(MEDIUM, s, shot="talking_head", strength=0.25)["video"]["grain"]
+        full = sample(MEDIUM, s, shot="talking_head", strength=1.0)["video"]["grain"]
+        assert 34 - 1e-9 <= mild <= 42 + 1e-9
+        assert 34 - 1e-9 <= full <= 42 + 1e-9
+        vals.append(full)
+    assert min(vals) < max(vals)
+    assert max(vals) > 34 + 0.2
+    plain = sample(MEDIUM, SEEDS[0], strength=0.25)["video"]["grain"]
+    head = sample(MEDIUM, SEEDS[0], shot="talking_head", strength=0.25)["video"]["grain"]
+    assert head > plain + 1e-9
+
+
+def test_motion_uses_gentler_rebuild():
+    for s in SEEDS[:80]:
+        scale = sample(MEDIUM, s, shot="motion")["video"]["rebuild_scale"]
+        assert 0.78 - 1e-9 <= scale <= 0.90 + 1e-9
+    for s in SEEDS[:40]:
+        scale = sample(STRONG, s, shot="motion")["video"]["rebuild_scale"]
+        assert 0.67 - 1e-9 <= scale <= 0.80 + 1e-9
+
+
+def test_motion_keeps_budgeted_grain():
+    """Motion already scores from movement; don't remap grain off the preset."""
+    s = derive_seed(42, 3)
+    plain = sample(MEDIUM, s)
+    moved = sample(MEDIUM, s, shot="motion")
+    assert moved["video"]["grain"] == plain["video"]["grain"]
+    assert moved["video"]["crop_keep"] == plain["video"]["crop_keep"]
+    assert "noise_chroma" not in moved["video"]
+    assert "noise_chroma" not in plain["video"]
+    assert "noise_seed" not in moved["video"]
+    assert "noise_seed" not in plain["video"]
+    assert "chroma_cloud" not in moved["video"]
+    assert "chroma_cloud" not in plain["video"]
+
+
+def test_talking_head_chroma_cloud_from_grain_no_extra_rng():
+    """720 uniqueness overlay tracks grain. Same seed must not shift crop/resample."""
+    from variant_maker.shot import chroma_cloud_range_for_shot
+
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert "chroma_cloud" not in plain["video"]
+    cloud_r = chroma_cloud_range_for_shot(MEDIUM, "talking_head")
+    assert cloud_r is not None
+    assert cloud_r.lo - 1e-9 <= head["video"]["chroma_cloud"] <= cloud_r.hi + 1e-9
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    grain_span = 42.0 - 34.0
+    expect = cloud_r.lo + (head["video"]["grain"] - 34.0) / grain_span * (cloud_r.hi - cloud_r.lo)
+    assert head["video"]["chroma_cloud"] == pytest.approx(expect)
+    assert cloud_r.lo == 6 and cloud_r.hi == 10
+    assert chroma_cloud_range_for_shot(MEDIUM, "motion") is None
+    assert chroma_cloud_range_for_shot(MEDIUM, None) is None

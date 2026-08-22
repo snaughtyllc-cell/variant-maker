@@ -19,11 +19,13 @@ import tempfile
 
 METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
-# is 24 bits (24/64 = 0.375 ≈ 38% UI). Medium talking-head should *score*
-# ~35–42 bits (~55–65% UI) via reconstructive rebuild_scale (~720–864 then
-# back to 1080×1920), moderate crop (keep 0.84–0.90), and grain — not ±32 px
-# and not a face-only zoom. Raising the gate to 32 previously forced strong
-# on a whole Fast 20-pack. Local uniqueness gate only — not a platform verdict.
+# is 24 bits (24/64 = 0.375 ≈ 38% UI). 1080 talking-head medium *can* score
+# ~35–42 bits (~55–65% UI) via crop 0.84–0.90 + chroma 34–42. That same
+# chroma on 720 is snow; phone-safe 720 grain lands ~26–31 bits (~40–48%)
+# and still passes. Rebuild / native-canvas SSIM do not buy the 55% band
+# on a still face. Not Pixel AI scramble, not a higher floor.
+# Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
+# Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31

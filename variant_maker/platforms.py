@@ -90,3 +90,26 @@ def resolve_platform(name: str, width: int | None = None, height: int | None = N
     if (ow, oh) == (base.width, base.height):
         return base
     return replace(base, width=ow, height=oh)
+
+
+def _even_dim(n: int) -> int:
+    n = int(n)
+    return max(2, n - (n % 2))
+
+
+def fit_platform_to_source(platform: Platform, width: int, height: int) -> Platform:
+    """Fast: never naive-upscale. Keep source size when it already fits the canvas.
+
+    HQ Real-ESRGAN still targets the full platform size. ``none`` is unchanged.
+    libx264 needs even dims, so odd sources are floored to even before the fit.
+    """
+    if platform.width is None or platform.height is None:
+        return platform
+    try:
+        sw, sh = _even_dim(width), _even_dim(height)
+    except (TypeError, ValueError):
+        return platform
+    tw, th = int(platform.width), int(platform.height)
+    if sw <= tw and sh <= th:
+        return replace(platform, width=sw, height=sh)
+    return platform
