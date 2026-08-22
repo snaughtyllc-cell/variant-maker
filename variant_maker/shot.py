@@ -38,9 +38,10 @@ SHOT_MOTION = "motion"
 # stay on the preset.
 # 720 chroma cloud: overlay at 80×142 then bicubic back. Lab `650f28dfb1f2`
 # stacked phone grain + cloud 18–22 (snow). `6d3e91ab7fd4` drew cloud-only
-# 18–22 — still grain on the face. Band is now 6–10; filtergraph also caps
-# and gblurs the overlay. 1080 talking-head stays 34–42. Derived from grain
-# — no extra RNG.
+# 18–22 — still grain on the face. `8df4cc4` 6–10 + gblur 2 was better than
+# those, but live SaveInta still read as chroma. Band is 4–7; filtergraph
+# caps at 7 and gblurs sigma=4. 1080 talking-head stays 34–42. Derived from
+# grain — no extra RNG. Gate stays 24.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -54,7 +55,7 @@ _GRAIN_FOR_SHOT = {
     ("medium", SHOT_TALKING_HEAD): Range(34, 42),
     ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
-_CHROMA_CLOUD_FOR_SHOT = Range(6, 10)
+_CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:

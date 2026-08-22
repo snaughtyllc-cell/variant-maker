@@ -54,3 +54,14 @@ def test_talking_head_grain_band_is_heavier_than_preset():
     assert (subtle.lo, subtle.hi) == (24, 36)
     assert shot.grain_range_for_shot(MEDIUM, "motion") is None
     assert shot.grain_range_for_shot(MEDIUM, None) is None
+
+
+def test_talking_head_chroma_cloud_band_is_softer_than_six_ten():
+    """Live SaveInta 6–10 + sigma=2 still read as chroma. Stay under 7; gate stays 24."""
+    from variant_maker.presets import MEDIUM
+
+    r = shot.chroma_cloud_range_for_shot(MEDIUM, "talking_head")
+    assert r is not None
+    assert (r.lo, r.hi) == (4, 7)
+    assert r.hi < 10
+    assert shot.chroma_cloud_range_for_shot(MEDIUM, "motion") is None

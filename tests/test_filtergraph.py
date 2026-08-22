@@ -1,3 +1,5 @@
+import re
+
 from variant_maker import filtergraph
 from variant_maker.platforms import get_platform, resolve_platform
 from variant_maker.probe import ColorTags, SourceInfo
@@ -329,7 +331,7 @@ def test_talking_head_sample_emits_chroma_noise():
     assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
     assert "alls=" not in vf
     # 1080 canvas keeps the working 34–42 recipe — cloud is sampled but not drawn.
-    assert 6 - 1e-9 <= p["video"]["chroma_cloud"] <= 10 + 1e-9
+    assert 4 - 1e-9 <= p["video"]["chroma_cloud"] <= 7 + 1e-9
     assert "split[main]" not in vf
 
 
@@ -344,7 +346,10 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
     vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
     assert "split[main][s]" in vf
     assert vf.count("noise=") == 1
-    assert "gblur=" in vf
+    assert "gblur=sigma=4" in vf
+    c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
+    assert c1s and max(c1s) <= 7
+    assert "c1s=10" not in vf and "c1s=9" not in vf and "c1s=8" not in vf
     assert "c1s=15" not in vf and "c1s=14" not in vf and "c1s=13" not in vf
     assert "c1s=12" not in vf
     assert "c1s=20" not in vf and "c1s=21" not in vf and "c1s=22" not in vf
@@ -352,8 +357,10 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
 
 
 def test_apply_chroma_cloud_strength_caps_old_band():
-    assert filtergraph.apply_chroma_cloud_strength(20) == 10
-    assert filtergraph.apply_chroma_cloud_strength(8) == 8
+    assert filtergraph.apply_chroma_cloud_strength(20) == 7
+    assert filtergraph.apply_chroma_cloud_strength(10) == 7
+    assert filtergraph.apply_chroma_cloud_strength(8) == 7
+    assert filtergraph.apply_chroma_cloud_strength(6) == 6
     assert filtergraph.apply_chroma_cloud_strength(0) == 0
 
 
@@ -383,9 +390,10 @@ def test_chroma_cloud_on_720_canvas_not_1080():
     vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
     assert "split[main][s]" in vf
     assert "scale=80:142" in vf
-    assert "gblur=" in vf
-    # 18–22 still read as grain on lab pack 6d3e91ab7fd4. Cap + blur the overlay.
-    assert "c1s=10" in vf or "c1s=8" in vf or "c1s=6" in vf
+    assert "gblur=sigma=4" in vf
+    # Live 6–10 + sigma=2 still read as chroma on SaveInta. Cap + heavier blur.
+    assert "c1s=7" in vf
+    assert "c1s=10" not in vf
     assert "c1s=20" not in vf
     assert "c1s=15" not in vf
     assert vf.count("noise=") == 1

@@ -48,9 +48,10 @@ _GRAIN_REF_SHORT_EDGE = 1080
 _GRAIN_SIZE_EXPONENT = 2.5
 # 720×1280 → 80×142. Strength is calibrated at this grid, not 1080 grain.
 _CHROMA_CLOUD_FACTOR = 9
-# 18–22 cloud-only still read as grain on lab pack 6d3e91ab7fd4.
-_CHROMA_CLOUD_STRENGTH_MAX = 10
-_CHROMA_CLOUD_BLUR = 2.0
+# Live SaveInta 6–10 + sigma=2 still read as chroma on the face. Cap the
+# leftover 18–22 (and the loud 8–10 copies) so they cannot redraw snow.
+_CHROMA_CLOUD_STRENGTH_MAX = 7
+_CHROMA_CLOUD_BLUR = 4.0
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
@@ -78,7 +79,7 @@ def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> i
 
 
 def apply_chroma_cloud_strength(cloud: float) -> int:
-    """Clamp the 720 overlay so leftover 18–22 params cannot redraw snow."""
+    """Clamp the 720 overlay so leftover 18–22 / 8–10 params cannot redraw snow."""
     g = float(cloud or 0.0)
     if g <= 0:
         return 0
