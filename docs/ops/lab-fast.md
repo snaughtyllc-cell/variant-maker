@@ -23,9 +23,9 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - Workers: min 0, max **1**, idle 120s
 - Prior `sha256:a9055e86…` / `e1c3b8a`: cloud-only 18–22. Pack `6d3e91ab7fd4` 40–43 bits / 62–67%, **look rejected**.
 - Prior `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Pack `650f28dfb1f2` **look rejected**.
-- Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. **Jeff: these are better.** Not promoted to live.
+- Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. **Jeff: these are better.** Promoted to live Fast `j0b1q4iuunzhnq` (`VF_ENGINE_REV=8df4cc4`, **no `VF_LAB`**, max 2, idle 600). Lab stays `VF_LAB=1`.
 
-Live Fast `j0b1q4iuunzhnq` was promoted to the same digest after the `06526b9` pack looked right (`VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
+Live Fast `j0b1q4iuunzhnq` is on `sha256:8ad6439c…` / `4f94edd` (720 cloud 6–10 + 16:9 canvas, **no `VF_LAB`**, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 
 Lab packs:
 
