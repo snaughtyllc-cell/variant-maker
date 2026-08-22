@@ -11,8 +11,10 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         path = "src.mp4"
         sha256 = "deadbeef"
         duration_s = 1.0
+        width = 1080
+        height = 1920
         def to_dict(self):
-            return {"path": self.path, "sha256": self.sha256}
+            return {"path": self.path, "sha256": self.sha256, "width": 1080, "height": 1920}
 
     monkeypatch.setattr(pipeline, "probe", lambda p: FakeSrc())
     monkeypatch.setattr(pipeline, "_ffmpeg_version", lambda: "test")

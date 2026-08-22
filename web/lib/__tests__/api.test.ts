@@ -208,6 +208,17 @@ it("createDriveExportSplit posts job_id, selected, destinations, consume_bank, a
   });
 });
 
+describe("listDriveExports", () => {
+  it("GETs /api/drive/exports", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 }),
+    );
+    const out = await api.listDriveExports();
+    expect(out).toEqual([]);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/drive/exports");
+  });
+});
+
 describe("captions API", () => {
   it("listCaptions GETs /api/captions", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

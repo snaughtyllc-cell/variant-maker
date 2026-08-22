@@ -201,6 +201,28 @@ class ExportJobOut(BaseModel):
     files: list[ExportFileOut] = []
 
 
+class DropFileOut(BaseModel):
+    source_id: str
+    index: int
+    variant_id: str
+    job_id: str | None = None
+    drive_file_id: str | None = None
+    platform_result: str | None = None
+    outcome: str
+
+
+class DropPackOut(BaseModel):
+    export_id: str
+    created_utc: str
+    destination_id: str
+    destination_name: str
+    folder_id: str
+    count: int
+    outcome: str
+    miss_labels: list[str] = []
+    files: list[DropFileOut] = []
+
+
 class DropLedgerStatusOut(BaseModel):
     configured: bool
     spreadsheet_id: str | None = None

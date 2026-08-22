@@ -53,7 +53,7 @@ export function AdvancedPanel({
             fontSize: 11.5,
           }}
         >
-          Output: Vertical 1080×1920 ▾
+          Output: Matches source
         </span>
       </div>
       {open && (
@@ -68,9 +68,21 @@ export function AdvancedPanel({
             color: "var(--color-muted)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Output format</span>
-            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Output format</span>
+              <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Matches source</span>
+            </div>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: "var(--color-muted2)",
+              }}
+            >
+              Auto — 9:16 → 1080×1920, 16:9 → 1920×1080.
+            </p>
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12, gap: 10, flexWrap: "wrap" }}>
@@ -142,9 +154,10 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Medium should land around
-                55–65%; the pass line is 38%. If medium misses that, one
-                strong pass runs and the tile shows esc — that is not a fail.
+                file is scored vs the original. Pass is 38%. 1080 medium often
+                lands 55–65%. 720 Fast with a clean look lands ~40–50% — still
+                a pass. If medium misses 38%, one strong pass runs and the tile
+                shows esc — that is not a fail.
               </span>
             </span>
             <input

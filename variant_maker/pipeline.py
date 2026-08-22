@@ -14,14 +14,17 @@ from concurrent.futures import ThreadPoolExecutor
 from . import autotune, quality, uniqueness
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
-from .platforms import get_platform
+from .platforms import fit_platform_to_source, resolve_platform
 from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+from .shot import classify_shot
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
-# Medium crop + reconstructive rebuild_scale sized so talking-head *scores* ~35–42 bits (~55–65% UI).
+# Gate 24/24 (~38% UI). 1080 talking-head medium *can* score ~35–42 bits
+# (~55–65% UI) on a matching canvas (portrait 1080×1920 or landscape 1920×1080).
+# Usable 720 Fast lands ~26–31 bits (~40–48%) — still a pass.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
@@ -51,7 +54,6 @@ def run(config: dict, *, on_event=None) -> Manifest:
     input_path = config["input"]
     count = config["count"]
     preset = get_preset(config["preset"])
-    platform = get_platform(config["platform"])
     out_dir = config["out"]
     floor = config.get("quality_floor", 90.0)
     # Spatial-corruption floor. Calibrated on a real clip across BOTH upscale backends (GPU
@@ -100,7 +102,25 @@ def run(config: dict, *, on_event=None) -> Manifest:
     hq = neural is not None and neural.available()
 
     src = probe(input_path)
+    platform = resolve_platform(
+        config["platform"],
+        getattr(src, "width", None),
+        getattr(src, "height", None),
+    )
+    # Fast: never lanczos-upscale a sub-canvas source (720p IG → 1080 glitter).
+    # HQ Real-ESRGAN is the true upscaler and still targets the full social canvas.
+    if not hq:
+        platform = fit_platform_to_source(platform, src.width, src.height)
     stem = os.path.splitext(os.path.basename(input_path))[0]
+    shot_info = classify_shot(src.path, src.duration_s)
+    shot_kind = shot_info.get("kind")
+    # Talking-head copies of a still face land ~13–17 peer bits even with
+    # different chroma seeds and strong grain. Escalating to strong tightens
+    # crop into 0.78 (the face-zoom we banned) and still fails peer. Vs-source
+    # already scores 55–65% on medium. Record peer bits; don't let them force
+    # strong or demote a passing vs-source score. Motion still uses the 24-bit
+    # peer floor. MIN_PEER_BITS stays 24.
+    peer_gate = shot_kind != "talking_head"
 
     def _name(i: int, vseed: int) -> str:
         return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
@@ -109,11 +129,16 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "master_seed": master_seed,
         "preset": preset.name,
         "platform": platform.name,
+        "canvas": (
+            [platform.width, platform.height]
+            if platform.width and platform.height else None
+        ),
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),
         "protect": False,
         "count": count,
+        "shot": shot_info,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
     }
@@ -130,6 +155,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             vseed, fname, path = _prep(i)
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
+                shot=shot_kind,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -169,7 +195,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             emit("rendering", index=i, attempt=attempt_no)
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
-                duration_s=src.duration_s,
+                duration_s=src.duration_s, shot=shot_kind,
             )
             if protect_frame is not None:
                 from .neural import protect
@@ -214,7 +240,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         def _gate_ok(u_score: dict, peer_min: int | None) -> bool:
             """Pass when source uniqueness clears (or unknown) AND peers clear min bits."""
-            if peer_min is not None and peer_min < min_bits_vs_peers:
+            if peer_gate and peer_min is not None and peer_min < min_bits_vs_peers:
                 return False
             return u_score["uniqueness_status"] in ("ok", "unknown")
 
@@ -223,7 +249,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             out = dict(u_score)
             out["min_bits_vs_peers"] = peer_min
             if (
-                peer_min is not None
+                peer_gate
+                and peer_min is not None
                 and peer_min < min_bits_vs_peers
                 and out.get("uniqueness_status") == "ok"
             ):
@@ -259,7 +286,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     **u_try,
                     "quality_passed": r_try["passed"],
                     "passed": r_try["passed"],
-                    "peer_ok": peer_min is None or peer_min >= min_bits_vs_peers,
+                    "peer_ok": (
+                        (not peer_gate)
+                        or peer_min is None
+                        or peer_min >= min_bits_vs_peers
+                    ),
                     "uniqueness": u_try["uniqueness"],
                 }
 

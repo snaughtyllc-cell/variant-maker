@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -70,6 +71,12 @@ export function GalleryToolbar({
         >
           Has shortfall
         </span>
+        <Link href="/drops" style={{ ...chipBase, textDecoration: "none" }}>
+          Sent to Drive
+        </Link>
+        <Link href="/drops?filter=flagged_week" style={{ ...chipBase, textDecoration: "none" }}>
+          Flagged this week
+        </Link>
         <span
           style={chipBase}
           onClick={() => onSort("newest")}

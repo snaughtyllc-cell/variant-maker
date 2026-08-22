@@ -6,7 +6,9 @@ ffmpeg SSIM per pair, then converts like TikFusion:
     bits = round((1 - mean_ssim) * 64)
 
 Higher bits = more different. This improves local duplicate-resilience tuning;
-it does not guarantee platform accept rates.
+it does not guarantee platform accept rates. The SSIM canvas follows the source
+orientation so a 16:9 clip is not letterboxed into 9:16 (that made landscape
+packs look ~90% unique after Fast stretched them to 1080×1920).
 """
 from __future__ import annotations
 
@@ -17,11 +19,15 @@ import tempfile
 
 METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
-# is 24 bits (24/64 = 0.375 ≈ 38% UI). Medium talking-head should *score*
-# ~35–42 bits (~55–65% UI) via reconstructive rebuild_scale (~720–864 then
-# back to 1080×1920), moderate crop (keep 0.84–0.90), and grain — not ±32 px
-# and not a face-only zoom. Raising the gate to 32 previously forced strong
-# on a whole Fast 20-pack. Local uniqueness gate only — not a platform verdict.
+# is 24 bits (24/64 = 0.375 ≈ 38% UI). 1080 talking-head medium *can* score
+# ~35–42 bits (~55–65% UI) via crop 0.84–0.90 + chroma 34–42. That same
+# chroma on 720 is snow; soft cloud 4–7 lands ~24 bits (38%). 720 luma
+# dust 8–12 (`quietdustmed` c0s=9) was usable but scored 23 bits. 11–13
+# aims at the 24-bit gate without redrawing 15–17. Still not the 55% 1080
+# band, and still not a higher floor. Rebuild / native-canvas SSIM do not
+# buy 55% on a still face. Not Pixel AI scramble.
+# Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
+# Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
@@ -30,9 +36,13 @@ MIN_PEER_BITS = 24
 DEFAULT_PEER = MIN_PEER_BITS  # alias
 MAX_PASSES = 3
 FRAME_FRACS = (0.25, 0.50, 0.75)
-# Vertical TikTok/Reels-ish canvas used for pairwise SSIM.
+# Default SSIM canvas is portrait (9:16). Landscape / square sources use
+# ssim_canvas() so a 16:9 clip is not letterboxed into 9:16 (that inflated
+# uniqueness when Fast used to stretch landscape into 1080×1920).
 SSIM_WIDTH = 576
 SSIM_HEIGHT = 1024
+SSIM_LONG = 1024
+SSIM_SHORT = 576
 
 _SSIM_ALL_RE = re.compile(r"SSIM\s+(?:Y|R):[^\n]*?\sAll:([0-9.]+)")
 
@@ -69,12 +79,33 @@ def similarity_from_uniqueness(uniqueness: float) -> float:
     return 1.0 - float(uniqueness)
 
 
-def _extract_frame(path: str, t: float, out_path: str) -> None:
-    """Extract one scaled frame near ``t`` seconds. Falls back to t=0 if seek misses."""
-    vf = (
-        f"scale={SSIM_WIDTH}:{SSIM_HEIGHT}:force_original_aspect_ratio=decrease,"
-        f"pad={SSIM_WIDTH}:{SSIM_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+def ssim_canvas(width: int | None, height: int | None) -> tuple[int, int]:
+    """SSIM sample size matching source orientation. Long side 1024, even."""
+    w = int(width or 0)
+    h = int(height or 0)
+    if w <= 0 or h <= 0:
+        return SSIM_WIDTH, SSIM_HEIGHT
+    if w == h:
+        return SSIM_SHORT, SSIM_SHORT
+    if w > h:
+        return SSIM_LONG, SSIM_SHORT
+    return SSIM_SHORT, SSIM_LONG
+
+
+def ssim_scale_filter(width: int, height: int) -> str:
+    """Fit inside the canvas and pad; never stretch."""
+    return (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
     )
+
+
+def _extract_frame(
+    path: str, t: float, out_path: str, *, canvas: tuple[int, int] | None = None,
+) -> None:
+    """Extract one scaled frame near ``t`` seconds. Falls back to t=0 if seek misses."""
+    cw, ch = canvas if canvas is not None else (SSIM_WIDTH, SSIM_HEIGHT)
+    vf = ssim_scale_filter(cw, ch)
     last_err: subprocess.CalledProcessError | None = None
     # Post-input -ss is more reliable on short clips; retry t=0 if the seek is past EOF.
     for seek in (max(0.0, t), 0.0):
@@ -128,15 +159,19 @@ def _ssim_pair(ref_path: str, dist_path: str) -> float:
 
 def mean_ssim(path_a: str, path_b: str) -> float:
     """Mean SSIM across the three TikFusion-aligned sample points."""
-    dur_a = _probe_duration(path_a)
+    from .probe import probe
+
+    info = probe(path_a, hash_content=False)
+    canvas = ssim_canvas(info.width, info.height)
+    dur_a = max(float(info.duration_s or 0.0), 0.1)
     dur_b = _probe_duration(path_b)
     with tempfile.TemporaryDirectory(prefix="vm-ssim-") as tmp:
         scores: list[float] = []
         for i, frac in enumerate(FRAME_FRACS):
             fa = os.path.join(tmp, f"a_{i}.png")
             fb = os.path.join(tmp, f"b_{i}.png")
-            _extract_frame(path_a, frac * dur_a, fa)
-            _extract_frame(path_b, frac * dur_b, fb)
+            _extract_frame(path_a, frac * dur_a, fa, canvas=canvas)
+            _extract_frame(path_b, frac * dur_b, fb, canvas=canvas)
             scores.append(_ssim_pair(fa, fb))
         return sum(scores) / len(scores)
 

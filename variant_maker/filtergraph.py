@@ -38,8 +38,126 @@ _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
 _LOUDNORM_MIN_S = 3.0
+# Sampler grain bands are calibrated on 1080×1920. ffmpeg noise is per-pixel.
+# Linear short/1080 left the same on-screen grain on 720p (bigger pixels).
+# Area (short/1080)² still read as "pretty decent grain" on a phone — 720p
+# pixels are 1.5× larger, so area-18 looks like 1080 chroma ~27. Exponent
+# 2.5 is the phone-viewing fix (720p chroma 40 → 15). Never go above the
+# 1080 calibration (4K downscales stay 1.0).
+_GRAIN_REF_SHORT_EDGE = 1080
+_GRAIN_SIZE_EXPONENT = 2.5
+# 720×1280 → 80×142. Strength is calibrated at this grid, not 1080 grain.
+_CHROMA_CLOUD_FACTOR = 9
+# Live SaveInta 6–10 + sigma=2 still read as chroma on the face. Cap the
+# leftover 18–22 (and the loud 8–10 copies) so they cannot redraw snow.
+_CHROMA_CLOUD_STRENGTH_MAX = 7
+_CHROMA_CLOUD_BLUR = 4.0
+# 720 talking-head luma dust. Cap leftover 14–20 (`softdust815a` c0s 15–17
+# read as a little much) at 13 so we cannot redraw that pack. Luma-only.
+_LUMA_DUST_MAX = 13
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
+
+
+def grain_scale_for_size(width: int | None, height: int | None) -> float:
+    """Phone-viewing scale vs 1080p short edge. Capped at 1 so we never add glitter."""
+    if not width or not height:
+        return 1.0
+    try:
+        short = min(int(width), int(height))
+    except (TypeError, ValueError):
+        return 1.0
+    if short <= 0:
+        return 1.0
+    linear = min(short / _GRAIN_REF_SHORT_EDGE, 1.0)
+    return linear ** _GRAIN_SIZE_EXPONENT
+
+
+def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> int:
+    """1080-calibrated grain → integer ffmpeg noise strength on this pixel grid."""
+    g = float(grain or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, round(g * grain_scale_for_size(width, height)))
+
+
+def apply_chroma_cloud_strength(cloud: float) -> int:
+    """Clamp the 720 overlay so leftover 18–22 / 8–10 params cannot redraw snow."""
+    g = float(cloud or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, min(round(g), _CHROMA_CLOUD_STRENGTH_MAX))
+
+
+def apply_luma_dust_strength(dust: float) -> int:
+    """Clamp 720 luma dust. Leftover 14–20 cannot redraw the grainy pack."""
+    g = float(dust or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, min(round(g), _LUMA_DUST_MAX))
+
+
+def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTOR) -> tuple[int, int]:
+    """Even low-res grid for the chroma overlay (720×1280 → 80×142)."""
+    w = max(int(width), 2)
+    h = max(int(height), 2)
+    fac = max(int(factor), 1)
+    return max((w // fac) // 2 * 2, 2), max((h // fac) // 2 * 2, 2)
+
+
+def chroma_cloud_applies(v: dict, width: int | None, height: int | None) -> bool:
+    """True when the 720 talking-head overlay will actually be drawn.
+
+    Sampler still emits phone-safe grain + chroma_cloud together (no extra RNG).
+    Drawing both is the snow Jeff rejected — cloud replaces full-res chroma on
+    canvases shorter than 1080. 1080 talking-head keeps the 34–42 recipe.
+    """
+    cloud = float(v.get("chroma_cloud") or 0.0)
+    if cloud <= _EPS or not width or not height:
+        return False
+    try:
+        return min(int(width), int(height)) < _GRAIN_REF_SHORT_EDGE
+    except (TypeError, ValueError):
+        return False
+
+
+def _luma_dust_filter(strength: int, seed: object = None) -> str:
+    """Luma-only temporal dust. c1s/c2s stay 0 so this is not stacked chroma."""
+    noise = f"noise=c0s={strength}:c0f=t+u:c1s=0:c2s=0"
+    if seed is not None:
+        s = int(seed) & 0x7FFFFFFF
+        noise += f":c0_seed={s}"
+    return noise
+
+
+def _chroma_cloud_graph(strength: int, width: int, height: int, seed: object = None) -> str:
+    """Chroma-only overlay: generate noise at 1/9 size, blend onto Cb/Cr, leave luma."""
+    lw, lh = chroma_cloud_size(width, height)
+    noise = f"noise=c0s=0:c1s={strength}:c2s={strength}:c1f=u:c2f=u"
+    if seed is not None:
+        s = int(seed) & 0x7FFFFFFF
+        noise += f":c1_seed={s}:c2_seed={s}"
+    blur = f"gblur=sigma={_CHROMA_CLOUD_BLUR:g}"
+    return (
+        f"split[main][s];"
+        f"[s]format=yuv444p,geq=lum='128':cb='128':cr='128',"
+        f"scale={lw}:{lh},{noise},"
+        f"scale={width}:{height}:flags=bicubic,{blur}[cl];"
+        f"[main][cl]blend=c0_expr='A':c1_expr='A+B-128':c2_expr='A+B-128'"
+    )
+
+
+def _noise_filter(v: dict, width: int | None = None, height: int | None = None) -> str:
+    """ffmpeg noise. Talking-head chroma-only keeps VMAF (luma) while SSIM All still moves."""
+    g = apply_canvas_grain(v.get("grain") or 0.0, width, height)
+    if v.get("noise_chroma"):
+        noise = f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u"
+        ns = v.get("noise_seed")
+        if ns is not None:
+            s = int(ns) & 0x7FFFFFFF
+            noise += f":c1_seed={s}:c2_seed={s}"
+        return noise
+    return f"noise=alls={g}:allf=t+u"
 
 
 def _remaining_duration_s(v: dict, duration_s: float) -> float:
@@ -141,6 +259,17 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         conv = zscale_convert_filter(out)
         if conv:
             parts.append(conv)
+    # Talking-head chroma grain on the source grid (before platform scale).
+    # Skip when the 720 chroma cloud will draw — stacking c1s 12–15 + cloud
+    # 18–22 is the snow on lab pack 650f28dfb1f2.
+    ow = platform.width or src.width
+    oh = platform.height or src.height
+    if (
+        v.get("grain", 0.0) > _EPS
+        and v.get("noise_chroma")
+        and not chroma_cloud_applies(v, ow, oh)
+    ):
+        parts.append(_noise_filter(v, src.width, src.height))
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
         flags = _resample_flags(v.get("resample_flags"))
@@ -175,8 +304,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(f"hue=h={v['hue_deg']:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
-    if v.get("grain", 0.0) > _EPS:
-        parts.append(f"noise=alls={round(v['grain'])}:allf=t+u")
+    if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
+        # Motion luma grain sits on the output canvas (after scale).
+        ow = platform.width or src.width
+        oh = platform.height or src.height
+        parts.append(_noise_filter(v, ow, oh))
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
     if not v.get("defer_tempo"):
         if platform.fps:
@@ -184,6 +316,20 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         speed = v.get("speed", 1.0)
         if abs(speed - 1.0) > _EPS:
             parts.append(f"setpts={1.0 / speed:.6f}*PTS")
+
+    ow = platform.width or src.width
+    oh = platform.height or src.height
+    if chroma_cloud_applies(v, ow, oh):
+        graph = _chroma_cloud_graph(
+            apply_chroma_cloud_strength(float(v.get("chroma_cloud") or 0.0)),
+            int(ow),
+            int(oh),
+            v.get("noise_seed"),
+        )
+        dust = apply_luma_dust_strength(float(v.get("luma_dust") or 0.0))
+        if dust:
+            graph = f"{graph},{_luma_dust_filter(dust, v.get('noise_seed'))}"
+        return f"{','.join(parts)},{graph},format=yuv420p"
 
     parts.append("format=yuv420p")
     return ",".join(parts)
