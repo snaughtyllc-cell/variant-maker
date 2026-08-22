@@ -76,6 +76,12 @@ Lab: same rev, `VF_LAB=1`, max 1, idle 120.
 Railway `RUNPOD_FAST_ENDPOINT_ID` stays `j0b1q4iuunzhnq`. Next experiments
 stay on lab — do not PATCH live to test.
 
+Look (not uniqueness): chroma noise used to run *after* the 720→1080
+upscale, so a 720p Instagram talking-head got 1080-sized glitter. Chroma
+band stays **34–42** (gate 24/24). Noise now runs after crop, before
+platform scale, so speckles scale with the frame. Luma motion grain still
+sits at the end of the graph.
+
 Live verify (same sources on `j0b1q4iuunzhnq`): talking-head **39/39/39 bits
 (61%)**, VMAF **97.5 / 98.8 / 98.6**, crop 0.86–0.88, caption upright.
 Motion **53/51/51 bits (~80–83%)**, VMAF 100.

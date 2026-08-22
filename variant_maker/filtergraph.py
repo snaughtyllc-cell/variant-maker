@@ -42,6 +42,19 @@ _LOUDNORM_MIN_S = 3.0
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 
+def _noise_filter(v: dict) -> str:
+    """ffmpeg noise. Talking-head chroma-only keeps VMAF (luma) while SSIM All still moves."""
+    g = round(float(v.get("grain") or 0.0))
+    if v.get("noise_chroma"):
+        noise = f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u"
+        ns = v.get("noise_seed")
+        if ns is not None:
+            s = int(ns) & 0x7FFFFFFF
+            noise += f":c1_seed={s}:c2_seed={s}"
+        return noise
+    return f"noise=alls={g}:allf=t+u"
+
+
 def _remaining_duration_s(v: dict, duration_s: float) -> float:
     """Wall-clock seconds left after start/end trim (before speed change)."""
     start_s, end_s = clamp_trims(v.get("trim_s", 0.0), v.get("trim_end_s", 0.0), duration_s)
@@ -141,6 +154,10 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         conv = zscale_convert_filter(out)
         if conv:
             parts.append(conv)
+    # Talking-head chroma grain BEFORE the 720→1080 upscale. Same uniqueness
+    # chroma, but speckles scale with the frame instead of landing as 1080 glitter.
+    if v.get("grain", 0.0) > _EPS and v.get("noise_chroma"):
+        parts.append(_noise_filter(v))
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
         flags = _resample_flags(v.get("resample_flags"))
@@ -175,20 +192,8 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(f"hue=h={v['hue_deg']:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
-    if v.get("grain", 0.0) > _EPS:
-        g = round(v["grain"])
-        if v.get("noise_chroma"):
-            # Talking-head: SSIM All sees chroma; VMAF is mostly luma. Luma grain
-            # 40–52 scored 58% uniqueness but VMAF ~80 (harvest skip). Per-copy
-            # seed keeps peer bits up so the pack stays on medium.
-            noise = f"noise=c0s=0:c0f=u:c1s={g}:c1f=u:c2s={g}:c2f=u"
-            ns = v.get("noise_seed")
-            if ns is not None:
-                s = int(ns) & 0x7FFFFFFF
-                noise += f":c1_seed={s}:c2_seed={s}"
-            parts.append(noise)
-        else:
-            parts.append(f"noise=alls={g}:allf=t+u")
+    if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
+        parts.append(_noise_filter(v))
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
     if not v.get("defer_tempo"):
         if platform.fps:

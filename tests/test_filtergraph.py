@@ -246,6 +246,20 @@ def test_talking_head_chroma_noise_skips_luma():
     assert "c1s=" not in vf_luma
 
 
+def test_chroma_noise_is_applied_before_platform_upscale():
+    """720p IG talking-head: noise after 1080 scale is glitter. Keep uniqueness chroma."""
+    p = make_params(video={"grain": 40.0, "noise_chroma": True, "noise_seed": 7})
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), REELS)
+    noise = "noise=c0s=0"
+    scale = "scale=1080:1920:force_original_aspect_ratio=disable"
+    assert noise in vf and scale in vf
+    assert vf.index(noise) < vf.index(scale)
+    assert vf.count("noise=") == 1
+    luma = make_params(video={"grain": 8.0})
+    vf_luma = filtergraph.build_video_filters(luma, make_src(w=720, h=1280), REELS)
+    assert vf_luma.index("scale=1080:1920:force_original_aspect_ratio=disable") < vf_luma.index("noise=alls=8")
+
+
 def test_talking_head_sample_emits_chroma_noise():
     from variant_maker.presets import MEDIUM
     from variant_maker.sampler import derive_seed, sample
