@@ -796,6 +796,10 @@ class JobStore:
         _, source = loc
         return next((v for v in source.variants if v.index == index), None)
 
+    def source_job_id(self, source_id: str) -> str | None:
+        loc = self._locate(source_id)
+        return loc[0] if loc is not None else None
+
     def find_variant(self, source_id: str, filename: str) -> str | None:
         loc = self._locate(source_id)
         if loc is None:

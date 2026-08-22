@@ -104,10 +104,31 @@ class ExportStore:
         path = self._path(export_id)
         if not os.path.exists(path):
             return None
-        with open(path, encoding="utf-8") as f:
-            raw = json.load(f)
-        files = [ExportFile(**item) for item in raw.pop("files", [])]
-        return ExportJob(files=files, **raw)
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f)
+            files = [ExportFile(**item) for item in raw.pop("files", [])]
+            return ExportJob(files=files, **raw)
+        except (OSError, json.JSONDecodeError, TypeError, KeyError, ValueError):
+            return None
+
+    def list(self) -> list[ExportJob]:
+        """Newest export jobs first. Skips temp/corrupt files."""
+        if not os.path.isdir(self._dir):
+            return []
+        jobs: list[ExportJob] = []
+        try:
+            names = os.listdir(self._dir)
+        except OSError:
+            return []
+        for name in names:
+            if not name.endswith(".json") or name.startswith("."):
+                continue
+            job = self.get(name[:-5])
+            if job is not None:
+                jobs.append(job)
+        jobs.sort(key=lambda j: (j.created_utc or "", j.export_id), reverse=True)
+        return jobs
 
     def save(self, job: ExportJob) -> None:
         path = self._path(job.export_id)

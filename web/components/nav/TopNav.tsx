@@ -10,6 +10,7 @@ import { StatusStrip } from "./StatusStrip";
 const PRIMARY = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
+  { href: "/drops", label: "Drops" },
   { href: "/workflows", label: "Workflows", short: "Flows" },
   { href: "/settings/drive", label: "Drive" },
 ] as const;

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - cursor/railway-runpod-split-c975
+      - cursor/ship-loop-c975
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py

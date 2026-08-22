@@ -12,6 +12,7 @@ import {
   DropLedgerStatus,
   DropLedgerSync,
   DriveVideo,
+  DropPack,
   ExportJob,
   ExportVariantRef,
   Invite,
@@ -295,6 +296,9 @@ export async function createSplitDriveExport(
 
 export const getDriveExport = (exportId: string) =>
   fetch(`/api/drive/exports/${exportId}`, { cache: "no-store" }).then(json<ExportJob>);
+
+export const listDriveExports = () =>
+  fetch("/api/drive/exports", { cache: "no-store" }).then(json<DropPack[]>);
 
 export const retryDriveExport = (exportId: string) =>
   fetch(`/api/drive/exports/${exportId}/retry`, { method: "POST" }).then(json<ExportJob>);

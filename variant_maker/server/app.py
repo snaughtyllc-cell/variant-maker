@@ -67,6 +67,7 @@ from .drop_ledger import (
     update_post_url_cell,
     write_sheet_id_file,
 )
+from .drops import DropPack, build_drop_packs
 from .events import event_to_dict
 from .jobs import (
     Job,
@@ -97,10 +98,12 @@ from .models import (
     DriveStatusOut,
     DriveVideoOut,
     DriveVideosOut,
+    DropFileOut,
     DropLedgerEnsureOut,
     DropLedgerStatusOut,
     DropLedgerSyncIn,
     DropLedgerSyncOut,
+    DropPackOut,
     ExportCreateIn,
     ExportFileOut,
     ExportJobOut,
@@ -300,6 +303,27 @@ def _export_job_out(job: ExportJob) -> ExportJobOut:
         files=[ExportFileOut(source_id=f.source_id, index=f.index, filename=f.filename,
                              status=f.status, error=f.error, drive_file_id=f.drive_file_id)
                for f in job.files],
+    )
+
+
+def _drop_pack_out(pack: DropPack) -> DropPackOut:
+    return DropPackOut(
+        export_id=pack.export_id,
+        created_utc=pack.created_utc,
+        destination_id=pack.destination_id,
+        destination_name=pack.destination_name,
+        folder_id=pack.folder_id,
+        count=pack.count,
+        outcome=pack.outcome,
+        miss_labels=list(pack.miss_labels),
+        files=[
+            DropFileOut(
+                source_id=f.source_id, index=f.index, variant_id=f.variant_id,
+                job_id=f.job_id, drive_file_id=f.drive_file_id,
+                platform_result=f.platform_result, outcome=f.outcome,
+            )
+            for f in pack.files
+        ],
     )
 
 
@@ -1738,6 +1762,13 @@ def create_app(
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
         ExportRunner(_drive(), app.state.exports).start(job)
         return _export_job_out(job)
+
+    @app.get("/api/drive/exports", response_model=list[DropPackOut])
+    def list_exports() -> list[DropPackOut]:
+        packs = build_drop_packs(
+            app.state.exports.list(), app.state.destinations, store,
+        )
+        return [_drop_pack_out(p) for p in packs]
 
     @app.post("/api/drive/exports/split", status_code=201, response_model=SplitExportOut)
     def split_export(body: ExportSplitIn) -> SplitExportOut:

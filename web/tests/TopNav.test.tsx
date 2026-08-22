@@ -86,10 +86,11 @@ describe("TopNav", () => {
     expect(screen.getAllByRole("link", { name: "Diagnostics" }).length).toBeGreaterThan(0);
   });
 
-  it("exposes all four primary destinations", () => {
+  it("exposes primary destinations including Drops", () => {
     render(<TopNav />);
     expect(screen.getAllByRole("link", { name: "Studio" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Gallery" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
     expect(screen.getAllByRole("link", { name: "Workflows" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Drive" }).length).toBeGreaterThan(0);
   });

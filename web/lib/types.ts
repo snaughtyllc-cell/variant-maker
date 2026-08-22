@@ -102,6 +102,27 @@ export interface ExportJob {
   created_utc: string;
   files: ExportFile[];
 }
+export interface DropFile {
+  source_id: string;
+  index: number;
+  variant_id: string;
+  job_id: string | null;
+  drive_file_id: string | null;
+  platform_result: PlatformResult | null;
+  outcome: "pass" | "miss";
+}
+export interface DropPack {
+  export_id: string;
+  created_utc: string;
+  destination_id: string;
+  destination_name: string;
+  folder_id: string;
+  count: number;
+  outcome: "pass" | "miss";
+  miss_labels: string[];
+  files: DropFile[];
+}
+export type DropFilter = "all" | "week" | "misses" | "flagged_week";
 export interface SplitDestination {
   destination_id: string;
   label?: string | null;
