@@ -330,9 +330,14 @@ def test_talking_head_sample_emits_chroma_noise():
     assert f"c1_seed={ns}" in vf and f"c2_seed={ns}" in vf
     assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
     assert "alls=" not in vf
-    # 1080 canvas keeps the working 34–42 recipe — cloud is sampled but not drawn.
+    # 1080 canvas keeps the working 34–42 recipe — cloud/dust are sampled but not drawn.
     assert 4 - 1e-9 <= p["video"]["chroma_cloud"] <= 7 + 1e-9
+    assert 14 - 1e-9 <= p["video"]["luma_dust"] <= 20 + 1e-9
     assert "split[main]" not in vf
+    assert vf.count("noise=") == 1
+    assert "c0s=0" in vf
+    dust_c0 = [int(x) for x in re.findall(r"c0s=(\d+)", vf) if int(x) > 0]
+    assert dust_c0 == []
 
 
 def test_talking_head_720_sample_draws_cloud_without_phone_grain():
@@ -345,7 +350,7 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
     p = sample(MEDIUM, derive_seed(11, 5), shot="talking_head")
     vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
     assert "split[main][s]" in vf
-    assert vf.count("noise=") == 1
+    assert vf.count("noise=") == 2
     assert "gblur=sigma=4" in vf
     c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
     assert c1s and max(c1s) <= 7
@@ -354,6 +359,59 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
     assert "c1s=12" not in vf
     assert "c1s=20" not in vf and "c1s=21" not in vf and "c1s=22" not in vf
     assert "alls=" not in vf
+    dust = [int(x) for x in re.findall(r"c0s=(\d+)", vf) if int(x) > 0]
+    assert len(dust) == 1
+    assert 14 <= dust[0] <= 20
+    assert "c0f=t+u" in vf
+
+
+def test_apply_luma_dust_strength_caps_and_skips_phone_scale():
+    """720-calibrated like chroma cloud. Phone-scale would only buy +3–5 bits."""
+    assert filtergraph.apply_luma_dust_strength(16) == 16
+    assert filtergraph.apply_luma_dust_strength(14) == 14
+    assert filtergraph.apply_luma_dust_strength(20) == 20
+    assert filtergraph.apply_luma_dust_strength(40) == 20
+    assert filtergraph.apply_luma_dust_strength(0) == 0
+    assert filtergraph.apply_canvas_grain(16, 720, 1280) == 6
+
+
+def test_720_cloud_draws_luma_dust_not_stacked_chroma():
+    """Luma-only dust after the soft cloud. alls= would restack chroma snow."""
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 16,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert "gblur=sigma=4" in vf
+    assert vf.count("noise=") == 2
+    assert "c1s=5" in vf
+    assert "c0s=16" in vf
+    assert "c0f=t+u" in vf
+    assert "alls=" not in vf
+    assert vf.endswith("format=yuv420p")
+    vf1080 = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert vf1080.count("noise=") == 1
+    assert "c1s=40" in vf1080
+    assert "c0s=16" not in vf1080
+    assert "split[main]" not in vf1080
+
+
+def test_luma_dust_omitted_when_zero():
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert vf.count("noise=") == 1
+    assert "c0s=16" not in vf
+    assert "c1s=5" in vf
 
 
 def test_apply_chroma_cloud_strength_caps_old_band():

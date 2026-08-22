@@ -52,6 +52,10 @@ _CHROMA_CLOUD_FACTOR = 9
 # leftover 18–22 (and the loud 8–10 copies) so they cannot redraw snow.
 _CHROMA_CLOUD_STRENGTH_MAX = 7
 _CHROMA_CLOUD_BLUR = 4.0
+# 720 talking-head luma dust. Calibrated on the 720 grid (like chroma cloud),
+# not phone-scaled 1080 grain. Cap leftover 40–52 so quality-proxy VMAF
+# stays above the floor. Luma-only — alls= would restack chroma snow.
+_LUMA_DUST_MAX = 20
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
@@ -86,6 +90,14 @@ def apply_chroma_cloud_strength(cloud: float) -> int:
     return max(1, min(round(g), _CHROMA_CLOUD_STRENGTH_MAX))
 
 
+def apply_luma_dust_strength(dust: float) -> int:
+    """Clamp 720 luma dust. Do not phone-scale — that band only bought +3–5 bits."""
+    g = float(dust or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, min(round(g), _LUMA_DUST_MAX))
+
+
 def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTOR) -> tuple[int, int]:
     """Even low-res grid for the chroma overlay (720×1280 → 80×142)."""
     w = max(int(width), 2)
@@ -108,6 +120,15 @@ def chroma_cloud_applies(v: dict, width: int | None, height: int | None) -> bool
         return min(int(width), int(height)) < _GRAIN_REF_SHORT_EDGE
     except (TypeError, ValueError):
         return False
+
+
+def _luma_dust_filter(strength: int, seed: object = None) -> str:
+    """Luma-only temporal dust. c1s/c2s stay 0 so this is not stacked chroma."""
+    noise = f"noise=c0s={strength}:c0f=t+u:c1s=0:c2s=0"
+    if seed is not None:
+        s = int(seed) & 0x7FFFFFFF
+        noise += f":c0_seed={s}"
+    return noise
 
 
 def _chroma_cloud_graph(strength: int, width: int, height: int, seed: object = None) -> str:
@@ -306,6 +327,9 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
             int(oh),
             v.get("noise_seed"),
         )
+        dust = apply_luma_dust_strength(float(v.get("luma_dust") or 0.0))
+        if dust:
+            graph = f"{graph},{_luma_dust_filter(dust, v.get('noise_seed'))}"
         return f"{','.join(parts)},{graph},format=yuv420p"
 
     parts.append("format=yuv420p")

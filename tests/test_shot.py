@@ -65,3 +65,19 @@ def test_talking_head_chroma_cloud_band_is_softer_than_six_ten():
     assert (r.lo, r.hi) == (4, 7)
     assert r.hi < 10
     assert shot.chroma_cloud_range_for_shot(MEDIUM, "motion") is None
+    assert shot.chroma_cloud_range_for_shot(MEDIUM, None) is None
+
+
+def test_talking_head_luma_dust_band_is_720_calibrated():
+    """Soft cloud lands 24 bits. Luma 14–20 on the 720 grid is the uniqueness lever.
+
+    Not phone-scaled (that is only +3–5 bits). Not stacked full-res chroma.
+    1080 talking-head stays 34–42 c1s. Gate stays 24.
+    """
+    from variant_maker.presets import MEDIUM
+
+    r = shot.luma_dust_range_for_shot(MEDIUM, "talking_head")
+    assert r is not None
+    assert (r.lo, r.hi) == (14, 20)
+    assert shot.luma_dust_range_for_shot(MEDIUM, "motion") is None
+    assert shot.luma_dust_range_for_shot(MEDIUM, None) is None

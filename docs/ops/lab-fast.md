@@ -10,8 +10,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`,
-`cursor/fast-chroma-cloud-c975`, `cursor/fast-cloud-less-grain-c975`, or
-`cursor/fast-chroma-softer-c975`.
+`cursor/fast-chroma-cloud-c975`, `cursor/fast-cloud-less-grain-c975`,
+`cursor/fast-chroma-softer-c975`, or `cursor/fast-720-luma-dust-c975`.
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
 
