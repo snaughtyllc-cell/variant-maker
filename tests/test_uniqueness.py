@@ -31,11 +31,11 @@ def test_bits_from_ssim_math():
 
 
 def test_fast_gate_fits_medium_talking_head_headroom():
-    """Pass stays 24 bits (~38% UI). Medium talking-head should land ~35–42 bits (~55–65%).
+    """Pass stays 24 bits (~38% UI). 1080 medium talking-head can land ~35–42 bits.
 
-    Raising the *gate* to 32 previously escalated entire Fast 20-packs. Delivery is
-    a reconstructive rebuild-scale (not ±32 px, not a face-only zoom), VMAF-capped
-    warp, and grain under the 12M cap — not a higher floor.
+    Raising the *gate* to 32 previously escalated entire Fast 20-packs. 720 Fast
+    with usable chroma lands ~26–31 bits (~40–48%) — still a pass. Delivery is
+    not Pixel AI scramble and not a higher floor.
     """
     talking_head_medium_typical = 35
     assert uniqueness.TARGET_BITS == 24

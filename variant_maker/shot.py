@@ -27,9 +27,15 @@ SHOT_MOTION = "motion"
 # (best_effort, harvest skip). SSIM All sees chroma; VMAF is mostly luma.
 # Talking-head grain is chroma-only (noise_chroma). Local crop + chroma 40/56
 # scored 35/43 bits (55/67% UI). Lab chroma 40/45/48 scored 40/43/44 bits
-# (62/67/69% UI). Band 34–42 aims at typical 55–65% without overshoot.
-# Shrink does not collapse uniqueness grain to shot.lo when look overspends.
-# No extra rotate (captions go crooked). Crop/warp stay on the preset. Gate 24/24.
+# (62/67/69% UI). Band 34–42 aims at typical 55–65% on *1080*.
+# 720 SaveInta bench (2026-08-22): crop 0.86 + phone-safe c1s=14 → 26 bits
+# (41%). Same + rebuild 0.73/0.67 → 24 bits (38%) — lanczos smooths the
+# chroma 576 was scoring. c1s=27 → 37 bits (58%) — that IS the snow Jeff
+# rejected. Scoring at native 720 / 1080 does not recover those bits.
+# Do not remap talking-head onto preset rebuild to "buy" %. Do not clone
+# Pixel AI scramble. Gate 24/24. Shrink does not collapse uniqueness grain
+# to shot.lo when look overspends. No extra rotate (captions). Crop/warp
+# stay on the preset.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
