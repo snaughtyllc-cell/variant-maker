@@ -9,8 +9,9 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Workers | max 2 | max 1, min 0 |
 | Recycle | promote only | whenever |
 
-CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`
-or `cursor/fast-chroma-cloud-c975`. Pushes the `variant-fast:lab` tag only.
+CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`,
+`cursor/fast-chroma-cloud-c975`, or `cursor/fast-cloud-less-grain-c975`.
+Pushes the `variant-fast:lab` tag only.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
@@ -21,6 +22,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - `VF_ENGINE_REV=5c86ef2` (720 talking-head chroma cloud 18–22 on canvases shorter than 1080). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
 - Prior lab image `sha256:68406fd7…` / `9ad8836` was phone-safe 2.5 grain only (SaveInta 13–15 / 41–48%).
+- Lab pack `650f28dfb1f2` (`5c86ef2`): talking-head 42–46 bits / 66–72%, VMAF 96–100, **look rejected** — stacked phone grain c1s 12–15 on top of the cloud. Next lab image on this branch draws cloud *instead of* full-res chroma.
 
 Live Fast `j0b1q4iuunzhnq` was promoted to the same digest after the `06526b9` pack looked right (`VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 

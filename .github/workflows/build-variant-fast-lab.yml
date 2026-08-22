@@ -6,6 +6,7 @@ on:
     branches:
       - cursor/fast-shot-probe-c975
       - cursor/fast-chroma-cloud-c975
+      - cursor/fast-cloud-less-grain-c975
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py

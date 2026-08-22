@@ -36,11 +36,12 @@ SHOT_MOTION = "motion"
 # Pixel AI scramble. Gate 24/24. Shrink does not collapse uniqueness grain
 # to shot.lo when look overspends. No extra rotate (captions). Crop/warp
 # stay on the preset.
-# 720 chroma cloud: phone-safe grain is 13–15 / 41–48%. Overlaying chroma
-# noise made at 80×142 (then bicubic back) hit 32 bits (50%) without snow,
-# rainbow, or tiles. Band 18–22 (n24 read as a green cast). Derived from
-# grain — no extra RNG. Filtergraph applies it only when the canvas short
-# edge is under 1080 so 1080 talking-head stays on the working 34–42 recipe.
+# 720 chroma cloud: overlay at 80×142 (then bicubic back) hit 32 bits (50%)
+# without snow when it REPLACED phone-safe grain. Lab pack 650f28dfb1f2
+# stacked c1s 12–15 + cloud 18–22 → 42–46 bits / 66–72% and still read as
+# snow. Filtergraph draws cloud instead of full-res chroma
+# when the canvas short edge is under 1080. 1080 talking-head stays 34–42.
+# Band 18–22 (n24 read as a green cast). Derived from grain — no extra RNG.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),

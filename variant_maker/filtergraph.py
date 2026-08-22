@@ -82,6 +82,22 @@ def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTO
     return max((w // fac) // 2 * 2, 2), max((h // fac) // 2 * 2, 2)
 
 
+def chroma_cloud_applies(v: dict, width: int | None, height: int | None) -> bool:
+    """True when the 720 talking-head overlay will actually be drawn.
+
+    Sampler still emits phone-safe grain + chroma_cloud together (no extra RNG).
+    Drawing both is the snow Jeff rejected — cloud replaces full-res chroma on
+    canvases shorter than 1080. 1080 talking-head keeps the 34–42 recipe.
+    """
+    cloud = float(v.get("chroma_cloud") or 0.0)
+    if cloud <= _EPS or not width or not height:
+        return False
+    try:
+        return min(int(width), int(height)) < _GRAIN_REF_SHORT_EDGE
+    except (TypeError, ValueError):
+        return False
+
+
 def _chroma_cloud_graph(strength: int, width: int, height: int, seed: object = None) -> str:
     """Chroma-only overlay: generate noise at 1/9 size, blend onto Cb/Cr, leave luma."""
     lw, lh = chroma_cloud_size(width, height)
@@ -210,9 +226,16 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         conv = zscale_convert_filter(out)
         if conv:
             parts.append(conv)
-    # Talking-head chroma grain on the source grid (before platform scale). Strength
-    # follows area vs 1080 so 720p does not inherit 1080 chroma 34–42 glitter.
-    if v.get("grain", 0.0) > _EPS and v.get("noise_chroma"):
+    # Talking-head chroma grain on the source grid (before platform scale).
+    # Skip when the 720 chroma cloud will draw — stacking c1s 12–15 + cloud
+    # 18–22 is the snow on lab pack 650f28dfb1f2.
+    ow = platform.width or src.width
+    oh = platform.height or src.height
+    if (
+        v.get("grain", 0.0) > _EPS
+        and v.get("noise_chroma")
+        and not chroma_cloud_applies(v, ow, oh)
+    ):
         parts.append(_noise_filter(v, src.width, src.height))
     if platform.width and platform.height:
         parts.append(even_scale_filter(platform.width, platform.height))
@@ -263,15 +286,12 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
 
     ow = platform.width or src.width
     oh = platform.height or src.height
-    cloud = float(v.get("chroma_cloud") or 0.0)
-    if (
-        cloud > _EPS
-        and ow
-        and oh
-        and min(int(ow), int(oh)) < _GRAIN_REF_SHORT_EDGE
-    ):
+    if chroma_cloud_applies(v, ow, oh):
         graph = _chroma_cloud_graph(
-            max(1, round(cloud)), int(ow), int(oh), v.get("noise_seed"),
+            max(1, round(float(v.get("chroma_cloud") or 0.0))),
+            int(ow),
+            int(oh),
+            v.get("noise_seed"),
         )
         return f"{','.join(parts)},{graph},format=yuv420p"
 
