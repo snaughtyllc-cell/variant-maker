@@ -18,13 +18,12 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:a9055e86b63703b26a5a30e6a6c714df6aed47c0241670fda95b4ccd8505b32f`
-- `VF_ENGINE_REV=e1c3b8a` (720 talking-head chroma cloud 18–22 **instead of** phone grain). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:702f41cdc146728de9cef8240da6addd4c41882e18f98baa3b6a2acfbe8b70de`
+- `VF_ENGINE_REV=8df4cc4` (720 cloud 6–10 + gblur, no phone grain). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
-- Prior lab image `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Jeff rejected the look.
-- Prior lab image `sha256:68406fd7…` / `9ad8836` was phone-safe 2.5 grain only (SaveInta 13–15 / 41–48%).
-- Lab pack `650f28dfb1f2` (`5c86ef2`): talking-head 42–46 bits / 66–72%, VMAF 96–100, **look rejected** — stacked grain.
-- Lab pack `6d3e91ab7fd4` (`e1c3b8a`): same clip, cloud only (one `noise=`), 40–43 bits / 62.5–67.2%, VMAF 97–100. Awaiting Jeff eyeball.
+- Prior `sha256:a9055e86…` / `e1c3b8a`: cloud-only 18–22. Pack `6d3e91ab7fd4` 40–43 bits / 62–67%, **look rejected**.
+- Prior `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Pack `650f28dfb1f2` **look rejected**.
+- Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. Awaiting Jeff eyeball.
 
 Live Fast `j0b1q4iuunzhnq` was promoted to the same digest after the `06526b9` pack looked right (`VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 
