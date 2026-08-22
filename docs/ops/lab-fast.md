@@ -17,9 +17,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`
-- `VF_ENGINE_REV=06526b9` (chroma 34–42, per-copy seed, talking-head does not peer-escalate). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:9f8785cbf9cc8ee20b360b237c812cecb5d0d0f4ba6d484b403d533e4722d52e`
+- `VF_ENGINE_REV=5c86ef2` (720 talking-head chroma cloud 18–22 on canvases shorter than 1080). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
+- Prior lab image `sha256:68406fd7…` / `9ad8836` was phone-safe 2.5 grain only (SaveInta 13–15 / 41–48%).
 
 Live Fast `j0b1q4iuunzhnq` was promoted to the same digest after the `06526b9` pack looked right (`VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 
