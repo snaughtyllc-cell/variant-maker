@@ -23,10 +23,12 @@ Keeping 720p without touching grain would still look cheap: chroma 40 on
    source size. 4K still downscales. `none` is unchanged.
 2. **Grain follows the grid it hits.** Sampler bands stay 1080-calibrated
    (talking-head medium **34–42**, motion luma **7–12**). `filtergraph`
-   scales ffmpeg strength by `min(w,h) / 1080`, capped at 1.0.
+   scales ffmpeg strength by `(min(w,h) / 1080)²`, capped at 1.0.
+   Linear `short/1080` left the same *on-screen* grain on a 720p phone
+   (each pixel is 1.5× larger). Area scale is the display-size fix.
    - Chroma (talking-head) hits the **source** grid (before platform scale)
-     → 720p chroma 40 becomes **27**.
-   - Luma (motion) hits the **output** canvas → 720p luma 8 becomes **5**.
+     → 720p chroma 40 becomes **18** (was 27 under linear).
+   - Luma (motion) hits the **output** canvas → 720p luma 8 becomes **4**.
 3. HQ still targets **1080×1920** so Real-ESRGAN can upscale.
 
 Gate **24/24** unchanged. Fast still never face-protects.

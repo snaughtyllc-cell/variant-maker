@@ -38,16 +38,17 @@ _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
 _LOUDNORM_MIN_S = 3.0
-# Sampler grain bands are calibrated on 1080×1920. ffmpeg noise is per-pixel, so a
-# 720p talking-head that inherits chroma 34–42 looks like glitter. Scale strength
-# with the short edge; never go above the 1080 calibration (4K downscales stay 1.0).
+# Sampler grain bands are calibrated on 1080×1920. ffmpeg noise is per-pixel.
+# Linear short/1080 left the same on-screen grain on 720p (bigger pixels).
+# Area (short/1080)² is the display-size fix. Never go above the 1080
+# calibration (4K downscales stay 1.0).
 _GRAIN_REF_SHORT_EDGE = 1080
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 
 def grain_scale_for_size(width: int | None, height: int | None) -> float:
-    """Linear scale vs 1080p short edge. Capped at 1 so we never add 1080+ glitter."""
+    """Area scale vs 1080p short edge. Capped at 1 so we never add 1080+ glitter."""
     if not width or not height:
         return 1.0
     try:
@@ -56,7 +57,8 @@ def grain_scale_for_size(width: int | None, height: int | None) -> float:
         return 1.0
     if short <= 0:
         return 1.0
-    return min(short / _GRAIN_REF_SHORT_EDGE, 1.0)
+    linear = min(short / _GRAIN_REF_SHORT_EDGE, 1.0)
+    return linear * linear
 
 
 def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> int:
@@ -180,7 +182,7 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         if conv:
             parts.append(conv)
     # Talking-head chroma grain on the source grid (before platform scale). Strength
-    # follows the short edge so 720p does not inherit 1080 chroma 34–42 glitter.
+    # follows area vs 1080 so 720p does not inherit 1080 chroma 34–42 glitter.
     if v.get("grain", 0.0) > _EPS and v.get("noise_chroma"):
         parts.append(_noise_filter(v, src.width, src.height))
     if platform.width and platform.height:
