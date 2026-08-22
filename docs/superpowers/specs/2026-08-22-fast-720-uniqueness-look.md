@@ -45,10 +45,16 @@ does not recover the 55% band.
 
 ## What we do
 
-- Keep phone-safe 720 grain. Keep chroma on for talking-head.
-- Treat **~40–50% as a passing usable 720 Fast pack**. Pass stays 38%.
+- Signed 720 talking-head Fast **look** (lab `39ecb97`, pack `quietdustmed`):
+  chroma cloud **4–7** + `gblur=sigma=4` + luma-only dust **8–12**.
+  Jeff: **that's usable**. Not live — SaveInta scored **23/23 bits (36%)**,
+  `below_target`. Live Fast stays 6–10 cloud (`4f94edd`) until uniqueness
+  is accepted or he says ship.
+- Do not put 14–20 dust back (c0s 15–17 was a little much).
+- Do not turn chroma back to 6–10 / 18–22 on this canvas.
+- Treat **~40–50% as a passing usable 720 uniqueness number** when the look
+  also holds. Pass stays 38% (24 bits). This signed look sits **under** that.
 - 55–65% remains the **1080** talking-head band (chroma 34–42 on 1080 pixels).
-- Studio copy says that so 41% is not read as a miss.
 - True pixel rewrite without snow is **HQ Real-ESRGAN**, a separate pack —
   not Fast CPU, not Pixel AI scramble.
 
