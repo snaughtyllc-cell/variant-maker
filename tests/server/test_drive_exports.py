@@ -61,6 +61,39 @@ def test_build_export_files_empty_raises(tmp_path):
         build_export_files(store, [VariantRef("s1", 2)])  # missing index
 
 
+def test_runner_still_uploads_when_tenant_context_drops(tmp_path):
+    """Send to Drive starts a daemon thread. That thread has no request tenant.
+
+    If the runner keeps an AttrProxy store, get() looks in the empty fallback
+    and the job stays running with every file pending (0 / 20 forever).
+    """
+    from types import SimpleNamespace
+
+    from variant_maker.server.auth_app import AttrProxy, tenant_cv
+
+    store, ws = _store_with_ok(tmp_path)
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    tenant_exports = ExportStore(ws.exports_dir())
+    fallback = ExportStore(str(tmp_path / "fallback-exports"))
+    proxy = AttrProxy("exports", fallback)
+    files = build_export_files(store, [VariantRef("s1", 1)])
+    token = tenant_cv.set(SimpleNamespace(exports=tenant_exports))
+    try:
+        job = proxy.create(destination_id="dst_x", folder_id=folder, files=files)
+        ExportRunner(drive, proxy).start(job)
+    finally:
+        tenant_cv.reset(token)
+    for _ in range(50):
+        job = tenant_exports.get(job.export_id)
+        if job.state in ("succeeded", "partial", "failed"):
+            break
+        time.sleep(0.05)
+    assert job.state == "succeeded", job.state
+    assert job.files[0].status == "succeeded"
+    assert fallback.get(job.export_id) is None
+
+
 def test_runner_uploads_and_suffixes_collision(tmp_path):
     store, ws = _store_with_ok(tmp_path)
     drive = FakeDrive()
