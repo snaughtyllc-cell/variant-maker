@@ -176,9 +176,10 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
     <div
       onClick={ready ? onOpen : undefined}
       style={{
-        aspectRatio: "9 / 16",
-        borderRadius: 9,
         position: "relative",
+        width: "100%",
+        alignSelf: "start",
+        borderRadius: 9,
         overflow: "hidden",
         cursor: ready ? "pointer" : "default",
         border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
@@ -239,11 +240,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         v{String(variant.index).padStart(2, "0")}
       </span>
       {ready ? (
-        <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
+        <VideoThumb src={variant.file_url} />
       ) : (
         <div
-          className="absolute inset-0"
           style={{
+            aspectRatio: "9 / 16",
+            width: "100%",
             background: "#14141d",
             display: "flex",
             alignItems: "center",

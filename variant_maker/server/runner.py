@@ -14,7 +14,7 @@ from .events import VariantEvent
 
 # Stage-1 LocalRunner defaults (see plan Global Constraints).
 DEFAULT_PRESET = "medium"
-DEFAULT_PLATFORM = "tiktok"   # vertical 1080x1920
+DEFAULT_PLATFORM = "tiktok"   # social canvas follows source AR (9:16 or 16:9)
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
 # Fast vs-source *gate*: 24 bits (~38% UI). TikFusion floor is ~18. Raising the
