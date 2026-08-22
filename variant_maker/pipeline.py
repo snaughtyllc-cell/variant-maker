@@ -22,7 +22,8 @@ from .shot import classify_shot
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
-# Medium crop + reconstructive rebuild_scale sized so talking-head *scores* ~35–42 bits (~55–65% UI).
+# Gate 24/24 (~38% UI). 1080 talking-head medium *can* score ~35–42 bits
+# (~55–65% UI). Usable 720 Fast lands ~26–31 bits (~40–48%) — still a pass.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]

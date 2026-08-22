@@ -181,7 +181,7 @@ export function QualityPanel({
         </div>
       )}
 
-      {/* Uniqueness — higher better; vs original even for n=1. Typical medium ~55–65%; pass ~38%. */}
+      {/* Uniqueness — higher better; vs original even for n=1. Pass ~38%. 1080 medium ~55–65%; usable 720 Fast ~40–50%. */}
       <QRow label="Uniqueness">
         {uniquenessPct != null ? (
           <>
@@ -221,7 +221,7 @@ export function QualityPanel({
             margin: "-4px 2px 8px",
           }}
         >
-          target ≥ {pct01(uniquenessTarget)}% vs the original · typical medium ~55–65%
+          target ≥ {pct01(uniquenessTarget)}% vs the original · 1080 medium ~55–65% · usable 720 ~40–50%
         </div>
       )}
 
