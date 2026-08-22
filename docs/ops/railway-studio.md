@@ -15,6 +15,9 @@ Team browser
 
 Studio is live at https://varyforge-studio-production.up.railway.app
 
+Experiments use **Lab Studio** (separate Railway env, empty volume, lab Fast).
+See [`lab-studio.md`](lab-studio.md). Do not restart live to show a lab pack.
+
 Until RunPod + object-store env is set, Studio still works: the start script
 falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
 too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,

@@ -15,7 +15,7 @@ def test_health_ok():
     client = TestClient(create_app())
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    assert resp.json() == {"status": "ok", "lab": False}
 
 
 def _client(tmp_path, plan=None):
@@ -651,7 +651,13 @@ def test_delete_source_endpoint_removes_gallery_card(tmp_path):
 def test_cli_build_app_serves_health(tmp_path):
     from variant_maker.server.cli import build_app
     client = TestClient(build_app(str(tmp_path)))
-    assert client.get("/api/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok", "lab": False}
+
+
+def test_health_lab_flag(monkeypatch):
+    monkeypatch.setenv("VARIANT_LAB", "1")
+    client = TestClient(create_app())
+    assert client.get("/api/health").json() == {"status": "ok", "lab": True}
 
 
 def test_make_runner_local():
