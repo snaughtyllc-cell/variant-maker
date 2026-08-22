@@ -20,13 +20,14 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:702f41cdc146728de9cef8240da6addd4c41882e18f98baa3b6a2acfbe8b70de`
-- `VF_ENGINE_REV=8df4cc4` (720 cloud 6–10 + gblur, no phone grain). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:cd68a8db77a1b3fd9781e2f9fb9328d1c17f3e543fd8725bf652b3b3a8c39ccf`
+- `VF_ENGINE_REV=568973c` (720 cloud 4–7 + `gblur=sigma=4`). `VF_LAB=1`
+- Prior lab image `sha256:702f41cdc146728de9cef8240da6addd4c41882e18f98baa3b6a2acfbe8b70de` / `8df4cc4` (cloud 6–10 + gblur 2)
 - Workers: min 0, max **1**, idle 120s
 - Prior `sha256:a9055e86…` / `e1c3b8a`: cloud-only 18–22. Pack `6d3e91ab7fd4` 40–43 bits / 62–67%, **look rejected**.
 - Prior `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Pack `650f28dfb1f2` **look rejected**.
 - Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. **Jeff: these are better.** Promoted to live Fast `j0b1q4iuunzhnq` (`VF_ENGINE_REV=8df4cc4`, **no `VF_LAB`**, max 2, idle 600). Lab stays `VF_LAB=1`.
-- Live SaveInta look-test (ship-loop Gallery): cloud 6–10 + sigma=2 still **chroma a bit noticeable**. Next lab: **4–7 + `gblur=sigma=4`**, cap 7 (`cursor/fast-chroma-softer-c975`). Gate stays 24. Do not PATCH live to try it.
+- Live SaveInta look-test (ship-loop Gallery `looktest4c41`): cloud 6–10 + sigma=2 still **chroma a bit noticeable**. Lab now on **4–7 + `gblur=sigma=4`**, cap 7 (`568973c` / `cd68a8db…`). SaveInta lab pack `softestd3ce5`: c1s=5, 24/24 bits, VMAF 100/98, medium. Gate stays 24. Do not PATCH live to try it.
 
 Live Fast `j0b1q4iuunzhnq` is on `sha256:8ad6439c…` / `4f94edd` (720 cloud 6–10 + 16:9 canvas, **no `VF_LAB`**, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 
@@ -43,6 +44,7 @@ Lab packs:
 | `b6c2c9c` no talking-head peer-escalate (`4d0e155b` / `3bf967b1`) | all medium **40/43/44 bits (62/67/69%)**, VMAF 98; two copies over 65% | **51–53 bits (~80–83%)**, VMAF 94–100, peer 53, `ok` |
 | **`06526b9` chroma 34–42** (`77bfac36` / `9141c13e`) **promoted to live** | **all medium 40/40/40 bits (62%)**, VMAF **98.2/98.4/98.6**, crop 0.84–0.88, chroma 39, rotate 0, `ok`, no escalate | **51–52 bits (~80%)**, VMAF 98–100, peer 50–52, `ok` |
 | `8df4cc4` 720 cloud 6–10 + gblur (`3a2231f5b731`) **look better; on live as `4f94edd`** | **35–38 bits (55–59%)**, VMAF 95–100, cloud 7–10, no phone grain, all medium | — |
+| `568973c` 4–7 + gblur 4 (`softestd3ce5`, SaveInta) **lab; not live** | **24/24 bits (38%)**, VMAF 100 / 98.3, c1s=5, sigma=4, 720×1280, medium, no escalate | — |
 
 Live pin: `sha256:8ad6439c6d6ccb3c2a9793dc1d197d2c5565d12801f06005c429d9bd2752b1d3` (`4f94edd`, 720 cloud + 16:9 canvas). Prior live `06526b9` digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
 
