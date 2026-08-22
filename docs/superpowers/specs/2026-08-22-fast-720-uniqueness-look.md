@@ -49,8 +49,10 @@ does not recover the 55% band.
   `gblur=sigma=4` + luma-only dust **11–13**. Lab `13cd292` pack
   `cleargate24a`: **26/28 bits (41/44%)**, VMAF 96.4 / 97.6, c0s=12, both
   medium `ok`. `quietdustmed` (8–12, c0s=9) was **usable** but 23 bits.
-  `softdust815a` (14–20, c0s 15/17) was a little much. Not live — Live Fast
-  stays 6–10 cloud (`4f94edd`) until Jeff says ship.
+  `softdust815a` (14–20, c0s 15/17) was a little much. Jeff: **Yea ship it.**
+  Live Fast `j0b1q4iuunzhnq` is digest-pinned to
+  `sha256:82daa69c…` / `13cd292`, **no `VF_LAB`**, max 2, idle 600. Lab
+  stays `VF_LAB=1` on the same digest.
 - Do not put 14–20 dust back. Do not turn chroma back to 6–10 / 18–22.
 - Treat **~40–50% as a passing usable 720 uniqueness number** when the look
   also holds. Pass stays 38% (24 bits). This pack is in that band.
