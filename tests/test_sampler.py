@@ -507,6 +507,8 @@ def test_motion_keeps_budgeted_grain():
     assert "noise_seed" not in plain["video"]
     assert "chroma_cloud" not in moved["video"]
     assert "chroma_cloud" not in plain["video"]
+    assert "luma_dust" not in moved["video"]
+    assert "luma_dust" not in plain["video"]
 
 
 def test_talking_head_chroma_cloud_from_grain_no_extra_rng():
@@ -528,3 +530,29 @@ def test_talking_head_chroma_cloud_from_grain_no_extra_rng():
     assert cloud_r.lo == 4 and cloud_r.hi == 7
     assert chroma_cloud_range_for_shot(MEDIUM, "motion") is None
     assert chroma_cloud_range_for_shot(MEDIUM, None) is None
+
+
+def test_talking_head_luma_dust_from_grain_no_extra_rng():
+    """720 luma dust tracks grain. Same seed must not shift crop/resample/cloud."""
+    from variant_maker.shot import chroma_cloud_range_for_shot, luma_dust_range_for_shot
+
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert "luma_dust" not in plain["video"]
+    dust_r = luma_dust_range_for_shot(MEDIUM, "talking_head")
+    assert dust_r is not None
+    assert dust_r.lo - 1e-9 <= head["video"]["luma_dust"] <= dust_r.hi + 1e-9
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    grain_span = 42.0 - 34.0
+    expect = dust_r.lo + (head["video"]["grain"] - 34.0) / grain_span * (dust_r.hi - dust_r.lo)
+    assert head["video"]["luma_dust"] == pytest.approx(expect)
+    assert dust_r.lo == 11 and dust_r.hi == 13
+    cloud_r = chroma_cloud_range_for_shot(MEDIUM, "talking_head")
+    assert cloud_r is not None
+    assert head["video"]["chroma_cloud"] == pytest.approx(
+        cloud_r.lo + (head["video"]["grain"] - 34.0) / grain_span * (cloud_r.hi - cloud_r.lo),
+    )
+    assert luma_dust_range_for_shot(MEDIUM, "motion") is None
+    assert luma_dust_range_for_shot(MEDIUM, None) is None

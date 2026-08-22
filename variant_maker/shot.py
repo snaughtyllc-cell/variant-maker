@@ -40,8 +40,14 @@ SHOT_MOTION = "motion"
 # stacked phone grain + cloud 18–22 (snow). `6d3e91ab7fd4` drew cloud-only
 # 18–22 — still grain on the face. `8df4cc4` 6–10 + gblur 2 was better than
 # those, but live SaveInta still read as chroma. Band is 4–7; filtergraph
-# caps at 7 and gblurs sigma=4. 1080 talking-head stays 34–42. Derived from
-# grain — no extra RNG. Gate stays 24.
+# caps at 7 and gblurs sigma=4. Soft cloud on SaveInta (`softestd3ce5`)
+# landed 24/24 bits (38%) — look approved, uniqueness too low. 720 luma
+# dust 14–20 (c0s 15–17 on `softdust815a`) read as a little much. 8–12
+# (`quietdustmed`, c0s=9) was usable but scored 23 bits. Band is 11–13
+# so copies sit near c0s=12 to clear the 24-bit gate without redrawing
+# 15–17. Filtergraph caps leftover 14–20 at 13. Luma-only, not stacked c1s.
+# 1080 talking-head stays 34–42. Derived from grain — no extra RNG.
+# Gate stays 24. Do not expect 55% on a still 720 face.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -56,6 +62,10 @@ _GRAIN_FOR_SHOT = {
     ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
 _CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
+# 720-calibrated luma. Unscaled 14–20 (`softdust815a` c0s 15–17) was a
+# little much. 8–12 (`quietdustmed` c0s=9) was usable but 23 bits. 11–13
+# aims at the 24-bit gate. Luma-only so we do not restack c1s 12–15 snow.
+_LUMA_DUST_FOR_SHOT = Range(11, 13)
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:
@@ -77,6 +87,13 @@ def chroma_cloud_range_for_shot(preset, shot: str | None) -> Range | None:
     if grain_range_for_shot(preset, shot) is None:
         return None
     return _CHROMA_CLOUD_FOR_SHOT
+
+
+def luma_dust_range_for_shot(preset, shot: str | None) -> Range | None:
+    """720 talking-head luma dust band, or None to skip (motion / no shot)."""
+    if grain_range_for_shot(preset, shot) is None:
+        return None
+    return _LUMA_DUST_FOR_SHOT
 
 
 def _duration(path: str, given: float | None) -> float:

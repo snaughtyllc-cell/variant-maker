@@ -65,3 +65,20 @@ def test_talking_head_chroma_cloud_band_is_softer_than_six_ten():
     assert (r.lo, r.hi) == (4, 7)
     assert r.hi < 10
     assert shot.chroma_cloud_range_for_shot(MEDIUM, "motion") is None
+    assert shot.chroma_cloud_range_for_shot(MEDIUM, None) is None
+
+
+def test_talking_head_luma_dust_band_is_720_calibrated():
+    """c0s=9 scored 23; 15–17 was a little much. Sit 11–13 to clear the 24 gate.
+
+    Not stacked full-res chroma. 1080 talking-head stays 34–42 c1s. Gate stays 24.
+    """
+    from variant_maker.presets import MEDIUM
+
+    r = shot.luma_dust_range_for_shot(MEDIUM, "talking_head")
+    assert r is not None
+    assert (r.lo, r.hi) == (11, 13)
+    assert r.lo > 9
+    assert r.hi < 15
+    assert shot.luma_dust_range_for_shot(MEDIUM, "motion") is None
+    assert shot.luma_dust_range_for_shot(MEDIUM, None) is None

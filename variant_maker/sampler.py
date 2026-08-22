@@ -24,7 +24,12 @@ import random
 from dataclasses import replace
 
 from .presets import Preset, Range
-from .shot import chroma_cloud_range_for_shot, grain_range_for_shot, rebuild_range_for_shot
+from .shot import (
+    chroma_cloud_range_for_shot,
+    grain_range_for_shot,
+    luma_dust_range_for_shot,
+    rebuild_range_for_shot,
+)
 
 # Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
 _MIN_REMAINING_S = 0.05
@@ -276,6 +281,9 @@ def sample(
         if cloud_r is not None:
             # Remap from the (possibly shrunk) grain — no extra RNG.
             raw["chroma_cloud"] = _remap_range(raw["grain"], shot_grain, cloud_r)
+        dust_r = luma_dust_range_for_shot(preset, shot)
+        if dust_r is not None:
+            raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats

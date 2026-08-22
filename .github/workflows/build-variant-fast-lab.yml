@@ -8,6 +8,7 @@ on:
       - cursor/fast-chroma-cloud-c975
       - cursor/fast-cloud-less-grain-c975
       - cursor/fast-chroma-softer-c975
+      - cursor/fast-720-luma-dust-c975
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py

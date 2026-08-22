@@ -21,9 +21,11 @@ METRIC_VERSION = "ssim_bits_v1"
 # TikFusion Smart Detector floor ≈ 18 bits (~28% unique). Fast vs-source *gate*
 # is 24 bits (24/64 = 0.375 ≈ 38% UI). 1080 talking-head medium *can* score
 # ~35–42 bits (~55–65% UI) via crop 0.84–0.90 + chroma 34–42. That same
-# chroma on 720 is snow; phone-safe 720 grain lands ~26–31 bits (~40–48%)
-# and still passes. Rebuild / native-canvas SSIM do not buy the 55% band
-# on a still face. Not Pixel AI scramble, not a higher floor.
+# chroma on 720 is snow; soft cloud 4–7 lands ~24 bits (38%). 720 luma
+# dust 8–12 (`quietdustmed` c0s=9) was usable but scored 23 bits. 11–13
+# aims at the 24-bit gate without redrawing 15–17. Still not the 55% 1080
+# band, and still not a higher floor. Rebuild / native-canvas SSIM do not
+# buy 55% on a still face. Not Pixel AI scramble.
 # Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
 # Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 24
