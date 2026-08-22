@@ -26,3 +26,38 @@ def test_none_and_neural_pre_stay_uncapped():
     assert x264_rate_args(none) == []
     pre = Platform("neural-pre", 540, 960, 30.0)
     assert x264_rate_args(pre) == []
+
+
+def test_fit_keeps_720p_portrait_inside_tiktok_canvas():
+    from variant_maker.platforms import fit_platform_to_source
+
+    fitted = fit_platform_to_source(get_platform("tiktok"), 720, 1280)
+    assert fitted.width == 720
+    assert fitted.height == 1280
+    assert fitted.maxrate == SOCIAL_MAXRATE
+    assert fitted.name == "tiktok"
+
+
+def test_fit_evens_odd_source_dims():
+    from variant_maker.platforms import fit_platform_to_source
+
+    fitted = fit_platform_to_source(get_platform("reels"), 721, 1281)
+    assert fitted.width == 720
+    assert fitted.height == 1280
+
+
+def test_fit_leaves_1080p_and_4k_on_the_social_canvas():
+    from variant_maker.platforms import fit_platform_to_source
+
+    same = fit_platform_to_source(get_platform("tiktok"), 1080, 1920)
+    assert same.width == 1080 and same.height == 1920
+    down = fit_platform_to_source(get_platform("tiktok"), 2160, 3840)
+    assert down.width == 1080 and down.height == 1920
+
+
+def test_fit_does_not_touch_none():
+    from variant_maker.platforms import fit_platform_to_source
+
+    none = get_platform("none")
+    fitted = fit_platform_to_source(none, 640, 360)
+    assert fitted.width is None and fitted.height is None

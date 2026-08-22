@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import autotune, quality, uniqueness
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
-from .platforms import get_platform
+from .platforms import fit_platform_to_source, get_platform
 from .presets import get_preset
 from .probe import probe
 from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
@@ -101,6 +101,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
     hq = neural is not None and neural.available()
 
     src = probe(input_path)
+    # Fast: never lanczos-upscale a sub-canvas source (720p IG → 1080 glitter).
+    # HQ Real-ESRGAN is the true upscaler and still targets the full social canvas.
+    if not hq:
+        platform = fit_platform_to_source(platform, src.width, src.height)
     stem = os.path.splitext(os.path.basename(input_path))[0]
     shot_info = classify_shot(src.path, src.duration_s)
     shot_kind = shot_info.get("kind")
