@@ -62,12 +62,14 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
     a = params["audio"]
     out_color = resolve_output_color(src.color)
 
+    vf = build_video_filters(params, src, platform)
+    video_flag = "-filter_complex" if ";" in vf else "-vf"
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-i", src.path,
         "-map_metadata", "-1",
         "-fflags", "+bitexact",
-        "-vf", build_video_filters(params, src, platform),
+        video_flag, vf,
         "-c:v", "libx264", "-preset", "medium",
         "-crf", str(v["crf"]), "-g", str(v["gop"]),
         *x264_rate_args(platform),

@@ -36,6 +36,11 @@ SHOT_MOTION = "motion"
 # Pixel AI scramble. Gate 24/24. Shrink does not collapse uniqueness grain
 # to shot.lo when look overspends. No extra rotate (captions). Crop/warp
 # stay on the preset.
+# 720 chroma cloud: phone-safe grain is 13–15 / 41–48%. Overlaying chroma
+# noise made at 80×142 (then bicubic back) hit 32 bits (50%) without snow,
+# rainbow, or tiles. Band 18–22 (n24 read as a green cast). Derived from
+# grain — no extra RNG. Filtergraph applies it only when the canvas short
+# edge is under 1080 so 1080 talking-head stays on the working 34–42 recipe.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -49,6 +54,7 @@ _GRAIN_FOR_SHOT = {
     ("medium", SHOT_TALKING_HEAD): Range(34, 42),
     ("strong", SHOT_TALKING_HEAD): Range(46, 58),
 }
+_CHROMA_CLOUD_FOR_SHOT = Range(18, 22)
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:
@@ -63,6 +69,13 @@ def grain_range_for_shot(preset, shot: str | None) -> Range | None:
     if not shot:
         return None
     return _GRAIN_FOR_SHOT.get((preset.name, shot))
+
+
+def chroma_cloud_range_for_shot(preset, shot: str | None) -> Range | None:
+    """Low-res chroma overlay band for talking-head, or None to skip."""
+    if grain_range_for_shot(preset, shot) is None:
+        return None
+    return _CHROMA_CLOUD_FOR_SHOT
 
 
 def _duration(path: str, given: float | None) -> float:

@@ -505,3 +505,25 @@ def test_motion_keeps_budgeted_grain():
     assert "noise_chroma" not in plain["video"]
     assert "noise_seed" not in moved["video"]
     assert "noise_seed" not in plain["video"]
+    assert "chroma_cloud" not in moved["video"]
+    assert "chroma_cloud" not in plain["video"]
+
+
+def test_talking_head_chroma_cloud_from_grain_no_extra_rng():
+    """720 uniqueness overlay tracks grain. Same seed must not shift crop/resample."""
+    from variant_maker.shot import chroma_cloud_range_for_shot
+
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert "chroma_cloud" not in plain["video"]
+    cloud_r = chroma_cloud_range_for_shot(MEDIUM, "talking_head")
+    assert cloud_r is not None
+    assert cloud_r.lo - 1e-9 <= head["video"]["chroma_cloud"] <= cloud_r.hi + 1e-9
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    grain_span = 42.0 - 34.0
+    expect = 18.0 + (head["video"]["grain"] - 34.0) / grain_span * (22.0 - 18.0)
+    assert head["video"]["chroma_cloud"] == pytest.approx(expect)
+    assert chroma_cloud_range_for_shot(MEDIUM, "motion") is None
+    assert chroma_cloud_range_for_shot(MEDIUM, None) is None

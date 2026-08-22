@@ -313,6 +313,47 @@ def test_talking_head_sample_emits_chroma_noise():
     assert f"c1_seed={ns}" in vf and f"c2_seed={ns}" in vf
     assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
     assert "alls=" not in vf
+    # 1080 canvas keeps the working 34–42 recipe — cloud is sampled but not drawn.
+    assert 18 - 1e-9 <= p["video"]["chroma_cloud"] <= 22 + 1e-9
+    assert "split[main]" not in vf
+
+
+def test_chroma_cloud_size_is_even_ninth():
+    assert filtergraph.chroma_cloud_size(720, 1280) == (80, 142)
+    w, h = filtergraph.chroma_cloud_size(1080, 1920)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) == (120, 212)
+
+
+def test_chroma_cloud_on_720_canvas_not_1080():
+    """Phone-safe grain + low-res chroma overlay. 1080 talking-head stays as-is."""
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7, "chroma_cloud": 20,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert "scale=80:142" in vf
+    assert "c1s=20" in vf
+    assert "c1s=15" in vf
+    assert "blend=c0_expr='A':c1_expr='A+B-128':c2_expr='A+B-128'" in vf
+    assert vf.endswith("format=yuv420p")
+    vf1080 = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "split[main]" not in vf1080
+    assert "blend=" not in vf1080
+    assert vf1080.count("noise=") == 1
+
+
+def test_chroma_cloud_omitted_when_zero():
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={"grain": 40.0, "noise_chroma": True, "chroma_cloud": 0})
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[" not in vf
+    assert "blend=" not in vf
 
 
 # ---- no-op axes are omitted -------------------------------------------------

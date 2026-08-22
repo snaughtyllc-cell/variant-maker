@@ -9,7 +9,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Workers | max 2 | max 1, min 0 |
 | Recycle | promote only | whenever |
 
-CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`.
+CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`
+or `cursor/fast-chroma-cloud-c975`. Pushes the `variant-fast:lab` tag only.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
