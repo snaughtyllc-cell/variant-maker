@@ -1,0 +1,39 @@
+name: Build VaryForge Fast CPU worker (lab)
+
+# Experiment image only. Does not overwrite variant-fast:latest (live).
+on:
+  push:
+    branches:
+      - cursor/fast-shot-probe-c975
+    paths:
+      - deploy/runpod/Dockerfile.fast
+      - deploy/runpod/cp_handler.py
+      - variant_maker/*.py
+      - variant_maker/server/**
+      - pyproject.toml
+      - .github/workflows/build-variant-fast-lab.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Fast CPU lab tag
+        run: |
+          docker build -f deploy/runpod/Dockerfile.fast \
+            -t ghcr.io/snaughtyllc-cell/variant-fast:lab .
+          docker push ghcr.io/snaughtyllc-cell/variant-fast:lab
