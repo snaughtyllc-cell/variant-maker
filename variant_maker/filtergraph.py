@@ -52,10 +52,9 @@ _CHROMA_CLOUD_FACTOR = 9
 # leftover 18–22 (and the loud 8–10 copies) so they cannot redraw snow.
 _CHROMA_CLOUD_STRENGTH_MAX = 7
 _CHROMA_CLOUD_BLUR = 4.0
-# 720 talking-head luma dust. Calibrated on the 720 grid (like chroma cloud),
-# not phone-scaled 1080 grain. Cap leftover 40–52 so quality-proxy VMAF
-# stays above the floor. Luma-only — alls= would restack chroma snow.
-_LUMA_DUST_MAX = 20
+# 720 talking-head luma dust. Cap leftover 14–20 (`softdust815a` c0s 15–17
+# read as a little much). Luma-only — alls= would restack chroma snow.
+_LUMA_DUST_MAX = 12
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
@@ -91,7 +90,7 @@ def apply_chroma_cloud_strength(cloud: float) -> int:
 
 
 def apply_luma_dust_strength(dust: float) -> int:
-    """Clamp 720 luma dust. Do not phone-scale — that band only bought +3–5 bits."""
+    """Clamp 720 luma dust. Leftover 14–20 cannot redraw the grainy pack."""
     g = float(dust or 0.0)
     if g <= 0:
         return 0

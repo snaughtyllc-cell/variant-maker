@@ -548,7 +548,7 @@ def test_talking_head_luma_dust_from_grain_no_extra_rng():
     grain_span = 42.0 - 34.0
     expect = dust_r.lo + (head["video"]["grain"] - 34.0) / grain_span * (dust_r.hi - dust_r.lo)
     assert head["video"]["luma_dust"] == pytest.approx(expect)
-    assert dust_r.lo == 14 and dust_r.hi == 20
+    assert dust_r.lo == 8 and dust_r.hi == 12
     cloud_r = chroma_cloud_range_for_shot(MEDIUM, "talking_head")
     assert cloud_r is not None
     assert head["video"]["chroma_cloud"] == pytest.approx(
