@@ -9,18 +9,21 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Workers | max 2 | max 1, min 0 |
 | Recycle | promote only | whenever |
 
-CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`
-or `cursor/fast-chroma-cloud-c975`. Pushes the `variant-fast:lab` tag only.
+CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`,
+`cursor/fast-chroma-cloud-c975`, or `cursor/fast-cloud-less-grain-c975`.
+Pushes the `variant-fast:lab` tag only.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:9f8785cbf9cc8ee20b360b237c812cecb5d0d0f4ba6d484b403d533e4722d52e`
-- `VF_ENGINE_REV=5c86ef2` (720 talking-head chroma cloud 18–22 on canvases shorter than 1080). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:702f41cdc146728de9cef8240da6addd4c41882e18f98baa3b6a2acfbe8b70de`
+- `VF_ENGINE_REV=8df4cc4` (720 cloud 6–10 + gblur, no phone grain). `VF_LAB=1`
 - Workers: min 0, max **1**, idle 120s
-- Prior lab image `sha256:68406fd7…` / `9ad8836` was phone-safe 2.5 grain only (SaveInta 13–15 / 41–48%).
+- Prior `sha256:a9055e86…` / `e1c3b8a`: cloud-only 18–22. Pack `6d3e91ab7fd4` 40–43 bits / 62–67%, **look rejected**.
+- Prior `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Pack `650f28dfb1f2` **look rejected**.
+- Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. **Jeff: these are better.** Not promoted to live.
 
 Live Fast `j0b1q4iuunzhnq` was promoted to the same digest after the `06526b9` pack looked right (`VF_ENGINE_REV=06526b9`, no `VF_LAB`, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab.
 
@@ -36,6 +39,7 @@ Lab packs:
 | `c1137ec` + per-copy seed (`a1e77075`) | copy 3 **41 bits (64%)** VMAF **98.29** medium; copies 1–2 still escalated (peer 13–14) | — |
 | `b6c2c9c` no talking-head peer-escalate (`4d0e155b` / `3bf967b1`) | all medium **40/43/44 bits (62/67/69%)**, VMAF 98; two copies over 65% | **51–53 bits (~80–83%)**, VMAF 94–100, peer 53, `ok` |
 | **`06526b9` chroma 34–42** (`77bfac36` / `9141c13e`) **promoted to live** | **all medium 40/40/40 bits (62%)**, VMAF **98.2/98.4/98.6**, crop 0.84–0.88, chroma 39, rotate 0, `ok`, no escalate | **51–52 bits (~80%)**, VMAF 98–100, peer 50–52, `ok` |
+| `8df4cc4` 720 cloud 6–10 + gblur (`3a2231f5b731`) **lab look better, not live** | **35–38 bits (55–59%)**, VMAF 95–100, cloud 7–10, no phone grain, all medium | — |
 
 Promoted digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`. Caption upright, shoulders in frame, ~22 MB under the 12M cap.
 

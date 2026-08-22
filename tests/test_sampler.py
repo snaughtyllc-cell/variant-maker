@@ -523,7 +523,8 @@ def test_talking_head_chroma_cloud_from_grain_no_extra_rng():
     assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
     assert head["video"]["resample_px"] == plain["video"]["resample_px"]
     grain_span = 42.0 - 34.0
-    expect = 18.0 + (head["video"]["grain"] - 34.0) / grain_span * (22.0 - 18.0)
+    expect = cloud_r.lo + (head["video"]["grain"] - 34.0) / grain_span * (cloud_r.hi - cloud_r.lo)
     assert head["video"]["chroma_cloud"] == pytest.approx(expect)
+    assert cloud_r.lo == 6 and cloud_r.hi == 10
     assert chroma_cloud_range_for_shot(MEDIUM, "motion") is None
     assert chroma_cloud_range_for_shot(MEDIUM, None) is None

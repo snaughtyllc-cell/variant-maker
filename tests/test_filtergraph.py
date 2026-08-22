@@ -314,8 +314,40 @@ def test_talking_head_sample_emits_chroma_noise():
     assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
     assert "alls=" not in vf
     # 1080 canvas keeps the working 34–42 recipe — cloud is sampled but not drawn.
-    assert 18 - 1e-9 <= p["video"]["chroma_cloud"] <= 22 + 1e-9
+    assert 6 - 1e-9 <= p["video"]["chroma_cloud"] <= 10 + 1e-9
     assert "split[main]" not in vf
+
+
+def test_talking_head_720_sample_draws_cloud_without_phone_grain():
+    from dataclasses import replace
+
+    from variant_maker.presets import MEDIUM
+    from variant_maker.sampler import derive_seed, sample
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = sample(MEDIUM, derive_seed(11, 5), shot="talking_head")
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert vf.count("noise=") == 1
+    assert "gblur=" in vf
+    assert "c1s=15" not in vf and "c1s=14" not in vf and "c1s=13" not in vf
+    assert "c1s=12" not in vf
+    assert "c1s=20" not in vf and "c1s=21" not in vf and "c1s=22" not in vf
+    assert "alls=" not in vf
+
+
+def test_apply_chroma_cloud_strength_caps_old_band():
+    assert filtergraph.apply_chroma_cloud_strength(20) == 10
+    assert filtergraph.apply_chroma_cloud_strength(8) == 8
+    assert filtergraph.apply_chroma_cloud_strength(0) == 0
+
+
+def test_chroma_cloud_applies_only_under_1080():
+    v = {"chroma_cloud": 20}
+    assert filtergraph.chroma_cloud_applies(v, 720, 1280) is True
+    assert filtergraph.chroma_cloud_applies(v, 1080, 1920) is False
+    assert filtergraph.chroma_cloud_applies({"chroma_cloud": 0}, 720, 1280) is False
+    assert filtergraph.chroma_cloud_applies({}, 720, 1280) is False
 
 
 def test_chroma_cloud_size_is_even_ninth():
@@ -326,7 +358,7 @@ def test_chroma_cloud_size_is_even_ninth():
 
 
 def test_chroma_cloud_on_720_canvas_not_1080():
-    """Phone-safe grain + low-res chroma overlay. 1080 talking-head stays as-is."""
+    """720 talking-head: cloud only. Stacking phone grain + cloud IS the snow."""
     from dataclasses import replace
 
     canvas = replace(REELS, width=720, height=1280)
@@ -336,14 +368,19 @@ def test_chroma_cloud_on_720_canvas_not_1080():
     vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
     assert "split[main][s]" in vf
     assert "scale=80:142" in vf
-    assert "c1s=20" in vf
-    assert "c1s=15" in vf
+    assert "gblur=" in vf
+    # 18–22 still read as grain on lab pack 6d3e91ab7fd4. Cap + blur the overlay.
+    assert "c1s=10" in vf or "c1s=8" in vf or "c1s=6" in vf
+    assert "c1s=20" not in vf
+    assert "c1s=15" not in vf
+    assert vf.count("noise=") == 1
     assert "blend=c0_expr='A':c1_expr='A+B-128':c2_expr='A+B-128'" in vf
     assert vf.endswith("format=yuv420p")
     vf1080 = filtergraph.build_video_filters(p, make_src(), REELS)
     assert "split[main]" not in vf1080
     assert "blend=" not in vf1080
     assert vf1080.count("noise=") == 1
+    assert "c1s=40" in vf1080
 
 
 def test_chroma_cloud_omitted_when_zero():
@@ -354,6 +391,7 @@ def test_chroma_cloud_omitted_when_zero():
     vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
     assert "split[" not in vf
     assert "blend=" not in vf
+    assert "c1s=15" in vf
 
 
 # ---- no-op axes are omitted -------------------------------------------------
