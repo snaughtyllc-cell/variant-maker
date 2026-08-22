@@ -790,7 +790,8 @@ def create_app(
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok"}
+        raw = (os.environ.get("VARIANT_LAB") or "").strip().lower()
+        return {"status": "ok", "lab": raw in {"1", "true", "yes"}}
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
         assert tenants is not None
