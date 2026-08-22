@@ -75,6 +75,30 @@ def test_cmd_drops_audio_when_absent():
     assert "-af" not in cmd and "-c:a" not in cmd
 
 
+def test_cmd_uses_filter_complex_for_chroma_cloud():
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    src = SourceInfo("in.mp4", "abc", 10.0, 720, 1280, 30.0, True, ColorTags("tv", "bt709", "bt709", "bt709"))
+    cmd = ffmpeg.build_render_cmd(
+        src,
+        make_params(grain=40.0, noise_chroma=True, noise_seed=7, chroma_cloud=20),
+        canvas,
+        "out.mp4",
+    )
+    assert "-filter_complex" in cmd
+    assert "-vf" not in cmd
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "split[main][s]" in graph
+    assert "-af" in cmd
+
+
+def test_cmd_keeps_vf_without_chroma_cloud():
+    cmd = ffmpeg.build_render_cmd(make_src(), make_params(), REELS, "out.mp4")
+    assert "-vf" in cmd
+    assert "-filter_complex" not in cmd
+
+
 def test_has_rubberband_true_when_filter_listed(monkeypatch):
     ffmpeg._rubberband_cached = None
 

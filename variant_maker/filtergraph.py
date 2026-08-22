@@ -46,6 +46,8 @@ _LOUDNORM_MIN_S = 3.0
 # 1080 calibration (4K downscales stay 1.0).
 _GRAIN_REF_SHORT_EDGE = 1080
 _GRAIN_SIZE_EXPONENT = 2.5
+# 720×1280 → 80×142. Strength is calibrated at this grid, not 1080 grain.
+_CHROMA_CLOUD_FACTOR = 9
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
@@ -70,6 +72,30 @@ def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> i
     if g <= 0:
         return 0
     return max(1, round(g * grain_scale_for_size(width, height)))
+
+
+def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTOR) -> tuple[int, int]:
+    """Even low-res grid for the chroma overlay (720×1280 → 80×142)."""
+    w = max(int(width), 2)
+    h = max(int(height), 2)
+    fac = max(int(factor), 1)
+    return max((w // fac) // 2 * 2, 2), max((h // fac) // 2 * 2, 2)
+
+
+def _chroma_cloud_graph(strength: int, width: int, height: int, seed: object = None) -> str:
+    """Chroma-only overlay: generate noise at 1/9 size, blend onto Cb/Cr, leave luma."""
+    lw, lh = chroma_cloud_size(width, height)
+    noise = f"noise=c0s=0:c1s={strength}:c2s={strength}:c1f=u:c2f=u"
+    if seed is not None:
+        s = int(seed) & 0x7FFFFFFF
+        noise += f":c1_seed={s}:c2_seed={s}"
+    return (
+        f"split[main][s];"
+        f"[s]format=yuv444p,geq=lum='128':cb='128':cr='128',"
+        f"scale={lw}:{lh},{noise},"
+        f"scale={width}:{height}:flags=bicubic[cl];"
+        f"[main][cl]blend=c0_expr='A':c1_expr='A+B-128':c2_expr='A+B-128'"
+    )
 
 
 def _noise_filter(v: dict, width: int | None = None, height: int | None = None) -> str:
@@ -234,6 +260,20 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         speed = v.get("speed", 1.0)
         if abs(speed - 1.0) > _EPS:
             parts.append(f"setpts={1.0 / speed:.6f}*PTS")
+
+    ow = platform.width or src.width
+    oh = platform.height or src.height
+    cloud = float(v.get("chroma_cloud") or 0.0)
+    if (
+        cloud > _EPS
+        and ow
+        and oh
+        and min(int(ow), int(oh)) < _GRAIN_REF_SHORT_EDGE
+    ):
+        graph = _chroma_cloud_graph(
+            max(1, round(cloud)), int(ow), int(oh), v.get("noise_seed"),
+        )
+        return f"{','.join(parts)},{graph},format=yuv420p"
 
     parts.append("format=yuv420p")
     return ",".join(parts)
