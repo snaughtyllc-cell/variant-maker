@@ -256,8 +256,8 @@ def test_chroma_noise_is_applied_before_platform_upscale():
     assert vf.index(noise) < vf.index(scale)
     assert vf.count("noise=") == 1
     # Sampler bands are 1080-calibrated; chroma hits the 720 grid so strength follows.
-    # Area scale: linear 2/3 left the same on-screen grain (bigger 720 pixels).
-    assert "c1s=18" in vf and "c1s=40" not in vf and "c1s=27" not in vf
+    # 2.5: area-18 still looked snowy on a phone (720 pixels are 1.5×).
+    assert "c1s=15" in vf and "c1s=40" not in vf and "c1s=27" not in vf and "c1s=18" not in vf
     luma = make_params(video={"grain": 8.0})
     vf_luma = filtergraph.build_video_filters(luma, make_src(w=720, h=1280), REELS)
     assert vf_luma.index("scale=1080:1920:force_original_aspect_ratio=disable") < vf_luma.index("noise=alls=8")
@@ -267,16 +267,17 @@ def test_grain_scale_follows_short_edge_and_never_exceeds_1080():
     """Sampler bands are 1080p-calibrated. ffmpeg noise is per-pixel.
 
     Linear short/1080 kept the same *on-screen* grain on a 720p phone
-    (each pixel is 1.5× larger). Area (short/1080)² is the display-size fix.
+    (each pixel is 1.5× larger). Area (short/1080)² still read as snow
+    (18 ≈ 1080 chroma 27 on bigger pixels). 2.5 is the phone-viewing fix.
     """
     assert filtergraph.grain_scale_for_size(1080, 1920) == 1.0
-    assert filtergraph.grain_scale_for_size(720, 1280) == (720 / 1080) ** 2
+    assert filtergraph.grain_scale_for_size(720, 1280) == (720 / 1080) ** 2.5
     assert filtergraph.grain_scale_for_size(1920, 1080) == 1.0
     assert filtergraph.grain_scale_for_size(2160, 3840) == 1.0
     assert filtergraph.grain_scale_for_size(None, None) == 1.0
     assert filtergraph.apply_canvas_grain(40, 1080, 1920) == 40
-    assert filtergraph.apply_canvas_grain(40, 720, 1280) == 18
-    assert filtergraph.apply_canvas_grain(8, 720, 1280) == 4
+    assert filtergraph.apply_canvas_grain(40, 720, 1280) == 15
+    assert filtergraph.apply_canvas_grain(8, 720, 1280) == 3
     assert filtergraph.apply_canvas_grain(40, 2160, 3840) == 40
 
 
@@ -288,15 +289,15 @@ def test_720p_canvas_uses_720_grain_not_1080_glitter():
     src = make_src(w=720, h=1280)
     chroma = make_params(video={"grain": 40.0, "noise_chroma": True, "noise_seed": 7})
     vf = filtergraph.build_video_filters(chroma, src, canvas)
-    assert "c1s=18" in vf and "c2s=18" in vf
-    assert "c1s=40" not in vf and "c1s=27" not in vf
+    assert "c1s=15" in vf and "c2s=15" in vf
+    assert "c1s=40" not in vf and "c1s=27" not in vf and "c1s=18" not in vf
     assert "scale=720:1280" in vf
     assert "scale=1080:1920" not in vf
     luma = make_params(video={"grain": 8.0})
     vf_luma = filtergraph.build_video_filters(luma, src, canvas)
-    assert "noise=alls=4:allf=t+u" in vf_luma
+    assert "noise=alls=3:allf=t+u" in vf_luma
     assert "noise=alls=8:allf=t+u" not in vf_luma
-    assert "noise=alls=5:allf=t+u" not in vf_luma
+    assert "noise=alls=4:allf=t+u" not in vf_luma
 
 
 def test_talking_head_sample_emits_chroma_noise():

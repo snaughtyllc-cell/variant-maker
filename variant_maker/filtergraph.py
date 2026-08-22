@@ -40,15 +40,18 @@ _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 _LOUDNORM_MIN_S = 3.0
 # Sampler grain bands are calibrated on 1080×1920. ffmpeg noise is per-pixel.
 # Linear short/1080 left the same on-screen grain on 720p (bigger pixels).
-# Area (short/1080)² is the display-size fix. Never go above the 1080
-# calibration (4K downscales stay 1.0).
+# Area (short/1080)² still read as "pretty decent grain" on a phone — 720p
+# pixels are 1.5× larger, so area-18 looks like 1080 chroma ~27. Exponent
+# 2.5 is the phone-viewing fix (720p chroma 40 → 15). Never go above the
+# 1080 calibration (4K downscales stay 1.0).
 _GRAIN_REF_SHORT_EDGE = 1080
+_GRAIN_SIZE_EXPONENT = 2.5
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
 
 def grain_scale_for_size(width: int | None, height: int | None) -> float:
-    """Area scale vs 1080p short edge. Capped at 1 so we never add 1080+ glitter."""
+    """Phone-viewing scale vs 1080p short edge. Capped at 1 so we never add glitter."""
     if not width or not height:
         return 1.0
     try:
@@ -58,7 +61,7 @@ def grain_scale_for_size(width: int | None, height: int | None) -> float:
     if short <= 0:
         return 1.0
     linear = min(short / _GRAIN_REF_SHORT_EDGE, 1.0)
-    return linear * linear
+    return linear ** _GRAIN_SIZE_EXPONENT
 
 
 def apply_canvas_grain(grain: float, width: int | None, height: int | None) -> int:
