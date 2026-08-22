@@ -130,6 +130,15 @@ class ExportStore:
         return os.path.join(self._dir, f"{export_id}.json")
 
 
+def _concrete_store(store: ExportStore) -> ExportStore:
+    """Pin the tenant ExportStore. AttrProxy is request-scoped; the upload thread
+    has no tenant context, so a proxy get() would miss the job and leave 0 / N."""
+    inner = getattr(store, "_inner", None)
+    if callable(inner):
+        return inner()
+    return store
+
+
 class ExportRunner:
     """Uploads an `ExportJob`'s files to Drive sequentially, on a background thread."""
 
@@ -138,6 +147,7 @@ class ExportRunner:
         self._store = export_store
 
     def start(self, job: ExportJob) -> None:
+        self._store = _concrete_store(self._store)
         job.state = "running"
         self._store.save(job)
         threading.Thread(target=self._run, args=(job.export_id,), daemon=True).start()
