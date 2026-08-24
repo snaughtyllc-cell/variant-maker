@@ -1,5 +1,7 @@
 "use client";
+
 import Link from "next/link";
+import { ArrowUpDown, CheckSquare, Send } from "lucide-react";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -19,109 +21,25 @@ interface GalleryToolbarProps {
   onSelectAll: () => void;
 }
 
-export function GalleryToolbar({
-  count,
-  variantCount,
-  filterMode,
-  onFilter,
-  sort,
-  onSort,
-  selectedCount,
-  sendDisabledReason,
-  onSend,
-  selectAllLabel,
-  selectAllDisabled,
-  onSelectAll,
-}: GalleryToolbarProps) {
+export function GalleryToolbar({ count, variantCount, filterMode, onFilter, sort, onSort, selectedCount, sendDisabledReason, onSend, selectAllLabel, selectAllDisabled, onSelectAll }: GalleryToolbarProps) {
   const sendDisabled = sendDisabledReason != null;
-  const chipBase: React.CSSProperties = {
-    fontSize: 12,
-    color: "var(--color-muted)",
-    background: "#14141d",
-    border: "1px solid var(--color-line)",
-    padding: "10px 11px",
-    borderRadius: 8,
-    cursor: "pointer",
-    userSelect: "none",
-  };
-
-  const chipOn: React.CSSProperties = {
-    ...chipBase,
-    color: "#fff",
-    borderColor: "#2f2a52",
-    background: "#191527",
-  };
-
   return (
-    <div className="gallery-toolbar">
-      <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
-        <b style={{ color: "var(--color-text)" }}>{count}</b> sources ·{" "}
-        <b style={{ color: "var(--color-text)" }}>{variantCount}</b> variants delivered
-      </div>
+    <section className="gallery-toolbar" aria-label="Gallery controls">
+      <div className="gallery-toolbar__count"><b>{count}</b> sources <span>·</span> <b>{variantCount}</b> finished variants</div>
       <div className="gallery-toolbar__actions">
-        <span
-          style={filterMode === "all" ? chipOn : chipBase}
-          onClick={() => onFilter("all")}
-        >
-          All sources
-        </span>
-        <span
-          style={filterMode === "shortfall" ? chipOn : chipBase}
-          onClick={() => onFilter("shortfall")}
-        >
-          Has shortfall
-        </span>
-        <Link href="/drops" style={{ ...chipBase, textDecoration: "none" }}>
-          Sent to Drive
-        </Link>
-        <Link href="/drops?filter=flagged_week" style={{ ...chipBase, textDecoration: "none" }}>
-          Flagged this week
-        </Link>
-        <span
-          style={chipBase}
-          onClick={() => onSort("newest")}
-        >
-          Sort: {sort === "newest" ? "Newest" : "Newest"} ▾
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={onSelectAll}
-            disabled={selectAllDisabled}
-            style={{
-              ...chipBase,
-              minHeight: 44,
-              fontWeight: 700,
-              opacity: selectAllDisabled ? 0.5 : 1,
-              cursor: selectAllDisabled ? "not-allowed" : "pointer",
-            }}
-          >
-            {selectAllLabel}
-          </button>
-          <button
-            onClick={onSend}
-            disabled={sendDisabled}
-            title={sendDisabledReason ?? undefined}
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "#fff",
-              background: sendDisabled ? "#3a2c5c" : "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              border: "none",
-              padding: "10px 14px",
-              minHeight: 44,
-              borderRadius: 8,
-              cursor: sendDisabled ? "not-allowed" : "pointer",
-              opacity: sendDisabled ? 0.6 : 1,
-            }}
-          >
-            ⇪ Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}
-          </button>
-          {sendDisabled && (
-            <span style={{ fontSize: 11, color: "var(--color-muted)" }}>{sendDisabledReason}</span>
-          )}
+        <div className="gallery-segments" aria-label="Source filter">
+          <button type="button" data-active={filterMode === "all"} onClick={() => onFilter("all")}>All sources</button>
+          <button type="button" data-active={filterMode === "shortfall"} onClick={() => onFilter("shortfall")}>Needs attention</button>
         </div>
+        <Link className="gallery-quiet-link" href="/drops">Sent</Link>
+        <Link className="gallery-quiet-link" href="/drops?filter=flagged_week">Flagged</Link>
+        <button type="button" className="gallery-quiet-link" onClick={() => onSort("newest")}><ArrowUpDown size={14} /> {sort === "newest" ? "Newest" : "Newest"}</button>
+        <button type="button" className="gallery-select-all" onClick={onSelectAll} disabled={selectAllDisabled}><CheckSquare size={14} /> {selectAllLabel}</button>
+        <span className="gallery-send-wrap">
+          <button type="button" className="vf-primary-button" onClick={onSend} disabled={sendDisabled} title={sendDisabledReason ?? undefined}><Send size={14} /> Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}</button>
+          {sendDisabled && <small>{sendDisabledReason}</small>}
+        </span>
       </div>
-    </div>
+    </section>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { Team } from "@/lib/types";
+import { UsersRound } from "lucide-react";
 
 function canManageTeam(role: string | null | undefined, isAdmin: boolean | undefined): boolean {
   return role === "owner" || Boolean(isAdmin);
@@ -105,8 +106,8 @@ export default function TeamPage() {
 
   if (meLoading || !allowed) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0e" }}>
-        <div style={{ padding: "18px 20px", color: "#8a8aa0", fontSize: 13 }}>
+      <main className="team-page">
+        <div style={{ color: "var(--color-muted)", fontSize: 13 }}>
           {meLoading ? "Loading…" : "Owner only"}
         </div>
       </main>
@@ -116,16 +117,20 @@ export default function TeamPage() {
   const studioName = team?.workspace_name || me?.workspace_name || "this studio";
 
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <div style={{ padding: "18px 20px 4px" }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Team</div>
-        <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
+    <main className="team-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><UsersRound size={19} /></span>
+        <div>
+          <p className="workspace-heading__eyebrow">Workspace access</p>
+          <h1>Team</h1>
+          <p className="workspace-heading__copy">
           Add VAs to <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{studioName}</strong>.
           They share this gallery, captions, and Drive. New empty studios stay on the site Admin page.
+          </p>
         </div>
       </div>
 
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
         {me?.viewing_other && (
           <div
             role="status"

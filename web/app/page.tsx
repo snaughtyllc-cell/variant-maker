@@ -1,5 +1,6 @@
 "use client";
 import { useState, useCallback } from "react";
+import { FolderOpen } from "lucide-react";
 import { DropZone } from "@/components/studio/DropZone";
 import { FileList } from "@/components/studio/FileList";
 import { DrivePickList } from "@/components/studio/DrivePickList";
@@ -99,18 +100,12 @@ export default function StudioPage() {
   return (
     <main className={studioShellClass(!!jobId)}>
       <div className="studio-cockpit">
-        <p
-          style={{
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: ".7px",
-            color: "var(--color-muted2)",
-            margin: "0 0 8px",
-            fontWeight: 700,
-          }}
-        >
-          1 · Source videos
-        </p>
+        <header className="studio-intro">
+          <p>Studio</p>
+          <h1>Build a new pack</h1>
+          <span>Choose source clips, set the output count, then track the live queue without leaving this workspace.</span>
+        </header>
+        <p className="studio-step-label">1 · Source videos</p>
 
         <EngineWaitNote />
         <StudioQueue qualityMode={qualityMode} jobId={jobId} />
@@ -121,21 +116,9 @@ export default function StudioPage() {
           type="button"
           onClick={() => setPickerOpen(true)}
           disabled={!!jobId}
-          style={{
-            marginTop: 10,
-            width: "100%",
-            fontSize: 12.5,
-            fontWeight: 600,
-            color: "var(--color-text)",
-            background: "var(--color-panel2)",
-            border: "1px solid var(--color-line)",
-            padding: "10px 14px",
-            borderRadius: 10,
-            cursor: jobId ? "not-allowed" : "pointer",
-            opacity: jobId ? 0.6 : 1,
-          }}
+          className="studio-drive-picker"
         >
-          From Google Drive
+          <FolderOpen size={16} /> Pick from Google Drive
         </button>
 
         <FileList files={files} durations={durations} onRemove={handleRemoveFile} />

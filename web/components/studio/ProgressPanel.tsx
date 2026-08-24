@@ -40,8 +40,8 @@ export function ProgressPanel() {
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: "linear-gradient(135deg, #1c1430, #241a44)",
-            border: "1px solid #2e2350",
+            background: "#223a3e",
+            border: "1px solid #355156",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -49,7 +49,7 @@ export function ProgressPanel() {
             marginBottom: 4,
           }}
         >
-          ◈
+          <span style={{ color: "#57dfe6" }}>●</span>
         </div>
         <p
           style={{

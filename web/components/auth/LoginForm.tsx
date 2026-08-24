@@ -1,16 +1,17 @@
 "use client";
 import { FormEvent, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { passwordLogin } from "@/lib/api";
 
 const fieldStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  background: "#16161f",
-  border: "1px solid #2a2a38",
+  background: "#f3f8f9",
+  border: "1px solid #c9dde0",
   borderRadius: 10,
   padding: "11px 12px",
   fontSize: 14,
-  color: "#ececf4",
+  color: "var(--color-text)",
   outline: "none",
 };
 
@@ -53,9 +54,9 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
           role="alert"
           style={{
             fontSize: 13,
-            color: "#ffd08a",
-            background: "#1c1608",
-            border: "1px solid #3a2c10",
+            color: "#8e6119",
+            background: "#fff8eb",
+            border: "1px solid #efdfbd",
             borderRadius: 10,
             padding: "10px 12px",
             marginBottom: 16,
@@ -99,7 +100,7 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
             fontSize: 14,
             fontWeight: 700,
             color: "#fff",
-            background: "#7c5cff",
+            background: "#172124",
             border: "none",
             padding: "12px 16px",
             borderRadius: 10,
@@ -115,18 +116,18 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
           alignItems: "center",
           gap: 10,
           margin: "18px 0",
-          color: "#5a5a70",
+          color: "#87989d",
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: "0.04em",
           textTransform: "uppercase",
         }}
       >
-        <span style={{ flex: 1, height: 1, background: "#23232f" }} />
+        <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
         or
-        <span style={{ flex: 1, height: 1, background: "#23232f" }} />
+        <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
       </div>
-      <a
+      <Link
         href="/api/auth/google/start"
         style={{
           display: "block",
@@ -134,15 +135,15 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
           textDecoration: "none",
           fontSize: 14,
           fontWeight: 700,
-          color: "#ececf4",
-          background: "#1b1b27",
-          border: "1px solid #2a2a38",
+          color: "var(--color-text)",
+          background: "#f3f8f9",
+          border: "1px solid #c9dde0",
           padding: "12px 16px",
           borderRadius: 10,
         }}
       >
         Continue with Google
-      </a>
+      </Link>
     </>
   );
 }

@@ -10,7 +10,7 @@ function DropsContent() {
 
 export default function DropsPage() {
   return (
-    <main style={{ minHeight: "100vh" }}>
+    <main className="drops-page">
       <Suspense
         fallback={
           <div

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
+import { ShieldCheck } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -116,8 +117,8 @@ export default function AdminPage() {
 
   if (meLoading || !isAdmin) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0e" }}>
-        <div style={{ padding: "18px 20px", color: "#8a8aa0", fontSize: 13 }}>
+      <main className="admin-page">
+        <div style={{ color: "var(--color-muted)", fontSize: 13 }}>
           {meLoading ? "Loading…" : "Admin only"}
         </div>
       </main>
@@ -125,18 +126,22 @@ export default function AdminPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <div style={{ padding: "18px 20px 4px" }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Admin</div>
-        <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
+    <main className="admin-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><ShieldCheck size={19} /></span>
+        <div>
+          <p className="workspace-heading__eyebrow">Site administration</p>
+          <h1>Admin</h1>
+          <p className="workspace-heading__copy">
           Open another studio with the same UI. Members are listed on each
           workspace — Remove drops their login until you invite them again.
           Outside operators add their own VAs on <strong>Team</strong>; this
           page is the only place that can mint a new empty studio.
+          </p>
         </div>
       </div>
 
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
         {formError && (
           <div
             role="alert"

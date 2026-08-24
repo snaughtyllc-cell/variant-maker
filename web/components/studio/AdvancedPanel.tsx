@@ -46,7 +46,7 @@ export function AdvancedPanel({
           style={{
             marginLeft: "auto",
             color: "var(--color-text)",
-            background: "#14141d",
+            background: "#edf6f7",
             border: "1px solid var(--color-line)",
             padding: "4px 10px",
             borderRadius: 999,
@@ -106,7 +106,7 @@ export function AdvancedPanel({
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
-                background: "#16161f",
+                background: "#fbfdfd",
                 color: "var(--color-text)",
                 border: "1px solid var(--color-line)",
                 borderRadius: 8,
@@ -164,7 +164,7 @@ export function AdvancedPanel({
               type="checkbox"
               checked={allowCreativeEscalate}
               onChange={(e) => onAllowCreativeEscalateChange(e.target.checked)}
-              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#7c5cff" }}
+              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#0caab8" }}
             />
           </label>
         </div>
