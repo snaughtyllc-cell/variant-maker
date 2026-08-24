@@ -38,5 +38,6 @@ keeps the word; 576 SSIM still sees crop + grain.
 
 Lab `856e23d` / `sha256:59caa472…` pack `wordcrop856e` (`caption-safe-crop-test.mp4`):
 keep **0.953 / 0.928**, window **0.55/0.52** and **0.53/0.62**, **38/42 bits
-(59/66%)**, VMAF **99.9 / 100**, both medium `ok`. Live Fast stays `13cd292`
-until Jeff says the words are in.
+(59/66%)**, VMAF **99.9 / 100**, both medium `ok`. Jeff: **yea way better.**
+Live Fast `j0b1q4iuunzhnq` is digest-pinned to that image, **no `VF_LAB`**,
+max 2, idle 600. Lab stays `VF_LAB=1` on the same digest.
