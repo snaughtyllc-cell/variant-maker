@@ -5,15 +5,18 @@ import { usePathname } from "next/navigation";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { showDiagnosticsNav, showTeamNav } from "@/lib/navAccess";
+import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 
-const PRIMARY = [
-  { href: "/", label: "Studio" },
-  { href: "/gallery", label: "Gallery" },
-  { href: "/drops", label: "Drops" },
-  { href: "/workflows", label: "Workflows", short: "Flows" },
-  { href: "/settings/drive", label: "Drive" },
-] as const;
+function extraTabVisible(
+  href: string,
+  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
+): boolean {
+  if (href === "/diagnostics") return showDiagnosticsNav(me);
+  if (href === "/team") return showTeamNav(me);
+  if (href === "/admin") return Boolean(me?.is_admin);
+  return false;
+}
 
 function linkActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
@@ -26,8 +29,6 @@ export function TopNav() {
   const pathname = usePathname();
   const { data: me } = useAuthMe();
   const [moreOpen, setMoreOpen] = useState(false);
-  const diagnostics = showDiagnosticsNav(me);
-  const team = showTeamNav(me);
 
   async function handleLogout() {
     await logout();
@@ -41,45 +42,20 @@ export function TopNav() {
 
   const extraLinks = (
     <>
-      {diagnostics && (
+      {EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me)).map((tab) => (
         <Link
-          href="/diagnostics"
+          key={tab.href}
+          href={tab.href}
           className={linkClass}
           style={
-            linkActive(pathname, "/diagnostics")
+            linkActive(pathname, tab.href)
               ? { color: "#ffffff", background: "#1b1b27" }
               : { color: "#8a8aa0" }
           }
         >
-          Diagnostics
+          {tab.label}
         </Link>
-      )}
-      {team && (
-        <Link
-          href="/team"
-          className={linkClass}
-          style={
-            linkActive(pathname, "/team")
-              ? { color: "#ffffff", background: "#1b1b27" }
-              : { color: "#8a8aa0" }
-          }
-        >
-          Team
-        </Link>
-      )}
-      {me?.is_admin && (
-        <Link
-          href="/admin"
-          className={linkClass}
-          style={
-            linkActive(pathname, "/admin")
-              ? { color: "#ffffff", background: "#1b1b27" }
-              : { color: "#8a8aa0" }
-          }
-        >
-          Admin
-        </Link>
-      )}
+      ))}
     </>
   );
 
@@ -94,7 +70,7 @@ export function TopNav() {
         </div>
 
         <nav className="top-nav__links hidden sm:flex gap-1 ml-0 sm:ml-2 min-w-0">
-          {PRIMARY.map(({ href, label }) => (
+          {PRIMARY_TABS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -201,9 +177,9 @@ export function TopNav() {
         </div>
       )}
       <nav className="app-tab-bar" aria-label="Primary">
-        {PRIMARY.map((item) => {
+        {PRIMARY_TABS.map((item) => {
           const active = linkActive(pathname, item.href);
-          const tabLabel = "short" in item ? item.short : item.label;
+          const tabLabel = item.short ?? item.label;
           return (
             <Link
               key={item.href}

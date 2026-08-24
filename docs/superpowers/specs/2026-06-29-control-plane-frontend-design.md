@@ -1,5 +1,10 @@
 # Control-Plane Frontend — Stage 1 Design
 
+> **IA superseded.** This spec is the v1 four-screen list (Studio / Gallery /
+> Diagnostics / variant side-panel). Current destinations — Drops, Workflows,
+> Drive, Team, Admin included — are in [`docs/ops/studio-ia.md`](../../ops/studio-ia.md)
+> and `web/lib/studioDestinations.ts`. Use those for any redesign.
+
 **Date:** 2026-06-29
 **Status:** Approved (brainstorm) — pending spec review
 **Scope:** The Next.js frontend for the variant-maker control plane. Built against the **already-shipped, locked** FastAPI in `variant_maker/server/`. No backend changes required.

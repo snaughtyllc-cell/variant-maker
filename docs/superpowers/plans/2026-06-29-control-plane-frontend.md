@@ -1,5 +1,10 @@
 # Control-Plane Frontend Implementation Plan
 
+> **IA superseded.** This plan built the v1 four-screen list (Studio / Gallery /
+> variant side-panel / Diagnostics). Current destinations are in
+> [`docs/ops/studio-ia.md`](../../ops/studio-ia.md) and
+> `web/lib/studioDestinations.ts`. Use those for any redesign.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the Next.js (App Router) frontend for the variant-maker control plane — Studio · Gallery · variant side-panel · Diagnostics — against the already-shipped, locked FastAPI in `variant_maker/server/`, with zero backend changes.

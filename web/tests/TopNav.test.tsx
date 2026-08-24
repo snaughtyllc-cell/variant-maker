@@ -22,6 +22,7 @@ vi.mock("@/components/nav/StatusStrip", () => ({
 }));
 
 import { TopNav } from "@/components/nav/TopNav";
+import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 
 const BASE: AuthMe = {
   auth_required: true,
@@ -88,10 +89,22 @@ describe("TopNav", () => {
 
   it("exposes primary destinations including Drops", () => {
     render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Studio" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Gallery" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
-    expect(screen.getAllByRole("link", { name: "Workflows" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Drive" }).length).toBeGreaterThan(0);
+    for (const tab of PRIMARY_TABS) {
+      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
+        "href",
+        tab.href,
+      );
+    }
+  });
+
+  it("renders role extras from the same catalog as the IA doc", () => {
+    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
+    render(<TopNav />);
+    for (const tab of EXTRA_TABS) {
+      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
+        "href",
+        tab.href,
+      );
+    }
   });
 });
