@@ -77,7 +77,7 @@ export function ExportProgress({ exportId, initial }: ExportProgressProps) {
             background:
               job.state === "failed"
                 ? "var(--color-red)"
-                : "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+                : "var(--ink)",
             transition: "width 0.2s ease",
           }}
         />
@@ -91,9 +91,9 @@ export function ExportProgress({ exportId, initial }: ExportProgressProps) {
             marginBottom: failedFiles.length > 0 ? 10 : 0,
             color:
               job.state === "succeeded"
-                ? "#7bf2a8"
+                ? "#247955"
                 : job.state === "partial"
-                ? "#ffd08a"
+                ? "#8e6119"
                 : "var(--color-red)",
           }}
         >
@@ -112,8 +112,8 @@ export function ExportProgress({ exportId, initial }: ExportProgressProps) {
               style={{
                 fontSize: 12,
                 color: "var(--color-muted)",
-                background: "#1c1608",
-                border: "1px solid #3a2c10",
+                background: "#fff8eb",
+                border: "1px solid #efdfbd",
                 borderRadius: 8,
                 padding: "6px 10px",
               }}
@@ -133,7 +133,7 @@ export function ExportProgress({ exportId, initial }: ExportProgressProps) {
             fontSize: 12.5,
             fontWeight: 700,
             color: "#fff",
-            background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+            background: "var(--ink)",
             border: "none",
             padding: "8px 14px",
             borderRadius: 9,

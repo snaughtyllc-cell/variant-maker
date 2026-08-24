@@ -22,11 +22,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [data, needsLogin, isLogin, loggedIn, router]);
 
   if (isLoading && !data) {
-    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+    return <div className="vf-boot" />;
   }
 
   if (needsLogin && !isLogin) {
-    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+    return <div className="vf-boot" />;
   }
 
   return (

@@ -167,8 +167,8 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
           style={{
             position: "fixed",
             inset: 0,
-            background: "#05050880",
-            backdropFilter: "blur(1px)",
+            background: "rgba(23, 42, 46, 0.32)",
+            backdropFilter: "blur(3px)",
             zIndex: 60,
           }}
         />
@@ -183,10 +183,10 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
             maxWidth: "calc(100vw - 32px)",
             maxHeight: "calc(100vh - 48px)",
             overflow: "auto",
-            background: "linear-gradient(180deg, #0e0e15, #0b0b11)",
-            border: "1px solid var(--color-line2)",
+            background: "#fbfdfd",
+            border: "1px solid #c7dde0",
             borderRadius: 16,
-            boxShadow: "0 30px 70px #000000aa",
+            boxShadow: "0 26px 60px rgba(22, 58, 65, 0.22)",
             zIndex: 61,
             outline: "none",
             padding: 20,
@@ -239,7 +239,7 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
                   aria-label="Split pack across accounts"
                   checked={splitMode}
                   onChange={(e) => setSplitMode(e.target.checked)}
-                  style={{ accentColor: "#7c5cff", marginTop: 2 }}
+                  style={{ accentColor: "#0caab8", marginTop: 2 }}
                 />
                 <span>
                   Split across accounts
@@ -408,7 +408,7 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
                     fontSize: 12.5,
                     fontWeight: 700,
                     color: "#fff",
-                    background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+                    background: "#172124",
                     border: "none",
                     padding: "8px 16px",
                     borderRadius: 9,

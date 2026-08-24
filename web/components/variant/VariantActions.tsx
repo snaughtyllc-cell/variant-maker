@@ -61,10 +61,10 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
   const currentResult = variant.platform_result ?? "unknown";
   const resultBadge =
     currentResult === "passed"
-      ? { text: "✓ Passed upload", color: "#7bf2a8", background: "#0c2c1a", border: "#16502f" }
+      ? { text: "✓ Passed upload", color: "#247955", background: "#e9f8f0", border: "#c6e8d7" }
       : currentResult === "flagged"
-        ? { text: "⚑ Flagged", color: "#ff9aa8", background: "#2c1018", border: "#5a1a28" }
-        : { text: "⚠ Duplicate rejected", color: "#ffd08a", background: "#2c2210", border: "#5a4416" };
+        ? { text: "⚑ Flagged", color: "#a33f3d", background: "#fff3f1", border: "#efc5c0" }
+        : { text: "⚠ Duplicate rejected", color: "#8e6119", background: "#fff8eb", border: "#efdfbd" };
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -126,9 +126,9 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "10px",
             borderRadius: 10,
-            background: currentResult === "passed" ? "#0c2c1a" : "#16161f",
-            border: `1px solid ${currentResult === "passed" ? "#16502f" : "var(--color-line)"}`,
-            color: currentResult === "passed" ? "#7bf2a8" : "var(--color-text)",
+            background: currentResult === "passed" ? "#e9f8f0" : "#f3f8f9",
+            border: `1px solid ${currentResult === "passed" ? "#c6e8d7" : "var(--color-line)"}`,
+            color: currentResult === "passed" ? "#247955" : "var(--color-text)",
             cursor: resultBusy ? "not-allowed" : "pointer",
             opacity: resultBusy && resultBusy !== "passed" ? 0.6 : 1,
           }}
@@ -147,9 +147,9 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "10px",
             borderRadius: 10,
-            background: currentResult === "duplicate_reject" ? "#2c2210" : "#16161f",
-            border: `1px solid ${currentResult === "duplicate_reject" ? "#5a4416" : "var(--color-line)"}`,
-            color: currentResult === "duplicate_reject" ? "#ffd08a" : "var(--color-text)",
+            background: currentResult === "duplicate_reject" ? "#fff8eb" : "#f3f8f9",
+            border: `1px solid ${currentResult === "duplicate_reject" ? "#efdfbd" : "var(--color-line)"}`,
+            color: currentResult === "duplicate_reject" ? "#8e6119" : "var(--color-text)",
             cursor: resultBusy ? "not-allowed" : "pointer",
             opacity: resultBusy && resultBusy !== "duplicate_reject" ? 0.6 : 1,
           }}
@@ -168,9 +168,9 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "10px",
             borderRadius: 10,
-            background: currentResult === "flagged" ? "#2c1018" : "#16161f",
-            border: `1px solid ${currentResult === "flagged" ? "#5a1a28" : "var(--color-line)"}`,
-            color: currentResult === "flagged" ? "#ff9aa8" : "var(--color-text)",
+            background: currentResult === "flagged" ? "#fff3f1" : "#f3f8f9",
+            border: `1px solid ${currentResult === "flagged" ? "#efc5c0" : "var(--color-line)"}`,
+            color: currentResult === "flagged" ? "#a33f3d" : "var(--color-text)",
             cursor: resultBusy ? "not-allowed" : "pointer",
             opacity: resultBusy && resultBusy !== "flagged" ? 0.6 : 1,
           }}
@@ -210,10 +210,10 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "11px",
             borderRadius: 10,
-            backgroundImage: "var(--background-image-cta)",
+            background: "var(--ink)",
             border: "none",
-            color: "#fff",
-            boxShadow: "0 4px 14px #ff4d8d33",
+            color: "#f7fbfb",
+            boxShadow: "none",
             textDecoration: "none",
             cursor: "pointer",
           }}
@@ -234,7 +234,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "11px",
             borderRadius: 10,
-            background: "#16161f",
+            background: "#f3f8f9",
             border: "1px solid var(--color-line)",
             color: busy ? "var(--color-muted)" : "var(--color-text)",
             cursor: busy ? "not-allowed" : "pointer",
@@ -256,7 +256,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "11px",
             borderRadius: 10,
-            background: "#16161f",
+            background: "#f3f8f9",
             border: "1px solid var(--color-line)",
             color: "var(--color-text)",
             cursor: "pointer",

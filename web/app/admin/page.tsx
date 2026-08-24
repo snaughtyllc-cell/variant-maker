@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
+import { ShieldCheck } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -116,8 +117,8 @@ export default function AdminPage() {
 
   if (meLoading || !isAdmin) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0e" }}>
-        <div style={{ padding: "18px 20px", color: "#8a8aa0", fontSize: 13 }}>
+      <main className="admin-page">
+        <div style={{ color: "var(--color-muted)", fontSize: 13 }}>
           {meLoading ? "Loading…" : "Admin only"}
         </div>
       </main>
@@ -125,31 +126,24 @@ export default function AdminPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <div style={{ padding: "18px 20px 4px" }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Admin</div>
-        <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
+    <main className="admin-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><ShieldCheck size={19} /></span>
+        <div>
+          <p className="workspace-heading__eyebrow">Site administration</p>
+          <h1>Admin</h1>
+          <p className="workspace-heading__copy">
           Open another studio with the same UI. Members are listed on each
           workspace — Remove drops their login until you invite them again.
           Outside operators add their own VAs on <strong>Team</strong>; this
           page is the only place that can mint a new empty studio.
+          </p>
         </div>
       </div>
 
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
         {formError && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: 16,
-              padding: "10px 12px",
-              background: "#1c1608",
-              border: "1px solid #3a2c10",
-              borderRadius: 10,
-              color: "#ffd08a",
-              fontSize: 13,
-            }}
-          >
+          <div className="vf-alert" role="alert">
             {formError}
           </div>
         )}
@@ -250,16 +244,8 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => handleOpen(ws.id)}
                         disabled={openingId === ws.id}
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: "#fff",
-                          background: "#7c5cff",
-                          border: "none",
-                          padding: "7px 12px",
-                          borderRadius: 9,
-                          cursor: openingId === ws.id ? "wait" : "pointer",
-                        }}
+                        className="vf-primary-button"
+                        style={{ cursor: openingId === ws.id ? "wait" : "pointer" }}
                       >
                         {openingId === ws.id ? "Opening…" : "Open"}
                       </button>
@@ -321,16 +307,8 @@ export default function AdminPage() {
           <button
             type="submit"
             disabled={submitting}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              border: "none",
-              padding: "8px 14px",
-              borderRadius: 9,
-              cursor: submitting ? "wait" : "pointer",
-            }}
+            className="vf-primary-button"
+            style={{ cursor: submitting ? "wait" : "pointer" }}
           >
             {submitting ? "Sending…" : "Invite"}
           </button>

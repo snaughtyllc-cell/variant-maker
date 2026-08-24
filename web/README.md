@@ -3,6 +3,12 @@
 Next.js 16 App Router UI for the variant-maker engine.
 Pure client of the FastAPI backend via a same-origin dev proxy.
 
+**Redesign / Codex:** do not use the old four-screen list
+(Studio / Gallery / variant side-panel / Diagnostics). That was v1.
+The live product has nine destinations. Source of truth:
+[`docs/ops/studio-ia.md`](../docs/ops/studio-ia.md) and
+`web/lib/studioDestinations.ts`.
+
 ---
 
 ## Prerequisites
@@ -112,12 +118,41 @@ The build must succeed with no type errors before merging.
 
 ## Screens
 
-| Screen | How to reach it | What it does |
+The four-row table that used to live here (Studio / Gallery / Variant
+side-panel / Diagnostics) was the **first-version** list. It hid every
+destination shipped after v1 — Drops, Workflows, Drive, Team, Admin —
+which is why a redesign pass that only read this README could not see
+the live product.
+
+**Use [`docs/ops/studio-ia.md`](../docs/ops/studio-ia.md) as the redesign
+source of truth.** The machine-readable catalog is
+`web/lib/studioDestinations.ts`. A test fails if a `web/app/**/page.tsx`
+route is missing from that catalog.
+
+| Tab | Route | Audience | Phone bar | What it does |
+|---|---|---|---|---|
+| **Studio** | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast vs HQ, Advanced, live queue. Reload mid-run re-attaches. |
+| **Gallery** | `/gallery` | everyone | yes | 24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| **Drops** | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
+| **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
+| **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
+| **Team** | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
+| **Admin** | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
+| **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`below_floor` / `corrupt` / `best_effort`). Operators never use this. |
+| **Login** | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
+
+Nested (not tabs — a redesign must still include them):
+
+| Surface | Opens from | What it is |
 |---|---|---|
-| **Studio** | `/` (root) | Drop one or more source videos, set variant count, click Generate. A live progress panel streams rendering events — tiles appear as each variant completes. Reload mid-run to re-attach to the running job. |
-| **Gallery** | `/gallery` | Groups completed variants by source video. Cards autoplay on hover. Groups showing fewer variants than requested display a "Regenerate" button to fill the shortfall. |
-| **Variant side-panel** | Click any Gallery card | Slide-in panel with a before/after compare slider, a scrub bar that plays both streams in sync, quality metrics from the manifest, a greyed-out Similarity placeholder (Stage 2), and a Download button. |
-| **Diagnostics** | `/diagnostics` | Lists failed variants grouped by reason (`below_floor`, `corrupt`, `best_effort`). `best_effort` variants include an Inspect link to the side-panel. |
+| **Variant sheet** | Gallery card | Compare slider, scrub, quality, uniqueness, platform flag, post URL, download. |
+| **Send to Drive** | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
+| **Drive picker** | Studio | Import source files from a saved Drive destination. |
+| **Watch / queue / cancel** | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
+
+Phone (`< 640px`) shows the five everyone-tabs. Team / Admin /
+Diagnostics sit under **More**. Desktop shows extras in the top row
+when the session is allowed. Auth gating: `web/lib/navAccess.ts`.
 
 ---
 

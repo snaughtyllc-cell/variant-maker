@@ -73,7 +73,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
         padding: 14,
         marginBottom: 13,
         boxShadow: isActive
-          ? "0 0 0 1px #7c5cff22, 0 8px 26px #00000040"
+          ? "0 0 0 1px #16c8d322, 0 8px 26px #00000040"
           : "none",
         transition: "border-color 0.2s, box-shadow 0.2s",
       }}

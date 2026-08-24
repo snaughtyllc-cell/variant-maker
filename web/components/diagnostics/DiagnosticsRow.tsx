@@ -125,9 +125,9 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
               padding: "3px 9px",
               borderRadius: 999,
               flexShrink: 0,
-              color: "#fca5a5",
-              background: "#2c1212",
-              border: "1px solid #5a1f1f",
+              color: "#a33f3d",
+              background: "#fff3f1",
+              border: "1px solid #efc5c0",
             }}
           >
             CORRUPT
@@ -140,9 +140,9 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
               padding: "3px 9px",
               borderRadius: 999,
               flexShrink: 0,
-              color: "#ffd08a",
-              background: "#2c2210",
-              border: "1px solid #5a4416",
+              color: "#8e6119",
+              background: "#fff8eb",
+              border: "1px solid #efdfbd",
             }}
           >
             BELOW FLOOR
@@ -181,7 +181,7 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
                 padding: "7px 11px",
                 borderRadius: 8,
                 border: "1px solid var(--color-line)",
-                background: "#16161f",
+                background: "#f3f8f9",
                 color: "var(--color-text)",
                 cursor: "pointer",
               }}
@@ -199,7 +199,7 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
               padding: "7px 11px",
               borderRadius: 8,
               border: "1px solid var(--color-line)",
-              background: "#16161f",
+              background: "#f3f8f9",
               color: "var(--color-text)",
               cursor: "pointer",
             }}
@@ -217,10 +217,10 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
               padding: "7px 11px",
               borderRadius: 8,
               border: "none",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+              background: "var(--ink)",
               color: "#fff",
               cursor: busy ? "not-allowed" : "pointer",
-              boxShadow: "0 3px 12px #ff4d8d33",
+              boxShadow: "none",
               opacity: busy ? 0.7 : 1,
             }}
           >
@@ -274,7 +274,7 @@ function MetricLine({ metric, corrupt }: { metric: string; corrupt: boolean }) {
   // e.g. "VMAF 84.2 < floor 90 · histogram OK"
   // or   "Spatial VMAF 22.0 < corruption floor · rejected before delivery"
   const parts = metric.split(/(\d+\.?\d*)/);
-  const accentColor = corrupt ? "#fca5a5" : "#ffd08a";
+  const accentColor = corrupt ? "#a33f3d" : "#8e6119";
 
   return (
     <>

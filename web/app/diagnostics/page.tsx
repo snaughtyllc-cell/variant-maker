@@ -5,6 +5,7 @@ import { useDiagnostics } from "@/lib/useDiagnostics";
 import { DiagnosticsList } from "@/components/diagnostics/DiagnosticsList";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { showDiagnosticsNav } from "@/lib/navAccess";
+import { Activity } from "lucide-react";
 
 export default function DiagnosticsPage() {
   const router = useRouter();
@@ -20,8 +21,8 @@ export default function DiagnosticsPage() {
 
   if (meLoading || !allowed) {
     return (
-      <main style={{ minHeight: "100vh", background: "#0a0a0e" }}>
-        <div style={{ padding: "18px 20px", color: "#8a8aa0", fontSize: 13 }}>
+      <main className="diagnostics-page">
+        <div style={{ color: "var(--color-muted)", fontSize: 13 }}>
           {meLoading ? "Loading…" : "Admin only"}
         </div>
       </main>
@@ -31,44 +32,22 @@ export default function DiagnosticsPage() {
   const totalFailed = items.length;
 
   return (
-    <main style={{ minHeight: "100vh" }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 14,
-          padding: "18px 20px 4px",
-        }}
-      >
+    <main className="diagnostics-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><Activity size={19} /></span>
         <div>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: "var(--color-text)",
-            }}
-          >
-            Diagnostics
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--color-muted)",
-              marginTop: 2,
-            }}
-          >
+          <p className="workspace-heading__eyebrow">Admin exceptions</p>
+          <h1>Diagnostics</h1>
+          <p className="workspace-heading__copy">
             {isLoading
               ? "Loading…"
               : totalFailed === 0
               ? "All variants delivered — nothing to report."
               : `${totalFailed} variant${totalFailed !== 1 ? "s" : ""} exhausted the 3-reroll cap. Everything else delivered.`}
-          </div>
+          </p>
         </div>
       </div>
-
-      {/* List */}
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
         {isLoading ? (
           <div
             style={{

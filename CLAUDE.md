@@ -9,6 +9,11 @@ degraded re-encodes. This tool IS the deliverable.
 
 Full design: `docs/spec.md`. Build steps: `PLAN.md`.
 
+Studio UI redesigns must start from `docs/ops/studio-ia.md` and
+`web/lib/studioDestinations.ts` — not the v1 four-screen list in old
+specs (Studio / Gallery / variant panel / Diagnostics). Live tabs also
+include Drops, Workflows, Drive, Team, and Admin.
+
 ## Scope guards (do not drift)
 - **NOT a detector.** A local "would-the-platform-catch-this" predictor is a *later* project.
   For now the real platform is the oracle; we test variants on it and label them. The only

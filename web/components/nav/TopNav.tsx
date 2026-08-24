@@ -1,33 +1,56 @@
 "use client";
+
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Cloud,
+  FolderOpen,
+  GalleryHorizontalEnd,
+  LogOut,
+  MoreHorizontal,
+  PackageCheck,
+  Settings2,
+  ShieldCheck,
+  UsersRound,
+  Workflow,
+} from "lucide-react";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { showDiagnosticsNav, showTeamNav } from "@/lib/navAccess";
+import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 
-const PRIMARY = [
-  { href: "/", label: "Studio" },
-  { href: "/gallery", label: "Gallery" },
-  { href: "/drops", label: "Drops" },
-  { href: "/workflows", label: "Workflows", short: "Flows" },
-  { href: "/settings/drive", label: "Drive" },
-] as const;
+const ICONS = {
+  "/": GalleryHorizontalEnd,
+  "/gallery": FolderOpen,
+  "/drops": PackageCheck,
+  "/workflows": Workflow,
+  "/settings/drive": Cloud,
+  "/team": UsersRound,
+  "/admin": ShieldCheck,
+  "/diagnostics": Settings2,
+} as const;
 
-function linkActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+function extraTabVisible(
+  href: string,
+  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
+): boolean {
+  if (href === "/diagnostics") return showDiagnosticsNav(me);
+  if (href === "/team") return showTeamNav(me);
+  if (href === "/admin") return Boolean(me?.is_admin);
+  return false;
 }
 
-const linkClass =
-  "text-[13px] px-2.5 py-2 sm:px-3 sm:py-1.5 rounded-lg no-underline transition-colors whitespace-nowrap shrink-0";
+function linkActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function TopNav() {
   const pathname = usePathname();
   const { data: me } = useAuthMe();
   const [moreOpen, setMoreOpen] = useState(false);
-  const diagnostics = showDiagnosticsNav(me);
-  const team = showTeamNav(me);
+  const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
 
   async function handleLogout() {
     await logout();
@@ -39,181 +62,86 @@ export function TopNav() {
     window.location.reload();
   }
 
-  const extraLinks = (
-    <>
-      {diagnostics && (
-        <Link
-          href="/diagnostics"
-          className={linkClass}
-          style={
-            linkActive(pathname, "/diagnostics")
-              ? { color: "#ffffff", background: "#1b1b27" }
-              : { color: "#8a8aa0" }
-          }
-        >
-          Diagnostics
-        </Link>
-      )}
-      {team && (
-        <Link
-          href="/team"
-          className={linkClass}
-          style={
-            linkActive(pathname, "/team")
-              ? { color: "#ffffff", background: "#1b1b27" }
-              : { color: "#8a8aa0" }
-          }
-        >
-          Team
-        </Link>
-      )}
-      {me?.is_admin && (
-        <Link
-          href="/admin"
-          className={linkClass}
-          style={
-            linkActive(pathname, "/admin")
-              ? { color: "#ffffff", background: "#1b1b27" }
-              : { color: "#8a8aa0" }
-          }
-        >
-          Admin
-        </Link>
-      )}
-    </>
-  );
-
   return (
     <>
-      <header
-        className="top-nav flex items-center gap-2 px-3 py-2 border-b border-line sm:gap-[18px] sm:px-[18px] sm:py-3"
-        style={{ background: "linear-gradient(180deg, #101018, #0c0c12)" }}
-      >
-        <div className="top-nav__brand hidden sm:flex items-center gap-2 font-extrabold text-[15px] tracking-[0.2px] text-text shrink-0">
-          VaryForge
-        </div>
+      <header className="vf-topbar">
+        <Link className="vf-brand" href="/" aria-label="VaryForge Studio home">
+          <span className="vf-brand-mark" aria-hidden="true" />
+          <span>VaryForge</span>
+        </Link>
 
-        <nav className="top-nav__links hidden sm:flex gap-1 ml-0 sm:ml-2 min-w-0">
-          {PRIMARY.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className={linkClass}
-              style={
-                linkActive(pathname, href)
-                  ? { color: "#ffffff", background: "#1b1b27" }
-                  : { color: "#8a8aa0" }
-              }
-            >
-              {label}
-            </Link>
-          ))}
-          {extraLinks}
+        <nav className="vf-desktop-nav" aria-label="Primary navigation">
+          {PRIMARY_TABS.map(({ href, label }) => {
+            const Icon = ICONS[href as keyof typeof ICONS];
+            const active = linkActive(pathname, href);
+            return (
+              <Link key={href} href={href} className="vf-nav-link" data-active={active}>
+                <Icon size={15} strokeWidth={1.8} /> {label}
+              </Link>
+            );
+          })}
+          {allowedExtras.length > 0 && <span className="vf-nav-separator" aria-hidden="true" />}
+          {allowedExtras.map(({ href, label }) => {
+            const Icon = ICONS[href as keyof typeof ICONS];
+            const active = linkActive(pathname, href);
+            return (
+              <Link key={href} href={href} className="vf-nav-link vf-nav-link-extra" data-active={active}>
+                <Icon size={15} strokeWidth={1.8} /> {label}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="ml-auto shrink-0 flex items-center gap-2">
+        <div className="vf-topbar-actions">
           <StatusStrip />
-          {me?.email && (
+          {(me?.email || allowedExtras.length > 0) && (
             <>
-              <span
-                className="hidden sm:inline text-[11.5px] text-muted max-w-[180px] truncate"
-                title={me.email}
-              >
-                {me.email}
-              </span>
+              {me?.email && <span className="vf-account-email" title={me.email}>{me.email}</span>}
+              {me?.email && <button type="button" className="vf-logout" onClick={handleLogout}><LogOut size={14} /> Log out</button>}
               <button
                 type="button"
-                onClick={handleLogout}
-                className="top-nav__logout hidden sm:inline text-[12px] font-semibold px-2.5 py-1.5 rounded-lg"
-                style={{
-                  color: "#ececf4",
-                  background: "#1b1b27",
-                  border: "1px solid #23232f",
-                  cursor: "pointer",
-                }}
-              >
-                Log out
-              </button>
-              <button
-                type="button"
+                className="vf-more-trigger"
                 aria-expanded={moreOpen}
-                aria-label="More"
-                className="top-nav__more sm:hidden text-[12px] font-semibold px-2.5 py-1.5 rounded-lg"
-                style={{
-                  color: "#ececf4",
-                  background: "#1b1b27",
-                  border: "1px solid #23232f",
-                  cursor: "pointer",
-                }}
-                onClick={() => setMoreOpen((o) => !o)}
+                aria-controls="vf-mobile-more"
+                onClick={() => setMoreOpen((open) => !open)}
               >
-                More
+                <MoreHorizontal size={17} /> More
               </button>
             </>
           )}
         </div>
       </header>
-      {moreOpen && me?.email && (
-        <div
-          className="sm:hidden px-3 py-2 border-b border-line flex flex-col gap-1"
-          style={{ background: "#101018" }}
-        >
-          {me.email && (
-            <div className="text-[11.5px] text-muted truncate px-1 py-1">{me.email}</div>
+
+      {moreOpen && (me?.email || allowedExtras.length > 0) && (
+        <aside className="vf-mobile-more" id="vf-mobile-more" aria-label="More navigation">
+          {me?.email && <span className="vf-mobile-email">{me.email}</span>}
+          {allowedExtras.length > 0 && (
+            <nav className="vf-mobile-extra-links">
+              {allowedExtras.map(({ href, label }) => {
+                const Icon = ICONS[href as keyof typeof ICONS];
+                return <Link key={href} href={href} onClick={() => setMoreOpen(false)}><Icon size={16} /> {label}</Link>;
+              })}
+            </nav>
           )}
-          <div className="flex flex-wrap gap-1">{extraLinks}</div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-[12px] font-semibold px-2.5 py-2 rounded-lg text-left"
-            style={{
-              color: "#ececf4",
-              background: "#1b1b27",
-              border: "1px solid #23232f",
-              cursor: "pointer",
-            }}
-          >
-            Log out
-          </button>
-        </div>
+          {me?.email && <button type="button" className="vf-mobile-logout" onClick={handleLogout}><LogOut size={15} /> Log out</button>}
+        </aside>
       )}
+
       {me?.viewing_other && (
-        <div
-          className="flex items-center gap-3 px-3 py-2 sm:px-[18px] text-[13px]"
-          style={{ background: "#1a1610", borderBottom: "1px solid #3a3020", color: "#ffd08a" }}
-        >
-          <span>Viewing {me.workspace_name || "another studio"} — Exit to your studio</span>
-          <button
-            type="button"
-            onClick={handleExitView}
-            className="font-semibold"
-            style={{
-              color: "#fff",
-              background: "#7c5cff",
-              border: "none",
-              borderRadius: 8,
-              padding: "5px 10px",
-              cursor: "pointer",
-            }}
-          >
-            Exit
-          </button>
+        <div className="vf-viewing-banner">
+          <span>Viewing {me.workspace_name || "another studio"}</span>
+          <button type="button" onClick={handleExitView}>Exit to my studio</button>
         </div>
       )}
-      <nav className="app-tab-bar" aria-label="Primary">
-        {PRIMARY.map((item) => {
+
+      <nav className="vf-mobile-tabs" aria-label="Primary navigation">
+        {PRIMARY_TABS.map((item) => {
+          const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
-          const tabLabel = "short" in item ? item.short : item.label;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-label={item.label}
-              aria-current={active ? "page" : undefined}
-              className="app-tab-bar__item no-underline"
-              style={{ color: active ? "#ffffff" : "#8a8aa0" }}
-            >
-              {tabLabel}
+            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} data-active={active}>
+              <Icon size={17} strokeWidth={1.8} />
+              <span>{item.short ?? item.label}</span>
             </Link>
           );
         })}

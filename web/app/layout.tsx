@@ -29,7 +29,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0a0a0e",
+  themeColor: "#e8f6f8",
 };
 
 // Prevent static HTML shells from being cached by RunPod's CDN with stale JS refs.

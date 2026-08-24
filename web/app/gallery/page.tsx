@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
@@ -150,7 +151,17 @@ function GalleryContent() {
   }
 
   return (
-    <>
+    <main className="workspace-page gallery-page">
+      <section className="workspace-page-shell">
+        <header className="workspace-heading">
+          <span className="workspace-heading__icon"><FolderOpen size={19} /></span>
+          <div>
+            <p className="workspace-heading__eyebrow">Review library</p>
+            <h1>Gallery</h1>
+            <p className="workspace-heading__copy">Finished packs by source. Review quality, keep the strongest variants, and send selected copies to Drive.</p>
+          </div>
+        </header>
+      </section>
       <GalleryToolbar
         count={allSources.length}
         variantCount={totalVariants}
@@ -167,7 +178,7 @@ function GalleryContent() {
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div style={{ padding: "8px 16px 22px" }}>
+      <div className="gallery-content" style={{ padding: "8px 16px 22px" }}>
         {isLoading && (
           <div
             style={{
@@ -244,14 +255,13 @@ function GalleryContent() {
           onClose={handleSendModalClose}
         />
       )}
-    </>
+    </main>
   );
 }
 
 export default function GalleryPage() {
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <Suspense
+    <Suspense
         fallback={
           <div
             style={{
@@ -266,9 +276,8 @@ export default function GalleryPage() {
             Loading…
           </div>
         }
-      >
-        <GalleryContent />
-      </Suspense>
-    </main>
+    >
+      <GalleryContent />
+    </Suspense>
   );
 }

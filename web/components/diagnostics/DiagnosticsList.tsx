@@ -42,7 +42,7 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
               style={{
                 fontSize: 17,
                 display: "block",
-                color: "#ffd08a",
+                color: "#8e6119",
               }}
             >
               {belowFloorCount}
@@ -62,7 +62,7 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
               style={{
                 fontSize: 17,
                 display: "block",
-                color: "#fca5a5",
+                color: "#a33f3d",
               }}
             >
               {corruptCount}

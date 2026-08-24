@@ -76,27 +76,21 @@ export function PasswordPanel() {
         <button
           type="submit"
           disabled={busy}
-          style={{
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: "#fff",
-            background: "#7c5cff",
-            border: "none",
-            padding: "8px 14px",
-            borderRadius: 9,
-            cursor: busy ? "wait" : "pointer",
-          }}
+          className="vf-primary-button"
+          style={{ cursor: busy ? "wait" : "pointer" }}
         >
           {busy ? "Saving…" : hasPassword ? "Change password" : "Add password"}
         </button>
       </form>
       {error && (
-        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: "#ffd08a" }}>
+        <div role="alert" className="vf-alert" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>
           {error}
         </div>
       )}
       {saved && (
-        <div style={{ marginTop: 10, fontSize: 12.5, color: "#7bf2a8" }}>Password saved.</div>
+        <div className="vf-alert vf-alert--ok" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>
+          Password saved.
+        </div>
       )}
     </div>
   );
