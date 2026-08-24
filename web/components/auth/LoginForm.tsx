@@ -45,7 +45,7 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
 
   return (
     <>
-      <p style={{ fontSize: 13, color: "#8a8aa0", lineHeight: 1.5, margin: "0 0 22px" }}>
+      <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 22px" }}>
         Studio is invite-only. Use the invited email and a password, or continue with
         Google. First password sign-in sets that password.
       </p>
@@ -67,7 +67,7 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
         </div>
       )}
       <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: "#8a8aa0" }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>
           Email
           <input
             type="email"
@@ -79,7 +79,7 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
             style={{ ...fieldStyle, marginTop: 6 }}
           />
         </label>
-        <label style={{ fontSize: 12, fontWeight: 600, color: "#8a8aa0" }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>
           Password
           <input
             type="password"

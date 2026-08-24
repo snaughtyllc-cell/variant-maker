@@ -97,6 +97,28 @@ input, select, textarea { font-size: 16px; }
 .vf-primary-button:disabled { cursor: not-allowed; opacity: 0.55; }
 .vf-secondary-button { align-items: center; background: #f3f8f9; border: 1px solid var(--color-line); border-radius: 8px; color: var(--ink); cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 630; gap: 7px; justify-content: center; padding: 9px 12px; }
 .vf-secondary-button:hover:not(:disabled) { border-color: #a2c8ce; }
+.vf-alert {
+  background: #fff8eb;
+  border: 1px solid #efdfbd;
+  border-radius: 10px;
+  color: #8e6119;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+}
+.vf-alert--error {
+  background: #fff3f1;
+  border-color: #efc5c0;
+  color: #a33f3d;
+}
+.vf-alert--ok {
+  background: #e9f8f0;
+  border-color: #c6e8d7;
+  color: #247955;
+}
+.vf-boot { background: var(--aqua); min-height: 100vh; }
+input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 /* Studio is a focused creation cockpit, not a dashboard. */
 .studio-shell { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); display: grid; grid-template-columns: 1fr; min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
@@ -194,8 +216,10 @@ input, select, textarea { font-size: 16px; }
 .drive-page > div:last-child { max-width: 900px; }
 .team-page > div:last-child, .admin-page > div:last-child { max-width: 1120px; overflow-x: auto; }
 .workflow-page [style*="#0d0d13"], .drive-page [style*="#0d0d13"], .team-page [style*="#0d0d13"], .admin-page [style*="#0d0d13"] { background: #f7fbfb !important; }
-.workflow-page [style*="#1c1608"], .drive-page [style*="#1c1608"], .team-page [style*="#1c1608"], .admin-page [style*="#1c1608"] { background: #fff8eb !important; border-color: #efdfbd !important; color: #8e6119 !important; }
-.workflow-page button[style*="linear-gradient"], .drive-page button[style*="linear-gradient"], .team-page button[style*="linear-gradient"], .admin-page button[style*="linear-gradient"] { background: var(--ink) !important; box-shadow: none !important; }
+.workflow-page [style*="#1c1608"], .drive-page [style*="#1c1608"], .team-page [style*="#1c1608"], .admin-page [style*="#1c1608"],
+.team-page [style*="#1a1610"], .admin-page [style*="#1a1610"] { background: #fff8eb !important; border-color: #efdfbd !important; color: #8e6119 !important; }
+.workflow-page button[style*="linear-gradient"], .drive-page button[style*="linear-gradient"], .team-page button[style*="linear-gradient"], .admin-page button[style*="linear-gradient"],
+.admin-page button[style*="#7c5cff"], .team-page button[style*="#7c5cff"], .drive-page button[style*="#7c5cff"] { background: var(--ink) !important; box-shadow: none !important; }
 .workflow-page input, .workflow-page select, .drive-page input, .drive-page select, .drive-page textarea, .team-page input, .admin-page input { border-color: #c9dde0 !important; }
 .workflow-page input:focus, .workflow-page select:focus, .drive-page input:focus, .drive-page select:focus, .drive-page textarea:focus, .team-page input:focus, .admin-page input:focus { border-color: #16c8d3 !important; box-shadow: 0 0 0 3px #cef4f6; }
 .team-page table, .admin-page table { background: #fbfdfd; border: 1px solid #d6e5e7; border-radius: 10px; overflow: hidden; }
@@ -207,6 +231,7 @@ input, select, textarea { font-size: 16px; }
 /* StatusStrip remains compact, but is now part of the light shell. */
 .status-engine, .status-cpu { background: #f2f8f8 !important; border-color: #d4e3e6 !important; }
 .status-cpu strong { color: var(--ink); }
+.status-queue { background: #fff8e9 !important; border-color: #ecd9b3 !important; color: #876019 !important; }
 
 /* Login intentionally has its own restrained dark media-state. */
 .login-page { align-items: center; background: #172124; display: flex; justify-content: center; min-height: 100dvh; padding: 24px; }
@@ -214,6 +239,7 @@ input, select, textarea { font-size: 16px; }
 .login-brand { align-items: center; color: var(--ink); display: flex; font-size: 16px; font-weight: 760; gap: 9px; margin-bottom: 22px; }
 .login-brand-mark { background: #16c8d3; border-radius: 6px; height: 18px; width: 18px; }
 .login-card h1 { color: var(--ink); font-size: 24px; letter-spacing: -0.04em; margin: 0 0 8px; }
+.login-card p, .login-card label { color: var(--color-muted); }
 .login-card [style*="#14141d"], .login-card [style*="#16161f"] { background: #f3f8f9 !important; border-color: #c9dde0 !important; color: var(--ink) !important; }
 .login-card button[style*="linear-gradient"] { background: var(--ink) !important; box-shadow: none !important; }
 

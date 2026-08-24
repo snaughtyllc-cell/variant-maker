@@ -107,10 +107,10 @@ export function DropLedgerPanel() {
             style={{
               marginTop: 10,
               padding: "10px 12px",
-              background: "#1c1608",
-              border: "1px solid #3a2c10",
+              background: "#fff8eb",
+              border: "1px solid #efdfbd",
               borderRadius: 10,
-              color: "#ffd08a",
+              color: "#8e6119",
               fontSize: 12.5,
               lineHeight: 1.45,
             }}
@@ -125,10 +125,10 @@ export function DropLedgerPanel() {
             style={{
               marginTop: 10,
               padding: "10px 12px",
-              background: "#1c1608",
-              border: "1px solid #3a2c10",
+              background: "#fff8eb",
+              border: "1px solid #efdfbd",
               borderRadius: 10,
-              color: "#ffd08a",
+              color: "#8e6119",
               fontSize: 12.5,
             }}
           >
@@ -194,7 +194,7 @@ function primaryBtn(disabled: boolean): CSSProperties {
     fontSize: 12.5,
     fontWeight: 700,
     color: "#fff",
-    background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+    background: "var(--ink)",
     border: "none",
     padding: "8px 14px",
     borderRadius: 9,

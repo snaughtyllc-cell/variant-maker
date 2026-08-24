@@ -21,7 +21,6 @@ export function StatusStrip() {
       {/* Engine status pill */}
       <span
         className="status-engine inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
-        style={{ background: "#14141d" }}
       >
         <span
           className="w-[7px] h-[7px] rounded-full flex-none"
@@ -29,7 +28,7 @@ export function StatusStrip() {
             ready && online
               ? { background: "#22c55e", boxShadow: "0 0 8px #22c55e88" }
               : loading
-              ? { background: "#8a8aa0" }
+              ? { background: "#87989d" }
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
@@ -38,8 +37,7 @@ export function StatusStrip() {
 
       {queueLabel && (
         <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
-          style={{ background: "#1a1610", color: "var(--color-amber)", borderColor: "#3a3020" }}
+          className="status-queue inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
           title="Live packs on this shared Studio URL"
         >
           {queueLabel}
@@ -49,7 +47,6 @@ export function StatusStrip() {
       {/* Local mode pill — desktop only; phones hide it to keep the bar usable */}
       <span
         className="status-cpu inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
-        style={{ background: "#14141d" }}
       >
         Local&nbsp;·&nbsp;CPU&nbsp;<strong className="text-text font-semibold">fast</strong>
       </span>

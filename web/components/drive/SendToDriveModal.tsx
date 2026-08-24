@@ -239,7 +239,7 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
                   aria-label="Split pack across accounts"
                   checked={splitMode}
                   onChange={(e) => setSplitMode(e.target.checked)}
-                  style={{ accentColor: "#7c5cff", marginTop: 2 }}
+                  style={{ accentColor: "#0caab8", marginTop: 2 }}
                 />
                 <span>
                   Split across accounts

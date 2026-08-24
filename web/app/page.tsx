@@ -145,17 +145,7 @@ export default function StudioPage() {
         </div>
 
         {error && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "8px 12px",
-              background: "#2a0e0e",
-              border: "1px solid #5a1a1a",
-              borderRadius: 8,
-              fontSize: 12,
-              color: "var(--color-red)",
-            }}
-          >
+          <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>
             {error}
           </div>
         )}

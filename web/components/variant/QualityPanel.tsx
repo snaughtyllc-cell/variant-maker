@@ -87,9 +87,9 @@ function OkBadge({ ok }: { ok: boolean }) {
       style={{
         fontSize: 10,
         fontWeight: 800,
-        color: ok ? "#7bf2a8" : "#f87171",
-        background: ok ? "#0c2c1a" : "#2c1010",
-        border: `1px solid ${ok ? "#16502f" : "#5a2020"}`,
+        color: ok ? "#247955" : "#a33f3d",
+        background: ok ? "#e9f8f0" : "#fff3f1",
+        border: `1px solid ${ok ? "#c6e8d7" : "#efc5c0"}`,
         padding: "2px 7px",
         borderRadius: 6,
         flexShrink: 0,
@@ -167,9 +167,9 @@ export function QualityPanel({
             marginBottom: 10,
             fontSize: 11.5,
             lineHeight: 1.5,
-            color: "#ffd08a",
-            background: "#1c1608",
-            border: "1px solid #3a2c10",
+            color: "#8e6119",
+            background: "#fff8eb",
+            border: "1px solid #efdfbd",
             borderRadius: 8,
           }}
         >
@@ -191,7 +191,7 @@ export function QualityPanel({
                 fontSize: 12.5,
                 fontWeight: 800,
                 flexShrink: 0,
-                color: uniquenessOk ? "#7bf2a8" : "#fbbf24",
+                color: uniquenessOk ? "#247955" : "#a56b17",
               }}
             >
               {uniquenessPct}%
@@ -235,7 +235,7 @@ export function QualityPanel({
                 fontSize: 12.5,
                 fontWeight: 800,
                 flexShrink: 0,
-                color: similarityOk ? "#7bf2a8" : "#fbbf24",
+                color: similarityOk ? "#247955" : "#a56b17",
               }}
             >
               {similarityPct}%
@@ -277,7 +277,7 @@ export function QualityPanel({
             fontSize: 12.5,
             fontWeight: 800,
             flexShrink: 0,
-            color: pass ? "#7bf2a8" : "#f87171",
+            color: pass ? "#247955" : "#a33f3d",
           }}
         >
           {quality.vmaf.toFixed(1)}
@@ -308,9 +308,9 @@ export function QualityPanel({
                 style={{
                   fontSize: 10,
                   fontWeight: 800,
-                  color: "#7bf2a8",
-                  background: "#0c2c1a",
-                  border: "1px solid #16502f",
+                  color: "#247955",
+                  background: "#e9f8f0",
+                  border: "1px solid #c6e8d7",
                   padding: "2px 7px",
                   borderRadius: 6,
                   flexShrink: 0,

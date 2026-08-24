@@ -132,35 +132,12 @@ export default function TeamPage() {
 
       <div>
         {me?.viewing_other && (
-          <div
-            role="status"
-            style={{
-              marginBottom: 16,
-              padding: "10px 12px",
-              background: "#1a1610",
-              border: "1px solid #3a3020",
-              borderRadius: 10,
-              color: "#ffd08a",
-              fontSize: 13,
-              lineHeight: 1.45,
-            }}
-          >
+          <div className="vf-alert" role="status">
             Team always manages your home studio, not the one in the Viewing banner.
           </div>
         )}
         {formError && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: 16,
-              padding: "10px 12px",
-              background: "#1c1608",
-              border: "1px solid #3a2c10",
-              borderRadius: 10,
-              color: "#ffd08a",
-              fontSize: 13,
-            }}
-          >
+          <div className="vf-alert" role="alert">
             {formError}
           </div>
         )}
@@ -263,16 +240,8 @@ export default function TeamPage() {
           <button
             type="submit"
             disabled={submitting}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              border: "none",
-              padding: "8px 14px",
-              borderRadius: 9,
-              cursor: submitting ? "wait" : "pointer",
-            }}
+            className="vf-primary-button"
+            style={{ cursor: submitting ? "wait" : "pointer" }}
           >
             {submitting ? "Sending…" : "Invite"}
           </button>
