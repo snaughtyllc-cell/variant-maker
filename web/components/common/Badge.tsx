@@ -10,11 +10,11 @@ interface BadgeProps {
 }
 
 const COLOR_MAP: Record<BadgeColor, { bg: string; color: string; border: string }> = {
-  green:  { bg: "#0b3d1f", color: "#7bf2a8", border: "#134d28" },
-  amber:  { bg: "#3d2200", color: "#f59e0b", border: "#4d2e00" },
-  cyan:   { bg: "#072830", color: "#22d3ee", border: "#0c3d47" },
-  red:    { bg: "#2a0e0e", color: "#f87171", border: "#5a1a1a" },
-  muted:  { bg: "#14141d", color: "#8a8aa0", border: "#23232f" },
+  green:  { bg: "#e9f8f0", color: "#247955", border: "#c6e8d7" },
+  amber:  { bg: "#fff3e5", color: "#986317", border: "#efd9b0" },
+  cyan:   { bg: "#dff4f5", color: "#075966", border: "#b9e7ea" },
+  red:    { bg: "#fff3f1", color: "#a33f3d", border: "#efc5c0" },
+  muted:  { bg: "#edf5f6", color: "#637277", border: "#d4e3e6" },
 };
 
 export function Badge({ children, color = "muted", className }: BadgeProps) {

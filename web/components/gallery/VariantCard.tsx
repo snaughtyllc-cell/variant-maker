@@ -129,9 +129,9 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             fontWeight: 800,
             padding: "1px 5px",
             borderRadius: 5,
-            background: "#2c2210",
-            color: "#ffd08a",
-            border: "1px solid #5a4416",
+            background: "#fff8eb",
+            color: "#8e6119",
+            border: "1px solid #efdfbd",
           }}
         >
           ⚠
@@ -182,8 +182,8 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         borderRadius: 9,
         overflow: "hidden",
         cursor: ready ? "pointer" : "default",
-        border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
-        boxShadow: selected ? "0 0 0 2px #7c5cff44" : undefined,
+        border: selected ? "1px solid #0caab8" : "1px solid var(--color-line)",
+        boxShadow: selected ? "0 0 0 2px #0caab844" : undefined,
         transition: "transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease",
         opacity: ready ? 1 : 0.7,
       }}
@@ -194,8 +194,8 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = "";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = selected ? "0 0 0 2px #7c5cff44" : "";
-        (e.currentTarget as HTMLDivElement).style.borderColor = selected ? "#7c5cff" : "var(--color-line)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = selected ? "0 0 0 2px #0caab844" : "";
+        (e.currentTarget as HTMLDivElement).style.borderColor = selected ? "#0caab8" : "var(--color-line)";
       }}
     >
       {/* Selection checkbox */}
@@ -218,7 +218,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           height: 13,
           zIndex: 3,
           cursor: "pointer",
-          accentColor: "#7c5cff",
+          accentColor: "#0caab8",
         }}
       />
 
@@ -246,7 +246,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           style={{
             aspectRatio: "9 / 16",
             width: "100%",
-            background: "#14141d",
+            background: "#dce9eb",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -254,7 +254,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             textAlign: "center",
             fontSize: 10,
             fontWeight: 700,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           Not on Studio

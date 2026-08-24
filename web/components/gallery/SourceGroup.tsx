@@ -217,7 +217,7 @@ export function SourceGroup({
             borderRadius: 7,
             flexShrink: 0,
             overflow: "hidden",
-            background: "#14141d",
+            background: "#dce9eb",
             border: "1px solid var(--color-line)",
           }}
         >
@@ -265,8 +265,8 @@ export function SourceGroup({
               padding: "4px 10px",
               borderRadius: 999,
               ...(fullDelivery
-                ? { color: "#7bf2a8", background: "#0c2c1a", border: "1px solid #16502f" }
-                : { color: "#ffd08a", background: "#2c2210", border: "1px solid #5a4416" }),
+                ? { color: "#247955", background: "#e9f8f0", border: "1px solid #c6e8d7" }
+                : { color: "#8e6119", background: "#fff3e5", border: "1px solid #efd9b0" }),
             }}
           >
             {fullDelivery ? "✓ " : ""}
@@ -377,10 +377,10 @@ export function SourceGroup({
         <div
           style={{
             padding: "10px 16px",
-            background: "#1c1608",
-            borderBottom: "1px solid #3a2c10",
+            background: "#fff8eb",
+            borderBottom: "1px solid #efdfbd",
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           ⚠ {zipMsg}
@@ -393,10 +393,10 @@ export function SourceGroup({
             alignItems: "center",
             gap: 12,
             padding: "10px 16px",
-            background: "#1c1608",
-            borderBottom: "1px solid #3a2c10",
+            background: "#fff8eb",
+            borderBottom: "1px solid #efdfbd",
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
             flexWrap: "wrap",
           }}
         >
@@ -410,12 +410,12 @@ export function SourceGroup({
               fontSize: 12.5,
               fontWeight: 700,
               color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+              background: "var(--ink)",
               border: "none",
               padding: "7px 14px",
               borderRadius: 9,
               cursor: copyLoading ? "not-allowed" : "pointer",
-              boxShadow: "0 4px 14px #ff4d8d33",
+              boxShadow: "none",
               opacity: copyLoading ? 0.7 : 1,
             }}
           >
@@ -427,10 +427,10 @@ export function SourceGroup({
         <div
           style={{
             padding: "10px 16px",
-            background: "#1c1608",
-            borderBottom: "1px solid #3a2c10",
+            background: "#fff8eb",
+            borderBottom: "1px solid #efdfbd",
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           Videos are still landing on Studio…
@@ -443,10 +443,10 @@ export function SourceGroup({
             alignItems: "center",
             gap: 12,
             padding: "10px 16px",
-            background: "#1c1608",
-            borderBottom: "1px solid #3a2c10",
+            background: "#fff8eb",
+            borderBottom: "1px solid #efdfbd",
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           <span>⚠ {shortfallMsg}</span>
@@ -459,12 +459,12 @@ export function SourceGroup({
                 fontSize: 12.5,
                 fontWeight: 700,
                 color: "#fff",
-                background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+                background: "var(--ink)",
                 border: "none",
                 padding: "7px 14px",
                 borderRadius: 9,
                 cursor: regenLoading ? "not-allowed" : "pointer",
-                boxShadow: "0 4px 14px #ff4d8d33",
+                boxShadow: "none",
                 opacity: regenLoading ? 0.7 : 1,
               }}
             >

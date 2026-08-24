@@ -143,18 +143,7 @@ export default function AdminPage() {
 
       <div>
         {formError && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: 16,
-              padding: "10px 12px",
-              background: "#1c1608",
-              border: "1px solid #3a2c10",
-              borderRadius: 10,
-              color: "#ffd08a",
-              fontSize: 13,
-            }}
-          >
+          <div className="vf-alert" role="alert">
             {formError}
           </div>
         )}
@@ -255,16 +244,8 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => handleOpen(ws.id)}
                         disabled={openingId === ws.id}
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: "#fff",
-                          background: "#7c5cff",
-                          border: "none",
-                          padding: "7px 12px",
-                          borderRadius: 9,
-                          cursor: openingId === ws.id ? "wait" : "pointer",
-                        }}
+                        className="vf-primary-button"
+                        style={{ cursor: openingId === ws.id ? "wait" : "pointer" }}
                       >
                         {openingId === ws.id ? "Opening…" : "Open"}
                       </button>
@@ -326,16 +307,8 @@ export default function AdminPage() {
           <button
             type="submit"
             disabled={submitting}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
-              border: "none",
-              padding: "8px 14px",
-              borderRadius: 9,
-              cursor: submitting ? "wait" : "pointer",
-            }}
+            className="vf-primary-button"
+            style={{ cursor: submitting ? "wait" : "pointer" }}
           >
             {submitting ? "Sending…" : "Invite"}
           </button>

@@ -225,11 +225,11 @@ export function WorkflowsPanel() {
           style={{
             padding: "12px 16px",
             marginBottom: 18,
-            background: "#1c1608",
-            border: "1px solid #3a2c10",
+            background: "#fff8eb",
+            border: "1px solid #efdfbd",
             borderRadius: 12,
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           <div>{status.message}</div>
@@ -397,7 +397,7 @@ export function WorkflowsPanel() {
             checked={enabled}
             onChange={(e) => setEnabled(e.target.checked)}
             disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#7c5cff" }}
+            style={{ accentColor: "#0caab8" }}
           />
           Watch folder (auto-poll)
         </label>
@@ -408,7 +408,7 @@ export function WorkflowsPanel() {
             checked={autoCaption}
             onChange={(e) => setAutoCaption(e.target.checked)}
             disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#7c5cff", marginTop: 2 }}
+            style={{ accentColor: "#0caab8", marginTop: 2 }}
           />
           <span>
             Auto-caption from bank
@@ -446,7 +446,7 @@ export function WorkflowsPanel() {
             fontSize: 12.5,
             fontWeight: 700,
             color: "#fff",
-            background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+            background: "var(--ink)",
             border: "none",
             padding: "9px 16px",
             borderRadius: 9,
@@ -525,7 +525,7 @@ export function WorkflowsPanel() {
                     checked={wf.enabled}
                     disabled={busy}
                     onChange={() => handleToggleEnabled(wf)}
-                    style={{ accentColor: "#7c5cff" }}
+                    style={{ accentColor: "#0caab8" }}
                   />
                   Watch
                 </label>
@@ -543,7 +543,7 @@ export function WorkflowsPanel() {
                     checked={!!wf.auto_caption}
                     disabled={busy}
                     onChange={() => handleToggleAutoCaption(wf)}
-                    style={{ accentColor: "#7c5cff" }}
+                    style={{ accentColor: "#0caab8" }}
                   />
                   Auto-caption
                 </label>
