@@ -76,6 +76,12 @@ _COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
 })
 _GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1", "rebuild_scale"})
 
+# Caption-safe crop window. 0..1 slides the leftover onto one edge and clips
+# burned-in words (live pack ced7cbec7c49 copy 1: keep 0.84, x=0.90, y=0.14).
+# Stay near center; still zero-mean at 0.5. Unbudgeted fingerprint.
+CROP_OFFSET_LO = 0.35
+CROP_OFFSET_HI = 0.65
+
 # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
 RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
@@ -287,11 +293,11 @@ def sample(
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
-    # into the quality budget. crop_x_frac/crop_y_frac range over the whole frame
-    # (zero-mean at the centered 0.5); trim_end_s reuses the preset's trim_s range,
-    # drawn independently from trim_s (same distribution, different draw).
-    raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
-    raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
+    # into the quality budget. crop_x_frac/crop_y_frac stay in a center band so a
+    # 4–8% punch cannot slide onto a caption (zero-mean at 0.5). trim_end_s reuses
+    # the preset's trim_s range, drawn independently from trim_s.
+    raw["crop_x_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
+    raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)

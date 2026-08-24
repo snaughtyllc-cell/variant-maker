@@ -169,7 +169,7 @@ Two checks, run on every variant; fail → reduce strength and regenerate (bound
 
 | Video param | subtle | medium | strong |
 |---|---|---|---|
-| crop punch-in (kept, rescaled) | 0.98–1.00 | 0.84–0.90 | 0.78–0.86 |
+| crop punch-in (kept, rescaled) | 0.98–1.00 | 0.92–0.96 | 0.88–0.93 |
 | rotation deg (`safe` only) | 0 | ±0.3 | ±0.8 |
 | brightness (zero-mean) | ±0.01 | ±0.025 | ±0.04 |
 | contrast | 0.99–1.01 | 0.97–1.03 | 0.95–1.06 |

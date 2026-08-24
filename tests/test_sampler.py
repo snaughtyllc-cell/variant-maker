@@ -2,6 +2,8 @@ import pytest
 
 from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
+    CROP_OFFSET_HI,
+    CROP_OFFSET_LO,
     _VIDEO_AXES,
     _axis_distortion,
     clamp_strength,
@@ -174,8 +176,8 @@ def test_pitch_within_range_with_rubberband():
 
 def test_sample_includes_crop_offset_and_trim_end():
     p = sample(MEDIUM, seed=1)
-    assert 0.0 <= p["video"]["crop_x_frac"] <= 1.0
-    assert 0.0 <= p["video"]["crop_y_frac"] <= 1.0
+    assert CROP_OFFSET_LO <= p["video"]["crop_x_frac"] <= CROP_OFFSET_HI
+    assert CROP_OFFSET_LO <= p["video"]["crop_y_frac"] <= CROP_OFFSET_HI
     assert p["video"]["trim_end_s"] >= 0.0
 
 
@@ -183,9 +185,24 @@ def test_sample_includes_crop_offset_and_trim_end():
 def test_crop_offset_and_trim_end_within_bounds(preset):
     for s in SEEDS[:100]:
         v = sample(preset, s)["video"]
-        assert 0.0 <= v["crop_x_frac"] <= 1.0
-        assert 0.0 <= v["crop_y_frac"] <= 1.0
+        assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
         assert preset.trim_s.lo - 1e-9 <= v["trim_end_s"] <= preset.trim_s.hi + 1e-9
+
+
+def test_crop_offset_stays_off_caption_edges():
+    """Live pack ced7cbec7c49 slid y=0.10 / x=0.99 and cropped a word.
+    The leftover window must stay near center so burned-in text survives.
+    """
+    assert CROP_OFFSET_LO == pytest.approx(0.35)
+    assert CROP_OFFSET_HI == pytest.approx(0.65)
+    for s in SEEDS[:200]:
+        v = sample(MEDIUM, s)["video"]
+        assert 0.35 - 1e-9 <= v["crop_x_frac"] <= 0.65 + 1e-9
+        assert 0.35 - 1e-9 <= v["crop_y_frac"] <= 0.65 + 1e-9
+        # 0..1 edge slides are the miss — never emit them.
+        assert v["crop_x_frac"] > 0.2
+        assert v["crop_y_frac"] < 0.8
 
 
 def test_crop_offset_axes_are_zero_mean():
@@ -222,19 +239,20 @@ def test_crop_keep_is_unbudgeted_fingerprint():
 
 
 def test_medium_crop_range_is_tighter_than_identity():
-    """Talking-head keep=0.72 (face-only zoom) scored *worse* SSIM than 0.858.
-    Medium always punches ≥10% but keeps background in the 576×1024 uniqueness
-    frame. Escalate is a bit tighter. Gate stays 24.
+    """Face-only keep=0.72 scored *worse* SSIM. 0.84–0.90 with a 0..1 window
+    cropped a burned-in word on live pack ced7cbec7c49 (keep 0.84, y=0.14).
+    Medium now punches 4–8% and stays centered. Escalate is a bit tighter,
+    not face-zoom. Gate stays 24.
     """
-    assert MEDIUM.crop_keep.lo == pytest.approx(0.84)
-    assert MEDIUM.crop_keep.hi == pytest.approx(0.90)
+    assert MEDIUM.crop_keep.lo == pytest.approx(0.92)
+    assert MEDIUM.crop_keep.hi == pytest.approx(0.96)
     assert STRONG.crop_keep.lo < MEDIUM.crop_keep.lo
-    assert STRONG.crop_keep.lo == pytest.approx(0.78)
-    assert STRONG.crop_keep.hi == pytest.approx(0.86)
+    assert STRONG.crop_keep.lo == pytest.approx(0.88)
+    assert STRONG.crop_keep.hi == pytest.approx(0.93)
     for s in SEEDS[:80]:
         keep = sample(MEDIUM, s)["video"]["crop_keep"]
-        assert keep <= 0.90 + 1e-9
-        assert keep >= 0.84 - 1e-9
+        assert keep <= 0.96 + 1e-9
+        assert keep >= 0.92 - 1e-9
 
 
 def test_grain_is_texture_under_the_social_cap():
