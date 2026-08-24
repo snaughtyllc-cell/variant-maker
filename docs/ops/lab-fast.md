@@ -11,7 +11,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 
 CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`,
 `cursor/fast-chroma-cloud-c975`, `cursor/fast-cloud-less-grain-c975`,
-`cursor/fast-chroma-softer-c975`, or `cursor/fast-720-luma-dust-c975`.
+`cursor/fast-chroma-softer-c975`, `cursor/fast-720-luma-dust-c975`, or
+`cursor/caption-safe-crop-c975`.
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
 
@@ -20,8 +21,9 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2`
-- `VF_ENGINE_REV=13cd292` (720 cloud 4–7 + gblur 4 + luma-only dust **11–13**). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72`
+- `VF_ENGINE_REV=856e23d` (caption-safe crop 0.92–0.96 + window 0.35–0.65; 720 cloud 4–7 + luma dust 11–13). `VF_LAB=1`
+- Prior lab image `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2` / `13cd292` (hard crop 0.84–0.90 + 0..1 window; live pin)
 - Prior lab image `sha256:e2ab9ec598c3ac8ae412e36e1cf3f01004c229e231b9b28c396b610ea473cc9c` / `39ecb97` (dust 8–12; `quietdustmed` c0s=9 **look usable**, 23 bits)
 - Prior lab image `sha256:b08ad7a1e3ab7049ee5f72050365d9f79eb9f31e23500ed68d024a294097f163` / `815a262` (dust 14–20; `softdust815a` c0s 15/17 **grain a little much**)
 - Prior lab image `sha256:cd68a8db77a1b3fd9781e2f9fb9328d1c17f3e543fd8725bf652b3b3a8c39ccf` / `568973c` (cloud 4–7 + gblur 4, no dust)
@@ -31,6 +33,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - Prior `sha256:9f8785cb…` / `5c86ef2` stacked c1s 12–15 + cloud. Pack `650f28dfb1f2` **look rejected**.
 - Lab pack `3a2231f5b731` (`8df4cc4`): same clip, cloud 7–10 + `gblur=sigma=2`, 35–38 bits / 54.7–59.4%, VMAF 95–100. **Jeff: these are better.** Promoted to live Fast `j0b1q4iuunzhnq` (`VF_ENGINE_REV=8df4cc4`, **no `VF_LAB`**, max 2, idle 600). Lab stays `VF_LAB=1`.
 - Live SaveInta look-test (ship-loop Gallery `looktest4c41`): cloud 6–10 + sigma=2 still **chroma a bit noticeable**. Lab `568973c` 4–7 + gblur 4 (`softestd3ce5`): c1s=5, **24/24 bits (38%)**. `815a262` dust 14–20 (`softdust815a`): **25/26 bits**, c0s 15/17 — **grain a little much**. `39ecb97` dust 8–12 (`quietdustmed`): **23/23 bits**, c0s=9 — **Jeff: that's usable**, under gate. Lab `13cd292` / `82daa69c…` dust **11–13**. SaveInta pack `cleargate24a` (`720-cloud-clear-24-test.mp4`): **26/28 bits (41/44%)**, VMAF **96.4 / 97.6**, c1s=6, c0s=12, sigma=4, both medium, `ok`, no escalate. Gate 24 **cleared**. Jeff: **Yea ship it.** Promoted that digest to live Fast.
+- Live pack `ced7cbec7c49` (hard crop): copy 1 keep **0.84** x=0.90 y=0.14 **cropped a word**. Lab `856e23d` same clip (`wordcrop856e` / `caption-safe-crop-test.mp4`): keep **0.953 / 0.928**, x/y **0.55/0.52** and **0.53/0.62**, **38/42 bits (59/66%)**, VMAF **99.9 / 100**, medium, `ok`. Live Fast stays `13cd292` until Jeff says the words are in.
 
 Live Fast `j0b1q4iuunzhnq` is on `sha256:82daa69c…` / `13cd292` (720 cloud **4–7** + `gblur=sigma=4` + luma-only dust **11–13**, **no `VF_LAB`**, max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not** PATCH live to test the next experiment — use lab. Do **not** re-pin live to a new ship-loop `:latest` digest until that build is tested.
 
@@ -51,6 +54,7 @@ Lab packs:
 | `815a262` + luma dust 14–20 (`softdust815a`, SaveInta) **lab; not live** | **25/26 bits (39/41%)**, VMAF **94.2 / 93.8**, c1s=5, c0s=15/17, sigma=4, medium. **Jeff: grain a little much** | — |
 | `39ecb97` dust 8–12 (`quietdustmed`, SaveInta) **look usable; 23 bits** | **23/23 bits (36%)**, VMAF **96.6 / 97.4**, c1s=5, c0s=9, sigma=4, both medium, `below_target`. **Jeff: that's usable.** | — |
 | **`13cd292` dust 11–13 (`cleargate24a`, SaveInta) promoted to live** | **26/28 bits (41/44%)**, VMAF **96.4 / 97.6**, c1s=6, c0s=12, sigma=4, both medium, `ok`, no escalate. Gate 24 cleared. **Jeff: Yea ship it.** | — |
+| `856e23d` caption-safe crop (`wordcrop856e`, same clip as `ced7cbec7c49`) **lab; not live** | **38/42 bits (59/66%)**, VMAF **99.9 / 100**, keep **0.953 / 0.928**, x/y centered 0.55/0.52 and 0.53/0.62, medium, `ok`. Old pack keep 0.84 y=0.14 cropped a word | — |
 
 Live pin: `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2` (`13cd292`, 720 cloud 4–7 + luma dust 11–13, **no `VF_LAB`**). Prior live `4f94edd` digest: `sha256:8ad6439c6d6ccb3c2a9793dc1d197d2c5565d12801f06005c429d9bd2752b1d3`. Prior live `06526b9` digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
 

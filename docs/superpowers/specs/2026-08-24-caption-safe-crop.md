@@ -35,3 +35,8 @@ face-protects. 720 talking-head cloud + luma dust unchanged.
 
 This pack had uniqueness headroom (41–50 bits). A smaller centered punch
 keeps the word; 576 SSIM still sees crop + grain.
+
+Lab `856e23d` / `sha256:59caa472…` pack `wordcrop856e` (`caption-safe-crop-test.mp4`):
+keep **0.953 / 0.928**, window **0.55/0.52** and **0.53/0.62**, **38/42 bits
+(59/66%)**, VMAF **99.9 / 100**, both medium `ok`. Live Fast stays `13cd292`
+until Jeff says the words are in.
