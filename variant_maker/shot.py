@@ -34,8 +34,11 @@ SHOT_MOTION = "motion"
 # rejected. Scoring at native 720 / 1080 does not recover those bits.
 # Do not remap talking-head onto preset rebuild to "buy" %. Do not clone
 # Pixel AI scramble. Gate 24/24. Shrink does not collapse uniqueness grain
-# to shot.lo when look overspends. No extra rotate (captions). Crop/warp
-# stay on the preset.
+# to shot.lo when look overspends. No extra rotate (captions).
+# Instagram 720 talking-head: centered keep 0.92–0.96 scores 20–21 bits
+# (below the gate). Punch leftover from the top (crop_y → 1.0) and keep
+# 0.86–0.90 so crop-only clears 24 without eating burned-in words and
+# without face-zoom 0.72/0.78. 1080 keeps the signed caption-safe band.
 # 720 chroma cloud: overlay at 80×142 then bicubic back. Lab `650f28dfb1f2`
 # stacked phone grain + cloud 18–22 (snow). `6d3e91ab7fd4` drew cloud-only
 # 18–22 — still grain on the face. `8df4cc4` 6–10 + gblur 2 was better than
@@ -94,6 +97,39 @@ def luma_dust_range_for_shot(preset, shot: str | None) -> Range | None:
     if grain_range_for_shot(preset, shot) is None:
         return None
     return _LUMA_DUST_FOR_SHOT
+
+
+# Instagram downloads land at 720. Centered caption-safe keep 0.92–0.96 scores
+# 20–21 SSIM bits on that SKU (timed portrait.mp4) — below the 24-bit gate.
+# Punch leftover from the TOP (y→1.0) so burned-in words stay; restore enough
+# keep that crop-only clears 24. 1080 keeps the signed 0.92–0.96 / y 0.35–0.65
+# band. Not face-zoom 0.72/0.78.
+PHONE_SHORT_SIDE = 1080
+_CROP_KEEP_720_TH = {
+    "subtle": Range(0.94, 0.98),
+    "medium": Range(0.86, 0.90),
+    "strong": Range(0.82, 0.88),
+}
+
+
+def is_phone_canvas(width: int | None, height: int | None) -> bool:
+    """True for Instagram-class 720 (or any source whose short side is under 1080)."""
+    w, h = int(width or 0), int(height or 0)
+    return w > 0 and h > 0 and min(w, h) < PHONE_SHORT_SIDE
+
+
+def crop_keep_range_for_shot(
+    preset, shot: str | None, width: int | None = None, height: int | None = None,
+) -> Range | None:
+    """720 talking-head uniqueness punch, or None to keep the preset (1080 / motion)."""
+    if shot != SHOT_TALKING_HEAD or not is_phone_canvas(width, height):
+        return None
+    return _CROP_KEEP_720_TH.get(preset.name)
+
+
+def keeps_bottom_captions(width: int | None = None, height: int | None = None) -> bool:
+    """Instagram 720: take the crop leftover from the top so captions stay."""
+    return is_phone_canvas(width, height)
 
 
 def _duration(path: str, given: float | None) -> float:

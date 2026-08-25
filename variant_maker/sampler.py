@@ -26,7 +26,9 @@ from dataclasses import replace
 from .presets import Preset, Range
 from .shot import (
     chroma_cloud_range_for_shot,
+    crop_keep_range_for_shot,
     grain_range_for_shot,
+    keeps_bottom_captions,
     luma_dust_range_for_shot,
     rebuild_range_for_shot,
 )
@@ -76,11 +78,16 @@ _COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
 })
 _GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1", "rebuild_scale"})
 
-# Caption-safe crop window. 0..1 slides the leftover onto one edge and clips
-# burned-in words (live pack ced7cbec7c49 copy 1: keep 0.84, x=0.90, y=0.14).
-# Stay near center; still zero-mean at 0.5. Unbudgeted fingerprint.
+# Caption-safe crop window on 1080. 0..1 slides the leftover onto one edge
+# and clips burned-in words (live pack ced7cbec7c49 copy 1: keep 0.84, x=0.90,
+# y=0.14). Stay near center; still zero-mean at 0.5. Unbudgeted fingerprint.
 CROP_OFFSET_LO = 0.35
 CROP_OFFSET_HI = 0.65
+# Instagram 720: leftover is taken from the TOP (y→1.0) so the bottom caption
+# band stays. Centered y on 720 scored 20 bits — below the gate — and also ate
+# words when y drifted low. Unbudgeted; not zero-mean (that is the point).
+CROP_Y_KEEP_BOTTOM_LO = 0.90
+CROP_Y_KEEP_BOTTOM_HI = 1.00
 
 # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
@@ -217,6 +224,8 @@ def sample(
     strength: float = 1.0,
     duration_s: float | None = None,
     shot: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
 ) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
@@ -225,8 +234,10 @@ def sample(
     above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
     escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
     WHICH axes move; strength fixes how far. `duration_s` (when given) scales head/tail
-    trim so a short source keeps a usable remaining duration. `shot` is a look-first
+    trim so a short source keeps a usable remaining duration.     `shot` is a look-first
     hint (`talking_head` / `motion`); None keeps the preset rebuild band so seeds match.
+    ``width`` / ``height`` select the Instagram-720 crop (punch from the top).
+    Omitted size keeps the 1080 caption-safe center band so seeds match.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -245,6 +256,9 @@ def sample(
     raw["rebuild_scale"] = _remap_range(
         raw["rebuild_scale"], preset.rebuild_scale, rebuild_range_for_shot(preset, shot),
     )
+    keep_r = crop_keep_range_for_shot(preset, shot, width, height)
+    if keep_r is not None:
+        raw["crop_keep"] = _remap_range(raw["crop_keep"], preset.crop_keep, keep_r)
     work = preset
     shot_grain = grain_range_for_shot(preset, shot)
     if shot_grain is not None:
@@ -293,11 +307,14 @@ def sample(
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
-    # into the quality budget. crop_x_frac/crop_y_frac stay in a center band so a
-    # 4–8% punch cannot slide onto a caption (zero-mean at 0.5). trim_end_s reuses
-    # the preset's trim_s range, drawn independently from trim_s.
+    # into the quality budget. 1080 x/y stay in a center band (zero-mean at 0.5).
+    # Instagram 720 takes leftover from the top so burned-in words survive AND
+    # vs-source bits can clear 24. trim_end_s reuses the preset's trim_s range.
     raw["crop_x_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
-    raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
+    if keeps_bottom_captions(width, height):
+        raw["crop_y_frac"] = rng.uniform(CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI)
+    else:
+        raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)

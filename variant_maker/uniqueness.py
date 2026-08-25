@@ -23,8 +23,10 @@ METRIC_VERSION = "ssim_bits_v1"
 # ~35–42 bits (~55–65% UI) via crop + chroma 34–42. That same
 # chroma on 720 is snow; soft cloud 4–7 lands ~24 bits (38%). 720 luma
 # dust 8–12 (`quietdustmed` c0s=9) was usable but scored 23 bits. 11–13
-# aims at the 24-bit gate without redrawing 15–17. Still not the 55% 1080
-# band, and still not a higher floor. Rebuild / native-canvas SSIM do not
+# aims at the 24-bit gate without redrawing 15–17. Instagram 720 also needs
+# crop leftover from the top (keep 0.86–0.90): centered 0.92 keep scored
+# 20 bits on portrait.mp4 and a Fast 20 never cleared. Still not the 55%
+# 1080 band, and still not a higher floor. Rebuild / native-canvas SSIM do not
 # buy 55% on a still face. Not Pixel AI scramble.
 # Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
 # Local uniqueness gate only — not a platform verdict.

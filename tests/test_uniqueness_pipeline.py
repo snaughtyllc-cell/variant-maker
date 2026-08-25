@@ -257,14 +257,14 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
     assert v2.strength_final == 1.4
 
 
-def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
-    """v2 clears vs source but not vs v1 → auto-tune searches stronger, not milder."""
+def test_auto_tune_peer_fail_escalates_instead_of_bisecting(monkeypatch, tmp_path):
+    """v2 clears vs source but not vs v1 → one medium miss then strong, not five hunts."""
     _stub_common(monkeypatch)
     seen = []
     stub_sample = pipeline.sample
 
     def spy_sample(preset, seed, **kwargs):
-        seen.append(kwargs.get("strength", 1.0))
+        seen.append(preset.name)
         return stub_sample(preset, seed, **kwargs)
 
     monkeypatch.setattr(pipeline, "sample", spy_sample)
@@ -273,7 +273,6 @@ def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
 
     def fake_bits_vs(a, b):
         peer_n["n"] += 1
-        # First v2 check is a twin; later attempt clears the 24-bit sibling floor.
         return 10 if peer_n["n"] == 1 else 30
 
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", fake_bits_vs)
@@ -282,24 +281,29 @@ def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
         lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
     )
 
-    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=False)
+    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=True)
     manifest = pipeline.run(cfg)
 
     v1, v2 = manifest.variants
     assert v1.uniqueness_status == "ok"
-    assert v2.uniqueness_status == "ok"
+    assert v1.escalated is False
+    assert v2.escalated is True
+    assert v2.preset_used == "strong"
     assert v2.quality.get("min_bits_vs_peers") == 30
-    # v1 stop_on_clear: one strength. v2: first miss then a stronger hit.
-    assert len(seen) >= 3
-    v2_strengths = seen[1:]
-    assert v2_strengths[1] > v2_strengths[0]
-    assert v2.strength_final > v2_strengths[0]
+    assert seen.count("medium") == 2  # v1 keeper + v2 miss
+    assert seen.count("strong") == 1
 
 
-def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch, tmp_path):
-    """Fast default: uniqueness starts below target then clears; 3-rung ladder unused."""
+def test_auto_tune_source_miss_escalates_on_second_encode(monkeypatch, tmp_path):
+    """Fast daily: one medium uniqueness miss then strong — not five bisection encodes."""
     _stub_common(monkeypatch)
-    n = {"scores": 0}
+    n = {"scores": 0, "presets": []}
+
+    def fake_sample(preset, seed, **kw):
+        n["presets"].append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
 
     def fake_score(src_path, variant_path, target=None):
         n["scores"] += 1
@@ -314,11 +318,36 @@ def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch,
     manifest = pipeline.run(cfg)
 
     record = manifest.variants[0]
-    assert record.escalated is False
-    assert record.preset_used == "medium"
+    assert record.escalated is True
+    assert record.preset_used == "strong"
     assert record.uniqueness_status == "ok"
-    assert 0.5 <= record.strength_final <= 1.8
-    assert n["scores"] > 1
+    assert n["scores"] == 2
+    assert n["presets"] == ["medium", "strong"]
+
+
+def test_discarded_uniqueness_miss_skips_quality_render(monkeypatch, tmp_path):
+    """VMAF on a medium encode we are about to throw away doubled Fast 20 wall time."""
+    _stub_common(monkeypatch)
+    n = {"qr": 0}
+
+    def fake_qr(src, params, qr):
+        n["qr"] += 1
+        open(qr, "w").close()
+        return qr
+
+    monkeypatch.setattr(pipeline.quality, "quality_render", fake_qr)
+    scores = iter([
+        _ok_score(0.1, bits=6, status="below_target"),
+        _ok_score(0.5, bits=32, status="ok"),
+    ])
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: next(scores),
+    )
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    pipeline.run(cfg)
+    assert n["qr"] == 1
 
 
 def test_hq_strips_fast_pixel_ops(monkeypatch, tmp_path):
@@ -495,7 +524,13 @@ def test_talking_head_peer_miss_does_not_escalate(monkeypatch, tmp_path):
         pipeline, "classify_shot",
         lambda *a, **k: {"kind": "talking_head", "self_bits": 17},
     )
-    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 13)
+    bits_calls = {"n": 0}
+
+    def fake_bits_vs(a, b):
+        bits_calls["n"] += 1
+        return 13
+
+    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", fake_bits_vs)
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: _ok_score(0.625, bits=40, status="ok"),
@@ -509,7 +544,8 @@ def test_talking_head_peer_miss_does_not_escalate(monkeypatch, tmp_path):
     assert v2.escalated is False
     assert v1.uniqueness_status == "ok"
     assert v2.uniqueness_status == "ok"
-    assert v2.quality.get("min_bits_vs_peers") == 13
+    assert v2.quality.get("min_bits_vs_peers") is None
+    assert bits_calls["n"] == 0
     assert "strong" not in presets
 
 

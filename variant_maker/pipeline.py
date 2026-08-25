@@ -24,11 +24,16 @@ from .shot import classify_shot
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
 # Gate 24/24 (~38% UI). 1080 talking-head medium *can* score ~35–42 bits
 # (~55–65% UI) on a matching canvas (portrait 1080×1920 or landscape 1920×1080).
-# Usable 720 Fast lands ~26–31 bits (~40–48%) — still a pass.
+# Usable 720 Fast lands ~24–27 bits (~38–42%) when crop punches from the top —
+# still a pass. Centered 0.92 keep on Instagram 720 scored 20 bits and never
+# cleared; do not tell operators to re-upload 1080.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
 DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
+# Fast daily packs: one medium encode, then escalate. Five-step bisection on a
+# 720 talking-head that sits at 23 bits is how a Fast 20 hit executionTimeout.
+FAST_TUNE_MAX_ITERS = 1
 
 
 def use_face_protect(quality_mode: str | None) -> bool:
@@ -155,7 +160,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             vseed, fname, path = _prep(i)
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
-                shot=shot_kind,
+                shot=shot_kind, width=src.width, height=src.height,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -185,7 +190,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
 
-        def attempt(strength: float, use_preset) -> dict:
+        def attempt(strength: float, use_preset, *, gate_quality: bool = True) -> dict:
             nonlocal attempt_no, last_strength
             attempt_no += 1
             # Record the EFFECTIVE strength (post-clamp) — the value `sample` actually
@@ -196,6 +201,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s, shot=shot_kind,
+                width=src.width, height=src.height,
             )
             if protect_frame is not None:
                 from .neural import protect
@@ -209,6 +215,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
             else:
                 _, cmd = render_variant(src, params, platform, path)
                 nops = []
+            if not gate_quality:
+                # Uniqueness miss will discard this encode. Do not pay VMAF on it.
+                return {
+                    "vmaf": None, "histogram_ok": True, "passed": True,
+                    "params": params, "cmd": cmd, "neural_ops": nops,
+                    "regen_count": 0,
+                }
             qr = path + ".qr.mp4"
             quality.quality_render(src, params, qr)
             emit("checking", index=i)
@@ -225,7 +238,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
 
         def _peer_bits(variant_path: str) -> int | None:
-            """Lowest SSIM bits vs earlier kept variants; None if no peers yet."""
+            """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
+
+            Talking-head skips this (peer_gate is off) — still-face copies land
+            ~13 bits even at strong, and 8×8 ffmpeg SSIM on wave 2 of a Fast 20
+            was ~160s per uniqueness check.
+            """
+            if not peer_gate:
+                return None
             with kept_lock:
                 peers = list(kept_paths)
             if not peers:
@@ -271,31 +291,55 @@ def run(config: dict, *, on_event=None) -> Manifest:
         }
         prev_effective = None
         if auto_tune:
+            def _quality_on_current(params) -> dict:
+                qr = path + ".qr.mp4"
+                quality.quality_render(src, params, qr)
+                emit("checking", index=i)
+                g = quality.passes_guard(src.path, path, qr, floor=floor)
+                for tmp in (qr, qr + ".vmaf.json"):
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                return g
+
             def _tune_attempt(strength: float) -> dict:
-                r_try = regen(preset, strength)
+                r_try = attempt(strength, preset, gate_quality=False)
                 emit("uniqueness", index=i)
                 u_try = uniqueness.score_uniqueness(
                     src.path, path, target=uniqueness_target,
                 )
                 peer_min = _peer_bits(path)
                 u_try = _apply_peer_status(u_try, peer_min)
+                peer_ok = (
+                    (not peer_gate)
+                    or peer_min is None
+                    or peer_min >= min_bits_vs_peers
+                )
+                uniq_ok = (
+                    u_try.get("uniqueness") is not None
+                    and u_try["uniqueness"] >= uniqueness_target
+                    and peer_ok
+                )
+                if uniq_ok:
+                    g = _quality_on_current(r_try["params"])
+                    if not g["passed"]:
+                        r_try = regen(preset, strength)
+                    else:
+                        r_try = {**r_try, **g, "regen_count": 0}
                 # Quality `passed` is VMAF/histogram only. Peer miss is too-similar
                 # (search stronger), not too-strong (search milder).
+                quality_run = r_try.get("vmaf") is not None
                 return {
                     **r_try,
                     **u_try,
-                    "quality_passed": r_try["passed"],
+                    "quality_passed": bool(r_try.get("passed")) and quality_run,
                     "passed": r_try["passed"],
-                    "peer_ok": (
-                        (not peer_gate)
-                        or peer_min is None
-                        or peer_min >= min_bits_vs_peers
-                    ),
+                    "peer_ok": peer_ok,
                     "uniqueness": u_try["uniqueness"],
                 }
 
             tuned = autotune.tune(
                 _tune_attempt, target=uniqueness_target, stop_on_clear=True,
+                max_iters=FAST_TUNE_MAX_ITERS,
             )
             r = {
                 "params": tuned["params"],
@@ -357,6 +401,16 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     u = _apply_peer_status(u, peer_min)
                     preset_used = strong.name
                     escalated = True
+
+        if r is not None and r.get("vmaf") is None:
+            qr = path + ".qr.mp4"
+            quality.quality_render(src, r["params"], qr)
+            emit("checking", index=i)
+            g = quality.passes_guard(src.path, path, qr, floor=floor)
+            for tmp in (qr, qr + ".vmaf.json"):
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            r = {**r, **g, "regen_count": r.get("regen_count") or 0}
 
         info = probe(path)
 

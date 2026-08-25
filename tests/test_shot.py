@@ -82,3 +82,30 @@ def test_talking_head_luma_dust_band_is_720_calibrated():
     assert r.hi < 15
     assert shot.luma_dust_range_for_shot(MEDIUM, "motion") is None
     assert shot.luma_dust_range_for_shot(MEDIUM, None) is None
+
+
+def test_phone_canvas_is_instagram_720():
+    assert shot.is_phone_canvas(720, 1280) is True
+    assert shot.is_phone_canvas(1280, 720) is True
+    assert shot.is_phone_canvas(1080, 1920) is False
+    assert shot.is_phone_canvas(1920, 1080) is False
+    assert shot.is_phone_canvas(None, 1280) is False
+    assert shot.keeps_bottom_captions(720, 1280) is True
+    assert shot.keeps_bottom_captions(1080, 1920) is False
+
+
+def test_720_talking_head_crop_keep_clears_gate_without_face_zoom():
+    """Centered 0.92 keep scored 20 bits on Instagram 720. 0.86–0.90 from the
+    top scored 25–26. Strong stays above the banned 0.78 face-zoom."""
+    from variant_maker.presets import MEDIUM, STRONG, SUBTLE
+
+    med = shot.crop_keep_range_for_shot(MEDIUM, "talking_head", 720, 1280)
+    assert med is not None
+    assert (med.lo, med.hi) == (0.86, 0.90)
+    strong = shot.crop_keep_range_for_shot(STRONG, "talking_head", 720, 1280)
+    assert strong is not None
+    assert strong.lo == 0.82
+    assert strong.lo > 0.78
+    assert shot.crop_keep_range_for_shot(MEDIUM, "talking_head", 1080, 1920) is None
+    assert shot.crop_keep_range_for_shot(MEDIUM, "motion", 720, 1280) is None
+    assert shot.crop_keep_range_for_shot(SUBTLE, None, 720, 1280) is None
