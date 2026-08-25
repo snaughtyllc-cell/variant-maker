@@ -11,6 +11,7 @@ on:
       - cursor/fast-720-luma-dust-c975
       - cursor/caption-safe-crop-c975
       - cursor/ig-720-fast-20-c975
+      - cursor/aqmtp-uniqueness-c975
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py

@@ -38,6 +38,15 @@ Engine libx264 `-preset medium`, seed 42/1, SnapInsta AQMTp:
 
 SaveInta medium (same seed): **24**, shade-off.
 
+Confirmation (`sample` + `render_variant`, same seed, after pin + gblur 10):
+
+| Clip | Preset | Bits | Shade |
+|---|---|---|---|
+| AQMTp | medium | **18** `below_target` | off |
+| AQMTp | strong | **24** `ok` | 100, gblur 10, cloud 7, dust 13 |
+| SaveInta | medium | **25** `ok` | off |
+| SaveInta | strong | **37** `ok` | 100 (look-risk still; Fast will not escalate this clip) |
+
 Gate stays **24 / 24**. Fast never face-protects. Color stays zero-mean.
 
 Harness `scripts/first_pass_screen.py` is **medium only**. It will still

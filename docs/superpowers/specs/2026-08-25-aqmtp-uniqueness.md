@@ -43,6 +43,11 @@ Lossless frames, then x264. Clip: SnapInsta AQMTp 720.
 | same engine, pin shade **100** + cloud **7** + dust **13**, gblur 12 | **23** |
 | same pin, **gblur 10** (or 8) | **24** ok |
 
+In-tree confirmation (`sample` + `render_variant`, same seed): AQMTp
+medium **18** shade-off; AQMTp strong **24**; SaveInta medium **25**
+shade-off. SaveInta strong is **37** (look-risk still — Fast will not
+escalate a clip that already cleared medium).
+
 Warp, hue, clarity, vignette, and low-freq chroma do not move SSIM on a
 still that already fills 576×1024. Crop on this clip is weaker than the
 first-pass 17-bit note (keep 0.90/0.86/0.82) — this session’s crop-only

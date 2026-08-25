@@ -10,7 +10,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
-`cursor/ig-720-fast-20-c975` (plus the older look branches).
+`cursor/aqmtp-uniqueness-c975` and `cursor/ig-720-fast-20-c975` (plus the
+older look branches).
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
 
