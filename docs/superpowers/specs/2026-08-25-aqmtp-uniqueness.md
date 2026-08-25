@@ -57,6 +57,12 @@ pin the surviving caps. `gblur=12` still lost 1 bit to medium-preset x264.
 
 ## Change
 
+**Superseded same day:** strong escalate must **not** draw `luma_shade`.
+`lookaqmtp` failed look. Current engine: shade range is always None, leftover
+params do not draw. Look-first gates actual frames.
+
+Original uniqueness experiment (kept for the bits table above):
+
 1. **Medium 720 talking-head stays shade-off.** That is the signed SaveInta
    look (cloud 4–7 + dust 11–13). AQMTp will miss 24 on encode 1. Expected.
 2. **Strong escalate draws `luma_shade`.** Same uniqueness loop as IG-720
@@ -84,13 +90,16 @@ zero-mean. `sample` and `filtergraph.build_*` stay pure.
 | `variant_maker/quality.py` | `_QUALITY_NEUTRAL` `luma_shade: 0` |
 | tests | `test_shot`, `test_sampler`, `test_filtergraph`, `test_quality` |
 
+## Verdict (same day)
+
+**Rejected look.** Lab Gallery `lookaqmtp` was lava on the face. Shade overlays stay
+off. Engine look-first: `docs/superpowers/specs/2026-08-25-look-first.md` and
+`docs/ops/look-learnings.md`. Do not pin live from `4540720`.
+
 ## Lab sign-off — do not pin live
 
-Lab Fast 8 of **AQMTp** (`4540720` / `sha256:5aed2f3d…`): **8/8 strong,
-33–34 bits**, VMAF **97–99**, shade 100. SaveInta Fast 8: **8/8 medium,
-24–27 bits**, shade-off. Shade is visible low-freq lighting — Jeff signs
-that look.
+Lab Fast 8 of **AQMTp** (`4540720` / `sha256:5aed2f3d…`): **REJECTED look**
+(lava shade). SaveInta Fast 8: **8/8 medium, 24–27 bits**, shade-off.
 
 Do **not** pin live from this spec. Live Fast stays `7dae269` /
-`sha256:5f815e72…`, **no `VF_LAB`**, until Jeff signs the AQMTp pack.
-Ops: `docs/ops/aqmtp-uniqueness-2026-08-25.md`.
+`sha256:5f815e72…`, **no `VF_LAB`**. Look-first is the visual gate now.

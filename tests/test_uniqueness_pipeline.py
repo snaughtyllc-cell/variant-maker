@@ -43,6 +43,16 @@ def _stub_common(monkeypatch):
     )
     # No peer distance by default (first / only variant).
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        },
+    )
+    monkeypatch.setattr(pipeline.look, "write_look_stills", lambda *a, **k: {
+        "look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg",
+    })
 
 
 def _ok_score(uniqueness=0.5, bits=32, status="ok", target=DEFAULT_TARGET):
@@ -109,23 +119,71 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
     assert record.uniqueness_status == "ok"
 
 
-def test_no_escalate_when_allow_creative_escalate_false(monkeypatch, tmp_path):
+def test_look_fail_skips_escalate(monkeypatch, tmp_path):
+    """lookaqmtp-class blotch must not escalate. Keep the medium file."""
     _stub_common(monkeypatch)
-
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: {
+            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
+        },
+    )
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: _ok_score(
             0.1, bits=6, status="below_target",
         ),
     )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "fail"
+    assert record.uniqueness_status == "below_target"
 
+
+def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            0.1, bits=6, status="below_target",
+        ),
+    )
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
     manifest = pipeline.run(cfg)
-
     record = manifest.variants[0]
     assert record.escalated is False
     assert record.preset_used == "medium"
     assert record.uniqueness_status == "below_target"
+
+
+def test_look_first_one_encode_no_escalate(monkeypatch, tmp_path):
+    """CLI --look-first: one medium copy + stills, no uniqueness hunt."""
+    _stub_common(monkeypatch)
+    seen = []
+
+    def spy_sample(preset, seed, **kwargs):
+        seen.append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", spy_sample)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            0.1, bits=6, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, count=8, look_first=True, allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    assert len(manifest.variants) == 1
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "ok"
+    assert seen == ["medium"]
 
 
 def test_uniq_strengths_are_not_collapsed_to_the_same_effective_value(monkeypatch, tmp_path):
@@ -208,8 +266,8 @@ def test_emits_uniqueness_and_escalating_states(monkeypatch, tmp_path):
     pipeline.run(cfg, on_event=lambda state, **kw: events.append(state))
 
     assert events == [
-        "rendering", "checking", "uniqueness",
-        "escalating", "rendering", "checking", "uniqueness",
+        "rendering", "checking", "looking", "uniqueness",
+        "escalating", "rendering", "checking", "looking", "uniqueness",
         "done",
     ]
 

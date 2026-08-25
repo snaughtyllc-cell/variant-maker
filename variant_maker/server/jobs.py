@@ -83,6 +83,10 @@ class VariantInfo:
     escalated: bool = False
     platform_result: str | None = None
     post_url: str | None = None
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
 
 
 @dataclass
@@ -186,6 +190,8 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "uniqueness_target": v.uniqueness_target, "preset_used": v.preset_used,
         "strength_final": v.strength_final, "escalated": v.escalated,
         "platform_result": v.platform_result, "post_url": v.post_url,
+        "look_status": v.look_status, "look_mae": v.look_mae,
+        "look_src": v.look_src, "look_var": v.look_var,
     }
 
 
@@ -235,6 +241,10 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         escalated=bool(data.get("escalated") or False),
         platform_result=data.get("platform_result"),
         post_url=data.get("post_url") or None,
+        look_status=data.get("look_status"),
+        look_mae=data.get("look_mae"),
+        look_src=data.get("look_src"),
+        look_var=data.get("look_var"),
     )
 
 
@@ -256,6 +266,10 @@ def _event_from_dict(data: dict) -> VariantEvent:
         preset_used=data.get("preset_used"),
         strength_final=data.get("strength_final"),
         platform_result=data.get("platform_result"),
+        look_status=data.get("look_status"),
+        look_mae=data.get("look_mae"),
+        look_src=data.get("look_src"),
+        look_var=data.get("look_var"),
     )
 
 
@@ -546,9 +560,15 @@ class JobStore:
                             uniqueness_target=e.uniqueness_target,
                             preset_used=e.preset_used, strength_final=e.strength_final,
                             escalated=e.escalated, platform_result=e.platform_result,
+                            look_status=e.look_status, look_mae=e.look_mae,
+                            look_src=e.look_src, look_var=e.look_var,
                         ))
                         break
-                if e.state == "done" or token.runpod_job_id:
+                if e.state == "looking":
+                    names = [n for n in (e.look_src, e.look_var) if n]
+                    if names:
+                        self._pull_named_outputs(e.source_id, names)
+                if e.state in ("done", "looking") or token.runpod_job_id:
                     self._persist(job)
 
             for source in job.sources:
@@ -608,6 +628,10 @@ class JobStore:
                         uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
                         preset_used=v.preset_used, strength_final=v.strength_final,
                         escalated=v.escalated, platform_result=v.platform_result,
+                        look_status=getattr(v, "look_status", None),
+                        look_mae=getattr(v, "look_mae", None),
+                        look_src=getattr(v, "look_src", None),
+                        look_var=getattr(v, "look_var", None),
                     )
                     for v in result.variants
                 ]
@@ -753,6 +777,10 @@ class JobStore:
                         escalated=bool(v.get("escalated") or False),
                         platform_result=v.get("platform_result"),
                         post_url=v.get("post_url") or None,
+                        look_status=v.get("look_status") or quality.get("look_status"),
+                        look_mae=v.get("look_mae") if v.get("look_mae") is not None else quality.get("look_mae"),
+                        look_src=v.get("look_src"),
+                        look_var=v.get("look_var"),
                     ))
                 sources.append(source)
             if not sources:
@@ -815,19 +843,28 @@ class JobStore:
         self._pull_missing_outputs(source_id)
         return path if os.path.isfile(path) else None
 
-    def _pull_missing_outputs(self, source_id: str) -> None:
-        """Copy variant mp4s from object storage when job.json has them but disk doesn't."""
+    def _pull_named_outputs(self, source_id: str, names: list[str]) -> None:
         fetch = getattr(self._runner, "fetch_outputs", None)
-        if not callable(fetch):
+        if not callable(fetch) or not names:
             return
         loc = self._locate(source_id)
         if loc is None:
             return
-        job_id, source = loc
-        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
-        if not names:
-            return
+        job_id, _ = loc
         fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
+
+    def _pull_missing_outputs(self, source_id: str) -> None:
+        """Copy variant mp4s and look stills from object storage when disk is missing them."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return
+        _, source = loc
+        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
+        for v in source.variants:
+            for n in (v.look_src, v.look_var):
+                if n:
+                    names.append(n)
+        self._pull_named_outputs(source_id, names)
 
     def _refresh_copy_error(self, job: Job) -> None:
         """Surface a VA-facing error when GPU metadata is ok but mp4s never landed."""
@@ -891,6 +928,10 @@ class JobStore:
                 uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
                 preset_used=v.preset_used, strength_final=v.strength_final,
                 escalated=v.escalated, platform_result=v.platform_result,
+                look_status=getattr(v, "look_status", None),
+                look_mae=getattr(v, "look_mae", None),
+                look_src=getattr(v, "look_src", None),
+                look_var=getattr(v, "look_var", None),
             ))
         return source
 

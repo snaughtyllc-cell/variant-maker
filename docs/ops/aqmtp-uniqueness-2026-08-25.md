@@ -52,16 +52,18 @@ Gate stays **24 / 24**. Fast never face-protects. Color stays zero-mean.
 Harness `scripts/first_pass_screen.py` is **medium only**. It will still
 report AQMTp as a miss. Escalate is encode 2; the screen does not run it.
 
-## Lab Fast 8 (`4540720`, digest `sha256:5aed2f3d…`)
+## Lab Fast 8 (`4540720`, digest `sha256:5aed2f3d…`) — **REJECTED look**
 
 Lab only. Live stays `7dae269` / `sha256:5f815e72…`, **no `VF_LAB`**.
 
 | Pack | Result |
 |---|---|
-| AQMTp Fast 8 `lab8_aqmtp454_68054751` | **8/8** strong, escalated, **33–34 bits**, VMAF **97.0–98.9**, shade 100, ~**5.1 min**, all `ok` |
-| SaveInta Fast 8 `lab8_saveinta454_5edb1768` | **8/8** medium, **24–27 bits**, VMAF **95.4–98.6**, **no `luma_shade`**, no escalate, ~**4.5 min** |
+| AQMTp Fast 8 `lab8_aqmtp454_68054751` | **REJECTED look.** 8/8 strong, **33–34 bits**, VMAF **97–99**, shade 100. Lava / oil-slick on the face. Coarse luma MAE **41–57**. Do not redraw. Do not pin live. |
+| SaveInta Fast 8 `lab8_saveinta454_5edb1768` | **8/8** medium, **24–27 bits**, VMAF **95.4–98.6**, **no `luma_shade`**, no escalate, ~**4.5 min**. Control pack. |
 
-AQMTp shade is the uniqueness lever and is visible on the face (low-freq lighting, not 720 chroma snow). Jeff signs that look before any live pin.
+Look-first (`docs/superpowers/specs/2026-08-25-look-first.md`, `docs/ops/look-learnings.md`) now gates actual frames before uniqueness escalate. Shade overlays stay off.
+
+AQMTp-class tight 720 faces stay **~18 bits** on signed medium. That is uniqueness-hard, not a license to overlay lighting.
 
 ## Do not pin live
 

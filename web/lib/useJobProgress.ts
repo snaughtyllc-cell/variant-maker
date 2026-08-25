@@ -22,6 +22,10 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
         uniqueness_target: v.uniqueness_target ?? null,
         escalated: v.escalated ?? false,
         platform_result: v.platform_result ?? null,
+        look_status: v.look_status ?? null,
+        look_mae: v.look_mae ?? null,
+        look_src_url: v.look_src_url ?? null,
+        look_var_url: v.look_var_url ?? null,
       };
       next = reduceEvent(next, ev);
     }
@@ -45,6 +49,27 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
           bySource: {
             ...next.bySource,
             [s.source_id]: { ...prev, inFlight: undefined },
+          },
+        };
+      }
+    }
+    if (s.look_preview) {
+      const prev = next.bySource[s.source_id];
+      if (prev) {
+        next = {
+          ...next,
+          bySource: {
+            ...next.bySource,
+            [s.source_id]: {
+              ...prev,
+              lookPreview: {
+                index: s.look_preview.index,
+                src: s.look_preview.look_src_url || "",
+                var: s.look_preview.look_var_url || "",
+                status: s.look_preview.look_status ?? null,
+                mae: s.look_preview.look_mae ?? null,
+              },
+            },
           },
         };
       }

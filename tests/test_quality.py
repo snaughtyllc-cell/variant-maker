@@ -52,8 +52,8 @@ def test_quality_render_strips_rebuild_keeps_warp(monkeypatch, tmp_path):
     # Grain stays in the VMAF proxy (including chroma-only talking-head noise).
     assert captured["video"]["grain"] == 44.0
     assert captured["video"]["noise_chroma"] is True
-    # Low-freq shade is a fingerprint like crop — VMAF must not fail-forward
-    # AQMTp escalate into best_effort.
+    # Low-freq shade leftover is stripped on the VMAF proxy. Look-first
+    # scores the actual file instead.
     assert captured["video"]["luma_shade"] == 0.0
 
 

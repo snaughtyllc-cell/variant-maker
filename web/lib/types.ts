@@ -12,17 +12,29 @@ export interface VariantOut {
   escalated?: boolean; platform_result?: PlatformResult | null;
   post_url?: string | null;
   file_ready?: boolean;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
 }
 export interface InFlightOut {
   index: number;
-  state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating";
+  state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating";
   attempt: number;
   max_attempts: number;
+}
+export interface LookPreviewOut {
+  index: number;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
 }
 export interface SourceOut {
   source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
   variants: VariantOut[];
   in_flight?: InFlightOut | null;
+  look_preview?: LookPreviewOut | null;
   job_state?: "running" | "done" | string | null;
   failed?: number;
   created_utc?: string | null;
@@ -54,7 +66,7 @@ export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt"; quality: Quality; }
 export interface VariantEvent {
   source_id: string; index: number;
-  state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating" | "done";
+  state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating" | "done";
   attempt: number; max_attempts: number;
   status: string | null; quality: Quality | null; filename: string | null;
   uniqueness?: number | null;
@@ -63,6 +75,12 @@ export interface VariantEvent {
   uniqueness_target?: number | null;
   escalated?: boolean;
   platform_result?: PlatformResult | null;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src?: string | null;
+  look_var?: string | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
 }
 export const VMAF_FLOOR = 90;
 

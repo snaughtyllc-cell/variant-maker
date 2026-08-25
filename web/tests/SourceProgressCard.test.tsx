@@ -25,4 +25,27 @@ describe("SourceProgressCard in-flight slot", () => {
     const slot = screen.getByText("render").parentElement as HTMLElement;
     expect(slot.style.aspectRatio).toBe("9 / 16");
   });
+
+  it("shows source vs variant stills on looking", () => {
+    render(
+      <SourceProgressCard
+        source={{
+          ...base,
+          inFlight: { index: 1, state: "looking", attempt: 0, max_attempts: 3 },
+          lookPreview: {
+            index: 1,
+            src: "/api/look/s1/look_v01_src.jpg",
+            var: "/api/look/s1/look_v01.jpg",
+            status: "ok",
+            mae: 12,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/v01 looking/)).toBeTruthy();
+    expect(screen.getByText(/Look ok/)).toBeTruthy();
+    expect(screen.getByAltText("Source").getAttribute("src")).toBe("/api/look/s1/look_v01_src.jpg");
+    expect(screen.getByAltText("Variant").getAttribute("src")).toBe("/api/look/s1/look_v01.jpg");
+    expect(screen.getByText("look")).toBeTruthy();
+  });
 });

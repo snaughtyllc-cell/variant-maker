@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { HQ_RENDERING_HINT, inFlightRenderingLabel, liveRunSubcopy } from "@/lib/hqWaitCopy";
+import { HQ_RENDERING_HINT, inFlightLookingLabel, inFlightRenderingLabel, liveRunSubcopy } from "@/lib/hqWaitCopy";
 
 describe("hqWaitCopy", () => {
   it("fast rendering stays the short vNN line", () => {
     expect(inFlightRenderingLabel(1)).toBe("● v01 rendering…");
     expect(inFlightRenderingLabel(12, "fast")).toBe("● v12 rendering…");
+  });
+
+  it("looking is a visual check, not uniqueness", () => {
+    expect(inFlightLookingLabel(1)).toBe("● v01 looking…");
   });
 
   it("HQ rendering names upscale so a silent first minute is not a hang", () => {

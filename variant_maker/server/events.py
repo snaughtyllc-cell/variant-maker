@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 # Valid VariantEvent.state values, in lifecycle order.
-STATES = ("rendering", "checking", "rerolling", "uniqueness", "escalating", "done")
+STATES = ("rendering", "checking", "looking", "rerolling", "uniqueness", "escalating", "done")
 
 
 @dataclass
@@ -26,6 +26,10 @@ class VariantEvent:
     preset_used: str | None = None
     strength_final: float | None = None
     platform_result: str | None = None
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
 
 
 def event_to_dict(e: VariantEvent) -> dict:

@@ -115,6 +115,7 @@ from .models import (
     JobEventsSnapshot,
     JobFromDriveIn,
     JobSummary,
+    LookPreviewOut,
     PasswordLoginIn,
     PasswordSetIn,
     PlatformResultIn,
@@ -159,11 +160,17 @@ from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
 
-_IN_FLIGHT_STATES = frozenset({"rendering", "checking", "rerolling", "uniqueness", "escalating"})
+_IN_FLIGHT_STATES = frozenset({"rendering", "checking", "looking", "rerolling", "uniqueness", "escalating"})
 _UPLOAD_META: dict[str, dict] = {}
 
 ExchangeFn = Callable[..., dict[str, Any]]
 FetchEmailFn = Callable[[dict[str, Any]], str | None]
+
+
+def _look_file_url(source_id: str, name: str | None) -> str | None:
+    if not name:
+        return None
+    return f"/api/look/{source_id}/{quote(name, safe='')}"
 
 
 def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
@@ -176,6 +183,10 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         escalated=v.escalated, platform_result=v.platform_result,
         post_url=v.post_url,
         file_ready=file_ready,
+        look_status=v.look_status,
+        look_mae=v.look_mae,
+        look_src_url=_look_file_url(source_id, v.look_src),
+        look_var_url=_look_file_url(source_id, v.look_var),
     )
 
 
@@ -195,6 +206,23 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
             )
         if e.state == "done":
             return None
+    return None
+
+
+def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
+    if job is None:
+        return None
+    for e in reversed(job.events):
+        if e.source_id != source_id:
+            continue
+        if e.state == "looking" and (e.look_src or e.look_var):
+            return LookPreviewOut(
+                index=e.index,
+                look_status=e.look_status,
+                look_mae=e.look_mae,
+                look_src_url=_look_file_url(source_id, e.look_src),
+                look_var_url=_look_file_url(source_id, e.look_var),
+            )
     return None
 
 
@@ -224,6 +252,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
             for v in variants
         ],
         in_flight=_in_flight(job, s.source_id),
+        look_preview=_look_preview(job, s.source_id),
         job_state=job.state if job is not None else None,
         failed=failed,
         created_utc=job.created_utc if job is not None else None,
@@ -1272,6 +1301,16 @@ def create_app(
         return [DiagnosticsItem(source_id=v.source_id, index=v.index, filename=v.filename,
                                 status=v.status, quality=v.quality)
                 for v in store.diagnostics()]
+
+    @app.get("/api/look/{source_id}/{filename}")
+    def look_still(source_id: str, filename: str):
+        """Source vs variant JPEG stills for the look-first visual test."""
+        if not str(filename).startswith("look_") or not str(filename).endswith(".jpg"):
+            raise HTTPException(status_code=404, detail="look still not found")
+        path = store.find_variant(source_id, filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="look still not found")
+        return FileResponse(path, media_type="image/jpeg")
 
     @app.get("/api/variants/{source_id}/{filename}")
     def variant_file(source_id: str, filename: str):

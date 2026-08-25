@@ -22,6 +22,18 @@ class VariantOut(BaseModel):
     platform_result: str | None = None
     post_url: str | None = None
     file_ready: bool = True
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src_url: str | None = None
+    look_var_url: str | None = None
+
+
+class LookPreviewOut(BaseModel):
+    index: int
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src_url: str | None = None
+    look_var_url: str | None = None
 
 
 class PlatformResultIn(BaseModel):
@@ -48,6 +60,7 @@ class SourceOut(BaseModel):
     shortfall: int
     variants: list[VariantOut] = []
     in_flight: InFlightOut | None = None
+    look_preview: LookPreviewOut | None = None
     job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt count (Diagnostics population)
     created_utc: str | None = None

@@ -70,7 +70,24 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.variants).toHaveLength(1);
   });
 
-    it("done(ok) carries uniqueness onto the tile", () => {
+    it("looking sets inFlight and lookPreview stills", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "looking", index: 1,
+      look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+      look_status: "ok", look_mae: 12.4,
+    }));
+    expect(r.bySource.s1.inFlight?.state).toBe("looking");
+    expect(r.bySource.s1.lookPreview).toEqual({
+      index: 1,
+      src: "/api/look/s1/look_v01_src.jpg",
+      var: "/api/look/s1/look_v01.jpg",
+      status: "ok",
+      mae: 12.4,
+    });
+  });
+
+  it("done(ok) carries uniqueness onto the tile", () => {
     let r = base();
     r = reduceEvent(r, ev({
       state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
@@ -78,6 +95,20 @@ describe("progress reducer", () => {
     }));
     expect(r.bySource.s1.variants[0]).toMatchObject({
       uniqueness: 0.42, uniqueness_status: "ok", uniqueness_target: 0.375, escalated: true,
+    });
+  });
+
+  it("done(ok) carries look stills onto the tile", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
+      look_status: "fail", look_mae: 51, look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+    }));
+    expect(r.bySource.s1.variants[0]).toMatchObject({
+      look_status: "fail",
+      look_mae: 51,
+      look_src_url: "/api/look/s1/look_v01_src.jpg",
+      look_var_url: "/api/look/s1/look_v01.jpg",
     });
   });
 

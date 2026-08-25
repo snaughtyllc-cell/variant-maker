@@ -3,7 +3,7 @@ import { SourceProgress } from "@/lib/progress";
 import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
 import { VideoThumb } from "@/components/common/VideoThumb";
-import { QualityMode, inFlightRenderingLabel } from "@/lib/hqWaitCopy";
+import { QualityMode, inFlightLookingLabel, inFlightRenderingLabel } from "@/lib/hqWaitCopy";
 import { ESCALATED_TITLE } from "@/lib/format";
 
 interface SourceProgressCardProps {
@@ -12,7 +12,7 @@ interface SourceProgressCardProps {
 }
 
 export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgressCardProps) {
-  const { filename, requested, delivered, done, inFlight, variants } = source;
+  const { filename, requested, delivered, done, inFlight, lookPreview, variants } = source;
   const progress = requested > 0 ? done / requested : 0;
   const isActive = !!inFlight;
 
@@ -35,6 +35,13 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
       return (
         <span style={{ color: "var(--color-cyan)" }}>
           ● v{idxStr} checking…
+        </span>
+      );
+    }
+    if (state === "looking") {
+      return (
+        <span style={{ color: "var(--color-cyan)" }}>
+          {inFlightLookingLabel(index)}
         </span>
       );
     }
@@ -133,6 +140,86 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
         <span>{delivered} ready</span>
       </div>
 
+      {lookPreview && (lookPreview.src || lookPreview.var) && (
+        <div
+          data-testid="look-preview"
+          style={{
+            marginTop: 10,
+            padding: 8,
+            borderRadius: 10,
+            border: `1px solid ${lookPreview.status === "fail" ? "#5a2a28" : "var(--color-line2)"}`,
+            background: "#14141d",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              color:
+                lookPreview.status === "fail"
+                  ? "#f0a8a4"
+                  : lookPreview.status === "ok"
+                    ? "#7bf2a8"
+                    : "var(--color-cyan)",
+              marginBottom: 6,
+            }}
+          >
+            {lookPreview.status === "fail"
+              ? "Look fail"
+              : lookPreview.status === "ok"
+                ? "Look ok"
+                : "Looking…"}
+            {lookPreview.mae != null ? ` · MAE ${lookPreview.mae}` : ""}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+            }}
+          >
+            {lookPreview.src ? (
+              <figure style={{ margin: 0 }}>
+                <img
+                  src={lookPreview.src}
+                  alt="Source"
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    borderRadius: 6,
+                    aspectRatio: "9 / 16",
+                    objectFit: "cover",
+                    background: "#0e0e14",
+                  }}
+                />
+                <figcaption style={{ fontSize: 10, color: "var(--color-muted2)", marginTop: 4 }}>
+                  Source
+                </figcaption>
+              </figure>
+            ) : null}
+            {lookPreview.var ? (
+              <figure style={{ margin: 0 }}>
+                <img
+                  src={lookPreview.var}
+                  alt="Variant"
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    borderRadius: 6,
+                    aspectRatio: "9 / 16",
+                    objectFit: "cover",
+                    background: "#0e0e14",
+                  }}
+                />
+                <figcaption style={{ fontSize: 10, color: "var(--color-muted2)", marginTop: 4 }}>
+                  Variant
+                </figcaption>
+              </figure>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Thumbs + in-flight slot (show the dashed tile during v01 too) */}
       {(variants.length > 0 || inFlight) && (
         <div
@@ -193,6 +280,8 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
                   ? `↻ ${inFlight.attempt}/${inFlight.max_attempts}`
                   : inFlight.state === "checking"
                   ? "check"
+                  : inFlight.state === "looking"
+                  ? "look"
                   : inFlight.state === "uniqueness"
                   ? "⟡ unique"
                   : inFlight.state === "escalating"

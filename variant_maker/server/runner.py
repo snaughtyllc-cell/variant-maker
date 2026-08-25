@@ -134,6 +134,10 @@ class VariantResult:
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
 
 
 @dataclass
@@ -177,6 +181,10 @@ class LocalRunner:
                 preset_used=kw.get("preset_used"),
                 strength_final=kw.get("strength_final"),
                 platform_result=kw.get("platform_result"),
+                look_status=kw.get("look_status"),
+                look_mae=kw.get("look_mae"),
+                look_src=kw.get("look_src"),
+                look_var=kw.get("look_var"),
             ))
 
         quality_mode = normalize_quality_mode(quality_mode)
@@ -212,6 +220,10 @@ class LocalRunner:
                 strength_final=getattr(v, "strength_final", None),
                 escalated=getattr(v, "escalated", False),
                 platform_result=getattr(v, "platform_result", None),
+                look_status=getattr(v, "look_status", None),
+                look_mae=getattr(v, "look_mae", None),
+                look_src=getattr(v, "look_src", None),
+                look_var=getattr(v, "look_var", None),
             )
             for v in manifest.variants
         ]

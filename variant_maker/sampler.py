@@ -30,7 +30,6 @@ from .shot import (
     grain_range_for_shot,
     keeps_bottom_captions,
     luma_dust_range_for_shot,
-    luma_shade_range_for_shot,
     rebuild_range_for_shot,
 )
 
@@ -306,11 +305,6 @@ def sample(
         dust_r = luma_dust_range_for_shot(preset, shot, width, height)
         if dust_r is not None:
             raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
-        shade_r = luma_shade_range_for_shot(preset, shot, width, height)
-        if shade_r is not None:
-            # Strong 720 talking-head only. Pin the encode-surviving end
-            # (shade 100 / cloud 7 / dust 13). No extra RNG.
-            raw["luma_shade"] = _remap_range(raw["grain"], shot_grain, shade_r)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats

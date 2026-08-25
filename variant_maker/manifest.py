@@ -35,6 +35,10 @@ class VariantRecord:
     preset_used: str | None = None
     strength_final: float | None = None
     escalated: bool = False
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
 
 
 @dataclass

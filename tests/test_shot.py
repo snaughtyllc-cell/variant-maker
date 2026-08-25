@@ -124,17 +124,11 @@ def test_720_talking_head_crop_keep_clears_gate_without_face_zoom():
     assert shot.crop_keep_range_for_shot(SUBTLE, None, 720, 1280) is None
 
 
-def test_720_talking_head_luma_shade_is_strong_escalate_only():
-    """AQMTp-class stills stay at 17–21 bits on signed medium (crop + cloud 4–7 +
-    dust 11–13). Escalate pins shade 100 + cloud 7 + dust 13 so libx264
-    medium can clear 24 without 720 snow / cookie mesh. Medium keeps the
-    signed SaveInta look. 1080 does not need it. Gate stays 24. Not Pixel AI.
-    """
+def test_720_talking_head_luma_shade_stays_off():
+    """lookaqmtp 8×14 c0s=100 was lava. Shade range is always None."""
     from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 
-    strong = shot.luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280)
-    assert strong is not None
-    assert (strong.lo, strong.hi) == (100, 100)
+    assert shot.luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280) is None
     assert shot.luma_shade_range_for_shot(MEDIUM, "talking_head", 720, 1280) is None
     assert shot.luma_shade_range_for_shot(SUBTLE, "talking_head", 720, 1280) is None
     assert shot.luma_shade_range_for_shot(STRONG, "talking_head", 1080, 1920) is None

@@ -210,6 +210,52 @@ export function VariantSheet({
               videoRefs={{ beforeRef, afterRef }}
             />
 
+            {variant.look_src_url && variant.look_var_url && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 8,
+                  marginTop: 12,
+                }}
+              >
+                <figure style={{ margin: 0 }}>
+                  <img
+                    src={variant.look_src_url}
+                    alt="Source still"
+                    style={{
+                      width: "100%",
+                      display: "block",
+                      borderRadius: 8,
+                      aspectRatio: "9 / 16",
+                      objectFit: "cover",
+                      background: "#0e0e14",
+                    }}
+                  />
+                  <figcaption style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4 }}>
+                    Source
+                  </figcaption>
+                </figure>
+                <figure style={{ margin: 0 }}>
+                  <img
+                    src={variant.look_var_url}
+                    alt="Variant still"
+                    style={{
+                      width: "100%",
+                      display: "block",
+                      borderRadius: 8,
+                      aspectRatio: "9 / 16",
+                      objectFit: "cover",
+                      background: "#0e0e14",
+                    }}
+                  />
+                  <figcaption style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4 }}>
+                    Variant
+                  </figcaption>
+                </figure>
+              </div>
+            )}
+
             {/* Scrub bar — controls both videos in sync */}
             <div style={{ marginTop: 12 }}>
               <ScrubBar videos={[beforeRef, afterRef]} />
@@ -223,6 +269,8 @@ export function VariantSheet({
               uniquenessTarget={variant.uniqueness_target}
               escalated={variant.escalated}
               bestEffort={variant.status === "best_effort"}
+              lookStatus={variant.look_status}
+              lookMae={variant.look_mae}
             />
 
             {/* Actions */}

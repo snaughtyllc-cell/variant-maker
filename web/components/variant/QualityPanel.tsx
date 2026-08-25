@@ -9,6 +9,8 @@ interface QualityPanelProps {
   uniquenessTarget?: number | null;
   escalated?: boolean;
   bestEffort?: boolean;
+  lookStatus?: string | null;
+  lookMae?: number | null;
 }
 
 function QRow({
@@ -107,6 +109,8 @@ export function QualityPanel({
   uniquenessTarget,
   escalated,
   bestEffort,
+  lookStatus,
+  lookMae,
 }: QualityPanelProps) {
   const pass = vmafPass(quality.vmaf);
   const rerollPct = (quality.regen_count / 3) * 100;
@@ -178,6 +182,76 @@ export function QualityPanel({
             Best effort after 3 re-rolls — quality stayed under the floor. Optimized for
             uniqueness while keeping a clean look.
           </span>
+        </div>
+      )}
+
+      {lookStatus === "fail" && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            padding: "9px 11px",
+            marginBottom: 10,
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            color: "#a33f3d",
+            background: "#fff3f1",
+            border: "1px solid #efc5c0",
+            borderRadius: 8,
+          }}
+        >
+          <span>⚠</span>
+          <span>
+            Look fail — the picture drifted too far from the source (blotchy lighting,
+            lava, cookies). VMAF and uniqueness bits are not a look check.
+          </span>
+        </div>
+      )}
+
+      <QRow label="Look">
+        {lookStatus === "ok" || lookStatus === "fail" ? (
+          <>
+            <Meter pct={lookStatus === "ok" ? 100 : 0} green={lookStatus === "ok"} />
+            <OkBadge ok={lookStatus === "ok"} />
+            {lookMae != null && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  color: "var(--color-muted)",
+                }}
+              >
+                MAE {lookMae}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <Meter pct={0} />
+            <span
+              style={{
+                fontSize: 12.5,
+                fontWeight: 800,
+                flexShrink: 0,
+                color: "var(--color-muted)",
+              }}
+            >
+              — / n/a
+            </span>
+          </>
+        )}
+      </QRow>
+      {(lookStatus === "ok" || lookStatus === "fail") && (
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "var(--color-muted2)",
+            margin: "-4px 2px 8px",
+          }}
+        >
+          Coarse luma vs source on the real file. Not VMAF.
         </div>
       )}
 

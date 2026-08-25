@@ -20,6 +20,7 @@ def test_variant_event_to_dict_roundtrips_fields():
         "uniqueness_metric": "ssim_bits_v1", "uniqueness_target": 24 / 64,
         "escalated": True, "preset_used": "strong", "strength_final": 1.0,
         "platform_result": None,
+        "look_status": None, "look_mae": None, "look_src": None, "look_var": None,
     }
 
 

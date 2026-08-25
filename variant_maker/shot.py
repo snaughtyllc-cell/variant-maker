@@ -51,10 +51,10 @@ SHOT_MOTION = "motion"
 # 15–17. Filtergraph caps leftover 14–20 at 13. Luma-only, not stacked c1s.
 # 1080 talking-head stays 34–42. Derived from grain — no extra RNG.
 # Gate stays 24. Do not expect 55% on a still 720 face. AQMTp-class tight
-# 720 faces stay 17–21 on signed medium; strong escalate pins low-freq
-# luma shade (8×14, gblur 10, c0s 100) plus cloud 7 / dust 13 so the
-# uniqueness loop can clear 24 without snow or a cookie mesh. Medium
-# stays shade-off (SaveInta).
+# 720 faces stay ~18 bits on signed medium. Strong 720 TH does NOT draw
+# luma shade — lookaqmtp (8×14 c0s=100) was lava on the face. Look-first
+# (`look.py` / docs/ops/look-learnings.md) gates actual frames. Medium
+# stays the signed SaveInta look.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -73,13 +73,8 @@ _CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
 # little much. 8–12 (`quietdustmed` c0s=9) was usable but 23 bits. 11–13
 # aims at the 24-bit gate. Luma-only so we do not restack c1s 12–15 snow.
 _LUMA_DUST_FOR_SHOT = Range(11, 13)
-# Strong 720 talking-head only. Real libx264 -preset medium on AQMTp
-# (seed 42/1) scored 22 at shade 95.6 + cloud 4.8 + dust 11.5. The
-# encode-surviving end is shade 100 + cloud 7 + dust 13. Medium is
-# shade-off (SaveInta). Not 16×28 cookie, not 720 snow.
-_LUMA_SHADE_720_TH = {
-    "strong": Range(100, 100),
-}
+# Strong 720 talking-head pins the top of the signed cloud/dust band.
+# Not luma shade (lookaqmtp rejected).
 _CHROMA_CLOUD_720_TH_STRONG = Range(7, 7)
 _LUMA_DUST_720_TH_STRONG = Range(13, 13)
 
@@ -123,10 +118,9 @@ def luma_dust_range_for_shot(
 def luma_shade_range_for_shot(
     preset, shot: str | None, width: int | None = None, height: int | None = None,
 ) -> Range | None:
-    """Strong 720 talking-head uniqueness lighting, or None (medium / 1080 / motion)."""
-    if shot != SHOT_TALKING_HEAD or not is_phone_canvas(width, height):
-        return None
-    return _LUMA_SHADE_720_TH.get(preset.name)
+    """Always None. lookaqmtp 8×14 c0s=100 was lava; leftover shade must not draw."""
+    del preset, shot, width, height
+    return None
 
 
 # Instagram downloads land at 720. Centered caption-safe keep 0.92–0.96 scores

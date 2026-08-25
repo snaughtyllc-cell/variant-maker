@@ -16,6 +16,10 @@ export function inFlightRenderingLabel(
   return `● v${idx} rendering…`;
 }
 
+export function inFlightLookingLabel(index: number): string {
+  return `● v${String(index).padStart(2, "0")} looking…`;
+}
+
 export function liveRunSubcopy(qualityMode: QualityMode = "fast"): string {
   if (qualityMode === "hq") {
     return `${HQ_RENDERING_HINT} Gallery stays empty until a variant finishes.`;
