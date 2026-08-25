@@ -52,6 +52,17 @@ Gate stays **24 / 24**. Fast never face-protects. Color stays zero-mean.
 Harness `scripts/first_pass_screen.py` is **medium only**. It will still
 report AQMTp as a miss. Escalate is encode 2; the screen does not run it.
 
+## Lab Fast 8 (`4540720`, digest `sha256:5aed2f3d…`)
+
+Lab only. Live stays `7dae269` / `sha256:5f815e72…`, **no `VF_LAB`**.
+
+| Pack | Result |
+|---|---|
+| AQMTp Fast 8 `lab8_aqmtp454_68054751` | **8/8** strong, escalated, **33–34 bits**, VMAF **97.0–98.9**, shade 100, ~**5.1 min**, all `ok` |
+| SaveInta Fast 8 `lab8_saveinta454_5edb1768` | **8/8** medium, **24–27 bits**, VMAF **95.4–98.6**, **no `luma_shade`**, no escalate, ~**4.5 min** |
+
+AQMTp shade is the uniqueness lever and is visible on the face (low-freq lighting, not 720 chroma snow). Jeff signs that look before any live pin.
+
 ## Do not pin live
 
 Live Fast stays `j0b1q4iuunzhnq` / `7dae269` / `sha256:5f815e72…`,

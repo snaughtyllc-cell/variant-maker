@@ -86,8 +86,10 @@ zero-mean. `sample` and `filtergraph.build_*` stay pure.
 
 ## Lab sign-off — do not pin live
 
-Lab Fast 8 of **AQMTp** is the look sign-off. SaveInta 720 is the look
-control: medium copies must still be shade-off.
+Lab Fast 8 of **AQMTp** (`4540720` / `sha256:5aed2f3d…`): **8/8 strong,
+33–34 bits**, VMAF **97–99**, shade 100. SaveInta Fast 8: **8/8 medium,
+24–27 bits**, shade-off. Shade is visible low-freq lighting — Jeff signs
+that look.
 
 Do **not** pin live from this spec. Live Fast stays `7dae269` /
 `sha256:5f815e72…`, **no `VF_LAB`**, until Jeff signs the AQMTp pack.
