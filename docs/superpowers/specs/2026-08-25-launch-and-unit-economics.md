@@ -57,69 +57,116 @@ min 0.
 
 | Worker | Planning band | Why a band |
 |---|---|---|
-| Fast CPU `cpu3g-8-32` | **~$0.25–$0.45 / worker-hour** | RunPod does not publish a stable public CPU serverless table; invoice is source of truth. |
+| Fast CPU `cpu3g-8-32` | **~$0.40 / worker-hour** (invoice still TBD) | Public CPU formula ≈ `$0.01667/vCPU/hr + $0.00833/GB RAM/hr` → 8+32 ≈ **$0.40/hr**. Old $0.25–$0.45 band; use $0.40 until the invoice line for `varyforge-fast-cpu` says otherwise. |
 | HQ 4090-class serverless | **~$0.40–$0.70 / worker-hour** | Same: per-second flex. Idle 10 min after HQ is the expensive surprise. |
 | Railway Studio + volume | **~$20–60 / month** shared | All workspaces share one URL. Do not allocate this 1:1 to one tester. |
 | Object storage | **near $0** at 24h gallery TTL | Packs expire; R2 is a mailbox, not a film archive. |
 
-Until we time a real pack, treat Fast encode as:
+### Timed pack — live Fast 20, 2026-08-25 (this is the quote)
 
-| Clip | Copies | Worker time (encode, 1 worker, sequential) | + 10 min idle if this was the last job |
-|---|---|---|---|
-| ~15–30s talking-head 720 Fast | 20 | **~8–20 min** (plan **15 min**) | +10 min |
-| Same × **10 sources in one Generate** | 200 | **~80–200 min** (plan **2.5 h**) | +10 min once |
-| Same × 10 sources as **10 separate clicks** hours apart | 200 | same encode | **+10 min × 10** |
+Ran on live `j0b1q4iuunzhnq` (`varyforge-fast-cpu`), same digest as production,
+**no `VF_LAB`**, no live PATCH. Clip: `portrait.mp4`, **720×1280, 22.06s,
+30fps** (daily-SKU talking-head, not the 2s fixture). Count **20**,
+`quality_mode=fast`, `jobs=8`, `allow_creative_escalate=true`, autotune on
+(max 5 strength iters then one strong escalate). Workers were **already
+warm** (2 idle / 2 ready). Job id `3e79485c-ba95-47df-9987-6d2d6aa5de37-u2`,
+worker `mu4rioyvxk8vi6`. Raw timeline: `docs/ops/fast-20-timing-2026-08-25.md`.
+
+| Field | Measured |
+|---|---|
+| Queue / pickup | `delayTime` **842 ms** (warm) |
+| Worker start → terminal | `executionTime` **3,612,120 ms** (**60.2 min**) |
+| Studio done / R2 copy-back | **n/a** — job never returned a result |
+| Requested vs delivered | **20 requested, 0 returned** |
+| On-worker progress | copies **1–8 `done` at ~24.9 min**; **9–16** still uniqueness after escalate at timeout; **17–20 never started** |
+| Terminal | **`FAILED` / `executionTimeout exceeded`** (endpoint cap **3600s**) |
+| Idle after this job | live **600s**; a second Fast CPU was already idle at submit (max 2 occupancy, not this pack’s encode) |
+| Cold-start TTFV | **not measured** (this run was warm) |
+
+Every copy that ran took the **pessimistic uniqueness path**: 5 autotune
+renders + 1 creative escalate (6 encodes). None of 1–8 cleared the 24-bit
+gate on autotune; they only reached `done` after escalate. Copies 9–16
+followed the same ladder; uniqueness-vs-peers after wave 1 was slower
+(~160s dwell vs ~14s on wave 1), so wave 2 was still scoring the escalate
+encode when the 3600s cap hit.
+
+First encode wave of 8 was **~3 min** (render → checking at ~180s). If this
+clip had cleared uniqueness on iter 1, a 20-pack would have been ~3 waves
+× ~3–4 min ≈ **10–15 min** — the old planning band. **This talking-head did
+not take that path.**
+
+| Clip | Copies | What happened | Worker time | + 10 min idle |
+|---|---|---|---|---|
+| 22s 720 talking-head Fast (this run) | 20 | **timeout, 0 delivered** | **60.2 min billed encode** | +10 min |
+| Same clip, first 8 that reached `done` | 8 | success on-worker, not returned | **~24.9 min** | +10 min |
+| Same × 10 sources as 10 Fast **8**s (1 worker, sequential) | 80 | extrapolated from wave 1 | **~4.15 h encode** | +10 min once if batched |
+| Same × 10 sources as 10 Fast **20**s | 200 | **does not complete** inside 3600s today | ~$0.40 encode **wasted per timeout** | +10 min each |
 
 ### Worked example — 10 sources × 20 Fast copies (the question)
 
-Assume **15 min encode / source**, one Generate with all 10 files, Fast CPU
-**$0.35/hr** (mid-band):
+**Do not quote the old ~$1 / 200-files number for this SKU.** A 20-pack of
+this 22s 720 talking-head does not finish on live Fast. Each timeout still
+bills ~60 min encode + 10 min idle:
 
-| Piece | Time | Cost |
+| Piece | Time | Cost at $0.40/hr |
 |---|---|---|
-| Encode 10 × 15 min | 2.5 h | **$0.88** |
-| One cooldown | 0.17 h | **$0.06** |
-| **COGS compute** | | **~$0.94** |
-| Railway + storage share | | **~$0.05–0.20** this pack |
-| **All-in COGS** | | **~$1.00–1.20** for 200 files |
+| One failed Fast 20 (this run) | 1.00 h encode | **$0.40** |
+| Cooldown if last job on that worker | 0.17 h | **$0.07** |
+| **COGS for 0 gallery files** | | **~$0.47** |
+| Ten such clicks (10×20 month, all timeout) | 10 × (1.00 + 0.17) h | **~$4.70** and **no files** |
 
-If they fire 10 separate Generates across the day: extra **~9 × 10 min idle ≈
-$0.53**. Same 200 files, **~50% more compute**. Product rule: **one Generate
-with N sources**, not N clicks.
+**Path that actually delivers today — Fast 8 of this clip:**
 
-**Per-variant Fast COGS ≈ $0.005–$0.01** at that band (clip length dominates).
+| Piece | Time | Cost at $0.40/hr |
+|---|---|---|
+| Encode 8 (measured wave 1) | 0.415 h | **$0.17** |
+| One cooldown | 0.17 h | **$0.07** |
+| **COGS compute / source** | | **~$0.23** for 8 files |
+| 10 sources × Fast 8, one worker, sequential, one cooldown | 4.15 + 0.17 h | **~$1.73** for 80 files |
+| 25 × Fast 8 to hit Creator’s 200-copy month | 10.4 + idle | **~$4.1–$5.8** depending on how many cooldowns |
+
+If they fire 10 separate Generates hours apart: extra **~9 × 10 min idle**.
+Product rule is still **batch in one Generate** — but batching a Fast 20 of
+this clip currently **fails**, so the first-tester rule is **Fast 8**, not
+“then Fast 20.”
+
+Per-variant COGS on a **successful Fast 8** of this clip: **~$0.03**
+($0.23 / 8), not $0.005. Escalate ate the cheap band.
 
 HQ is **not** this math. A 20 HQ pack can sit on a 4090 for a long time; do
 not sell HQ as the daily 20. HQ is the upsell / hard talking-head.
 
-### What we still must measure (one test-reel pack)
+### What this means for live (do not PATCH Fast from this)
 
-On the **next** real Fast 20 of a typical talking-head, write down:
+- **Do not raise `TARGET_BITS` / the 24/24 gate** to buy a faster pack.
+- **Do not raise live execution timeout** from this doc alone — Jeff signs
+  ops. A completing 20 on this uniqueness path would need **~75–90 min**
+  (wave 2 was ~10 min slower than wave 1; copies 17–20 never started).
+- Lab uniqueness loop is how we make iter-1 clears more common. Until then,
+  testers stay on **Fast 8**.
+- Cold-start time-to-first-variant is still unmeasured.
 
-- Worker start → last `ok` (RunPod request duration)
-- Studio “done” (includes R2 copy-back)
-- Clip duration + resolution
-- Copies requested vs delivered
-- Idle whether another job landed inside 10 min
+### Margin (use the timed pack)
 
-Paste into this spec. Pricing without that row is a band, not a quote.
+Sell **the month**, not the second. $99 is still a fine DIY placeholder **if
+they get files**. Compute on Fast 8 is still cheap vs $99. The new risk is
+**paying ~$0.47 for a Fast 20 that returns nothing.**
 
-### Margin (use after the timed pack)
-
-Sell **the month**, not the second.
-
-| If they pay | For 200 Fast copies/mo | Gross on ~$1.20 COGS |
+| If they pay | For a month of Fast **8**s (80–200 files) | Gross vs ~$2–6 COGS |
 |---|---|---|
-| $49 | test / creator | ~40× |
-| $99 | default DIY | ~80× |
-| $149 | comfortable DIY | ~120× |
+| $49 | test / creator | still ~8–25× |
+| $99 | default DIY | still ~15–50× |
+| $149 | comfortable DIY | still ~25–75× |
 
-Compute is cheap. **What eats margin:** HQ, two agencies generating at once
-(second Fast worker), idle 10 min on sparse clicks, uniqueness escalate
-re-encodes, and **VA time** on DIFM.
+The old “~80× on $1.20 COGS” assumed a 15 min Fast 20 that delivered 20.
+That pack **did not exist** on this clip.
+
+**What eats margin:** uniqueness autotune + escalate (this run: 6 encodes
+per copy), Fast 20 timeouts, HQ, two agencies generating at once (second
+Fast worker), idle 10 min on sparse clicks, and **VA time** on DIFM.
 
 Do not price DIY at TikFusion “unlimited” until max workers and quotas exist.
-Two concurrent 10×20 jobs = two Fast CPUs billed in parallel.
+Two concurrent packs = two Fast CPUs billed in parallel.
 
 ---
 
@@ -162,7 +209,8 @@ Order:
 2. **Phone path that actually posts:** Studio drop → Fast 8 (not 20) on the
    first reel → Gallery Share/Save without ZIP → they post → they mark
    Drops (unlabeled = pass).
-3. **Then** 20-copy packs once they trust look.
+3. **Do not** graduate them to Fast 20 of 22s 720 talking-head until a pack
+   of that SKU returns files (timed 20 timed out). Stay on Fast 8.
 4. **Quota cap** in `tenants.json` before the third tester, so one person
    cannot sit on both Fast workers for a weekend.
 5. Stripe / self-serve only when Jeff is the invite bottleneck **and** money
@@ -171,8 +219,9 @@ Order:
 Onboarding copy they need on-screen, not a PDF:
 
 - Fast vs HQ in one sentence (daily = Fast; HQ is slow and costs us GPU).
-- Batch files in one Generate.
-- Do not post all 20 the same day (strategy — even DIY).
+- Batch files in one Generate. Daily pack is **Fast 8** until a Fast 20 of
+  their talking-head actually returns files (2026-08-25 timed 20 timed out).
+- Do not post all copies the same day (strategy — even DIY).
 
 Mobile: five-tab bar stays Studio · Gallery · Drops · Flows · Drive. Creator
 plan hides Flows if we gate Workflows. Team stays under More, and More is
@@ -237,10 +286,10 @@ sales in the same week.
 | # | Slice | Done when | Notes |
 |---|---|---|---|
 | **0** | This brief | You and your homie agree on Creator = 10×20 and DIY vs DIFM | This file |
-| **1** | Time one Fast 20 | Numbers in §1 filled | Next test-reel pack |
+| **1** | Time one Fast 20 | Numbers in §1 filled | **Done 2026-08-25.** Live Fast 20 of 22s 720 talking-head **timed out at 3600s** (8 done on-worker, 0 returned). Testers stay on Fast 8. |
 | **2** | Workspace plan + variant cap | Generate refuses at cap with a human sentence | `tenants.json` + Studio copy. No Stripe. **Shipped this slice.** |
 | **3** | Creator nav | Testers see Studio / Gallery / Drops / Drive. Team / Workflows / Admin / Diagnostics hidden | Same catalog, `plan` flag. **Shipped this slice.** |
-| **4** | Test-reel invites | 3–5 people on live, Fast 8 then 20, they label Drops | Invite-only |
+| **4** | Test-reel invites | 3–5 people on live, Fast 8, they label Drops | Invite-only. Fast 20 of this SKU is blocked by the 3600s cap until uniqueness is cheaper or Jeff raises timeout. |
 | **5** | Lab uniqueness loop | One scheduled probe, Jeff still signs look | Lab Fast only |
 | **6** | Occupancy (Wave 1) | Second studio does not wait on the first | When two testers overlap |
 | **7** | Stripe | Creator / Pro / Agency match the table | After money repeats |
@@ -256,7 +305,7 @@ TikFusion keeps shipping.
 | Decision | Call |
 |---|---|
 | First paid shape | Invite-only Creator: 10 sources × 20 Fast / 30 days |
-| Price | Set after timed pack; **$99** is the working DIY placeholder, not a promise |
+| Price | **$99** still works as DIY vs Fast-8 COGS (~$2–6/mo); do not sell Fast 20 of this talking-head until a pack returns files |
 | HQ in Creator | Off or tiny. Daily packs are Fast |
 | Team / Workflows | Pro+ . Not on the first test-reel login |
 | Admin / Diagnostics | Jeff only |
@@ -264,9 +313,12 @@ TikFusion keeps shipping.
 | DIFM | Retainer + drip. Same Studio. No IG login farm |
 | Unlimited | Never, until we have max workers *and* a cap that matches invoice |
 
-## Open (need the timed pack or a yes)
+## Open (need a yes)
 
-- Exact Fast $/hr from the RunPod invoice line for `varyforge-fast-cpu`.
-- Creator at 8 copies vs 20 for the first week of testers (20 is the sell;
-  8 is faster to love).
-- Whether Workflows stays visible on Creator (hidden is simpler).
+- Exact Fast $/hr from the RunPod invoice line for `varyforge-fast-cpu`
+  (using **$0.40/hr** from the public CPU formula until then).
+- Whether Jeff raises live Fast **execution timeout** so a 20-pack of this
+  uniqueness path can finish (~75–90 min estimated) — **not** done from this
+  doc; testers stay on Fast 8.
+- Cold-start time-to-first-variant (this run was warm, 842 ms pickup).
+- Workflows stays hidden on Creator (already shipped that way).
