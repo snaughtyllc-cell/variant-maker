@@ -59,18 +59,17 @@ loop is how AQMTp-class tight faces get over 24 later.
 
 ## What to do next (today, not a research program)
 
-1. Lab Fast is pinned to `7dae269` (`sha256:5f815e72…`). Fast **8** of
-   SaveInta + AQMTp is done (both **5.3 min**, 8/8 files). Jeff signed
-   the SaveInta 8 look. Fast **20** of that 720 clip **completed** in
-   **13.4 min**, 20/20, all medium 25–27 bits (`docs/ops/fast-20-lab-2026-08-25.md`).
-   Live stays on `856e23d` until Jeff glances at Lab Gallery
-   `look20saveinta`, then live pin (no `VF_LAB`).
+1. **Live Fast is `7dae269`** (`sha256:5f815e72…`, no `VF_LAB`). Lab Fast 20 of
+   SaveInta 720 completed in 13.4 min; live smoke Fast 8 of that clip
+   **4.2 min**, 8/8, keep 0.87–0.90 from the top. Writeup:
+   `docs/ops/live-pin-7dae269-2026-08-25.md`. Testers can use **live**
+   Studio Fast for Instagram 720 wait-time.
 2. Six TikTok 576 downloads screened:
-   `docs/ops/tiktok-div-screen-2026-08-25.md`. Dance/UGC clear 24; a car
-   talking clip is 21→24 strong. Still want **IG 720 saves** (no TikTok
-   logo) for look: tight face, stickers, dance, UGC, 30–45s.
-3. **Do not invite subscription testers onto live Fast** until lab Fast 20
-   of a 720 talking-head **completes** and 8-copy wall is under 8 min.
+   `docs/ops/tiktok-div-screen-2026-08-25.md`. AQMTp-class tight 720 faces
+   still sit ~18 bits — files return; uniqueness loop later. Still useful:
+   more **IG 720 saves** (no TikTok logo).
+3. Do not re-pin live to an untested `:latest`. Next engine change goes to
+   lab first. Launch caps (PR #34) only when Jeff wants Creator quotas.
 
 You do not need to personally download 40 clips for the wait-time question.
 The screen is the automatic check. More styles tighten uniqueness
