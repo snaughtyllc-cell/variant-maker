@@ -9,10 +9,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Workers | max 2 | max 1, min 0 |
 | Recycle | promote only | whenever |
 
-CI: `.github/workflows/build-variant-fast-lab.yml` on `cursor/fast-shot-probe-c975`,
-`cursor/fast-chroma-cloud-c975`, `cursor/fast-cloud-less-grain-c975`,
-`cursor/fast-chroma-softer-c975`, `cursor/fast-720-luma-dust-c975`, or
-`cursor/caption-safe-crop-c975`.
+CI: `.github/workflows/build-variant-fast-lab.yml` also on
+`cursor/ig-720-fast-20-c975` (plus the older look branches).
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
 
@@ -21,8 +19,9 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72`
-- `VF_ENGINE_REV=856e23d` (caption-safe crop 0.92–0.96 + window 0.35–0.65; 720 cloud 4–7 + luma dust 11–13). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`
+- `VF_ENGINE_REV=7dae269` (Instagram 720 Fast 20: fail-forward uniqueness + 720 crop from the top). `VF_LAB=1`
+- Prior lab image `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72` / `856e23d` (caption-safe crop 0.92–0.96 + window 0.35–0.65; **still the live pin**)
 - Prior lab image `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2` / `13cd292` (hard crop 0.84–0.90 + 0..1 window; live pin)
 - Prior lab image `sha256:e2ab9ec598c3ac8ae412e36e1cf3f01004c229e231b9b28c396b610ea473cc9c` / `39ecb97` (dust 8–12; `quietdustmed` c0s=9 **look usable**, 23 bits)
 - Prior lab image `sha256:b08ad7a1e3ab7049ee5f72050365d9f79eb9f31e23500ed68d024a294097f163` / `815a262` (dust 14–20; `softdust815a` c0s 15/17 **grain a little much**)
@@ -55,6 +54,7 @@ Lab packs:
 | `39ecb97` dust 8–12 (`quietdustmed`, SaveInta) **look usable; 23 bits** | **23/23 bits (36%)**, VMAF **96.6 / 97.4**, c1s=5, c0s=9, sigma=4, both medium, `below_target`. **Jeff: that's usable.** | — |
 | **`13cd292` dust 11–13 (`cleargate24a`, SaveInta) promoted to live** | **26/28 bits (41/44%)**, VMAF **96.4 / 97.6**, c1s=6, c0s=12, sigma=4, both medium, `ok`, no escalate. Gate 24 cleared. **Jeff: Yea ship it.** | — |
 | **`856e23d` caption-safe crop (`wordcrop856e`) promoted to live** | **38/42 bits (59/66%)**, VMAF **99.9 / 100**, keep **0.953 / 0.928**, x/y centered 0.55/0.52 and 0.53/0.62, medium, `ok`. Jeff: **yea way better.** | — |
+| **`7dae269` IG-720 Fast 20 (lab only)** | SaveInta Fast 8: **8/8 medium 25–26 bits**, VMAF 95–99, **5.3 min** warm. AQMTp Fast 8: **8/8 strong 17–21 bits**, `below_target`, files returned, **5.3 min**. | TikTok 576 diversity: 5/6 clear 24 on medium; car talking 21→24 strong. |
 
 Live pin: `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72` (`856e23d`, caption-safe crop 0.92–0.96 + window 0.35–0.65, **no `VF_LAB`**). Prior live `13cd292` digest: `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2`. Prior live `4f94edd` digest: `sha256:8ad6439c6d6ccb3c2a9793dc1d197d2c5565d12801f06005c429d9bd2752b1d3`. Prior live `06526b9` digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
 

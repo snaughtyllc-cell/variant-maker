@@ -50,21 +50,23 @@ Fail-forward (medium miss → escalate) handles this. Wait = 2 encodes, not 6.
 face (keep 0.90 / 0.86 / 0.82 all **17 crop-only**). Strong encode still
 **18 / below_target**. Source already only has 17 self-bits — the still
 fills the uniqueness canvas. Fail-forward still **returns files in 2
-encodes**; they stay `below_target` (~28% UI). TikFusion’s floor is ~18
-bits; ours is 24. This SKU is uniqueness-hard, not wait-hard.
+encodes**; they stay `below_target` (~28% UI). TikFusion’s floor is a
+comment (~18), not a measured dump. Ours is 24. This SKU is
+uniqueness-hard, not wait-hard.
 
 Do not raise the gate. Do not snow the 720 face to buy 24. Lab uniqueness
 loop is how AQMTp-class tight faces get over 24 later.
 
 ## What to do next (today, not a research program)
 
-1. **Pin this engine on lab Fast** (workflow now builds `variant-fast:lab`
-   from `cursor/ig-720-fast-20-c975`). Time a Fast **8** and a Fast **20**
-   of SaveInta + AQMTp + girlies on lab. Live stays on the old pin until
-   those packs finish and Jeff signs look.
-2. **Jeff drops 5 more Instagram saves** into a folder / Studio (we re-run
-   the screen). Want: tight talking-head (AQMTp-class), story with
-   stickers, dance, UGC product, 30–45s. Not ten copies of SaveInta.
+1. Lab Fast is pinned to `7dae269` (`sha256:5f815e72…`). Fast **8** of
+   SaveInta + AQMTp is done (both **5.3 min**, 8/8 files). Fast **20** of
+   SaveInta is next after Jeff signs the Fast 8 look. Live stays on
+   `856e23d`.
+2. Six TikTok 576 downloads screened:
+   `docs/ops/tiktok-div-screen-2026-08-25.md`. Dance/UGC clear 24; a car
+   talking clip is 21→24 strong. Still want **IG 720 saves** (no TikTok
+   logo) for look: tight face, stickers, dance, UGC, 30–45s.
 3. **Do not invite subscription testers onto live Fast** until lab Fast 20
    of a 720 talking-head **completes** and 8-copy wall is under 8 min.
 
