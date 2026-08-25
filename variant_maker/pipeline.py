@@ -27,7 +27,7 @@ from .shot import classify_shot
 # Usable 720 Fast lands ~24–27 bits (~38–42%) when crop punches from the top —
 # still a pass. Centered 0.92 keep on Instagram 720 scored 20 bits and never
 # cleared; do not tell operators to re-upload 1080. AQMTp-class tight faces
-# miss medium (~18 bits); strong escalate draws low-freq luma shade so the
+# miss medium (~18 bits); strong escalate pins shade/cloud/dust so the
 # uniqueness loop can clear 24 without 720 snow. Medium stays shade-off.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.

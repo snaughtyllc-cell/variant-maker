@@ -55,10 +55,11 @@ _CHROMA_CLOUD_BLUR = 4.0
 # 720 talking-head luma dust. Cap leftover 14–20 (`softdust815a` c0s 15–17
 # read as a little much) at 13 so we cannot redraw that pack. Luma-only.
 _LUMA_DUST_MAX = 13
-# Strong 720 talking-head uniqueness lighting. 720/90 = 8×14; gblur 12 is
-# a large lighting region, not the 16×28 cookie mesh. Cap leftover >100.
+# Strong 720 talking-head uniqueness lighting. 720/90 = 8×14; gblur 10
+# survives libx264 medium (gblur 12 scored 23 on AQMTp). Not 16×28 cookie.
+# Cap leftover >100.
 _LUMA_SHADE_FACTOR = 90
-_LUMA_SHADE_BLUR = 12.0
+_LUMA_SHADE_BLUR = 10.0
 _LUMA_SHADE_STRENGTH_MAX = 100
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
@@ -159,7 +160,7 @@ def _luma_dust_filter(strength: int, seed: object = None) -> str:
 
 
 def _luma_shade_graph(strength: int, width: int, height: int, seed: object = None) -> str:
-    """Low-freq luma lighting: gray noise at 1/90 size, heavy blur, blend on Y."""
+    """Low-freq luma lighting: gray noise at 1/90 size, gblur 10, blend on Y."""
     lw, lh = luma_shade_size(width, height)
     noise = f"noise=c0s={strength}:c0f=u:c1s=0:c2s=0"
     if seed is not None:

@@ -28,7 +28,8 @@ METRIC_VERSION = "ssim_bits_v1"
 # 20 bits on portrait.mp4 and a Fast 20 never cleared. Still not the 55%
 # 1080 band, and still not a higher floor. Rebuild / native-canvas SSIM do not
 # buy 55% on a still face. AQMTp-class stills that fill 576 stay ~18 bits on
-# signed medium; strong escalate uses low-freq luma shade (not 720 snow).
+# signed medium; strong escalate pins shade 100 + cloud 7 + dust 13
+# (not 720 snow).
 # Not Pixel AI scramble.
 # Raising the gate to 32 previously forced strong on a whole Fast 20-pack.
 # Local uniqueness gate only — not a platform verdict.

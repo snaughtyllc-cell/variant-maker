@@ -58,7 +58,7 @@ def test_talking_head_grain_band_is_heavier_than_preset():
 
 def test_talking_head_chroma_cloud_band_is_softer_than_six_ten():
     """Live SaveInta 6–10 + sigma=2 still read as chroma. Stay under 7; gate stays 24."""
-    from variant_maker.presets import MEDIUM
+    from variant_maker.presets import MEDIUM, STRONG
 
     r = shot.chroma_cloud_range_for_shot(MEDIUM, "talking_head")
     assert r is not None
@@ -66,6 +66,13 @@ def test_talking_head_chroma_cloud_band_is_softer_than_six_ten():
     assert r.hi < 10
     assert shot.chroma_cloud_range_for_shot(MEDIUM, "motion") is None
     assert shot.chroma_cloud_range_for_shot(MEDIUM, None) is None
+    # Strong 720 escalate pins the encode-surviving cap. Medium / 1080 stay 4–7.
+    pinned = shot.chroma_cloud_range_for_shot(STRONG, "talking_head", 720, 1280)
+    assert pinned is not None
+    assert (pinned.lo, pinned.hi) == (7, 7)
+    wide = shot.chroma_cloud_range_for_shot(STRONG, "talking_head", 1080, 1920)
+    assert wide is not None
+    assert (wide.lo, wide.hi) == (4, 7)
 
 
 def test_talking_head_luma_dust_band_is_720_calibrated():
@@ -73,7 +80,7 @@ def test_talking_head_luma_dust_band_is_720_calibrated():
 
     Not stacked full-res chroma. 1080 talking-head stays 34–42 c1s. Gate stays 24.
     """
-    from variant_maker.presets import MEDIUM
+    from variant_maker.presets import MEDIUM, STRONG
 
     r = shot.luma_dust_range_for_shot(MEDIUM, "talking_head")
     assert r is not None
@@ -82,6 +89,12 @@ def test_talking_head_luma_dust_band_is_720_calibrated():
     assert r.hi < 15
     assert shot.luma_dust_range_for_shot(MEDIUM, "motion") is None
     assert shot.luma_dust_range_for_shot(MEDIUM, None) is None
+    pinned = shot.luma_dust_range_for_shot(STRONG, "talking_head", 720, 1280)
+    assert pinned is not None
+    assert (pinned.lo, pinned.hi) == (13, 13)
+    wide = shot.luma_dust_range_for_shot(STRONG, "talking_head", 1080, 1920)
+    assert wide is not None
+    assert (wide.lo, wide.hi) == (11, 13)
 
 
 def test_phone_canvas_is_instagram_720():
@@ -113,16 +126,15 @@ def test_720_talking_head_crop_keep_clears_gate_without_face_zoom():
 
 def test_720_talking_head_luma_shade_is_strong_escalate_only():
     """AQMTp-class stills stay at 17–21 bits on signed medium (crop + cloud 4–7 +
-    dust 11–13). Escalate draws a low-freq luma shade 576 can see without 720
-    snow / cookie mesh. Medium keeps the signed SaveInta look. 1080 does not
-    need it. Gate stays 24. Not Pixel AI.
+    dust 11–13). Escalate pins shade 100 + cloud 7 + dust 13 so libx264
+    medium can clear 24 without 720 snow / cookie mesh. Medium keeps the
+    signed SaveInta look. 1080 does not need it. Gate stays 24. Not Pixel AI.
     """
     from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 
     strong = shot.luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280)
     assert strong is not None
-    assert strong.lo >= 94
-    assert strong.hi == 100
+    assert (strong.lo, strong.hi) == (100, 100)
     assert shot.luma_shade_range_for_shot(MEDIUM, "talking_head", 720, 1280) is None
     assert shot.luma_shade_range_for_shot(SUBTLE, "talking_head", 720, 1280) is None
     assert shot.luma_shade_range_for_shot(STRONG, "talking_head", 1080, 1920) is None

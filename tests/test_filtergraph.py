@@ -1,5 +1,7 @@
 import re
 
+import pytest
+
 from variant_maker import filtergraph
 from variant_maker.platforms import get_platform, resolve_platform
 from variant_maker.probe import ColorTags, SourceInfo
@@ -366,8 +368,9 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
 
 
 def test_strong_720_talking_head_draws_luma_shade_not_snow():
-    """Low-freq luma overlay (8×14 then heavy blur). Not stacked 720 chroma.
+    """Low-freq luma overlay (8×14 then gblur 10). Not stacked 720 chroma.
     Medium 720 keeps the signed cloud+dust recipe with no shade.
+    Escalate pins shade 100 / cloud 7 / dust 13 (encode-surviving end).
     """
     from dataclasses import replace
 
@@ -378,14 +381,17 @@ def test_strong_720_talking_head_draws_luma_shade_not_snow():
     src = make_src(w=720, h=1280)
     strong = sample(STRONG, derive_seed(11, 5), shot="talking_head", width=720, height=1280)
     vf = filtergraph.build_video_filters(strong, src, canvas)
-    assert 94 - 1e-9 <= strong["video"]["luma_shade"] <= 100 + 1e-9
+    assert strong["video"]["luma_shade"] == pytest.approx(100.0)
+    assert strong["video"]["chroma_cloud"] == pytest.approx(7.0)
+    assert strong["video"]["luma_dust"] == pytest.approx(13.0)
     assert "scale=8:14" in vf
-    assert "gblur=sigma=12" in vf
+    assert "gblur=sigma=10" in vf
     assert "gblur=sigma=4" in vf
     assert vf.count("noise=") == 3
     c0s = [int(x) for x in re.findall(r"c0s=(\d+)", vf)]
-    assert any(v >= 94 for v in c0s)
-    assert any(11 <= v <= 13 for v in c0s if v < 20)
+    assert 100 in c0s
+    assert 13 in c0s
+    assert "c1s=7" in vf
     c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
     assert c1s and max(c1s) <= 7
     assert "alls=" not in vf
@@ -394,7 +400,7 @@ def test_strong_720_talking_head_draws_luma_shade_not_snow():
     vf_m = filtergraph.build_video_filters(medium, src, canvas)
     assert "luma_shade" not in medium["video"]
     assert "scale=8:14" not in vf_m
-    assert "gblur=sigma=12" not in vf_m
+    assert "gblur=sigma=10" not in vf_m
     assert vf_m.count("noise=") == 2
     vf1080 = filtergraph.build_video_filters(strong, make_src(), REELS)
     assert "scale=8:14" not in vf1080

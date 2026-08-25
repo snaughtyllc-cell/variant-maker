@@ -299,17 +299,17 @@ def sample(
                 _shrink_toward_calm(raw, work, _LOOK_AXES, budget / look_spent)
 
     if shot_grain is not None:
-        cloud_r = chroma_cloud_range_for_shot(preset, shot)
+        cloud_r = chroma_cloud_range_for_shot(preset, shot, width, height)
         if cloud_r is not None:
             # Remap from the (possibly shrunk) grain — no extra RNG.
             raw["chroma_cloud"] = _remap_range(raw["grain"], shot_grain, cloud_r)
-        dust_r = luma_dust_range_for_shot(preset, shot)
+        dust_r = luma_dust_range_for_shot(preset, shot, width, height)
         if dust_r is not None:
             raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
         shade_r = luma_shade_range_for_shot(preset, shot, width, height)
         if shade_r is not None:
-            # Strong 720 talking-head only. Low-freq lighting 576 can see on a
-            # face that already fills the canvas. No extra RNG.
+            # Strong 720 talking-head only. Pin the encode-surviving end
+            # (shade 100 / cloud 7 / dust 13). No extra RNG.
             raw["luma_shade"] = _remap_range(raw["grain"], shot_grain, shade_r)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn

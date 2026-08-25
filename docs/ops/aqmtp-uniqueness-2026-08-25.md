@@ -23,9 +23,20 @@ Same fail-forward as IG-720 Fast 20. `FAST_TUNE_MAX_ITERS = 1`.
 1. **Encode 1 = medium.** Crop + cloud 4–7 + dust 11–13. No luma shade.
    SaveInta-class clips clear 24 here. **AQMTp will not** — that is
    expected, not a hunt.
-2. **Encode 2 = strong escalate.** Low-freq luma shade (8×14, gblur 12,
-   `c0s` 94–100, Y only) remapped from grain. Phone canvas, talking-head
-   only. Cap 100. No extra RNG. Not 720 snow, not a cookie mesh.
+2. **Encode 2 = strong escalate.** Low-freq luma shade (8×14, gblur 10,
+   `c0s` 100, Y only) plus cloud **7** / dust **13**. Phone canvas,
+   talking-head only. Cap 100. No extra RNG. Not 720 snow, not a cookie
+   mesh.
+
+Engine libx264 `-preset medium`, seed 42/1, SnapInsta AQMTp:
+
+| Escalate | Bits |
+|---|---|
+| shade 95.6 + cloud 4.8 + dust 11.5, gblur 12 | **22** |
+| pin 100 / 7 / 13, gblur 12 | **23** |
+| pin 100 / 7 / 13, gblur **10** | **24** ok |
+
+SaveInta medium (same seed): **24**, shade-off.
 
 Gate stays **24 / 24**. Fast never face-protects. Color stays zero-mean.
 

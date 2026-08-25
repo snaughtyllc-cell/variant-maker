@@ -476,7 +476,7 @@ def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
     assert p["video"]["rebuild_scale"] < 1.0
     assert out["video"]["crop_keep"] == p["video"]["crop_keep"]
     shaded = sample(STRONG, derive_seed(1, 4), shot="talking_head", width=720, height=1280)
-    assert shaded["video"]["luma_shade"] >= 94
+    assert shaded["video"]["luma_shade"] == pytest.approx(100.0)
     hq = disable_fast_pixel_ops(shaded)
     assert hq["video"]["luma_shade"] == 0.0
     assert hq["video"]["crop_keep"] == shaded["video"]["crop_keep"]
@@ -620,7 +620,10 @@ def test_strong_720_talking_head_luma_shade_from_grain_no_extra_rng():
     assert "luma_shade" not in med["video"]
     shade_r = luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280)
     assert shade_r is not None
-    assert shade_r.lo - 1e-9 <= head["video"]["luma_shade"] <= shade_r.hi + 1e-9
+    assert (shade_r.lo, shade_r.hi) == (100, 100)
+    assert head["video"]["luma_shade"] == pytest.approx(100.0)
+    assert head["video"]["chroma_cloud"] == pytest.approx(7.0)
+    assert head["video"]["luma_dust"] == pytest.approx(13.0)
     assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
     assert head["video"]["resample_px"] == plain["video"]["resample_px"]
     grain_span = 58.0 - 46.0
@@ -628,5 +631,7 @@ def test_strong_720_talking_head_luma_shade_from_grain_no_extra_rng():
     assert head["video"]["luma_shade"] == pytest.approx(expect)
     wide = sample(STRONG, seed, shot="talking_head", width=1080, height=1920)
     assert "luma_shade" not in wide["video"]
+    expect_cloud = 4.0 + (wide["video"]["grain"] - 46.0) / grain_span * 3.0
+    assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
     moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
     assert "luma_shade" not in moved["video"]

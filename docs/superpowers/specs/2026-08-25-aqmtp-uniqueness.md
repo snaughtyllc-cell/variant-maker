@@ -39,22 +39,27 @@ Lossless frames, then x264. Clip: SnapInsta AQMTp 720.
 | High-amp **mid-freq** luma shade | looks like a cookie / mesh — **rejected** |
 | Low-freq luma shade **8×14**, `gblur=12`, `c0s` **90–100**, stacked on crop+cloud+dust | lossless **24** |
 | same, **veryfast** x264 | `c90` smoothed to **22–23**; `c100` + cloud **7** + dust **13** scored **24** ok |
+| **libx264 `-preset medium`** (engine, seed 42/1) | shade **95.6** + cloud **4.8** + dust **11.5**, gblur 12 → **22** |
+| same engine, pin shade **100** + cloud **7** + dust **13**, gblur 12 | **23** |
+| same pin, **gblur 10** (or 8) | **24** ok |
 
 Warp, hue, clarity, vignette, and low-freq chroma do not move SSIM on a
 still that already fills 576×1024. Crop on this clip is weaker than the
 first-pass 17-bit note (keep 0.90/0.86/0.82) — this session’s crop-only
-draw is **14–15**. Medium still lands **18**, same as the screen.
+draw is **14–15**. Medium still lands **18**, same as the screen. Remapping
+shade from grain onto `94–100` left escalate at the low end of that band;
+pin the surviving caps. `gblur=12` still lost 1 bit to medium-preset x264.
 
 ## Change
 
 1. **Medium 720 talking-head stays shade-off.** That is the signed SaveInta
    look (cloud 4–7 + dust 11–13). AQMTp will miss 24 on encode 1. Expected.
 2. **Strong escalate draws `luma_shade`.** Same uniqueness loop as IG-720
-   Fast 20 (`FAST_TUNE_MAX_ITERS = 1`): one medium, then one strong. Shade
-   remaps from grain onto `Range(94, 100)`, **phone canvas only**
-   (short side < 1080), talking-head only. No extra RNG.
+   Fast 20 (`FAST_TUNE_MAX_ITERS = 1`): one medium, then one strong. Pins
+   shade **100**, cloud **7**, dust **13** (no extra RNG), **phone canvas
+   only** (short side < 1080), talking-head only.
 3. **Filtergraph:** gray noise at **1/90** size (720×1280 → **8×14**),
-   `gblur=sigma=12`, blend on **Y**. Strength **cap 100** so leftover
+   `gblur=sigma=10`, blend on **Y**. Strength **cap 100** so leftover
    cannot redraw a cookie mesh.
 4. **HQ** `disable_fast_pixel_ops` zeros `luma_shade` (ESRGAN already
    rebuilds pixels).
