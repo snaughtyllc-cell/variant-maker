@@ -65,7 +65,7 @@ export const sourceUrl = (sourceId: string) => `/api/sources/${sourceId}/source`
 export const eventsUrl = (jobId: string) => `/api/jobs/${jobId}/events`;
 export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`;
 
-export const getHealth = () => fetch("/api/health").then(json<{ status: string }>);
+export const getHealth = () => fetch("/api/health").then(json<{ status: string; lab?: boolean }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
 export const getQueue = () => fetch("/api/queue").then(json<QueueSnapshot>);
 export const getJob = (id: string) =>

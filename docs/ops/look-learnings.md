@@ -54,10 +54,12 @@ Platform flags after a drop stay in Phase 12
 
 | Hole | What we know | What we will not do |
 |---|---|---|
-| AQMTp-class tight 720 talking-head that already fills 576 | Source self-bits ~18. Signed medium **18** `below_target`. Crop-only 14–15. Shade bought 24+ bits and **failed look**. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie/lighting overlays. Retune medium so SaveInta picks up shade. |
+| AQMTp-class tight 720 talking-head that already fills 576 | Source self-bits ~18. Signed medium **18** `below_target`. Crop-only 14–15. Shade bought 24+ bits and **failed look**. Shade-off Fast 8 `lookshadeoff` (`21ae9d3`): still **17–21 bits**. Some copies fail the coarse luma gate (max of 3 frames) even without shade. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie/lighting overlays. Retune medium so SaveInta picks up shade. Pin live from `lookshadeoff`. |
 
 ## Engine backstop
 
-`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Runs on the real encode **before** uniqueness escalate. Studio shows source vs variant stills on `looking` so an upload is a visual test first, not a uniqueness % after eight files.
+`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Runs on the real encode **before** uniqueness escalate. Studio shows source vs variant stills on `looking` so an upload is a visual test first, not a uniqueness % after eight files. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
+
+If the first encode looks ok and uniqueness still misses, strong escalate may not replace that file: a look-fail escalate rolls back to medium.
 
 Leftover `luma_shade` params must not draw. Filtergraph ignores them.

@@ -25,6 +25,10 @@ vi.mock("@/components/nav/TopNav", () => ({
   TopNav: () => <div>TopNav</div>,
 }));
 
+vi.mock("@/components/nav/LabBanner", () => ({
+  LabBanner: () => null,
+}));
+
 import { AuthGate } from "@/components/auth/AuthGate";
 
 const AUTH_OFF: AuthMe = {

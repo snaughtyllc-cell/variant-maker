@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import random
+import shutil
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -266,6 +267,45 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
             return look_info
 
+        def _snapshot_medium() -> dict:
+            """Keep the look-ok medium file so a blotchy escalate can roll back."""
+            snap = path + ".look_medium.mp4"
+            shutil.copy2(path, snap)
+            return {
+                "path": snap,
+                "look": dict(look_info),
+                "u": dict(u),
+                "r": dict(r) if r is not None else None,
+                "preset_used": preset_used,
+            }
+
+        def _restore_medium_if_look_fail(snap: dict) -> None:
+            """Escalate is uniqueness-only. Look fail keeps the medium encode."""
+            nonlocal look_info, u, r, preset_used, escalated
+            if look_info.get("look_status") != "fail":
+                if os.path.isfile(snap["path"]):
+                    os.remove(snap["path"])
+                return
+            os.replace(snap["path"], path)
+            look_info = snap["look"]
+            u = snap["u"]
+            r = snap["r"]
+            preset_used = snap["preset_used"]
+            escalated = False
+            try:
+                stills = look.write_look_stills(src.path, path, out_dir, i)
+                look_info = {**look_info, **stills}
+            except (OSError, ValueError, subprocess.CalledProcessError):
+                pass
+            emit(
+                "looking", index=i, filename=fname,
+                look_status=look_info.get("look_status"),
+                look_mae=look_info.get("look_mae"),
+                look_mae_max=look_info.get("look_mae_max"),
+                look_src=look_info.get("look_src"),
+                look_var=look_info.get("look_var"),
+            )
+
         def _peer_bits(variant_path: str) -> int | None:
             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
 
@@ -402,6 +442,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 not cleared and allow_creative_escalate
                 and look_info.get("look_status") != "fail"
             ):
+                snap = _snapshot_medium()
                 emit("escalating", index=i)
                 strong = get_preset("strong")
                 r = regen(strong, 1.0)
@@ -412,6 +453,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 u = _apply_peer_status(u, peer_min)
                 preset_used = strong.name
                 escalated = True
+                _restore_medium_if_look_fail(snap)
         else:
             for strength in uniq_strengths:
                 # Belt-and-suspenders: if two ladder rungs clamp to the same effective
@@ -434,6 +476,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     allow_creative_escalate
                     and look_info.get("look_status") != "fail"
                 ):
+                    snap = _snapshot_medium()
                     emit("escalating", index=i)
                     strong = get_preset("strong")
                     r = regen(strong, 1.0)
@@ -444,6 +487,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     u = _apply_peer_status(u, peer_min)
                     preset_used = strong.name
                     escalated = True
+                    _restore_medium_if_look_fail(snap)
 
         if r is not None and r.get("vmaf") is None:
             qr = path + ".qr.mp4"

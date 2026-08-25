@@ -20,8 +20,9 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:5aed2f3d999507c9fa5e5d072c6a7880a80e0297d8e4fca803a071c0fa8e6043`
-- `VF_ENGINE_REV=4540720` (AQMTp uniqueness shade on strong 720 TH). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b`
+- `VF_ENGINE_REV=21ae9d3` (look-first visual gate, shade off). `VF_LAB=1`
+- Prior lab image `sha256:5aed2f3d999507c9fa5e5d072c6a7880a80e0297d8e4fca803a071c0fa8e6043` / `4540720` (AQMTp uniqueness shade — **REJECTED look**, lava). Do not pin.
 - Prior lab image `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e` / `7dae269` (Instagram 720 Fast 20; **still live**)
 - Prior lab image `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72` / `856e23d` (caption-safe crop 0.92–0.96 + window 0.35–0.65; was live)
 - Prior lab image `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2` / `13cd292` (hard crop 0.84–0.90 + 0..1 window; live pin)
@@ -62,7 +63,8 @@ Lab packs:
 | **`13cd292` dust 11–13 (`cleargate24a`, SaveInta) promoted to live** | **26/28 bits (41/44%)**, VMAF **96.4 / 97.6**, c1s=6, c0s=12, sigma=4, both medium, `ok`, no escalate. Gate 24 cleared. **Jeff: Yea ship it.** | — |
 | **`856e23d` caption-safe crop (`wordcrop856e`) promoted to live** | **38/42 bits (59/66%)**, VMAF **99.9 / 100**, keep **0.953 / 0.928**, x/y centered 0.55/0.52 and 0.53/0.62, medium, `ok`. Jeff: **yea way better.** | — |
 | **`7dae269` IG-720 Fast 20 — promoted to live** | SaveInta Fast 8 lab: **8/8 medium 25–26 bits**, **5.3 min**. SaveInta Fast 20 lab: **20/20 medium 25–27 bits**, **13.4 min**, Gallery `look20saveinta`. Live smoke Fast 8: **8/8 medium 25–26 bits**, keep 0.87–0.90 y from top, **4.2 min**. AQMTp Fast 8: **8/8 strong 17–21 bits**, files returned. Native 1080 TH Fast 8: **2.3 min 26–27 bits**. iPhone 4K (Studio 1080 proxy) gym Fast 8: **5.4 min 50–55 bits**. | TikTok 576 diversity: 5/6 clear 24 on medium; car talking 21→24 strong. |
-| **`4540720` AQMTp uniqueness shade — lab only, not live** | **REJECTED look.** AQMTp Fast 8 (`lookaqmtp`): 8/8 strong 33–34 bits, VMAF 97–99, shade 100 — lava on the face. SaveInta Fast 8 (`looksaveinta`): 8/8 medium 24–27 bits, shade-off. Do not pin live. Look-first now gates actual frames. | — |
+| **`4540720` AQMTp uniqueness shade — lab only, not live** | **REJECTED look.** AQMTp Fast 8 (`lookaqmtp`, now `lookaqmtp-rejected`): 8/8 strong 33–34 bits, VMAF 97–99, shade 100 — lava on the face. SaveInta Fast 8 (`looksaveinta`): 8/8 medium 24–27 bits, shade-off. Do not pin live. Look-first now gates actual frames. | — |
+| **`21ae9d3` look-first shade-off — lab only, not live** | AQMTp Fast 8 (`lookshadeoff` / `lab8_aqmtp21ae_761def3b`): 8/8 **below_target 17–21 bits**, VMAF 95–99. Look **ok** on copies 2/5/7/8 (strong, MAE ~20–26). Look **fail** on 1/3 (medium, mean 36 / 45.67, max 77 / —) and 4/6 (strong after escalate). Gate used **max** of 3 frames (UI mean can sit under 38). Worker **3.1 min** + 20s delay. Stills in Gallery. **Do not pin live.** | — |
 
 Live pin: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e` (`7dae269`, 720 Fast 20, **no `VF_LAB`**). Prior live `856e23d` digest: `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72`. Prior live `13cd292` digest: `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2`. Prior live `4f94edd` digest: `sha256:8ad6439c6d6ccb3c2a9793dc1d197d2c5565d12801f06005c429d9bd2752b1d3`. Prior live `06526b9` digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
 

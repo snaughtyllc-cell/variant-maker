@@ -144,6 +144,39 @@ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     assert record.uniqueness_status == "below_target"
 
 
+def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
+    """Strong blotch after a look-ok medium must not replace the medium file."""
+    _stub_common(monkeypatch)
+    looks = iter([
+        {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
+        },
+        {
+            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_mae": 40.0, "look_mae_max": 51.0, "look_target": 38.0,
+        },
+    ])
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: next(looks),
+    )
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            0.1, bits=18, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "ok"
+    assert record.uniqueness_status == "below_target"
+    assert record.uniqueness == 0.1
+
+
 def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
     _stub_common(monkeypatch)
     monkeypatch.setattr(
