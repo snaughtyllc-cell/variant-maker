@@ -60,9 +60,11 @@ loop is how AQMTp-class tight faces get over 24 later.
 ## What to do next (today, not a research program)
 
 1. Lab Fast is pinned to `7dae269` (`sha256:5f815e72…`). Fast **8** of
-   SaveInta + AQMTp is done (both **5.3 min**, 8/8 files). Fast **20** of
-   SaveInta is next after Jeff signs the Fast 8 look. Live stays on
-   `856e23d`.
+   SaveInta + AQMTp is done (both **5.3 min**, 8/8 files). Jeff signed
+   the SaveInta 8 look. Fast **20** of that 720 clip **completed** in
+   **13.4 min**, 20/20, all medium 25–27 bits (`docs/ops/fast-20-lab-2026-08-25.md`).
+   Live stays on `856e23d` until Jeff glances at Lab Gallery
+   `look20saveinta`, then live pin (no `VF_LAB`).
 2. Six TikTok 576 downloads screened:
    `docs/ops/tiktok-div-screen-2026-08-25.md`. Dance/UGC clear 24; a car
    talking clip is 21→24 strong. Still want **IG 720 saves** (no TikTok
