@@ -20,8 +20,9 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b`
-- `VF_ENGINE_REV=21ae9d3` (look-first visual gate, shade off). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6`
+- `VF_ENGINE_REV=9a04e62` (look-first + escalate look-fail rolls back to medium). `VF_LAB=1`
+- Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.
 - Prior lab image `sha256:5aed2f3d999507c9fa5e5d072c6a7880a80e0297d8e4fca803a071c0fa8e6043` / `4540720` (AQMTp uniqueness shade — **REJECTED look**, lava). Do not pin.
 - Prior lab image `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e` / `7dae269` (Instagram 720 Fast 20; **still live**)
 - Prior lab image `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72` / `856e23d` (caption-safe crop 0.92–0.96 + window 0.35–0.65; was live)
