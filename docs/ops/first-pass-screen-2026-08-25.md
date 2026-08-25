@@ -68,7 +68,11 @@ loop is how AQMTp-class tight faces get over 24 later.
    `docs/ops/tiktok-div-screen-2026-08-25.md`. AQMTp-class tight 720 faces
    still sit ~18 bits — files return; uniqueness loop later. Still useful:
    more **IG 720 saves** (no TikTok logo).
-3. Do not re-pin live to an untested `:latest`. Next engine change goes to
+3. Jeff dropped 1 iPhone 4K + 2×1080. Studio proxies 4K → 1080 before Fast.
+   Lab Fast 8 on `7dae269`: native 1080 talking-head **2.3 min 26–27 bits**;
+   4K→1080 gym **5.4 min 50–55 bits**. Writeup:
+   `docs/ops/res-1080-4k-lab-2026-08-25.md`.
+4. Do not re-pin live to an untested `:latest`. Next engine change goes to
    lab first. Launch caps (PR #34) only when Jeff wants Creator quotas.
 
 You do not need to personally download 40 clips for the wait-time question.
