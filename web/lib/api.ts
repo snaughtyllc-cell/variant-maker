@@ -517,6 +517,17 @@ export async function setAdminView(workspaceId: string | null): Promise<void> {
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
+export function setAdminWorkspacePlan(
+  workspaceId: string,
+  plan: "creator" | "pro" | "agency" | "internal",
+): Promise<AdminWorkspace> {
+  return fetch(`/api/admin/workspaces/${encodeURIComponent(workspaceId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan }),
+  }).then(json<AdminWorkspace>);
+}
+
 export const getWorkspaceTeam = () => fetch("/api/workspace/team").then(json<Team>);
 
 export function createWorkspaceInvite(email: string): Promise<Invite> {

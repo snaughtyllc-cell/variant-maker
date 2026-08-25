@@ -16,8 +16,18 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from .plans import (
+    PLAN_IDS,
+    WINDOW_DAYS,
+    QuotaSnapshot,
+    fast_limit,
+    hq_limit,
+    normalize_plan,
+)
+
 InviteKind = Literal["join", "new_workspace"]
 MemberRole = Literal["owner", "member"]
+USAGE_KEEP_DAYS = 40
 
 ADMIN_EMAIL_ENV = "VARIANT_AUTH_ADMIN_EMAIL"
 LEGACY_DIR_NAMES = ("jobs", "drive", "uploads", "workflow-work")
@@ -45,6 +55,9 @@ class WorkspaceInfo:
     id: str
     name: str
     created_utc: str
+    plan: str = "internal"
+    fast_limit_30d: int | None = None
+    hq_limit_30d: int | None = None
 
 
 @dataclass
@@ -99,6 +112,90 @@ def _now() -> str:
     return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _parse_utc(value: object) -> _dt.datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return _dt.datetime.strptime(value.strip(), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=_dt.UTC,
+        )
+    except ValueError:
+        return None
+
+
+def _opt_int(raw: dict, key: str) -> int | None:
+    if key not in raw or raw[key] is None:
+        return None
+    try:
+        return int(raw[key])
+    except (TypeError, ValueError):
+        return None
+
+
+def _workspace_from_raw(raw: object, workspace_id: str) -> WorkspaceInfo | None:
+    if not isinstance(raw, dict):
+        return None
+    return WorkspaceInfo(
+        id=str(raw.get("id") or workspace_id),
+        name=str(raw.get("name") or workspace_id),
+        created_utc=str(raw.get("created_utc") or ""),
+        plan=normalize_plan(raw.get("plan")),
+        fast_limit_30d=_opt_int(raw, "fast_limit_30d"),
+        hq_limit_30d=_opt_int(raw, "hq_limit_30d"),
+    )
+
+
+def _workspace_payload(ws: WorkspaceInfo, usage: list | None = None) -> dict:
+    payload = {
+        "id": ws.id,
+        "name": ws.name,
+        "created_utc": ws.created_utc,
+        "plan": ws.plan,
+    }
+    if ws.fast_limit_30d is not None:
+        payload["fast_limit_30d"] = ws.fast_limit_30d
+    if ws.hq_limit_30d is not None:
+        payload["hq_limit_30d"] = ws.hq_limit_30d
+    if usage:
+        payload["usage"] = usage
+    return payload
+
+
+def _usage_units(items: object, kind: str, *, now: _dt.datetime, window_days: int) -> int:
+    if not isinstance(items, list):
+        return 0
+    cutoff = now - _dt.timedelta(days=window_days)
+    total = 0
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        if str(raw.get("kind") or "") != kind:
+            continue
+        when = _parse_utc(raw.get("utc"))
+        if when is None or when < cutoff:
+            continue
+        try:
+            total += max(0, int(raw.get("units") or 0))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _prune_usage(items: object, *, now: _dt.datetime) -> list:
+    if not isinstance(items, list):
+        return []
+    cutoff = now - _dt.timedelta(days=USAGE_KEEP_DAYS)
+    kept = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        when = _parse_utc(raw.get("utc"))
+        if when is None or when < cutoff:
+            continue
+        kept.append(raw)
+    return kept
+
+
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
@@ -147,13 +244,7 @@ class TenantStore:
     def get_workspace(self, workspace_id: str) -> WorkspaceInfo | None:
         with self._lock:
             raw = self._load()["workspaces"].get(workspace_id)
-        if not isinstance(raw, dict):
-            return None
-        return WorkspaceInfo(
-            id=str(raw.get("id") or workspace_id),
-            name=str(raw.get("name") or workspace_id),
-            created_utc=str(raw.get("created_utc") or ""),
-        )
+        return _workspace_from_raw(raw, workspace_id)
 
     def get_user(self, email: str) -> UserInfo | None:
         key = normalize_email(email)
@@ -180,14 +271,93 @@ class TenantStore:
             ))
         return out
 
-    def create_workspace(self, *, name: str, workspace_id: str | None = None) -> WorkspaceInfo:
-        ws = WorkspaceInfo(id=workspace_id or _new_id("ws"), name=name.strip() or "Workspace",
-                           created_utc=_now())
+    def create_workspace(
+        self, *, name: str, workspace_id: str | None = None, plan: str = "internal",
+    ) -> WorkspaceInfo:
+        ws = WorkspaceInfo(
+            id=workspace_id or _new_id("ws"),
+            name=name.strip() or "Workspace",
+            created_utc=_now(),
+            plan=normalize_plan(plan),
+        )
         with self._lock:
             data = self._load()
-            data["workspaces"][ws.id] = asdict(ws)
+            data["workspaces"][ws.id] = _workspace_payload(ws)
             self._save(data)
         return ws
+
+    def set_workspace_plan(self, workspace_id: str, plan: str) -> WorkspaceInfo | None:
+        if plan not in PLAN_IDS:
+            raise ValueError("unknown plan")
+        with self._lock:
+            data = self._load()
+            raw = data["workspaces"].get(workspace_id)
+            ws = _workspace_from_raw(raw, workspace_id)
+            if ws is None:
+                return None
+            usage = raw.get("usage") if isinstance(raw, dict) else []
+            updated = WorkspaceInfo(
+                id=ws.id,
+                name=ws.name,
+                created_utc=ws.created_utc,
+                plan=plan,
+                fast_limit_30d=ws.fast_limit_30d,
+                hq_limit_30d=ws.hq_limit_30d,
+            )
+            data["workspaces"][workspace_id] = _workspace_payload(
+                updated, usage if isinstance(usage, list) else [],
+            )
+            self._save(data)
+        return updated
+
+    def quota_snapshot(
+        self, workspace_id: str, *, now: _dt.datetime | None = None,
+    ) -> QuotaSnapshot:
+        when = now or _dt.datetime.now(_dt.UTC)
+        with self._lock:
+            raw = self._load()["workspaces"].get(workspace_id)
+        ws = _workspace_from_raw(raw, workspace_id)
+        plan = normalize_plan(ws.plan if ws is not None else None)
+        usage = raw.get("usage") if isinstance(raw, dict) else []
+        return QuotaSnapshot(
+            plan=plan,
+            fast_used=_usage_units(usage, "fast", now=when, window_days=WINDOW_DAYS),
+            fast_limit=fast_limit(plan, ws.fast_limit_30d if ws else None),
+            hq_used=_usage_units(usage, "hq", now=when, window_days=WINDOW_DAYS),
+            hq_limit=hq_limit(plan, ws.hq_limit_30d if ws else None),
+            window_days=WINDOW_DAYS,
+        )
+
+    def record_usage(
+        self,
+        workspace_id: str,
+        *,
+        kind: str,
+        units: int,
+        job_id: str,
+        utc: str | None = None,
+    ) -> None:
+        if units <= 0:
+            return
+        if kind not in ("fast", "hq"):
+            return
+        stamp = utc or _now()
+        with self._lock:
+            data = self._load()
+            raw = data["workspaces"].get(workspace_id)
+            ws = _workspace_from_raw(raw, workspace_id)
+            if ws is None:
+                return
+            now = _parse_utc(stamp) or _dt.datetime.now(_dt.UTC)
+            usage = _prune_usage(raw.get("usage") if isinstance(raw, dict) else [], now=now)
+            usage.append({
+                "utc": stamp,
+                "kind": kind,
+                "units": int(units),
+                "job_id": job_id,
+            })
+            data["workspaces"][workspace_id] = _workspace_payload(ws, usage)
+            self._save(data)
 
     def upsert_user(self, user: UserInfo) -> UserInfo:
         key = normalize_email(user.email)
@@ -318,13 +488,9 @@ class TenantStore:
             spaces = self._load()["workspaces"]
         out: list[WorkspaceInfo] = []
         for ws_id, raw in spaces.items():
-            if not isinstance(raw, dict):
-                continue
-            out.append(WorkspaceInfo(
-                id=str(raw.get("id") or ws_id),
-                name=str(raw.get("name") or ws_id),
-                created_utc=str(raw.get("created_utc") or ""),
-            ))
+            parsed = _workspace_from_raw(raw, str(ws_id))
+            if parsed is not None:
+                out.append(parsed)
         return out
 
 
@@ -393,7 +559,9 @@ def provision_login(
         return store.upsert_user(UserInfo(
             email=addr, name=name or addr, workspace_id=ws_id, role="member",
         ))
-    ws = store.create_workspace(name=name or addr.split("@")[0] or "Studio")
+    ws = store.create_workspace(
+        name=name or addr.split("@")[0] or "Studio", plan="creator",
+    )
     return store.upsert_user(UserInfo(
         email=addr, name=name or addr, workspace_id=ws.id, role="owner",
     ))

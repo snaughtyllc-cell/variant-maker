@@ -123,9 +123,17 @@ money is changing hands often enough that a spreadsheet of operators hurts.
 1. Copy-link invite + workspace rename (still invite-only, still JSON tenants).
 2. Light usage readout for Jeff (who ran Fast/HQ, when) so hybrid spend is
    visible before Stripe.
-3. Stripe + plan limits **after** that. Postgres when `tenants.json` is
+3. Stripe + plan limits **after** that, priced off real Fast COGS (see
+   `2026-08-25-launch-and-unit-economics.md`). Postgres when `tenants.json` is
    actually painful (many operators, concurrent writes). Public signup only
    with a paid gate — not an open Studio.
+
+Until Wave 6 fires: invite testers, cap Fast variants on the workspace
+(`plan` in `tenants.json`). Working DIY placeholder **$99/mo Creator** is
+not a promise — confirm after one timed Fast 20 pack + RunPod invoice.
+
+**Uniqueness research** lives on lab Fast (`xar25v77v3j27u`, `VF_LAB=1`),
+never live. **DIFM / VA posting** is a later product, not Wave 6.
 
 **Not in this wave:** per-VA Drive inside Jeff’s own workspace (VAs there
 share packs on purpose). Owner workspaces already have their own Drive.

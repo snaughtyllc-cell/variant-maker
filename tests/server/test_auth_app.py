@@ -372,12 +372,15 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
     _login(jeff, "jeff")
     jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
     _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    assert jeff.patch(
+        f"/api/admin/workspaces/{ops_id}", json={"plan": "pro"},
+    ).status_code == 200
     jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
     _login(va, "va")
 
     assert va.get("/api/workspace/team").status_code == 403
     team = ops.get("/api/workspace/team").json()
-    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
     assert team["workspace_id"] == ops_id
     assert {m["email"] for m in team["members"]} == {"ops@x.com"}
 

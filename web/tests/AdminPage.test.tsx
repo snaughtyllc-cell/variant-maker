@@ -25,6 +25,7 @@ vi.mock("@/lib/api", () => ({
   createInvite: vi.fn(),
   deleteInvite: vi.fn(),
   setAdminView: vi.fn(),
+  setAdminWorkspacePlan: vi.fn(),
   removeAdminUser: vi.fn(),
 }));
 

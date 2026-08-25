@@ -8,6 +8,7 @@ interface AdvancedPanelProps {
   qualityMode: "fast" | "hq";
   onQualityModeChange: (value: "fast" | "hq") => void;
   totalVariants?: number;
+  allowHq?: boolean;
 }
 
 export function AdvancedPanel({
@@ -16,6 +17,7 @@ export function AdvancedPanel({
   qualityMode,
   onQualityModeChange,
   totalVariants = 0,
+  allowHq = true,
 }: AdvancedPanelProps) {
   const [open, setOpen] = useState(false);
   const hqHint = hqBatchHint(qualityMode, totalVariants);
@@ -97,26 +99,32 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
+                {allowHq
+                  ? "Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes."
+                  : "Daily packs are Fast. HQ is on Pro and Agency."}
               </span>
             </span>
-            <select
-              value={qualityMode}
-              onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
-              style={{
-                marginLeft: 12,
-                flexShrink: 0,
-                background: "#fbfdfd",
-                color: "var(--color-text)",
-                border: "1px solid var(--color-line)",
-                borderRadius: 8,
-                padding: "6px 8px",
-                fontSize: 12,
-              }}
-            >
-              <option value="fast">Fast</option>
-              <option value="hq">HQ (Phase 8)</option>
-            </select>
+              {allowHq ? (
+                <select
+                  value={qualityMode}
+                  onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
+                  style={{
+                    marginLeft: 12,
+                    flexShrink: 0,
+                    background: "#fbfdfd",
+                    color: "var(--color-text)",
+                    border: "1px solid var(--color-line)",
+                    borderRadius: 8,
+                    padding: "6px 8px",
+                    fontSize: 12,
+                  }}
+                >
+                  <option value="fast">Fast</option>
+                  <option value="hq">HQ (Phase 8)</option>
+                </select>
+              ) : (
+                <span style={{ fontWeight: 600, color: "var(--color-text)" }}>Fast</span>
+              )}
           </div>
 
           {hqHint && (

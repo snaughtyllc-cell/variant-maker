@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
-import { showDiagnosticsNav, showTeamNav } from "@/lib/navAccess";
+import { showDiagnosticsNav, showTeamNav, showWorkflowsNav } from "@/lib/navAccess";
 import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 
@@ -34,7 +34,7 @@ const ICONS = {
 
 function extraTabVisible(
   href: string,
-  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
+  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null; plan?: string | null } | undefined,
 ): boolean {
   if (href === "/diagnostics") return showDiagnosticsNav(me);
   if (href === "/team") return showTeamNav(me);
@@ -51,6 +51,9 @@ export function TopNav() {
   const { data: me } = useAuthMe();
   const [moreOpen, setMoreOpen] = useState(false);
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
+  const primaryTabs = PRIMARY_TABS.filter(
+    (tab) => tab.href !== "/workflows" || showWorkflowsNav(me),
+  );
 
   async function handleLogout() {
     await logout();
@@ -71,7 +74,7 @@ export function TopNav() {
         </Link>
 
         <nav className="vf-desktop-nav" aria-label="Primary navigation">
-          {PRIMARY_TABS.map(({ href, label }) => {
+          {primaryTabs.map(({ href, label }) => {
             const Icon = ICONS[href as keyof typeof ICONS];
             const active = linkActive(pathname, href);
             return (
@@ -135,7 +138,7 @@ export function TopNav() {
       )}
 
       <nav className="vf-mobile-tabs" aria-label="Primary navigation">
-        {PRIMARY_TABS.map((item) => {
+        {primaryTabs.map((item) => {
           const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
           return (

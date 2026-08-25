@@ -87,6 +87,17 @@ describe("TopNav", () => {
     expect(screen.getAllByRole("link", { name: "Diagnostics" }).length).toBeGreaterThan(0);
   });
 
+  it("hides Workflows and Team on Creator", () => {
+    me.data = { ...BASE, plan: "creator" };
+    render(<TopNav />);
+    expect(screen.queryByRole("link", { name: "Workflows" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
+    expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
+    expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute("href", "/settings/drive");
+  });
+
   it("exposes primary destinations including Drops", () => {
     render(<TopNav />);
     for (const tab of PRIMARY_TABS) {
