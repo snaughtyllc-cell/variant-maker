@@ -30,6 +30,7 @@ from .shot import (
     grain_range_for_shot,
     keeps_bottom_captions,
     luma_dust_range_for_shot,
+    luma_shade_range_for_shot,
     rebuild_range_for_shot,
 )
 
@@ -213,6 +214,7 @@ def disable_fast_pixel_ops(params: dict) -> dict:
     video["resample_px"] = 0
     video["rebuild_scale"] = 1.0
     video["warp_k1"] = 0.0
+    video["luma_shade"] = 0.0
     return {**params, "video": video}
 
 
@@ -304,6 +306,11 @@ def sample(
         dust_r = luma_dust_range_for_shot(preset, shot)
         if dust_r is not None:
             raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
+        shade_r = luma_shade_range_for_shot(preset, shot, width, height)
+        if shade_r is not None:
+            # Strong 720 talking-head only. Low-freq lighting 576 can see on a
+            # face that already fills the canvas. No extra RNG.
+            raw["luma_shade"] = _remap_range(raw["grain"], shot_grain, shade_r)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats

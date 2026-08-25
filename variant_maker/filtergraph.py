@@ -55,6 +55,11 @@ _CHROMA_CLOUD_BLUR = 4.0
 # 720 talking-head luma dust. Cap leftover 14–20 (`softdust815a` c0s 15–17
 # read as a little much) at 13 so we cannot redraw that pack. Luma-only.
 _LUMA_DUST_MAX = 13
+# Strong 720 talking-head uniqueness lighting. 720/90 = 8×14; gblur 12 is
+# a large lighting region, not the 16×28 cookie mesh. Cap leftover >100.
+_LUMA_SHADE_FACTOR = 90
+_LUMA_SHADE_BLUR = 12.0
+_LUMA_SHADE_STRENGTH_MAX = 100
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
 
@@ -97,6 +102,29 @@ def apply_luma_dust_strength(dust: float) -> int:
     return max(1, min(round(g), _LUMA_DUST_MAX))
 
 
+def luma_shade_size(width: int, height: int) -> tuple[int, int]:
+    """Even low-res grid for uniqueness lighting (720×1280 → 8×14)."""
+    return chroma_cloud_size(width, height, _LUMA_SHADE_FACTOR)
+
+
+def apply_luma_shade_strength(shade: float) -> int:
+    """Clamp leftover shade so we cannot redraw a cookie mesh."""
+    g = float(shade or 0.0)
+    if g <= 0:
+        return 0
+    return max(1, min(round(g), _LUMA_SHADE_STRENGTH_MAX))
+
+
+def luma_shade_applies(v: dict, width: int | None, height: int | None) -> bool:
+    """True when the 720 talking-head escalate lighting will actually be drawn."""
+    if apply_luma_shade_strength(v.get("luma_shade") or 0.0) <= 0 or not width or not height:
+        return False
+    try:
+        return min(int(width), int(height)) < _GRAIN_REF_SHORT_EDGE
+    except (TypeError, ValueError):
+        return False
+
+
 def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTOR) -> tuple[int, int]:
     """Even low-res grid for the chroma overlay (720×1280 → 80×142)."""
     w = max(int(width), 2)
@@ -128,6 +156,23 @@ def _luma_dust_filter(strength: int, seed: object = None) -> str:
         s = int(seed) & 0x7FFFFFFF
         noise += f":c0_seed={s}"
     return noise
+
+
+def _luma_shade_graph(strength: int, width: int, height: int, seed: object = None) -> str:
+    """Low-freq luma lighting: gray noise at 1/90 size, heavy blur, blend on Y."""
+    lw, lh = luma_shade_size(width, height)
+    noise = f"noise=c0s={strength}:c0f=u:c1s=0:c2s=0"
+    if seed is not None:
+        s = int(seed) & 0x7FFFFFFF
+        noise += f":c0_seed={s}"
+    blur = f"gblur=sigma={_LUMA_SHADE_BLUR:g}"
+    return (
+        f"split[shsrc][shn];"
+        f"[shn]format=yuv444p,geq=lum='128':cb='128':cr='128',"
+        f"scale={lw}:{lh},{noise},"
+        f"scale={width}:{height}:flags=bicubic,{blur}[sh];"
+        f"[shsrc][sh]blend=c0_expr='A+B-128':c1_expr='A':c2_expr='A'"
+    )
 
 
 def _chroma_cloud_graph(strength: int, width: int, height: int, seed: object = None) -> str:
@@ -319,17 +364,30 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
 
     ow = platform.width or src.width
     oh = platform.height or src.height
+    extras: list[str] = []
+    if luma_shade_applies(v, ow, oh):
+        extras.append(
+            _luma_shade_graph(
+                apply_luma_shade_strength(float(v.get("luma_shade") or 0.0)),
+                int(ow),
+                int(oh),
+                v.get("noise_seed"),
+            )
+        )
     if chroma_cloud_applies(v, ow, oh):
-        graph = _chroma_cloud_graph(
-            apply_chroma_cloud_strength(float(v.get("chroma_cloud") or 0.0)),
-            int(ow),
-            int(oh),
-            v.get("noise_seed"),
+        extras.append(
+            _chroma_cloud_graph(
+                apply_chroma_cloud_strength(float(v.get("chroma_cloud") or 0.0)),
+                int(ow),
+                int(oh),
+                v.get("noise_seed"),
+            )
         )
         dust = apply_luma_dust_strength(float(v.get("luma_dust") or 0.0))
         if dust:
-            graph = f"{graph},{_luma_dust_filter(dust, v.get('noise_seed'))}"
-        return f"{','.join(parts)},{graph},format=yuv420p"
+            extras.append(_luma_dust_filter(dust, v.get("noise_seed")))
+    if extras:
+        return f"{','.join(parts)},{','.join(extras)},format=yuv420p"
 
     parts.append("format=yuv420p")
     return ",".join(parts)

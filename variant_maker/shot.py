@@ -50,7 +50,10 @@ SHOT_MOTION = "motion"
 # so copies sit near c0s=12 to clear the 24-bit gate without redrawing
 # 15–17. Filtergraph caps leftover 14–20 at 13. Luma-only, not stacked c1s.
 # 1080 talking-head stays 34–42. Derived from grain — no extra RNG.
-# Gate stays 24. Do not expect 55% on a still 720 face.
+# Gate stays 24. Do not expect 55% on a still 720 face. AQMTp-class tight
+# 720 faces stay 17–21 on signed medium; strong escalate draws a low-freq
+# luma shade (8×14, gblur 12, c0s 94–100) so the uniqueness loop can clear
+# 24 without snow or a cookie mesh. Medium stays shade-off (SaveInta).
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -69,6 +72,12 @@ _CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
 # little much. 8–12 (`quietdustmed` c0s=9) was usable but 23 bits. 11–13
 # aims at the 24-bit gate. Luma-only so we do not restack c1s 12–15 snow.
 _LUMA_DUST_FOR_SHOT = Range(11, 13)
+# Strong 720 talking-head only. Lossless 8×14 c0s=90 + signed cloud/dust
+# scored 24; veryfast x264 smoothed milder draws to 22. Band sits at the
+# encode-surviving end. Medium is shade-off (SaveInta).
+_LUMA_SHADE_720_TH = {
+    "strong": Range(94, 100),
+}
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:
@@ -97,6 +106,15 @@ def luma_dust_range_for_shot(preset, shot: str | None) -> Range | None:
     if grain_range_for_shot(preset, shot) is None:
         return None
     return _LUMA_DUST_FOR_SHOT
+
+
+def luma_shade_range_for_shot(
+    preset, shot: str | None, width: int | None = None, height: int | None = None,
+) -> Range | None:
+    """Strong 720 talking-head uniqueness lighting, or None (medium / 1080 / motion)."""
+    if shot != SHOT_TALKING_HEAD or not is_phone_canvas(width, height):
+        return None
+    return _LUMA_SHADE_720_TH.get(preset.name)
 
 
 # Instagram downloads land at 720. Centered caption-safe keep 0.92–0.96 scores

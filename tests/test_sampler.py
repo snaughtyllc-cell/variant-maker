@@ -475,6 +475,11 @@ def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
     assert out["video"]["warp_k1"] == 0.0
     assert p["video"]["rebuild_scale"] < 1.0
     assert out["video"]["crop_keep"] == p["video"]["crop_keep"]
+    shaded = sample(STRONG, derive_seed(1, 4), shot="talking_head", width=720, height=1280)
+    assert shaded["video"]["luma_shade"] >= 94
+    hq = disable_fast_pixel_ops(shaded)
+    assert hq["video"]["luma_shade"] == 0.0
+    assert hq["video"]["crop_keep"] == shaded["video"]["crop_keep"]
 
 
 def test_shot_none_matches_omitted_shot():
@@ -601,3 +606,27 @@ def test_talking_head_luma_dust_from_grain_no_extra_rng():
     )
     assert luma_dust_range_for_shot(MEDIUM, "motion") is None
     assert luma_dust_range_for_shot(MEDIUM, None) is None
+
+
+def test_strong_720_talking_head_luma_shade_from_grain_no_extra_rng():
+    """Escalate-only uniqueness lighting. Same seed must not shift crop/resample."""
+    from variant_maker.shot import luma_shade_range_for_shot
+
+    seed = derive_seed(11, 5)
+    plain = sample(STRONG, seed)
+    med = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    head = sample(STRONG, seed, shot="talking_head", width=720, height=1280)
+    assert "luma_shade" not in plain["video"]
+    assert "luma_shade" not in med["video"]
+    shade_r = luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280)
+    assert shade_r is not None
+    assert shade_r.lo - 1e-9 <= head["video"]["luma_shade"] <= shade_r.hi + 1e-9
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    grain_span = 58.0 - 46.0
+    expect = shade_r.lo + (head["video"]["grain"] - 46.0) / grain_span * (shade_r.hi - shade_r.lo)
+    assert head["video"]["luma_shade"] == pytest.approx(expect)
+    wide = sample(STRONG, seed, shot="talking_head", width=1080, height=1920)
+    assert "luma_shade" not in wide["video"]
+    moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
+    assert "luma_shade" not in moved["video"]

@@ -20,12 +20,13 @@ from .probe import SourceInfo
 # Geometric/temporal axes are neutralized in the quality proxy: VMAF needs frame-aligned,
 # same-resolution ref & distorted, so only the quality-affecting ops (color/sharpen/grain/
 # encode + Fast pixel-seed warp) survive — at source geometry and timing. Fingerprint
-# rebuild/resample/crop/trim/speed are stripped. Warp stays so VMAF can cap it.
+# rebuild/resample/crop/trim/speed/luma_shade are stripped. Warp stays so VMAF can cap it.
 _QUALITY_NEUTRAL = {
     "crop_keep": 1.0, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
     "rotate_deg": 0.0, "trim_s": 0.0, "trim_end_s": 0.0, "speed": 1.0,
     "resample_px": 0,
     "rebuild_scale": 1.0,
+    "luma_shade": 0.0,
 }
 
 
