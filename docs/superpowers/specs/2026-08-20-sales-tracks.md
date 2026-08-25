@@ -91,3 +91,7 @@ After A/B/C are in operators’ hands, next-wave order (hybrid runners →
 1–2 clip speed → HQ occupancy → Drop Ledger 12b/12c → billing last) is
 `docs/superpowers/specs/2026-08-20-after-sales-tracks.md`.
 
+First testers / unit economics / Creator caps / DIFM:
+`docs/superpowers/specs/2026-08-25-launch-and-unit-economics.md`
+and `docs/ops/launch.md`.
+

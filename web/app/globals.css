@@ -126,7 +126,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-progress { background: #172124; border: 1px solid #172124; border-radius: 0 0 18px 18px; color: #f1fafb; display: flex; flex-direction: column; min-height: 330px; padding: 28px; }
 .studio-shell--live .studio-progress { order: -1; }
 .studio-progress--idle { display: flex; }
-.studio-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.studio-quota { color: var(--color-muted); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
 .studio-intro { margin: 0 0 24px; }
 .studio-intro p, .studio-step-label { color: #087989 !important; font-size: 10.5px !important; font-weight: 760 !important; letter-spacing: 0.09em !important; margin: 0 0 7px !important; text-transform: uppercase; }
 .studio-intro h1 { color: var(--ink); font-size: clamp(28px, 3vw, 38px); font-weight: 720; letter-spacing: -0.05em; line-height: 1; margin: 0; }

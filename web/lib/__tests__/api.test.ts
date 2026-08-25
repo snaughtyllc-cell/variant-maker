@@ -486,6 +486,17 @@ describe("admin API", () => {
       workspace_id: null,
     });
   });
+
+  it("setAdminWorkspacePlan PATCHes plan", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "ws_va", plan: "pro" }), { status: 200 }),
+    );
+    await api.setAdminWorkspacePlan("ws_va", "pro");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/admin/workspaces/ws_va");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ plan: "pro" });
+  });
 });
 
 describe("drop ledger API", () => {

@@ -18,14 +18,19 @@ describe v1 only. Do not treat them as the current product.
 
 ## Who sees what
 
+Plan is on the **workspace** (`tenants.json` `plan`, default **internal**).
+New-workspace invites land on **Creator**. Catalog still lists every tab;
+nav hides extras the plan does not include. See `docs/ops/launch.md`.
+
 | Audience | Tabs |
 |---|---|
-| Everyone signed in | **Studio · Gallery · Drops · Workflows · Drive** |
-| Workspace owner (or site admin) | + **Team** |
+| Creator plan | **Studio · Gallery · Drops · Drive** (no Workflows, no Team, no HQ) |
+| Pro / Agency | + **Workflows**; owners + **Team** |
+| Internal (Jeff, missing plan) | all operator tabs |
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
-Phone (`< 640px`) only has room for the five everyone-tabs. Team /
+Phone (`< 640px`) shows the primary tabs the plan allows. Team /
 Admin / Diagnostics sit under **More**. Desktop shows extras in the
 top row when the session is allowed to see them.
 
@@ -62,8 +67,10 @@ old four-row list.
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
-- Do not hide Drops, Workflows, Drive, Team, or Admin — they are live.
+- Do not drop Drops, Workflows, Drive, Team, or Admin from the **catalog** —
+  they are live. Creator **nav** hides Workflows and Team by plan; that is
+  intentional (`showWorkflowsNav` / `showTeamNav` + `plan`).
 - Do not put Admin / Diagnostics in the phone bottom bar. They stay
   under More.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,
-  `showDiagnosticsNav`). Site admin is `SITE_ADMIN_EMAILS`.
+  `showWorkflowsNav`, `showDiagnosticsNav`). Site admin is `SITE_ADMIN_EMAILS`.

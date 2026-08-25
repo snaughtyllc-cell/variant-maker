@@ -2,6 +2,21 @@
 
 Live Fast stays pinned. This endpoint is for engine experiments.
 
+## Uniqueness research loop (never live)
+
+TikFusion ships because someone is always probing. We do the same **here**,
+not on `j0b1q4iuunzhnq`.
+
+1. Fixture clips we already trust (720 talking-head, 1080 talking-head, motion).
+2. Change **one** knob (crop, chroma, dust, rebuild, seed).
+3. Encode 2 copies on lab `xar25v77v3j27u` (`VF_LAB=1`).
+4. Record bits, VMAF, preset, filter params, stills in this file.
+5. Jeff signs look. **Never** PATCH live. **Never** raise the 24-bit gate to
+   buy a screenshot %. **Never** Pixel AI scramble.
+
+Product brief: `docs/superpowers/specs/2026-08-25-launch-and-unit-economics.md` §4.
+This is ops, not a Studio tab.
+
 | | Live | Lab |
 |---|---|---|
 | Image tag | `variant-fast:latest` (digest-pinned on the endpoint) | `variant-fast:lab` |

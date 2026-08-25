@@ -177,8 +177,54 @@ def test_provision_new_workspace_invite(tmp_path):
         store, email="ops@x.com", name="Ops", admin_email="jeff@x.com",
     )
     assert ops is not None and ops.role == "owner"
+    ops_ws = store.get_workspace(ops.workspace_id)
+    assert ops_ws is not None and ops_ws.plan == "creator"
     jeff = provision_login(
         store, email="jeff@x.com", name="Jeff", admin_email="jeff@x.com",
     )
     assert jeff is not None
+    jeff_ws = store.get_workspace(jeff.workspace_id)
+    assert jeff_ws is not None and jeff_ws.plan == "internal"
     assert ops.workspace_id != jeff.workspace_id
+
+
+def test_legacy_workspace_json_is_internal_uncapped(tmp_path):
+    path = tmp_path / "t.json"
+    path.write_text(
+        '{"workspaces": {"ws_old": {"id": "ws_old", "name": "Jeff", '
+        '"created_utc": "2026-08-01T00:00:00Z"}}, "users": {}, "invites": []}',
+        encoding="utf-8",
+    )
+    store = TenantStore(str(path))
+    ws = store.get_workspace("ws_old")
+    assert ws is not None and ws.plan == "internal"
+    snap = store.quota_snapshot("ws_old")
+    assert snap.fast_limit is None
+    assert snap.fast_used == 0
+
+
+def test_usage_counts_rolling_window_and_ignores_old(tmp_path):
+    import datetime as dt
+
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Ops", plan="creator")
+    store.record_usage(
+        ws.id, kind="fast", units=20, job_id="old", utc="2026-07-01T00:00:00Z",
+    )
+    store.record_usage(
+        ws.id, kind="fast", units=20, job_id="new", utc="2026-08-20T00:00:00Z",
+    )
+    store.record_usage(
+        ws.id, kind="hq", units=4, job_id="hq1", utc="2026-08-20T00:00:00Z",
+    )
+    now = dt.datetime(2026, 8, 25, tzinfo=dt.UTC)
+    snap = store.quota_snapshot(ws.id, now=now)
+    assert snap.plan == "creator"
+    assert snap.fast_used == 20
+    assert snap.fast_limit == 200
+    assert snap.hq_used == 4
+    assert snap.hq_limit == 0
+    bumped = store.set_workspace_plan(ws.id, "pro")
+    assert bumped is not None and bumped.plan == "pro"
+    assert store.quota_snapshot(ws.id, now=now).fast_limit == 1000
+

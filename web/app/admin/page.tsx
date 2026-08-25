@@ -8,6 +8,7 @@ import {
   listInvites,
   removeAdminUser,
   setAdminView,
+  setAdminWorkspacePlan,
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
@@ -25,6 +26,7 @@ export default function AdminPage() {
   const [submitting, setSubmitting] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [removingEmail, setRemovingEmail] = useState<string | null>(null);
+  const [planSavingId, setPlanSavingId] = useState<string | null>(null);
 
   const isAdmin = Boolean(me?.is_admin);
 
@@ -58,6 +60,19 @@ export default function AdminPage() {
       cancelled = true;
     };
   }, [isAdmin]);
+
+  async function handlePlan(workspaceId: string, plan: "creator" | "pro" | "agency" | "internal") {
+    setPlanSavingId(workspaceId);
+    setFormError(null);
+    try {
+      const updated = await setAdminWorkspacePlan(workspaceId, plan);
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === workspaceId ? { ...ws, ...updated } : ws)));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to set plan");
+    } finally {
+      setPlanSavingId(null);
+    }
+  }
 
   async function handleOpen(workspaceId: string) {
     setOpeningId(workspaceId);
@@ -163,7 +178,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: "var(--color-muted)", textAlign: "left" }}>
-                {["Name", "Owner", "Members", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
+                {["Name", "Plan", "Owner", "Members", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
                   <th key={h || "open"} style={{ padding: "10px 12px", fontWeight: 600 }}>
                     {h}
                   </th>
@@ -173,7 +188,7 @@ export default function AdminPage() {
             <tbody>
               {loading && workspaces.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
+                  <td colSpan={10} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
                     Loading…
                   </td>
                 </tr>
@@ -181,6 +196,36 @@ export default function AdminPage() {
                 workspaces.map((ws) => (
                   <tr key={ws.id} style={{ borderTop: "1px solid var(--color-line)" }}>
                     <td style={{ padding: "10px 12px", fontWeight: 700 }}>{ws.name}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <select
+                        aria-label={`Plan for ${ws.name}`}
+                        value={ws.plan || "internal"}
+                        disabled={planSavingId === ws.id}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          if (
+                            next === "creator" ||
+                            next === "pro" ||
+                            next === "agency" ||
+                            next === "internal"
+                          ) {
+                            void handlePlan(ws.id, next);
+                          }
+                        }}
+                        style={{
+                          background: "#fbfdfd",
+                          border: "1px solid var(--color-line)",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          padding: "4px 8px",
+                        }}
+                      >
+                        <option value="creator">Creator</option>
+                        <option value="pro">Pro</option>
+                        <option value="agency">Agency</option>
+                        <option value="internal">Internal</option>
+                      </select>
+                    </td>
                     <td style={{ padding: "10px 12px", color: "var(--color-muted)" }}>{ws.owner_email ?? "—"}</td>
                     <td style={{ padding: "10px 12px", verticalAlign: "top", minWidth: 220 }}>
                       {(ws.members ?? []).length === 0 ? (

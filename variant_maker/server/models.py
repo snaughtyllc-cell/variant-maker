@@ -371,6 +371,17 @@ class CaptionPreviewOut(BaseModel):
     captions: list[str] = []
 
 
+class QuotaOut(BaseModel):
+    plan: str
+    window_days: int = 30
+    fast_used: int = 0
+    fast_limit: int | None = None
+    fast_remaining: int | None = None
+    hq_used: int = 0
+    hq_limit: int | None = None
+    hq_remaining: int | None = None
+
+
 class AuthMeOut(BaseModel):
     auth_required: bool
     email: str | None = None
@@ -382,6 +393,8 @@ class AuthMeOut(BaseModel):
     role: Literal["owner", "member"] | None = None
     is_admin: bool = False
     has_password: bool = False
+    plan: str | None = None
+    quota: QuotaOut | None = None
 
 
 class PasswordLoginIn(BaseModel):
@@ -423,6 +436,11 @@ class AdminWorkspaceOut(BaseModel):
     hq: int = 0
     last_job_utc: str | None = None
     last_error: str | None = None
+    plan: str = "internal"
+
+
+class AdminWorkspacePlanIn(BaseModel):
+    plan: Literal["creator", "pro", "agency", "internal"]
 
 
 class WorkspaceInviteIn(BaseModel):

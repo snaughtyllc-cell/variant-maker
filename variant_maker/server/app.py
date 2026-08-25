@@ -81,6 +81,7 @@ from .models import (
     AdminMemberOut,
     AdminViewIn,
     AdminWorkspaceOut,
+    AdminWorkspacePlanIn,
     AuthMeOut,
     CaptionAdvanceIn,
     CaptionBankFolderOut,
@@ -120,6 +121,7 @@ from .models import (
     PlatformResultIn,
     PostUrlIn,
     QueueOut,
+    QuotaOut,
     SourceOut,
     SplitExportOut,
     TeamOut,
@@ -131,6 +133,7 @@ from .models import (
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
+from .plans import blocked_reason, normalize_plan, quality_kind, shows_team, shows_workflows
 from .post_url import normalize_post_url
 from .runner import LocalRunner
 from .sessions import (
@@ -682,6 +685,7 @@ def create_app(
             hq=int(q.get("hq") or 0),
             last_job_utc=last_job_utc,
             last_error=last_error,
+            plan=ws.plan,
         )
 
     def _default_login_exchange(
@@ -817,11 +821,80 @@ def create_app(
     def health() -> dict:
         return {"status": "ok"}
 
+    def _quota_out(workspace_id: str) -> QuotaOut | None:
+        if tenants is None:
+            return None
+        snap = tenants.quota_snapshot(workspace_id)
+        return QuotaOut(
+            plan=snap.plan,
+            window_days=snap.window_days,
+            fast_used=snap.fast_used,
+            fast_limit=snap.fast_limit,
+            fast_remaining=snap.fast_remaining,
+            hq_used=snap.hq_used,
+            hq_limit=snap.hq_limit,
+            hq_remaining=snap.hq_remaining,
+        )
+
+    def _viewing_workspace(request: Request):
+        if not auth_on or tenants is None:
+            return None
+        viewing_id = getattr(request.state, "viewing_workspace_id", None)
+        if not viewing_id:
+            return None
+        return tenants.get_workspace(viewing_id)
+
+    def _enforce_quota(
+        request: Request, *, sources: int, count: int, quality_mode: str,
+    ) -> None:
+        ws = _viewing_workspace(request)
+        if ws is None or tenants is None:
+            return
+        need = max(0, int(sources)) * max(0, int(count))
+        snap = tenants.quota_snapshot(ws.id)
+        reason = blocked_reason(snap, quality_kind(quality_mode), need)
+        if reason:
+            raise HTTPException(status_code=429, detail=reason)
+
+    def _record_quota(
+        request: Request, *, sources: int, count: int, quality_mode: str, job_id: str,
+    ) -> None:
+        ws = _viewing_workspace(request)
+        if ws is None or tenants is None:
+            return
+        units = max(0, int(sources)) * max(0, int(count))
+        tenants.record_usage(
+            ws.id, kind=quality_kind(quality_mode), units=units, job_id=job_id,
+        )
+
+    def _require_team_feature(request: Request):
+        owner = _require_workspace_owner(request)
+        assert tenants is not None
+        home = tenants.get_workspace(owner.workspace_id)
+        plan = home.plan if home is not None else "internal"
+        if not shows_team(normalize_plan(plan)):
+            raise HTTPException(
+                status_code=403,
+                detail="Team is on Pro and Agency. Ask Jeff to bump the plan.",
+            )
+        return owner
+
+    def _require_workflows_feature(request: Request) -> None:
+        ws = _viewing_workspace(request)
+        if ws is None:
+            return
+        if not shows_workflows(normalize_plan(ws.plan)):
+            raise HTTPException(
+                status_code=403,
+                detail="Workflows are on Pro and Agency. Daily packs are one-off Generate.",
+            )
+
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
         assert tenants is not None
         viewing_id = viewing_id or user.workspace_id
         ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
         fresh = tenants.get_user(user.email) or user
+        quota = _quota_out(viewing_id) if viewing_id else None
         return AuthMeOut(
             auth_required=True,
             email=user.email,
@@ -833,6 +906,8 @@ def create_app(
             role=user.role,
             is_admin=is_admin_email(user.email, admin_email),
             has_password=bool(fresh.password_hash),
+            plan=ws.plan if ws else "internal",
+            quota=quota,
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:
@@ -1030,12 +1105,12 @@ def create_app(
 
     @app.get("/api/workspace/team", response_model=TeamOut)
     def workspace_team(request: Request) -> TeamOut:
-        owner = _require_workspace_owner(request)
+        owner = _require_team_feature(request)
         return _team_out(owner.workspace_id)
 
     @app.post("/api/workspace/invites", status_code=201, response_model=InviteOut)
     def workspace_create_invite(request: Request, body: WorkspaceInviteIn) -> InviteOut:
-        owner = _require_workspace_owner(request)
+        owner = _require_team_feature(request)
         assert tenants is not None
         try:
             inv = tenants.add_invite(
@@ -1050,7 +1125,7 @@ def create_app(
 
     @app.delete("/api/workspace/invites/{invite_id}", status_code=204)
     def workspace_delete_invite(request: Request, invite_id: str) -> None:
-        owner = _require_workspace_owner(request)
+        owner = _require_team_feature(request)
         assert tenants is not None
         inv = next((i for i in tenants.list_invites() if i.id == invite_id), None)
         if inv is None or inv.workspace_id != owner.workspace_id:
@@ -1059,7 +1134,7 @@ def create_app(
 
     @app.delete("/api/workspace/members/{email}", status_code=204)
     def workspace_remove_member(request: Request, email: str) -> None:
-        owner = _require_workspace_owner(request)
+        owner = _require_team_feature(request)
         assert tenants is not None
         addr = normalize_email(email)
         if addr == normalize_email(owner.email) or is_admin_email(addr, admin_email):
@@ -1084,14 +1159,39 @@ def create_app(
         )
         return resp
 
+    @app.patch("/api/admin/workspaces/{workspace_id}", response_model=AdminWorkspaceOut)
+    def admin_set_workspace_plan(
+        request: Request, workspace_id: str, body: AdminWorkspacePlanIn,
+    ) -> AdminWorkspaceOut:
+        _require_admin(request)
+        assert tenants is not None
+        try:
+            ws = tenants.set_workspace_plan(workspace_id, body.plan)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if ws is None:
+            raise HTTPException(status_code=404, detail="workspace not found")
+        return _admin_workspace_out(ws)
+
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
-    async def create_job(files: list[UploadFile], count: int = Form(...),
-                          allow_creative_escalate: bool = Form(True),
-                          quality_mode: str = Form("fast")) -> CreateJobResponse:
+    async def create_job(
+        request: Request,
+        files: list[UploadFile],
+        count: int = Form(...),
+        allow_creative_escalate: bool = Form(True),
+        quality_mode: str = Form("fast"),
+    ) -> CreateJobResponse:
+        _enforce_quota(
+            request, sources=len(files), count=count, quality_mode=quality_mode,
+        )
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode,
+        )
+        _record_quota(
+            request, sources=len(job.sources), count=count, quality_mode=quality_mode,
+            job_id=job.job_id,
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1132,6 +1232,7 @@ def create_app(
 
     @app.post("/api/jobs/from-uploads", status_code=201, response_model=CreateJobResponse)
     def create_job_from_uploads(
+        request: Request,
         upload_ids: str = Form(...),
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
@@ -1140,6 +1241,9 @@ def create_app(
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
             raise HTTPException(status_code=400, detail="upload_ids required")
+        _enforce_quota(
+            request, sources=len(ids), count=count, quality_mode=quality_mode,
+        )
         paths: list[tuple[str, str]] = []
         for uid in ids:
             meta = _UPLOAD_META.get(uid)
@@ -1154,12 +1258,16 @@ def create_app(
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
+        _record_quota(
+            request, sources=len(job.sources), count=count, quality_mode=quality_mode,
+            job_id=job.job_id,
+        )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
-    def create_job_from_drive(body: JobFromDriveIn) -> CreateJobResponse:
+    def create_job_from_drive(request: Request, body: JobFromDriveIn) -> CreateJobResponse:
         _require_drive()
         dest = app.state.destinations.get(body.destination_id)
         if dest is None:
@@ -1167,6 +1275,9 @@ def create_app(
         file_ids = [fid.strip() for fid in body.file_ids if str(fid).strip()]
         if not file_ids:
             raise HTTPException(status_code=400, detail="file_ids required")
+        _enforce_quota(
+            request, sources=len(file_ids), count=body.count, quality_mode=body.quality_mode,
+        )
         children = {
             f.id: f for f in _drive().list_files(dest.folder_id) if is_video_file(f)
         }
@@ -1189,6 +1300,10 @@ def create_app(
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
+        _record_quota(
+            request, sources=len(job.sources), count=body.count,
+            quality_mode=body.quality_mode, job_id=job.job_id,
+        )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                           for s in job.sources])
@@ -1288,12 +1403,22 @@ def create_app(
         return FileResponse(path, media_type="video/mp4")
 
     @app.post("/api/sources/{source_id}/regenerate", response_model=SourceOut)
-    def regenerate(source_id: str, n: int = Form(...)) -> SourceOut:
+    def regenerate(request: Request, source_id: str, n: int = Form(...)) -> SourceOut:
+        loc = store._locate(source_id)
+        if loc is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        job = store.get(loc[0])
+        quality_mode = job.quality_mode if job else "fast"
+        _enforce_quota(request, sources=1, count=n, quality_mode=quality_mode)
         source = store.regenerate(source_id, n)
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
+        _record_quota(
+            request, sources=1, count=n, quality_mode=quality_mode,
+            job_id=job.job_id if job else source_id,
+        )
         return _source_out(source, ok_only=True, job=job, ws=store._ws)
 
     @app.post("/api/sources/{source_id}/retry-copy", response_model=SourceOut)
@@ -1568,7 +1693,8 @@ def create_app(
         return DriveVideosOut(videos=videos)
 
     @app.get("/api/workflows", response_model=list[WorkflowOut])
-    def list_workflows() -> list[WorkflowOut]:
+    def list_workflows(request: Request) -> list[WorkflowOut]:
+        _require_workflows_feature(request)
         return [_workflow_out(w) for w in app.state.workflows.list()]
 
     def _require_distinct_workflow_folders(inbox_dest_id: str, output_dest_id: str) -> None:
@@ -1584,7 +1710,8 @@ def create_app(
             )
 
     @app.post("/api/workflows", status_code=201, response_model=WorkflowOut)
-    def create_workflow(body: WorkflowCreateIn) -> WorkflowOut:
+    def create_workflow(request: Request, body: WorkflowCreateIn) -> WorkflowOut:
+        _require_workflows_feature(request)
         _require_distinct_workflow_folders(body.inbox_destination_id, body.output_destination_id)
         try:
             wf = app.state.workflows.create(
@@ -1604,7 +1731,8 @@ def create_app(
         return _workflow_out(wf)
 
     @app.patch("/api/workflows/{workflow_id}", response_model=WorkflowOut)
-    def update_workflow(workflow_id: str, body: WorkflowUpdateIn) -> WorkflowOut:
+    def update_workflow(request: Request, workflow_id: str, body: WorkflowUpdateIn) -> WorkflowOut:
+        _require_workflows_feature(request)
         existing = app.state.workflows.get(workflow_id)
         if existing is None:
             raise HTTPException(status_code=404, detail="workflow not found")
@@ -1632,7 +1760,8 @@ def create_app(
         return _workflow_out(updated)
 
     @app.delete("/api/workflows/{workflow_id}", status_code=204)
-    def delete_workflow(workflow_id: str) -> None:
+    def delete_workflow(request: Request, workflow_id: str) -> None:
+        _require_workflows_feature(request)
         if not app.state.workflows.delete(workflow_id):
             raise HTTPException(status_code=404, detail="workflow not found")
         ledger_path = store._ws.workflow_ledger_path(workflow_id)
@@ -1642,7 +1771,8 @@ def create_app(
             pass
 
     @app.post("/api/workflows/{workflow_id}/run", response_model=WorkflowOut)
-    def run_workflow(workflow_id: str) -> WorkflowOut:
+    def run_workflow(request: Request, workflow_id: str) -> WorkflowOut:
+        _require_workflows_feature(request)
         _require_drive()
         wf = app.state.workflows.get(workflow_id)
         if wf is None:

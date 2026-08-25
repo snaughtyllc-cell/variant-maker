@@ -15,10 +15,13 @@ import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
+import { useAuthMe } from "@/lib/useAuthMe";
+import { quotaBlocksRun, quotaCaption } from "@/lib/quotaCopy";
 import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
 
 export default function StudioPage() {
   const { start, jobId, complete } = useRun();
+  const { data: me, mutate } = useAuthMe();
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
   const [drivePicks, setDrivePicks] = useState<DrivePick[]>([]);
@@ -31,6 +34,11 @@ export default function StudioPage() {
 
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
+  const need = totalVariants(sourceCount, perVideo);
+  const allowHq = (me?.plan || "internal") !== "creator";
+  const quality = allowHq ? qualityMode : "fast";
+  const quotaLine = quotaCaption(me?.quota, quality, need);
+  const quotaBlocked = quotaBlocksRun(me?.quota, quality, need);
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -71,7 +79,7 @@ export default function StudioPage() {
   }
 
   async function handleGenerate() {
-    if (busy || jobId || sourceCount === 0) return;
+    if (busy || jobId || sourceCount === 0 || quotaBlocked) return;
     if (files.length > 0 && drivePicks.length > 0) {
       setError("Use either phone files or Drive clips in one run — not both.");
       return;
@@ -85,11 +93,12 @@ export default function StudioPage() {
               destinationId: drivePicks[0].destinationId,
               fileIds: drivePicks.map((p) => p.id),
               count: perVideo,
-              qualityMode,
+              qualityMode: quality,
               allowCreativeEscalate,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, qualityMode);
-      start(resp, qualityMode);
+          : await createJob(files, perVideo, allowCreativeEscalate, quality);
+      start(resp, quality);
+      void mutate();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
@@ -103,12 +112,17 @@ export default function StudioPage() {
         <header className="studio-intro">
           <p>Studio</p>
           <h1>Build a new pack</h1>
-          <span>Choose source clips, set the output count, then track the live queue without leaving this workspace.</span>
+          <span>
+            Choose source clips, set the output count, then track the live queue without leaving this workspace.
+            {me?.plan === "creator"
+              ? " Daily packs are Fast — batch clips in one Generate. Don't dump every copy the same day."
+              : ""}
+          </span>
         </header>
         <p className="studio-step-label">1 · Source videos</p>
 
         <EngineWaitNote />
-        <StudioQueue qualityMode={qualityMode} jobId={jobId} />
+        <StudioQueue qualityMode={quality} jobId={jobId} />
 
         <DropZone onFiles={handleFiles} />
 
@@ -131,18 +145,25 @@ export default function StudioPage() {
             min={1}
             max={MAX_PER_VIDEO}
             fileCount={sourceCount}
-            qualityMode={qualityMode}
+            qualityMode={quality}
           />
           <GenerateButton
             fileCount={sourceCount}
             perVideo={perVideo}
             onClick={handleGenerate}
-            disabled={!!jobId}
+            disabled={!!jobId || quotaBlocked}
             busy={busy}
             jobId={jobId}
             complete={complete}
           />
         </div>
+
+        {quotaLine && (
+          <p className="studio-quota">
+            {quotaLine}
+            {quotaBlocked ? " You've hit this month's cap — ask Jeff to bump the plan, or wait for the window to roll." : ""}
+          </p>
+        )}
 
         {error && (
           <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>
@@ -153,9 +174,10 @@ export default function StudioPage() {
         <AdvancedPanel
           allowCreativeEscalate={allowCreativeEscalate}
           onAllowCreativeEscalateChange={setAllowCreativeEscalate}
-          qualityMode={qualityMode}
+          qualityMode={quality}
           onQualityModeChange={setQualityMode}
-          totalVariants={totalVariants(sourceCount, perVideo)}
+          totalVariants={need}
+          allowHq={allowHq}
         />
       </div>
 

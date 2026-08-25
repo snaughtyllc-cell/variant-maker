@@ -207,6 +207,18 @@ export interface Workflow {
 
 export type AuthRole = "owner" | "member";
 export type InviteKind = "join" | "new_workspace";
+export type PlanId = "creator" | "pro" | "agency" | "internal";
+
+export interface Quota {
+  plan: string;
+  window_days: number;
+  fast_used: number;
+  fast_limit: number | null;
+  fast_remaining: number | null;
+  hq_used: number;
+  hq_limit: number | null;
+  hq_remaining: number | null;
+}
 
 export interface AuthMe {
   auth_required: boolean;
@@ -219,6 +231,8 @@ export interface AuthMe {
   role: AuthRole | null;
   is_admin: boolean;
   has_password: boolean;
+  plan?: string | null;
+  quota?: Quota | null;
 }
 
 export interface Invite {
@@ -253,6 +267,7 @@ export interface AdminWorkspace {
   hq: number;
   last_job_utc: string | null;
   last_error: string | null;
+  plan?: string;
 }
 
 export interface DropLedgerStatus {
