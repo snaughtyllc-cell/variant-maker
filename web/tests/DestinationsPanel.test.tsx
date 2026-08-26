@@ -23,19 +23,19 @@ describe("DestinationsPanel share email", () => {
       auth_mode: "oauth",
       connected_email: "snaughtyllc@gmail.com",
       oauth_available: true,
-      share_email: "drive@varyforge.app",
+      share_email: "snaughtyllc@gmail.com",
     });
     vi.mocked(listDestinations).mockResolvedValue([]);
   });
 
-  it("shows a copyable branded mailbox at the top of Drive", async () => {
+  it("shows snaughtyllc@gmail.com as the Drive share email the team already uses", async () => {
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("snaughtyllc@gmail.com");
     });
     expect(screen.getByText(/Share this email/i)).toBeTruthy();
     expect(screen.getByText(/paste the folder link below/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
-    expect(screen.getByText(/Studio is still signed in as snaughtyllc@gmail.com/)).toBeTruthy();
+    expect(screen.queryByText(/Reconnect Google as/)).toBeNull();
   });
 });
