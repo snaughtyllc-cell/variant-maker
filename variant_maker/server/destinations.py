@@ -32,11 +32,6 @@ class Destination:
 
 
 def _not_writable_message(account_email: str | None, *, auth_mode: str | None = None) -> str:
-    if account_email and auth_mode == "oauth":
-        return (
-            f"Cannot write to this folder — sign in as an account that can edit it "
-            f"(connected: {account_email})"
-        )
     if account_email:
         return f"Cannot write to this folder — share it as Editor with {account_email}"
     return "Cannot write to this folder"

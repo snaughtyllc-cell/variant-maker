@@ -97,12 +97,12 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
+                Fast is the usual ~20. HQ is coming soon.
               </span>
             </span>
             <select
-              value={qualityMode}
-              onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
+              value="fast"
+              onChange={() => onQualityModeChange("fast")}
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
@@ -115,11 +115,13 @@ export function AdvancedPanel({
               }}
             >
               <option value="fast">Fast</option>
-              <option value="hq">HQ (Phase 8)</option>
+              <option value="hq" disabled>
+                HQ — coming soon
+              </option>
             </select>
           </div>
 
-          {hqHint && (
+          {hqHint && qualityMode === "hq" && (
             <p
               style={{
                 margin: "10px 0 0",

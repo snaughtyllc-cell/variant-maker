@@ -14,7 +14,7 @@ export default function DriveSettingsPage() {
           <p className="workspace-heading__eyebrow">Delivery setup</p>
           <h1>Drive</h1>
           <div className="workspace-heading__copy">
-            Connect the folders, caption bank, and Drop Ledger used across Studio, Gallery, and Workflows.
+            Share the VaryForge Drive email with your folder, paste the link, then set captions and Drop Ledger.
             <DriveLoginNote />
           </div>
         </div>

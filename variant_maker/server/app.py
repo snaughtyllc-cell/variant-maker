@@ -29,6 +29,7 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
+    read_share_email,
     resolve_drive_status,
 )
 from .drive_exports import (
@@ -382,6 +383,7 @@ def _drive_status_out(info) -> DriveStatusOut:
         auth_mode=info.auth_mode,
         connected_email=info.connected_email,
         oauth_available=info.oauth_available,
+        share_email=read_share_email(),
     )
 
 
@@ -608,7 +610,7 @@ def create_app(
 
     def _account_email() -> str | None:
         info = _drive_info()
-        return info.connected_email or info.sa_email
+        return read_share_email() or info.connected_email or info.sa_email
 
     def _require_drive() -> None:
         info = _drive_info()

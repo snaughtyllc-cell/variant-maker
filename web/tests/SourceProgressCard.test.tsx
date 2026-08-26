@@ -111,9 +111,9 @@ describe("SourceProgressCard in-flight slot", () => {
       />,
     );
     expect(screen.getByText(/v01 looking/)).toBeTruthy();
-    expect(screen.getByText(/Look ok/)).toBeTruthy();
-    expect(screen.getByAltText("Source").getAttribute("src")).toBe("/api/look/s1/look_v01_src.jpg");
-    expect(screen.getByAltText("Variant").getAttribute("src")).toBe("/api/look/s1/look_v01.jpg");
+    expect(screen.queryByTestId("look-preview")).toBeNull();
+    expect(screen.queryByAltText("Source")).toBeNull();
+    expect(screen.queryByAltText("Variant")).toBeNull();
     expect(screen.getByText("look")).toBeTruthy();
   });
 

@@ -8,7 +8,6 @@ import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePicke
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
-import { EngineWaitNote } from "@/components/studio/EngineWaitNote";
 import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
@@ -85,11 +84,11 @@ export default function StudioPage() {
               destinationId: drivePicks[0].destinationId,
               fileIds: drivePicks.map((p) => p.id),
               count: perVideo,
-              qualityMode,
+              qualityMode: "fast",
               allowCreativeEscalate,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, qualityMode);
-      start(resp, qualityMode);
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast");
+      start(resp, "fast");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
@@ -107,7 +106,6 @@ export default function StudioPage() {
         </header>
         <p className="studio-step-label">1 · Source videos</p>
 
-        <EngineWaitNote />
         <StudioQueue qualityMode={qualityMode} jobId={jobId} />
 
         <DropZone onFiles={handleFiles} />

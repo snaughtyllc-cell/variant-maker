@@ -135,6 +135,7 @@ class DriveStatusOut(BaseModel):
     auth_mode: str | None = None
     connected_email: str | None = None
     oauth_available: bool = False
+    share_email: str | None = None
 
 
 class DestinationOut(BaseModel):

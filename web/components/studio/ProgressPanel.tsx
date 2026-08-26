@@ -55,7 +55,7 @@ export function ProgressPanel() {
           style={{
             fontSize: 14,
             fontWeight: 700,
-            color: "var(--color-text)",
+            color: "#f1fafb",
             margin: 0,
           }}
         >
@@ -64,7 +64,7 @@ export function ProgressPanel() {
         <p
           style={{
             fontSize: 12,
-            color: "var(--color-muted2)",
+            color: "#b7c9cc",
             margin: 0,
             lineHeight: 1.5,
             maxWidth: 200,
@@ -93,9 +93,9 @@ export function ProgressPanel() {
     ? failed
     : complete
       ? emptyFail
-        ? "The job ended without any playable variants. Try Fast (not HQ) and a smaller 1080p file."
+        ? "The job ended without any playable variants. Try a smaller 1080p file."
         : "All variants done — open Gallery, or New run for another pack"
-      : liveRunSubcopy(qualityMode);
+      : liveRunSubcopy("fast");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -112,10 +112,10 @@ export function ProgressPanel() {
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#f1fafb" }}>
             {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11.5, color: "#b7c9cc", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
             {sub}
           </div>
         </div>
@@ -143,14 +143,13 @@ export function ProgressPanel() {
           {jobId && (
             <button
               type="button"
+              className="studio-progress-newrun"
               onClick={clear}
               style={{
-                background: "#16161f",
-                border: "1px solid var(--color-line)",
-                color: "var(--color-text)",
                 borderRadius: 8,
                 padding: "10px 12px",
                 fontSize: 13,
+                fontWeight: 700,
                 minHeight: 44,
                 cursor: "pointer",
               }}
@@ -159,16 +158,14 @@ export function ProgressPanel() {
             </button>
           )}
           <span
+            className="studio-progress-pill"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
               padding: "4px 10px",
               borderRadius: 999,
-              background: "#14141d",
-              border: "1px solid var(--color-line)",
               fontSize: 11.5,
-              color: "var(--color-muted)",
             }}
           >
             <span

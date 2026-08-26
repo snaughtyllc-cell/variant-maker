@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast vs HQ, Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -59,7 +59,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Connect Google, destinations, caption bank, Drop Ledger, password.",
+      "Share the VaryForge Drive email with a folder, paste the link, captions, Drop Ledger, password.",
   },
   {
     href: "/team",

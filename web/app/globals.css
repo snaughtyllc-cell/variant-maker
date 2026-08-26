@@ -155,6 +155,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-cockpit input[type="checkbox"] { accent-color: #0caab8; }
 .studio-progress [style*="#14141d"], .studio-progress [style*="#16161f"], .studio-progress [style*="#1c1c28"] { background: #203235 !important; }
 .studio-progress [style*="#2a0e0e"] { background: #422425 !important; border-color: #754345 !important; }
+.studio-progress-newrun {
+  background: #f4fbfc;
+  border: 1px solid #7ad4db;
+  color: #102326;
+}
+.studio-progress-newrun:hover { background: #e7f7f8; }
+.studio-progress-pill {
+  background: #203235;
+  border: 1px solid #4a6a6e;
+  color: #f1fafb;
+}
 
 /* Main content components take their colors from global tokens. */
 .gallery-toolbar { align-items: center; background: rgba(251, 253, 253, 0.92); border: 1px solid #d2e4e7; border-radius: 14px; box-shadow: var(--card-shadow); display: flex; flex-wrap: wrap; gap: 10px; margin: 0 auto 14px; max-width: 1240px; padding: 10px 12px; }

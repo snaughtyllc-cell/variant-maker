@@ -94,6 +94,7 @@ export interface DriveStatus {
   auth_mode?: string | null;
   connected_email?: string | null;
   oauth_available?: boolean;
+  share_email?: string | null;
 }
 export interface Destination {
   id: string;

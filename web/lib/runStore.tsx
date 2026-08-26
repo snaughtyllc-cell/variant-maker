@@ -11,8 +11,7 @@ type RunSource = { source_id: string; filename: string; requested: number };
 const QUALITY_KEY = "vm.quality";
 
 function readStoredQuality(): QualityMode {
-  if (typeof sessionStorage === "undefined") return "fast";
-  return sessionStorage.getItem(QUALITY_KEY) === "hq" ? "hq" : "fast";
+  return "fast";
 }
 
 interface RunCtx {
@@ -65,7 +64,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const progress = useJobProgress(jobId, sources);
   const complete = progress.complete;
 
-  function start(resp: CreateJobResponse, mode: QualityMode = "fast") {
+  function start(resp: CreateJobResponse, _qualityMode: QualityMode = "fast") {
     const id = resp.job_id;
     const srcs: RunSource[] = resp.sources.map((s) => ({
       source_id: s.source_id,
@@ -73,10 +72,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       requested: s.requested,
     }));
     sessionStorage.setItem("vm.job", id);
-    sessionStorage.setItem(QUALITY_KEY, mode);
+    sessionStorage.setItem(QUALITY_KEY, "fast");
     setSources(srcs);
     setJobId(id);
-    setQualityMode(mode);
+    setQualityMode("fast");
   }
 
   function clear() {

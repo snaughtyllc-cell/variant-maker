@@ -10,6 +10,8 @@ ENV_SA_JSON = "VARIANT_DRIVE_SERVICE_ACCOUNT_JSON"
 ENV_OAUTH_CLIENT_ID = "VARIANT_DRIVE_OAUTH_CLIENT_ID"
 ENV_OAUTH_CLIENT_SECRET = "VARIANT_DRIVE_OAUTH_CLIENT_SECRET"
 ENV_OAUTH_REDIRECT_URI = "VARIANT_DRIVE_OAUTH_REDIRECT_URI"
+ENV_SHARE_EMAIL = "VARIANT_DRIVE_SHARE_EMAIL"
+DEFAULT_SHARE_EMAIL = "drive@varyforge.app"
 
 DriveStatus = Literal["ready", "not_configured", "auth_failed"]
 AuthMode = Literal["oauth", "service_account"]
@@ -23,6 +25,13 @@ class DriveConfigInfo:
     auth_mode: AuthMode | None = None
     connected_email: str | None = None
     oauth_available: bool = False
+
+
+def read_share_email(environ: Mapping[str, str] | None = None) -> str:
+    """Human mailbox operators share folders with. Never Jeff's Gmail, never the SA robot."""
+    env = environ if environ is not None else os.environ
+    raw = (env.get(ENV_SHARE_EMAIL) or "").strip()
+    return raw or DEFAULT_SHARE_EMAIL
 
 
 def read_sa_email(sa_json_path: str) -> str | None:
