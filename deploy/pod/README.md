@@ -1,4 +1,4 @@
-# VaryForge on RunPod (always-on Pod)
+# varimo on RunPod (always-on Pod)
 
 Simplest path for you + VAs: one Pod, one URL, upload → variants → download.
 
@@ -17,11 +17,11 @@ Service-account JSON keys are often blocked by org policy. Prefer a **Web OAuth 
 2. **APIs & Services → Library** → enable **Google Drive API**.
 3. **APIs & Services → OAuth consent screen**
    - User type: **Internal** (Workspace) or **External** (then add test users).
-   - App name: e.g. `VaryForge Studio`
+   - App name: e.g. `varimo Studio`
    - Scopes: add Drive (`.../auth/drive` and/or `.../auth/drive.file`).
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**
    - Application type: **Web application**
-   - Name: `VaryForge Pod`
+   - Name: `varimo Pod`
    - **Authorized redirect URIs** — add exactly:
 
 ```

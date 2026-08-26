@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
 import "./globals.css";
 import { RunProvider } from "../lib/runStore";
 import { AuthGate } from "../components/auth/AuthGate";
@@ -14,12 +14,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Brand typeface — the varimo wordmark only. UI copy stays on Geist.
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
 export const metadata: Metadata = {
-  title: "VaryForge",
-  description: "Video variant studio — Fast daily packs from your phone or desktop",
+  title: "varimo",
+  description: "Many originals from one master — video variant studio, Fast daily packs from your phone or desktop",
   appleWebApp: {
     capable: true,
-    title: "VaryForge",
+    title: "varimo",
     statusBarStyle: "black-translucent",
   },
   formatDetection: { telephone: false },
@@ -44,7 +51,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-text">
         <RunProvider>
