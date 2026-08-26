@@ -54,8 +54,14 @@ input, select, textarea { font-size: 16px; }
   min-height: var(--nav-h);
   padding: 12px 28px;
 }
-.vf-brand { align-items: center; color: var(--ink); display: inline-flex; flex: none; font-family: var(--font-brand); font-size: 16px; font-weight: 700; gap: 8px; letter-spacing: -0.04em; text-decoration: none; }
-.vf-brand-mark { color: #16c8d3; flex: none; }
+.vf-brand { align-items: center; color: var(--ink); display: inline-flex; flex: none; text-decoration: none; }
+.vf-brand-mark { color: #16c8d3; display: none; flex: none; }
+/* 25px keeps the four-echo wordmark above its 120px minimum width. */
+.vf-brand-wordmark { font-size: 25px; }
+.varimo-wordmark { font-family: var(--font-brand); font-weight: 700; letter-spacing: -0.04em; line-height: 1; white-space: nowrap; }
+.varimo-wordmark__accent, .varimo-wordmark__echoes { color: #16c8d3; }
+/* Echo offset: each copy steps 0.538em, so the o's overlap as in brand/wordmark.svg. */
+.varimo-wordmark__echoes > span { display: inline-block; margin-left: -0.102em; }
 .vf-desktop-nav { align-items: center; display: flex; gap: 3px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .vf-desktop-nav::-webkit-scrollbar { display: none; }
 .vf-nav-link { align-items: center; border-radius: 8px; color: var(--color-muted); display: inline-flex; flex: none; font-size: 12.5px; font-weight: 570; gap: 6px; padding: 8px 10px; text-decoration: none; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
@@ -297,8 +303,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 /* Login intentionally has its own restrained dark media-state. */
 .login-page { align-items: center; background: #172124; display: flex; justify-content: center; min-height: 100dvh; padding: 24px; }
 .login-card { background: #fbfdfd; border: 1px solid #d2e4e7; border-radius: 18px; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24); max-width: 410px; padding: 32px 28px; width: 100%; }
-.login-brand { align-items: center; color: var(--ink); display: flex; font-family: var(--font-brand); font-size: 17px; font-weight: 700; gap: 8px; letter-spacing: -0.04em; margin-bottom: 22px; }
-.login-brand-mark { color: #16c8d3; flex: none; }
+.login-brand { align-items: center; color: var(--ink); display: flex; font-size: 26px; margin-bottom: 22px; }
 .login-card h1 { color: var(--ink); font-size: 24px; letter-spacing: -0.04em; margin: 0 0 8px; }
 .login-card p, .login-card label { color: var(--color-muted); }
 .login-card [style*="#14141d"], .login-card [style*="#16161f"] { background: #f3f8f9 !important; border-color: #c9dde0 !important; color: var(--ink) !important; }
@@ -322,7 +327,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 @media (max-width: 639px) {
   :root { --nav-h: 58px; --tab-h: calc(68px + env(safe-area-inset-bottom, 0px)); }
   .vf-topbar { min-height: var(--nav-h); padding: max(10px, env(safe-area-inset-top, 0px)) 14px 10px; }
-  .vf-brand { font-size: 14px; }
+  .vf-brand-wordmark { display: none; }
+  .vf-brand-mark { display: block; }
   .vf-desktop-nav, .vf-logout { display: none; }
   .vf-topbar-actions { gap: 6px; }
   .vf-topbar-actions .status-cpu, .status-ready-text { display: none; }

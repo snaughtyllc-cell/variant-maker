@@ -1,5 +1,5 @@
 import { LoginForm } from "@/components/auth/LoginForm";
-import { VarimoMark } from "@/components/brand/VarimoMark";
+import { VarimoWordmark } from "@/components/brand/VarimoWordmark";
 
 export default async function LoginPage({
   searchParams,
@@ -12,7 +12,7 @@ export default async function LoginPage({
   return (
     <main className="login-page">
       <div className="login-card">
-        <div className="login-brand"><VarimoMark className="login-brand-mark" size={18} /> varimo</div>
+        <div className="login-brand"><VarimoWordmark /></div>
         <h1>Sign in</h1>
         <LoginForm oauthError={error ?? null} />
       </div>

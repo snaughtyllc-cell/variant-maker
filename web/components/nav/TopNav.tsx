@@ -22,6 +22,7 @@ import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAc
 import { EXTRA_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 import { VarimoMark } from "../brand/VarimoMark";
+import { VarimoWordmark } from "../brand/VarimoWordmark";
 
 const ICONS = {
   "/": GalleryHorizontalEnd,
@@ -69,8 +70,8 @@ export function TopNav() {
     <>
       <header className="vf-topbar">
         <Link className="vf-brand" href="/" aria-label="varimo Studio home">
-          <VarimoMark className="vf-brand-mark" size={21} />
-          <span>varimo</span>
+          <VarimoMark className="vf-brand-mark" size={22} />
+          <VarimoWordmark className="vf-brand-wordmark" />
         </Link>
 
         <nav className="vf-desktop-nav" aria-label="Primary navigation">
