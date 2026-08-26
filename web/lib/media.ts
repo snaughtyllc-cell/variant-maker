@@ -8,6 +8,32 @@ export function clipInset(pct: number): string {
   return `inset(0 ${100 - pct}% 0 0)`;
 }
 
+/** Default Studio frame until probe / <video> metadata exists. */
+export const DEFAULT_CSS_ASPECT = "9 / 16";
+
+/**
+ * cssAspectRatio — CSS `aspect-ratio` from pixel dimensions.
+ * Invalid / missing sizes stay portrait so thumbs don't collapse before load.
+ */
+export function cssAspectRatio(width?: number | null, height?: number | null): string {
+  const w = Number(width);
+  const h = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return DEFAULT_CSS_ASPECT;
+  }
+  return `${Math.round(w)} / ${Math.round(h)}`;
+}
+
+/**
+ * Compare pane width: fill the row, but never taller than 46dvh at this aspect.
+ */
+export function compareSliderWidth(aspect: string = DEFAULT_CSS_ASPECT): string {
+  const [rawW, rawH] = aspect.split("/").map((part) => Number(part.trim()));
+  const w = Number.isFinite(rawW) && rawW > 0 ? rawW : 9;
+  const h = Number.isFinite(rawH) && rawH > 0 ? rawH : 16;
+  return `min(100%, calc(46dvh * ${w} / ${h}))`;
+}
+
 /**
  * clampTime — clamp a time value to [0, duration].
  * Returns 0 when duration is falsy or ≤ 0 (protects against un-loaded video).

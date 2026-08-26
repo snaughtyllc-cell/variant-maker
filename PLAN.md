@@ -117,8 +117,8 @@ Status legend: ✅ done & verified · 🔨 to build
   stops at the first uniqueness+quality+peer hit). HQ stays **off** (one Real-ESRGAN pass).
   Opt out with `auto_tune=False` / `--no-auto-tune`. Path-B 35% similarity is later.
 - Fast *gate* is **24 bits vs source**, **24 vs peers** (~38% UI). Do not raise the gate
-  to 32. Medium crop is unbudgeted `0.84–0.90` (talking-head face-only zoom scored
-  *worse* SSIM). Warp is unbudgeted too so strong cannot land `warp≈0`. Grain is
+  to 32. Medium crop is unbudgeted `0.92–0.96` (caption-safe; 0.84 + edge
+  window cropped a word). Warp is budgeted again so VMAF can cap it. Grain is
   uniqueness texture (7–12 / 10–16); social delivery is capped at 12M. Peer miss searches **stronger** (not milder — quality
   `passed` is VMAF only). Over-budget `sample()` shrinks color/encode first; crop_keep
   is fingerprint and does not shrink toward identity. Color stays zero-mean. VMAF floor stays.
@@ -174,7 +174,10 @@ Status legend: ✅ done & verified · 🔨 to build
   first so crop AND eq survive. `warp_k1` is **budgeted** (VMAF-capped); unbudgeted
   warp scored VMAF 53–80 and dropped Drive uploads. HQ skips rebuild+warp (ESRGAN owns pixels).
 - Unbudgeted rebuild fingerprint. Color zero-mean. VMAF floor stays. Gates stay 24/24.
-- Not named Smart Colors / Pixel AI scramble / fps jitter / random output dimensions.
+- Look-first shot probe (`docs/superpowers/specs/2026-08-21-fast-shot-probe.md`):
+  source 25% vs 75% self-bits < 24 → talking-head keeps a sharp rebuild and
+  remaps uniqueness grain (576 sees grain, not mush); motion stays gentler.
+  Not OpenCV. Not a detector.
 
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate is disabled until **New run**

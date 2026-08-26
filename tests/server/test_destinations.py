@@ -7,6 +7,7 @@ from variant_maker.server.destinations import (
     PROBE_MARKER_NAME,
     DestinationError,
     DestinationStore,
+    _not_writable_message,
     probe_folder_writable,
 )
 from variant_maker.server.workspace import Workspace
@@ -52,3 +53,9 @@ def test_workspace_destinations_path(tmp_path):
     path = ws.destinations_path()
     assert path.endswith(os.path.join("drive", "destinations.json"))
     assert os.path.isdir(ws.drive_dir())
+
+
+def test_not_writable_tells_them_to_share_the_mailbox():
+    msg = _not_writable_message("drive@varyforge.app", auth_mode="oauth")
+    assert "share it as Editor with drive@varyforge.app" in msg
+    assert "connected:" not in msg

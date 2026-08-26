@@ -24,6 +24,8 @@ def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
     assert uniqueness.TARGET_BITS == 24
     assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
+    assert uniqueness.FLOOR_BITS == 19
+    assert uniqueness.DEFAULT_FLOOR == uniqueness.FLOOR_BITS / 64
     # Sibling floor matches vs-source: 24 bits so a Fast 20-pack stays on medium.
     assert uniqueness.MIN_PEER_BITS == 24
     assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
@@ -31,15 +33,27 @@ def test_bits_from_ssim_math():
 
 
 def test_fast_gate_fits_medium_talking_head_headroom():
-    """Pass stays 24 bits (~38% UI). Medium talking-head should land ~35–42 bits (~55–65%).
+    """Pass stays 24 bits (~38% UI). 1080 medium talking-head can land ~35–42 bits.
 
-    Raising the *gate* to 32 previously escalated entire Fast 20-packs. Delivery is
-    a reconstructive rebuild-scale (not ±32 px, not a face-only zoom), VMAF-capped
-    warp, and grain under the 12M cap — not a higher floor.
+    Raising the *gate* to 32 previously escalated entire Fast 20-packs. 720 Fast
+    with usable chroma lands ~26–31 bits (~40–48%) — still a pass. Delivery is
+    not Pixel AI scramble and not a higher floor.
     """
     talking_head_medium_typical = 35
     assert uniqueness.TARGET_BITS == 24
     assert uniqueness.TARGET_BITS < talking_head_medium_typical
+    assert uniqueness.FLOOR_BITS == 19
+    assert uniqueness.FLOOR_BITS < uniqueness.TARGET_BITS
+
+
+def test_status_for_bits_two_line_floor():
+    """Target 24 (~38%). Fail-forward 19 (~30%). Under 19 is not a push."""
+    assert uniqueness.status_for_bits(24, target=uniqueness.DEFAULT_TARGET) == "ok"
+    assert uniqueness.status_for_bits(23, target=uniqueness.DEFAULT_TARGET) == "below_target"
+    assert uniqueness.status_for_bits(19, target=uniqueness.DEFAULT_TARGET) == "below_target"
+    assert uniqueness.status_for_bits(18, target=uniqueness.DEFAULT_TARGET) == "below_floor"
+    assert uniqueness.status_for_bits(0, target=uniqueness.DEFAULT_TARGET) == "below_floor"
+    assert uniqueness.status_for_bits(None, target=uniqueness.DEFAULT_TARGET) == "unknown"
 
 
 def test_similarity_is_one_minus_uniqueness():
@@ -48,7 +62,7 @@ def test_similarity_is_one_minus_uniqueness():
     assert uniqueness.similarity_from_uniqueness(1.0) == 0.0
 
 
-def test_identical_videos_low_bits_below_target():
+def test_identical_videos_low_bits_below_floor():
     with tempfile.TemporaryDirectory() as d:
         a = os.path.join(d, "a.mp4")
         b = os.path.join(d, "b.mp4")
@@ -58,7 +72,7 @@ def test_identical_videos_low_bits_below_target():
         assert r["uniqueness_metric"] == "ssim_bits_v1"
         assert r["bits"] is not None and r["bits"] < 8
         assert r["uniqueness"] is not None and r["uniqueness"] < uniqueness.DEFAULT_TARGET
-        assert r["uniqueness_status"] == "below_target"
+        assert r["uniqueness_status"] == "below_floor"
         assert r["uniqueness_target"] == uniqueness.DEFAULT_TARGET
 
 
@@ -98,6 +112,29 @@ def test_bits_vs_helper():
         _tiny_mp4(a, color="black")
         _tiny_mp4(b, color="white")
         assert uniqueness.bits_vs(a, b) >= uniqueness.TARGET_BITS
+
+
+def test_ssim_canvas_matches_source_orientation():
+    assert uniqueness.ssim_canvas(1080, 1920) == (576, 1024)
+    assert uniqueness.ssim_canvas(3840, 2160) == (1024, 576)
+    assert uniqueness.ssim_canvas(1080, 1080) == (576, 576)
+    assert uniqueness.ssim_canvas(0, 0) == (576, 1024)
+    vf = uniqueness.ssim_scale_filter(1024, 576)
+    assert "scale=1024:576:force_original_aspect_ratio=decrease" in vf
+    assert "pad=1024:576" in vf
+
+
+def test_landscape_identical_clips_stay_low_bits():
+    """16:9 twins must not look unique because an old 9:16 pad letterboxed them."""
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        b = os.path.join(d, "b.mp4")
+        pattern = "testsrc=size=320x180:rate=25:duration=1"
+        _tiny_mp4(a, lavfi=pattern)
+        _tiny_mp4(b, lavfi=pattern)
+        r = uniqueness.score_uniqueness(a, b, target=uniqueness.DEFAULT_TARGET)
+        assert r["bits"] is not None and r["bits"] < 8
+        assert r["uniqueness_status"] == "below_floor"
 
 
 def test_missing_file_unknown():

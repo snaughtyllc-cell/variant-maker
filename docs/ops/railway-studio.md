@@ -1,4 +1,4 @@
-# VaryForge Studio on Railway + RunPod serverless
+# varimo Studio on Railway + RunPod serverless
 
 Railway hosts the **product** (Studio UI + `variant-server`). RunPod serverless
 hosts the **engine** (ffmpeg + optional HQ GPU). Object storage is the mailbox
@@ -51,13 +51,14 @@ Set the **same** four vars on the RunPod serverless endpoint.
 
 ## 2b. Gallery keep (Railway volume)
 
-Studio keeps the last **10 finished Generate jobs per workspace** (one 8-pack
-= one job). Older finished jobs are deleted from the volume and from R2
-`inputs/{source_id}/` and `outputs/{source_id}/`. Running jobs are never
-deleted. Next Studio boot also prunes the backlog (`hydrate_from_disk`).
+Studio keeps finished Generate jobs for **24 hours** per workspace (one 8-pack
+= one job). Finished jobs older than that are deleted from the volume and from
+R2 `inputs/{source_id}/` and `outputs/{source_id}/`. Running jobs are never
+deleted. Opening Gallery and next Studio boot (`hydrate_from_disk`) also prune.
 
-Override with `VARIANT_GALLERY_KEEP_JOBS` (default `10`; `0` disables). Do not
-raise this to “keep everything” — the volume is the expensive part.
+Age window: `VARIANT_GALLERY_KEEP_HOURS` (default `24`; `0` disables age prune).
+Optional count cap: `VARIANT_GALLERY_KEEP_JOBS` (default `0` = off). The volume
+is the expensive part — leave the 24-hour window on.
 
 ## 3. RunPod serverless (engine)
 
@@ -90,7 +91,7 @@ RunPod **CPU** serverless endpoint from that image:
 
 - Compute type: **CPU**. Instance with **8+ cores** (e.g. `cpu3g-8-32`).
 - Start command is already `python -u /app/deploy/runpod/cp_handler.py`.
-- Min workers **0**, max workers 1–2, idle timeout **600s**, FlashBoot on.
+- Min workers **0**, max workers **4** (team Fast; HQ GPU max **3**), idle timeout **600s**, FlashBoot on.
 - Execution timeout **3600s** (a 20-pack must not die at 10–20 min).
 - Same `R2_*` env as the GPU endpoint.
 

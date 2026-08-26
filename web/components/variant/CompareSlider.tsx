@@ -5,7 +5,7 @@ import {
   releasePointerCaptureSafe,
   startsCompareDragImmediately,
 } from "@/lib/compareGesture";
-import { clipInset, paintVideoFrame, videoFrameSrc } from "@/lib/media";
+import { clipInset, cssAspectRatio, DEFAULT_CSS_ASPECT, paintVideoFrame, videoFrameSrc, compareSliderWidth } from "@/lib/media";
 
 export interface CompareSliderVideoRefs {
   beforeRef: React.RefObject<HTMLVideoElement | null>;
@@ -21,6 +21,7 @@ interface CompareSliderProps {
 
 export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderProps) {
   const [pct, setPct] = useState(54);
+  const [boxAspect, setBoxAspect] = useState(DEFAULT_CSS_ASPECT);
   const dragging = useRef(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -95,13 +96,25 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
     updatePct(e.clientX);
   }, [updatePct]);
 
+  useEffect(() => {
+    setBoxAspect(DEFAULT_CSS_ASPECT);
+  }, [afterSrc]);
+
+  function handleAfterMetadata() {
+    const v = afterRef.current;
+    if (v && v.videoWidth > 0 && v.videoHeight > 0) {
+      setBoxAspect(cssAspectRatio(v.videoWidth, v.videoHeight));
+    }
+    paintVideoFrame(v);
+  }
+
   const videoStyle: React.CSSProperties = {
     position: "absolute",
     inset: 0,
     width: "100%",
     height: "100%",
-    // contain: a 16:9 ingest proxy in this 9:16 pane must not crop-zoom
-    // (that made iPhone SOURCE look blocky vs a 1080×1920 variant).
+    // contain: letterbox inside the box so a 16:9 clip is not cover-cropped
+    // while we still default to 9:16 before metadata arrives.
     objectFit: "contain",
     display: "block",
     pointerEvents: "none",
@@ -113,7 +126,9 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       className="compare-slider"
       style={{
         position: "relative",
-        aspectRatio: "9 / 16",
+        aspectRatio: boxAspect,
+        width: compareSliderWidth(boxAspect),
+        maxHeight: "46dvh",
         borderRadius: 12,
         overflow: "hidden",
         border: "1px solid var(--color-line)",
@@ -136,7 +151,7 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         loop
         controls={false}
         disablePictureInPicture
-        onLoadedMetadata={() => paintVideoFrame(afterRef.current)}
+        onLoadedMetadata={handleAfterMetadata}
         onLoadedData={() => paintVideoFrame(afterRef.current)}
         style={videoStyle}
       />

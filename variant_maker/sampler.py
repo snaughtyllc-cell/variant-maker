@@ -21,8 +21,17 @@ from __future__ import annotations
 
 import hashlib
 import random
+from dataclasses import replace
 
-from .presets import Preset
+from .presets import Preset, Range
+from .shot import (
+    chroma_cloud_range_for_shot,
+    crop_keep_range_for_shot,
+    grain_range_for_shot,
+    keeps_bottom_captions,
+    luma_dust_range_for_shot,
+    rebuild_range_for_shot,
+)
 
 # Keep at least this much of a short clip after head+tail trim (ffmpeg needs remaining > 0).
 _MIN_REMAINING_S = 0.05
@@ -68,6 +77,17 @@ _COLOR_ENCODE_AXES = _ENCODE_AXES | frozenset({
     "brightness", "contrast", "saturation", "gamma", "hue_deg",
 })
 _GEOMETRY_AXES = frozenset({"crop_keep", "rotate_deg", "warp_k1", "rebuild_scale"})
+
+# Caption-safe crop window on 1080. 0..1 slides the leftover onto one edge
+# and clips burned-in words (live pack ced7cbec7c49 copy 1: keep 0.84, x=0.90,
+# y=0.14). Stay near center; still zero-mean at 0.5. Unbudgeted fingerprint.
+CROP_OFFSET_LO = 0.35
+CROP_OFFSET_HI = 0.65
+# Instagram 720: leftover is taken from the TOP (y→1.0) so the bottom caption
+# band stays. Centered y on 720 scored 20 bits — below the gate — and also ate
+# words when y drifted low. Unbudgeted; not zero-mean (that is the point).
+CROP_Y_KEEP_BOTTOM_LO = 0.90
+CROP_Y_KEEP_BOTTOM_HI = 1.00
 
 # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
@@ -176,12 +196,24 @@ def clamp_strength(strength: float) -> float:
     return min(2.0, max(0.0, strength))
 
 
+def _remap_range(value: float, src: Range, dst: Range) -> float:
+    """Map ``value`` from ``src`` onto ``dst`` (same seed position, new band)."""
+    if src.lo == dst.lo and src.hi == dst.hi:
+        return value
+    span = src.hi - src.lo
+    if span <= 0:
+        return dst.lo
+    t = min(1.0, max(0.0, (value - src.lo) / span))
+    return dst.lo + t * (dst.hi - dst.lo)
+
+
 def disable_fast_pixel_ops(params: dict) -> dict:
     """HQ skip: ESRGAN already rebuilds pixels. Zeros resample/rebuild/warp, keeps the rest."""
     video = dict(params["video"])
     video["resample_px"] = 0
     video["rebuild_scale"] = 1.0
     video["warp_k1"] = 0.0
+    video["luma_shade"] = 0.0
     return {**params, "video": video}
 
 
@@ -192,6 +224,9 @@ def sample(
     rubberband: bool = False,
     strength: float = 1.0,
     duration_s: float | None = None,
+    shot: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
 ) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
@@ -200,7 +235,10 @@ def sample(
     above 1.0 push past the preset's nominal budget (used by the uniqueness ladder to make
     escalating rungs actually distinct); lower values yield gentler variants. The seed fixes
     WHICH axes move; strength fixes how far. `duration_s` (when given) scales head/tail
-    trim so a short source keeps a usable remaining duration.
+    trim so a short source keeps a usable remaining duration.     `shot` is a look-first
+    hint (`talking_head` / `motion`); None keeps the preset rebuild band so seeds match.
+    ``width`` / ``height`` select the Instagram-720 crop (punch from the top).
+    Omitted size keeps the 1080 caption-safe center band so seeds match.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -216,30 +254,68 @@ def sample(
         else:
             raw[name] = rng.uniform(r.lo, r.hi)
 
+    raw["rebuild_scale"] = _remap_range(
+        raw["rebuild_scale"], preset.rebuild_scale, rebuild_range_for_shot(preset, shot),
+    )
+    keep_r = crop_keep_range_for_shot(preset, shot, width, height)
+    if keep_r is not None:
+        raw["crop_keep"] = _remap_range(raw["crop_keep"], preset.crop_keep, keep_r)
+    work = preset
+    shot_grain = grain_range_for_shot(preset, shot)
+    if shot_grain is not None:
+        # Remap onto the shot band, then budget/VMAF shrink toward *shot.lo*
+        # (not preset.lo). Luma grain 40–52 scored 55–65% uniqueness but VMAF
+        # ~80 and best_effort — harvest skipped those files. Chroma-only noise
+        # is the uniqueness lever (no extra RNG). Shrink must still be able to
+        # walk grain down so the quality guard can fire.
+        raw["grain"] = _remap_range(raw["grain"], preset.grain, shot_grain)
+        work = replace(preset, grain=shot_grain)
+        raw["noise_chroma"] = True
+        # ffmpeg noise seed defaults to -1 (same pattern on every copy). Derive
+        # from the variant seed — no extra RNG — so peers disagree at 576.
+        raw["noise_seed"] = int(seed) & 0x7FFFFFFF
+
     # Fit the budget: shrink grain/unsharp/crf first so color shows.
     # crop_keep and rebuild_scale are unbudgeted fingerprints — strength must
     # not pull keep to 1.0 or rebuild to identity. Warp shrinks with look.
-    spent = _spent_on(raw, preset, _ENCODE_AXES | _LOOK_AXES)
+    spent = _spent_on(raw, work, _ENCODE_AXES | _LOOK_AXES)
     if spent > budget and spent > 0:
-        look_spent = _spent_on(raw, preset, _LOOK_AXES)
+        look_spent = _spent_on(raw, work, _LOOK_AXES)
         leftover = budget - look_spent
+        enc = _ENCODE_AXES
+        if shot_grain is not None:
+            # Uniqueness grain is the talking-head lever; don't collapse it to
+            # shot.lo just because color/warp already spent the look budget.
+            enc = _ENCODE_AXES - {"grain"}
         if leftover >= 0:
-            enc_spent = _spent_on(raw, preset, _ENCODE_AXES)
+            enc_spent = _spent_on(raw, work, enc)
             if enc_spent > 0:
-                _shrink_toward_calm(raw, preset, _ENCODE_AXES, leftover / enc_spent)
+                _shrink_toward_calm(raw, work, enc, leftover / enc_spent)
         else:
-            _shrink_toward_calm(raw, preset, _ENCODE_AXES, 0.0)
-            look_spent = _spent_on(raw, preset, _LOOK_AXES)
+            _shrink_toward_calm(raw, work, enc, 0.0)
+            look_spent = _spent_on(raw, work, _LOOK_AXES)
             if look_spent > 0:
-                _shrink_toward_calm(raw, preset, _LOOK_AXES, budget / look_spent)
+                _shrink_toward_calm(raw, work, _LOOK_AXES, budget / look_spent)
+
+    if shot_grain is not None:
+        cloud_r = chroma_cloud_range_for_shot(preset, shot, width, height)
+        if cloud_r is not None:
+            # Remap from the (possibly shrunk) grain — no extra RNG.
+            raw["chroma_cloud"] = _remap_range(raw["grain"], shot_grain, cloud_r)
+        dust_r = luma_dust_range_for_shot(preset, shot, width, height)
+        if dust_r is not None:
+            raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
 
     # Fingerprint-only geometry axes: unbudgeted (never count toward distortion), drawn
     # independently of the shrink step above so a full-strength crop offset never eats
-    # into the quality budget. crop_x_frac/crop_y_frac range over the whole frame
-    # (zero-mean at the centered 0.5); trim_end_s reuses the preset's trim_s range,
-    # drawn independently from trim_s (same distribution, different draw).
-    raw["crop_x_frac"] = rng.uniform(0.0, 1.0)
-    raw["crop_y_frac"] = rng.uniform(0.0, 1.0)
+    # into the quality budget. 1080 x/y stay in a center band (zero-mean at 0.5).
+    # Instagram 720 takes leftover from the top so burned-in words survive AND
+    # vs-source bits can clear 24. trim_end_s reuses the preset's trim_s range.
+    raw["crop_x_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
+    if keeps_bottom_captions(width, height):
+        raw["crop_y_frac"] = rng.uniform(CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI)
+    else:
+        raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)

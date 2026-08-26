@@ -46,14 +46,14 @@ export function AdvancedPanel({
           style={{
             marginLeft: "auto",
             color: "var(--color-text)",
-            background: "#14141d",
+            background: "#edf6f7",
             border: "1px solid var(--color-line)",
             padding: "4px 10px",
             borderRadius: 999,
             fontSize: 11.5,
           }}
         >
-          Output: Vertical 1080×1920 ▾
+          Output: Matches source
         </span>
       </div>
       {open && (
@@ -68,9 +68,21 @@ export function AdvancedPanel({
             color: "var(--color-muted)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Output format</span>
-            <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Vertical 1080×1920</span>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Output format</span>
+              <span style={{ color: "var(--color-text)", fontWeight: 600 }}>Matches source</span>
+            </div>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: "var(--color-muted2)",
+              }}
+            >
+              Auto — 9:16 → 1080×1920, 16:9 → 1920×1080.
+            </p>
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12, gap: 10, flexWrap: "wrap" }}>
@@ -85,16 +97,16 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
+                Fast is the usual ~20. HQ is coming soon.
               </span>
             </span>
             <select
-              value={qualityMode}
-              onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
+              value="fast"
+              onChange={() => onQualityModeChange("fast")}
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
-                background: "#16161f",
+                background: "#fbfdfd",
                 color: "var(--color-text)",
                 border: "1px solid var(--color-line)",
                 borderRadius: 8,
@@ -103,11 +115,13 @@ export function AdvancedPanel({
               }}
             >
               <option value="fast">Fast</option>
-              <option value="hq">HQ (Phase 8)</option>
+              <option value="hq" disabled>
+                HQ — coming soon
+              </option>
             </select>
           </div>
 
-          {hqHint && (
+          {hqHint && qualityMode === "hq" && (
             <p
               style={{
                 margin: "10px 0 0",
@@ -142,16 +156,17 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Medium should land around
-                55–65%; the pass line is 38%. If medium misses that, one
-                strong pass runs and the tile shows esc — that is not a fail.
+                file is scored vs the original. Pass is 38%. If medium misses
+                38%, one strong pass always runs. Only after that hunt: 30%
+                and up still ships. Under 30% is a uniqueness miss — not a
+                Drive file.
               </span>
             </span>
             <input
               type="checkbox"
               checked={allowCreativeEscalate}
               onChange={(e) => onAllowCreativeEscalateChange(e.target.checked)}
-              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#7c5cff" }}
+              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#0caab8" }}
             />
           </label>
         </div>

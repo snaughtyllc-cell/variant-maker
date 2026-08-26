@@ -59,8 +59,9 @@ SUBTLE = Preset(
 MEDIUM = Preset(
     name="medium", budget=0.65,
     # Talking-head keep=0.72 (face-only zoom) scored *worse* SSIM bits than 0.858.
-    # 0.84–0.90 keeps background in the 576×1024 uniqueness frame (always ≥10% punch).
-    crop_keep=Range(0.84, 0.90), rotate_deg=Range(-0.8, 0.8),
+    # 0.84–0.90 with a 0..1 window cropped a burned-in word (ced7cbec7c49).
+    # 0.92–0.96 is a 4–8% punch — uniqueness still clears 24; captions stay in.
+    crop_keep=Range(0.92, 0.96), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03),     hue_deg=Range(-3, 3),
     grain=Range(7, 12), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.015, 0.015),
@@ -77,7 +78,7 @@ STRONG = Preset(
     name="strong", budget=0.90,
     # Escalate punches a bit harder than medium, not into face-only zoom. Grain is
     # uniqueness texture; social 12M cap is the file-size ceiling (not grain=4).
-    crop_keep=Range(0.78, 0.86), rotate_deg=Range(-2.0, 2.0),
+    crop_keep=Range(0.88, 0.93), rotate_deg=Range(-2.0, 2.0),
     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05),     hue_deg=Range(-6, 6),
     grain=Range(10, 16), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.020, 0.020),

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { LabBanner } from "@/components/nav/LabBanner";
 import { TopNav } from "@/components/nav/TopNav";
 import { useAuthMe } from "@/lib/useAuthMe";
 
@@ -22,15 +23,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [data, needsLogin, isLogin, loggedIn, router]);
 
   if (isLoading && !data) {
-    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+    return <div className="vf-boot" />;
   }
 
   if (needsLogin && !isLogin) {
-    return <div style={{ minHeight: "100vh", background: "#0a0a0e" }} />;
+    return <div className="vf-boot" />;
   }
 
   return (
     <>
+      <LabBanner />
       {!isLogin && <TopNav />}
       {isLogin ? children : <div className="app-main">{children}</div>}
     </>

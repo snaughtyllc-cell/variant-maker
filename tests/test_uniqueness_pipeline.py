@@ -3,6 +3,9 @@ escalate to the strong preset if none of them clear the target. ffmpeg/probe/uni
 are monkeypatched so this runs as a fast unit test."""
 from __future__ import annotations
 
+import threading
+import time
+
 from variant_maker import pipeline
 from variant_maker.uniqueness import DEFAULT_TARGET
 
@@ -11,9 +14,11 @@ class FakeSrc:
     path = "src.mp4"
     sha256 = "deadbeef"
     duration_s = 1.0
+    width = 1080
+    height = 1920
 
     def to_dict(self):
-        return {"path": self.path, "sha256": self.sha256}
+        return {"path": self.path, "sha256": self.sha256, "width": self.width, "height": self.height}
 
 
 def _stub_common(monkeypatch):
@@ -41,6 +46,16 @@ def _stub_common(monkeypatch):
     )
     # No peer distance by default (first / only variant).
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        },
+    )
+    monkeypatch.setattr(pipeline.look, "write_look_stills", lambda *a, **k: {
+        "look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg",
+    })
 
 
 def _ok_score(uniqueness=0.5, bits=32, status="ok", target=DEFAULT_TARGET):
@@ -107,23 +122,189 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
     assert record.uniqueness_status == "ok"
 
 
-def test_no_escalate_when_allow_creative_escalate_false(monkeypatch, tmp_path):
+def test_look_fail_skips_escalate(monkeypatch, tmp_path):
+    """lookaqmtp-class blotch must not escalate. Keep the medium file."""
     _stub_common(monkeypatch)
-
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: {
+            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
+        },
+    )
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: _ok_score(
             0.1, bits=6, status="below_target",
         ),
     )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "fail"
+    assert record.uniqueness_status == "below_floor"
+    assert record.status == "uniqueness_fail"
 
+
+def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
+    """Strong blotch after a look-ok medium must not replace the medium file."""
+    _stub_common(monkeypatch)
+    looks = iter([
+        {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
+        },
+        {
+            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_mae": 40.0, "look_mae_max": 51.0, "look_target": 38.0,
+        },
+    ])
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda src_path, variant_path: next(looks),
+    )
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            20 / 64, bits=20, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "ok"
+    assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+    assert record.uniqueness == 20 / 64
+
+
+def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
+    """Advanced off: 19–23 bits ship without a strong pass. Product Fast still hunts 24."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            20 / 64, bits=20, status="below_target",
+        ),
+    )
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
     manifest = pipeline.run(cfg)
-
     record = manifest.variants[0]
     assert record.escalated is False
     assert record.preset_used == "medium"
     assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+
+
+def test_twenty_bits_on_first_pass_still_escalates(monkeypatch, tmp_path):
+    """19-bit floor is not a first-pass shortcut. 20 bits still hunts 24 via strong."""
+    _stub_common(monkeypatch)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(20 / 64, bits=20, status="below_target")
+        return _ok_score(24 / 64, bits=24, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert n["scores"] == 2
+    assert record.escalated is True
+    assert record.preset_used == "strong"
+    assert record.uniqueness_status == "ok"
+    assert record.status == "ok"
+    assert record.uniqueness == 24 / 64
+
+
+def test_nineteen_after_escalate_ships(monkeypatch, tmp_path):
+    """Only after the 24-bit hunt: 19 bits (~30%) still ships as below_target."""
+    _stub_common(monkeypatch)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(20 / 64, bits=20, status="below_target")
+        return _ok_score(19 / 64, bits=19, status="below_target")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert n["scores"] == 2
+    assert record.escalated is True
+    assert record.preset_used == "strong"
+    assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+    assert record.uniqueness == 19 / 64
+
+
+def test_below_floor_does_not_ship_as_ok(monkeypatch, tmp_path):
+    """Under 19 bits (~30%) is uniqueness_fail — not a Drive/gallery ready file."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            12 / 64, bits=12, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.uniqueness_status == "below_floor"
+    assert record.status == "uniqueness_fail"
+
+
+def test_nineteen_bits_still_ships_as_ok(monkeypatch, tmp_path):
+    """19 bits (~30% UI) after the hunt (or with escalate off) is still a Drive file."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            19 / 64, bits=19, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+    assert record.uniqueness == 19 / 64
+
+
+def test_look_first_one_encode_no_escalate(monkeypatch, tmp_path):
+    """CLI --look-first: one medium copy + stills, no uniqueness hunt."""
+    _stub_common(monkeypatch)
+    seen = []
+
+    def spy_sample(preset, seed, **kwargs):
+        seen.append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", spy_sample)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            0.1, bits=6, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, count=8, look_first=True, allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    assert len(manifest.variants) == 1
+    record = manifest.variants[0]
+    assert record.escalated is False
+    assert record.preset_used == "medium"
+    assert record.look_status == "ok"
+    assert seen == ["medium"]
 
 
 def test_uniq_strengths_are_not_collapsed_to_the_same_effective_value(monkeypatch, tmp_path):
@@ -206,10 +387,104 @@ def test_emits_uniqueness_and_escalating_states(monkeypatch, tmp_path):
     pipeline.run(cfg, on_event=lambda state, **kw: events.append(state))
 
     assert events == [
-        "rendering", "checking", "uniqueness",
-        "escalating", "rendering", "checking", "uniqueness",
+        "rendering", "checking", "looking", "uniqueness",
+        "escalating", "rendering", "checking", "looking", "uniqueness",
         "done",
     ]
+
+
+def test_uniqueness_work_starts_before_stills_finish(monkeypatch, tmp_path):
+    """Stills are a side channel. Uniqueness must not wait for JPEGs."""
+    _stub_common(monkeypatch)
+    uniq_started = threading.Event()
+    stills_entered = threading.Event()
+
+    def fake_stills(*_a, **_k):
+        stills_entered.set()
+        assert uniq_started.wait(timeout=1.0), "uniqueness thread must already be running"
+        return {"look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg"}
+
+    def fake_uniq(_src, _variant, target=None):
+        uniq_started.set()
+        assert stills_entered.wait(timeout=1.0)
+        return _ok_score()
+
+    monkeypatch.setattr(pipeline.look, "write_look_stills", fake_stills)
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+
+    events: list[str] = []
+    looking_kw: list[dict] = []
+
+    def record(state, **kw):
+        events.append(state)
+        if state == "looking":
+            looking_kw.append(kw)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg, on_event=record)
+    assert events.index("looking") < events.index("uniqueness")
+    assert looking_kw[0].get("look_src") == "look_v01_src.jpg"
+
+
+def test_mae_runs_after_uniqueness_returns(monkeypatch, tmp_path):
+    """Coarse MAE must not share the Fast CPU with 8-wide SSIM."""
+    _stub_common(monkeypatch)
+    uniq_done = threading.Event()
+    order: list[str] = []
+
+    def fake_uniq(_src, _variant, target=None):
+        time.sleep(0.05)
+        order.append("uniq")
+        uniq_done.set()
+        return _ok_score()
+
+    def fake_mae(*_a, **_k):
+        assert uniq_done.is_set()
+        order.append("mae")
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+    monkeypatch.setattr(pipeline.look, "score_look", fake_mae)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg)
+    assert order == ["uniq", "mae"]
+
+
+def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
+    """Generate wait stays uniqueness-bound: stills overlap SSIM. MAE is after."""
+    _stub_common(monkeypatch)
+    started = threading.Barrier(2, timeout=2)
+    slice_s = 0.18
+    t_start: dict[str, float] = {}
+    t_end: dict[str, float] = {}
+
+    def slow_stills(*_a, **_k):
+        started.wait()
+        t_start["stills"] = time.perf_counter()
+        time.sleep(slice_s)
+        t_end["stills"] = time.perf_counter()
+        return {"look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg"}
+
+    def slow_uniq(_src, _variant, target=None):
+        started.wait()
+        t_start["uniq"] = time.perf_counter()
+        time.sleep(slice_s)
+        t_end["uniq"] = time.perf_counter()
+        return _ok_score()
+
+    monkeypatch.setattr(pipeline.look, "write_look_stills", slow_stills)
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", slow_uniq)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg)
+
+    span = max(t_end.values()) - min(t_start.values())
+    # Serial stills-then-uniqueness would be ~2 slices. Overlap is ~1.
+    assert span < 1.7 * slice_s, span
 
 
 def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
@@ -255,14 +530,14 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
     assert v2.strength_final == 1.4
 
 
-def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
-    """v2 clears vs source but not vs v1 → auto-tune searches stronger, not milder."""
+def test_auto_tune_peer_fail_escalates_instead_of_bisecting(monkeypatch, tmp_path):
+    """v2 clears vs source but not vs v1 → one medium miss then strong, not five hunts."""
     _stub_common(monkeypatch)
     seen = []
     stub_sample = pipeline.sample
 
     def spy_sample(preset, seed, **kwargs):
-        seen.append(kwargs.get("strength", 1.0))
+        seen.append(preset.name)
         return stub_sample(preset, seed, **kwargs)
 
     monkeypatch.setattr(pipeline, "sample", spy_sample)
@@ -271,7 +546,6 @@ def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
 
     def fake_bits_vs(a, b):
         peer_n["n"] += 1
-        # First v2 check is a twin; later attempt clears the 24-bit sibling floor.
         return 10 if peer_n["n"] == 1 else 30
 
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", fake_bits_vs)
@@ -280,24 +554,29 @@ def test_auto_tune_peer_fail_searches_stronger(monkeypatch, tmp_path):
         lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
     )
 
-    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=False)
+    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=True)
     manifest = pipeline.run(cfg)
 
     v1, v2 = manifest.variants
     assert v1.uniqueness_status == "ok"
-    assert v2.uniqueness_status == "ok"
+    assert v1.escalated is False
+    assert v2.escalated is True
+    assert v2.preset_used == "strong"
     assert v2.quality.get("min_bits_vs_peers") == 30
-    # v1 stop_on_clear: one strength. v2: first miss then a stronger hit.
-    assert len(seen) >= 3
-    v2_strengths = seen[1:]
-    assert v2_strengths[1] > v2_strengths[0]
-    assert v2.strength_final > v2_strengths[0]
+    assert seen.count("medium") == 2  # v1 keeper + v2 miss
+    assert seen.count("strong") == 1
 
 
-def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch, tmp_path):
-    """Fast default: uniqueness starts below target then clears; 3-rung ladder unused."""
+def test_auto_tune_source_miss_escalates_on_second_encode(monkeypatch, tmp_path):
+    """Fast daily: one medium uniqueness miss then strong — not five bisection encodes."""
     _stub_common(monkeypatch)
-    n = {"scores": 0}
+    n = {"scores": 0, "presets": []}
+
+    def fake_sample(preset, seed, **kw):
+        n["presets"].append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
 
     def fake_score(src_path, variant_path, target=None):
         n["scores"] += 1
@@ -312,11 +591,36 @@ def test_auto_tune_bisects_until_uniqueness_clears_without_escalate(monkeypatch,
     manifest = pipeline.run(cfg)
 
     record = manifest.variants[0]
-    assert record.escalated is False
-    assert record.preset_used == "medium"
+    assert record.escalated is True
+    assert record.preset_used == "strong"
     assert record.uniqueness_status == "ok"
-    assert 0.5 <= record.strength_final <= 1.8
-    assert n["scores"] > 1
+    assert n["scores"] == 2
+    assert n["presets"] == ["medium", "strong"]
+
+
+def test_discarded_uniqueness_miss_skips_quality_render(monkeypatch, tmp_path):
+    """VMAF on a medium encode we are about to throw away doubled Fast 20 wall time."""
+    _stub_common(monkeypatch)
+    n = {"qr": 0}
+
+    def fake_qr(src, params, qr):
+        n["qr"] += 1
+        open(qr, "w").close()
+        return qr
+
+    monkeypatch.setattr(pipeline.quality, "quality_render", fake_qr)
+    scores = iter([
+        _ok_score(0.1, bits=6, status="below_target"),
+        _ok_score(0.5, bits=32, status="ok"),
+    ])
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: next(scores),
+    )
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    pipeline.run(cfg)
+    assert n["qr"] == 1
 
 
 def test_hq_strips_fast_pixel_ops(monkeypatch, tmp_path):
@@ -419,3 +723,153 @@ def test_hq_still_grabs_and_applies_face_protect(monkeypatch, tmp_path):
     ))
     assert calls["grab"] == 1
     assert calls["apply"] >= 1
+
+
+def test_pipeline_resolves_landscape_tiktok_to_1920x1080(monkeypatch, tmp_path):
+    """16:9 ingest must render 1920×1080, not stretch to 1080×1920."""
+    _stub_common(monkeypatch)
+
+    class LandscapeSrc:
+        path = "src.mp4"
+        sha256 = "deadbeef"
+        duration_s = 1.0
+        width = 3840
+        height = 2160
+
+        def to_dict(self):
+            return {"path": self.path, "width": self.width, "height": self.height}
+
+    monkeypatch.setattr(pipeline, "probe", lambda p: LandscapeSrc())
+    captured = {}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        captured["size"] = (platform.width, platform.height)
+        captured["name"] = platform.name
+        open(path, "w").close()
+        return (path, "ffmpeg -y fake")
+
+    monkeypatch.setattr(pipeline, "render_variant", fake_render)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    manifest = pipeline.run(_cfg(tmp_path, platform="tiktok"))
+    assert captured["size"] == (1920, 1080)
+    assert captured["name"] == "tiktok"
+    assert manifest.run["canvas"] == [1920, 1080]
+
+
+def test_pipeline_passes_shot_into_sample(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    seen = []
+
+    def fake_sample(preset, seed, **kw):
+        seen.append(kw.get("shot"))
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
+    monkeypatch.setattr(
+        pipeline, "classify_shot",
+        lambda *a, **k: {"kind": "talking_head", "self_bits": 10},
+    )
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    manifest = pipeline.run(_cfg(tmp_path, auto_tune=False, uniq_strengths=[1.0]))
+    assert seen
+    assert all(s == "talking_head" for s in seen)
+    assert manifest.run["shot"]["kind"] == "talking_head"
+    assert manifest.run["shot"]["self_bits"] == 10
+
+
+def test_talking_head_peer_miss_does_not_escalate(monkeypatch, tmp_path):
+    """Still-face copies land ~13 peer bits; strong crop 0.78 is face-zoom and still fails."""
+    _stub_common(monkeypatch)
+    presets = []
+
+    def fake_sample(preset, seed, **kw):
+        presets.append(preset.name)
+        return {"video": {"rotate_deg": 0.0}, "audio": {}}
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
+    monkeypatch.setattr(
+        pipeline, "classify_shot",
+        lambda *a, **k: {"kind": "talking_head", "self_bits": 17},
+    )
+    bits_calls = {"n": 0}
+
+    def fake_bits_vs(a, b):
+        bits_calls["n"] += 1
+        return 13
+
+    monkeypatch.setattr(pipeline.uniqueness, "bits_vs", fake_bits_vs)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.625, bits=40, status="ok"),
+    )
+    cfg = _cfg(tmp_path, count=2, auto_tune=True, allow_creative_escalate=True)
+    manifest = pipeline.run(cfg)
+    v1, v2 = manifest.variants
+    assert v1.preset_used == "medium"
+    assert v2.preset_used == "medium"
+    assert v1.escalated is False
+    assert v2.escalated is False
+    assert v1.uniqueness_status == "ok"
+    assert v2.uniqueness_status == "ok"
+    assert v2.quality.get("min_bits_vs_peers") is None
+    assert bits_calls["n"] == 0
+    assert "strong" not in presets
+
+
+class _Src720(FakeSrc):
+    width = 720
+    height = 1280
+
+
+def test_fast_keeps_720p_inside_tiktok_canvas(monkeypatch, tmp_path):
+    """Naive 720→1080 is glitter until Real-ESRGAN exists. Fast stays native."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "probe", lambda p: _Src720())
+    seen = []
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        seen.append(platform)
+        open(path, "w").close()
+        return (path, "ffmpeg -y fake")
+
+    monkeypatch.setattr(pipeline, "render_variant", fake_render)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    pipeline.run(_cfg(tmp_path, platform="tiktok", auto_tune=False, uniq_strengths=[1.0]))
+    assert seen
+    assert all(p.width == 720 and p.height == 1280 for p in seen)
+
+
+def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
+    """HQ Real-ESRGAN is the true upscaler — keep the 1080×1920 social canvas."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "probe", lambda p: _Src720())
+    seen = []
+
+    def fake_upscale(src, params, path, platform=None):
+        seen.append(platform)
+        open(path, "w").close()
+        return path, "cmd", []
+
+    import variant_maker.neural.upscale as upscale_mod
+
+    monkeypatch.setattr(upscale_mod, "available", lambda: True)
+    monkeypatch.setattr(upscale_mod, "upscale_clip", fake_upscale)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.5, bits=32, status="ok"),
+    )
+    pipeline.run(_cfg(
+        tmp_path, platform="tiktok", quality_mode="hq",
+        auto_tune=False, uniq_strengths=[1.0],
+    ))
+    assert seen
+    assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)

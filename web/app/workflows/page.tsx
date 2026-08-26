@@ -1,26 +1,19 @@
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
 import { workflowPageBlurb } from "@/lib/workflowCopy";
+import { Workflow } from "lucide-react";
 
 export default function WorkflowsPage() {
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 14,
-          padding: "18px 20px 4px",
-        }}
-      >
+    <main className="workflow-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><Workflow size={19} /></span>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--color-text)" }}>Workflows</div>
-          <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2, maxWidth: 560, lineHeight: 1.45 }}>
-            {workflowPageBlurb()}
-          </div>
+          <p className="workspace-heading__eyebrow">Automation</p>
+          <h1>Workflows</h1>
+          <p className="workspace-heading__copy">{workflowPageBlurb()}</p>
         </div>
       </div>
-
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
         <WorkflowsPanel />
       </div>
     </main>

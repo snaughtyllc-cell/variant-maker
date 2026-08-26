@@ -14,10 +14,11 @@ from .events import VariantEvent
 
 # Stage-1 LocalRunner defaults (see plan Global Constraints).
 DEFAULT_PRESET = "medium"
-DEFAULT_PLATFORM = "tiktok"   # vertical 1080x1920
+DEFAULT_PLATFORM = "tiktok"   # social canvas follows source AR (9:16 or 16:9)
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
-# Fast vs-source *gate*: 24 bits (~38% UI). TikFusion floor is ~18. Raising the
+# Fast vs-source *gate*: 24 bits (~38% UI). Fail-forward floor is 19 bits
+# (~30% UI), just above TikFusion's ~18. Raising the
 # gate to 32 forced talking-head 20-packs onto strong. Medium crop + rebuild_scale
 # sized so those packs *score* ~35–42 bits (~55–65% UI) without changing the gate.
 UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
@@ -134,6 +135,10 @@ class VariantResult:
     strength_final: float | None = None
     escalated: bool = False
     platform_result: str | None = None
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
 
 
 @dataclass
@@ -177,6 +182,10 @@ class LocalRunner:
                 preset_used=kw.get("preset_used"),
                 strength_final=kw.get("strength_final"),
                 platform_result=kw.get("platform_result"),
+                look_status=kw.get("look_status"),
+                look_mae=kw.get("look_mae"),
+                look_src=kw.get("look_src"),
+                look_var=kw.get("look_var"),
             ))
 
         quality_mode = normalize_quality_mode(quality_mode)
@@ -212,6 +221,10 @@ class LocalRunner:
                 strength_final=getattr(v, "strength_final", None),
                 escalated=getattr(v, "escalated", False),
                 platform_result=getattr(v, "platform_result", None),
+                look_status=getattr(v, "look_status", None),
+                look_mae=getattr(v, "look_mae", None),
+                look_src=getattr(v, "look_src", None),
+                look_var=getattr(v, "look_var", None),
             )
             for v in manifest.variants
         ]

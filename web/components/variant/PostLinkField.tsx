@@ -103,7 +103,7 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
           style={{
             flex: "1 1 160px",
             minWidth: 0,
-            background: "#16161f",
+            background: "#f3f8f9",
             color: "var(--color-text)",
             border: "1px solid var(--color-line)",
             borderRadius: 8,
@@ -120,7 +120,7 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
             fontWeight: 700,
             padding: "10px 12px",
             borderRadius: 8,
-            background: "#16161f",
+            background: "#f3f8f9",
             border: "1px solid var(--color-line)",
             color: busy ? "var(--color-muted)" : "var(--color-text)",
             cursor: busy ? "not-allowed" : "pointer",

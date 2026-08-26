@@ -1,5 +1,9 @@
+import re
+
+import pytest
+
 from variant_maker import filtergraph
-from variant_maker.platforms import get_platform
+from variant_maker.platforms import get_platform, resolve_platform
 from variant_maker.probe import ColorTags, SourceInfo
 
 
@@ -188,6 +192,21 @@ def test_rebuild_omitted_on_none_platform():
     assert "scale=" not in vf
 
 
+def test_landscape_platform_scales_to_1920x1080_not_portrait():
+    """16:9 source must not be squeezed into 1080×1920."""
+    plat = resolve_platform("tiktok", 1920, 1080)
+    vf = filtergraph.build_video_filters(
+        make_params(), make_src(w=1920, h=1080), plat,
+    )
+    assert "scale=1920:1080:force_original_aspect_ratio=disable" in vf
+    assert "scale=1080:1920" not in vf
+    p = make_params(video={"rebuild_scale": 0.72, "resample_flags": "spline"})
+    vf = filtergraph.build_video_filters(p, make_src(w=1920, h=1080), plat)
+    w, h = filtergraph.even_rebuild_size(1920, 1080, 0.72)
+    assert f"scale={w}:{h}:flags=spline" in vf
+    assert "scale=1920:1080:flags=spline" in vf
+
+
 def test_rebuild_wins_over_tiny_resample():
     """±32 px is invisible at uniqueness resolution; rebuild is the fingerprint."""
     p = make_params(video={
@@ -214,6 +233,13 @@ def test_even_rebuild_size_keeps_ar_even_never_identity():
     assert strong[0] == 540
 
 
+def test_even_rebuild_size_talking_head_band_stays_sharp():
+    """Talking-head rebuild is look-preserving; uniqueness comes from grain, not mush."""
+    w, _h = filtergraph.even_rebuild_size(1080, 1920, 0.90)
+    assert w % 2 == 0
+    assert w >= 960
+
+
 def test_warp_emits_lenscorrection():
     p = make_params(video={"warp_k1": 0.008})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)
@@ -225,6 +251,284 @@ def test_warp_omitted_when_near_zero():
     p = make_params(video={"warp_k1": 0.00001})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)
     assert "lenscorrection=" not in vf
+
+
+def test_talking_head_chroma_noise_skips_luma():
+    """SSIM All sees chroma; VMAF is mostly luma. Default grain stays luma t+u."""
+    chroma = make_params(video={"grain": 40.0, "noise_chroma": True, "noise_seed": 12345})
+    vf = filtergraph.build_video_filters(chroma, make_src(), REELS)
+    assert "noise=c0s=0:c0f=u:c1s=40:c1f=u:c2s=40:c2f=u:c1_seed=12345:c2_seed=12345" in vf
+    assert "alls=" not in vf
+    luma = make_params(video={"grain": 8.0})
+    vf_luma = filtergraph.build_video_filters(luma, make_src(), REELS)
+    assert "noise=alls=8:allf=t+u" in vf_luma
+    assert "c1s=" not in vf_luma
+
+
+def test_chroma_noise_is_applied_before_platform_upscale():
+    """720p IG talking-head: noise after 1080 scale is glitter. Keep uniqueness chroma."""
+    p = make_params(video={"grain": 40.0, "noise_chroma": True, "noise_seed": 7})
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), REELS)
+    noise = "noise=c0s=0"
+    scale = "scale=1080:1920:force_original_aspect_ratio=disable"
+    assert noise in vf and scale in vf
+    assert vf.index(noise) < vf.index(scale)
+    assert vf.count("noise=") == 1
+    # Sampler bands are 1080-calibrated; chroma hits the 720 grid so strength follows.
+    # 2.5: area-18 still looked snowy on a phone (720 pixels are 1.5×).
+    assert "c1s=15" in vf and "c1s=40" not in vf and "c1s=27" not in vf and "c1s=18" not in vf
+    luma = make_params(video={"grain": 8.0})
+    vf_luma = filtergraph.build_video_filters(luma, make_src(w=720, h=1280), REELS)
+    assert vf_luma.index("scale=1080:1920:force_original_aspect_ratio=disable") < vf_luma.index("noise=alls=8")
+
+
+def test_grain_scale_follows_short_edge_and_never_exceeds_1080():
+    """Sampler bands are 1080p-calibrated. ffmpeg noise is per-pixel.
+
+    Linear short/1080 kept the same *on-screen* grain on a 720p phone
+    (each pixel is 1.5× larger). Area (short/1080)² still read as snow
+    (18 ≈ 1080 chroma 27 on bigger pixels). 2.5 is the phone-viewing fix.
+    """
+    assert filtergraph.grain_scale_for_size(1080, 1920) == 1.0
+    assert filtergraph.grain_scale_for_size(720, 1280) == (720 / 1080) ** 2.5
+    assert filtergraph.grain_scale_for_size(1920, 1080) == 1.0
+    assert filtergraph.grain_scale_for_size(2160, 3840) == 1.0
+    assert filtergraph.grain_scale_for_size(None, None) == 1.0
+    assert filtergraph.apply_canvas_grain(40, 1080, 1920) == 40
+    assert filtergraph.apply_canvas_grain(40, 720, 1280) == 15
+    assert filtergraph.apply_canvas_grain(8, 720, 1280) == 3
+    assert filtergraph.apply_canvas_grain(40, 2160, 3840) == 40
+
+
+def test_720p_canvas_uses_720_grain_not_1080_glitter():
+    """Native 720 output must not inherit chroma 34–42 / luma 7–12 from the 1080 recipe."""
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    src = make_src(w=720, h=1280)
+    chroma = make_params(video={"grain": 40.0, "noise_chroma": True, "noise_seed": 7})
+    vf = filtergraph.build_video_filters(chroma, src, canvas)
+    assert "c1s=15" in vf and "c2s=15" in vf
+    assert "c1s=40" not in vf and "c1s=27" not in vf and "c1s=18" not in vf
+    assert "scale=720:1280" in vf
+    assert "scale=1080:1920" not in vf
+    luma = make_params(video={"grain": 8.0})
+    vf_luma = filtergraph.build_video_filters(luma, src, canvas)
+    assert "noise=alls=3:allf=t+u" in vf_luma
+    assert "noise=alls=8:allf=t+u" not in vf_luma
+    assert "noise=alls=4:allf=t+u" not in vf_luma
+
+
+def test_talking_head_sample_emits_chroma_noise():
+    from variant_maker.presets import MEDIUM
+    from variant_maker.sampler import derive_seed, sample
+
+    seed = derive_seed(11, 5)
+    p = sample(MEDIUM, seed, shot="talking_head")
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert p["video"].get("noise_chroma") is True
+    ns = seed & 0x7FFFFFFF
+    assert p["video"].get("noise_seed") == ns
+    assert f"c1_seed={ns}" in vf and f"c2_seed={ns}" in vf
+    assert "c1s=" in vf and "c2s=" in vf and "c0s=0" in vf
+    assert "alls=" not in vf
+    # 1080 canvas keeps the working 34–42 recipe — cloud/dust are sampled but not drawn.
+    assert 4 - 1e-9 <= p["video"]["chroma_cloud"] <= 7 + 1e-9
+    assert 11 - 1e-9 <= p["video"]["luma_dust"] <= 13 + 1e-9
+    assert "split[main]" not in vf
+    assert vf.count("noise=") == 1
+    assert "c0s=0" in vf
+    dust_c0 = [int(x) for x in re.findall(r"c0s=(\d+)", vf) if int(x) > 0]
+    assert dust_c0 == []
+
+
+def test_talking_head_720_sample_draws_cloud_without_phone_grain():
+    from dataclasses import replace
+
+    from variant_maker.presets import MEDIUM
+    from variant_maker.sampler import derive_seed, sample
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = sample(MEDIUM, derive_seed(11, 5), shot="talking_head")
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert vf.count("noise=") == 2
+    assert "gblur=sigma=4" in vf
+    c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
+    assert c1s and max(c1s) <= 7
+    assert "c1s=10" not in vf and "c1s=9" not in vf and "c1s=8" not in vf
+    assert "c1s=15" not in vf and "c1s=14" not in vf and "c1s=13" not in vf
+    assert "c1s=12" not in vf
+    assert "c1s=20" not in vf and "c1s=21" not in vf and "c1s=22" not in vf
+    assert "alls=" not in vf
+    dust = [int(x) for x in re.findall(r"c0s=(\d+)", vf) if int(x) > 0]
+    assert len(dust) == 1
+    assert 11 <= dust[0] <= 13
+    assert "c0f=t+u" in vf
+
+
+def test_strong_720_talking_head_does_not_draw_luma_shade():
+    """lookaqmtp lava is rejected. Medium 720 stays signed cloud+dust. Leftover shade does not draw."""
+    from dataclasses import replace
+
+    from variant_maker.presets import MEDIUM, STRONG
+    from variant_maker.sampler import derive_seed, sample
+
+    canvas = replace(REELS, width=720, height=1280)
+    src = make_src(w=720, h=1280)
+    strong = sample(STRONG, derive_seed(11, 5), shot="talking_head", width=720, height=1280)
+    vf = filtergraph.build_video_filters(strong, src, canvas)
+    assert "luma_shade" not in strong["video"]
+    assert strong["video"]["chroma_cloud"] == pytest.approx(7.0)
+    assert strong["video"]["luma_dust"] == pytest.approx(13.0)
+    assert "scale=8:14" not in vf
+    assert "gblur=sigma=10" not in vf
+    assert "gblur=sigma=4" in vf
+    assert vf.count("noise=") == 2
+    assert "c1s=7" in vf
+    c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
+    assert c1s and max(c1s) <= 7
+    assert "alls=" not in vf
+    medium = sample(MEDIUM, derive_seed(11, 5), shot="talking_head", width=720, height=1280)
+    vf_m = filtergraph.build_video_filters(medium, src, canvas)
+    assert "luma_shade" not in medium["video"]
+    assert "scale=8:14" not in vf_m
+    leftover = make_params(video={
+        "grain": 50.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 12, "luma_shade": 140,
+    })
+    vf_cap = filtergraph.build_video_filters(leftover, src, canvas)
+    assert "scale=8:14" not in vf_cap
+    assert "gblur=sigma=10" not in vf_cap
+    assert "c0s=100" not in vf_cap
+    assert "c0s=140" not in vf_cap
+
+
+def test_luma_shade_never_applies_leftover():
+    v = {"luma_shade": 96}
+    assert filtergraph.luma_shade_applies(v, 720, 1280) is False
+    assert filtergraph.luma_shade_applies(v, 1080, 1920) is False
+    assert filtergraph.luma_shade_applies({"luma_shade": 0}, 720, 1280) is False
+    assert filtergraph.luma_shade_applies({}, 720, 1280) is False
+
+
+def test_apply_luma_dust_strength_caps_and_skips_phone_scale():
+    """Cap leftover 14–20 so softdust815a c0s 15–17 cannot redraw."""
+    assert filtergraph.apply_luma_dust_strength(11) == 11
+    assert filtergraph.apply_luma_dust_strength(12) == 12
+    assert filtergraph.apply_luma_dust_strength(13) == 13
+    assert filtergraph.apply_luma_dust_strength(16) == 13
+    assert filtergraph.apply_luma_dust_strength(20) == 13
+    assert filtergraph.apply_luma_dust_strength(40) == 13
+    assert filtergraph.apply_luma_dust_strength(0) == 0
+    assert filtergraph.apply_canvas_grain(16, 720, 1280) == 6
+
+
+def test_720_cloud_draws_luma_dust_not_stacked_chroma():
+    """Luma-only dust after the soft cloud. alls= would restack chroma snow."""
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 10,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert "gblur=sigma=4" in vf
+    assert vf.count("noise=") == 2
+    assert "c1s=5" in vf
+    assert "c0s=10" in vf
+    assert "c0f=t+u" in vf
+    assert "alls=" not in vf
+    assert vf.endswith("format=yuv420p")
+    leftover = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 16,
+    })
+    vf_old = filtergraph.build_video_filters(leftover, make_src(w=720, h=1280), canvas)
+    assert "c0s=13" in vf_old
+    assert "c0s=16" not in vf_old
+    vf1080 = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert vf1080.count("noise=") == 1
+    assert "c1s=40" in vf1080
+    assert "c0s=10" not in vf1080
+    assert "split[main]" not in vf1080
+
+
+def test_luma_dust_omitted_when_zero():
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert vf.count("noise=") == 1
+    assert "c0s=16" not in vf
+    assert "c1s=5" in vf
+
+
+def test_apply_chroma_cloud_strength_caps_old_band():
+    assert filtergraph.apply_chroma_cloud_strength(20) == 7
+    assert filtergraph.apply_chroma_cloud_strength(10) == 7
+    assert filtergraph.apply_chroma_cloud_strength(8) == 7
+    assert filtergraph.apply_chroma_cloud_strength(6) == 6
+    assert filtergraph.apply_chroma_cloud_strength(0) == 0
+
+
+def test_chroma_cloud_applies_only_under_1080():
+    v = {"chroma_cloud": 20}
+    assert filtergraph.chroma_cloud_applies(v, 720, 1280) is True
+    assert filtergraph.chroma_cloud_applies(v, 1080, 1920) is False
+    assert filtergraph.chroma_cloud_applies({"chroma_cloud": 0}, 720, 1280) is False
+    assert filtergraph.chroma_cloud_applies({}, 720, 1280) is False
+
+
+def test_chroma_cloud_size_is_even_ninth():
+    assert filtergraph.chroma_cloud_size(720, 1280) == (80, 142)
+    w, h = filtergraph.chroma_cloud_size(1080, 1920)
+    assert w % 2 == 0 and h % 2 == 0
+    assert (w, h) == (120, 212)
+
+
+def test_chroma_cloud_on_720_canvas_not_1080():
+    """720 talking-head: cloud only. Stacking phone grain + cloud IS the snow."""
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={
+        "grain": 40.0, "noise_chroma": True, "noise_seed": 7, "chroma_cloud": 20,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[main][s]" in vf
+    assert "scale=80:142" in vf
+    assert "gblur=sigma=4" in vf
+    # Live 6–10 + sigma=2 still read as chroma on SaveInta. Cap + heavier blur.
+    assert "c1s=7" in vf
+    assert "c1s=10" not in vf
+    assert "c1s=20" not in vf
+    assert "c1s=15" not in vf
+    assert vf.count("noise=") == 1
+    assert "blend=c0_expr='A':c1_expr='A+B-128':c2_expr='A+B-128'" in vf
+    assert vf.endswith("format=yuv420p")
+    vf1080 = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "split[main]" not in vf1080
+    assert "blend=" not in vf1080
+    assert vf1080.count("noise=") == 1
+    assert "c1s=40" in vf1080
+
+
+def test_chroma_cloud_omitted_when_zero():
+    from dataclasses import replace
+
+    canvas = replace(REELS, width=720, height=1280)
+    p = make_params(video={"grain": 40.0, "noise_chroma": True, "chroma_cloud": 0})
+    vf = filtergraph.build_video_filters(p, make_src(w=720, h=1280), canvas)
+    assert "split[" not in vf
+    assert "blend=" not in vf
+    assert "c1s=15" in vf
 
 
 # ---- no-op axes are omitted -------------------------------------------------

@@ -30,3 +30,12 @@ def test_auth_failed_invalid_json(tmp_path):
     p.write_text("{not-json")
     info = dc.resolve_drive_status(str(p))
     assert info.status == "auth_failed"
+
+
+def test_share_email_defaults(monkeypatch):
+    monkeypatch.delenv(dc.ENV_SHARE_EMAIL, raising=False)
+    assert dc.read_share_email({}) == "drive@varyforge.app"
+
+
+def test_share_email_from_env():
+    assert dc.read_share_email({dc.ENV_SHARE_EMAIL: " ops@varyforge.app "}) == "ops@varyforge.app"

@@ -1,4 +1,4 @@
-name: Build VaryForge control-plane image
+name: Build varimo control-plane image
 
 on:
   push:

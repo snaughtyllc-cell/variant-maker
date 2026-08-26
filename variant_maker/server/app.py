@@ -29,6 +29,7 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
+    read_share_email,
     resolve_drive_status,
 )
 from .drive_exports import (
@@ -67,7 +68,9 @@ from .drop_ledger import (
     update_post_url_cell,
     write_sheet_id_file,
 )
-from .events import event_to_dict
+from .drops import DropPack, build_drop_packs
+from .events import VariantEvent, event_to_dict
+from .experience import resolve_experience
 from .jobs import (
     Job,
     JobSource,
@@ -97,10 +100,12 @@ from .models import (
     DriveStatusOut,
     DriveVideoOut,
     DriveVideosOut,
+    DropFileOut,
     DropLedgerEnsureOut,
     DropLedgerStatusOut,
     DropLedgerSyncIn,
     DropLedgerSyncOut,
+    DropPackOut,
     ExportCreateIn,
     ExportFileOut,
     ExportJobOut,
@@ -112,6 +117,7 @@ from .models import (
     JobEventsSnapshot,
     JobFromDriveIn,
     JobSummary,
+    LookPreviewOut,
     PasswordLoginIn,
     PasswordSetIn,
     PlatformResultIn,
@@ -125,6 +131,7 @@ from .models import (
     WorkflowOut,
     WorkflowSummaryOut,
     WorkflowUpdateIn,
+    WorkspaceExperienceIn,
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
@@ -156,11 +163,17 @@ from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
 
-_IN_FLIGHT_STATES = frozenset({"rendering", "checking", "rerolling", "uniqueness", "escalating"})
+_IN_FLIGHT_STATES = frozenset({"rendering", "checking", "looking", "rerolling", "uniqueness", "escalating"})
 _UPLOAD_META: dict[str, dict] = {}
 
 ExchangeFn = Callable[..., dict[str, Any]]
 FetchEmailFn = Callable[[dict[str, Any]], str | None]
+
+
+def _look_file_url(source_id: str, name: str | None) -> str | None:
+    if not name:
+        return None
+    return f"/api/look/{source_id}/{quote(name, safe='')}"
 
 
 def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
@@ -173,15 +186,39 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         escalated=v.escalated, platform_result=v.platform_result,
         post_url=v.post_url,
         file_ready=file_ready,
+        look_status=v.look_status,
+        look_mae=v.look_mae,
+        look_src_url=_look_file_url(source_id, v.look_src),
+        look_var_url=_look_file_url(source_id, v.look_var),
+        caption=getattr(v, "caption", None),
     )
 
 
+def _in_flights(job: Job | None, source_id: str) -> list[InFlightOut]:
+    """Latest live state per variant index. Fast runs several copies at once."""
+    if job is None or job.state in ("done", "cancelled"):
+        return []
+    latest: dict[int, VariantEvent] = {}
+    for e in job.events:
+        if e.source_id != source_id:
+            continue
+        latest[e.index] = e
+    out: list[InFlightOut] = []
+    for idx in sorted(latest):
+        e = latest[idx]
+        if e.state in _IN_FLIGHT_STATES:
+            out.append(InFlightOut(
+                index=e.index, state=e.state, attempt=e.attempt, max_attempts=e.max_attempts,
+            ))
+    return out
+
+
 def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
-    if job is None:
-        return None
-    # A finished job must not keep "v01 rendering" — last event is often rendering
-    # when RunPod kills HQ at the 20-minute cap.
-    if job.state in ("done", "cancelled"):
+    """Newest live copy (Gallery 'still running'). Prefer ``_in_flights`` for Studio.
+
+    Walk newest-first and skip finished indexes — a done v01 must not hide v02–v08.
+    """
+    if job is None or job.state in ("done", "cancelled"):
         return None
     for e in reversed(job.events):
         if e.source_id != source_id:
@@ -190,15 +227,30 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
             return InFlightOut(
                 index=e.index, state=e.state, attempt=e.attempt, max_attempts=e.max_attempts,
             )
-        if e.state == "done":
-            return None
+    return None
+
+
+def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
+    if job is None:
+        return None
+    for e in reversed(job.events):
+        if e.source_id != source_id:
+            continue
+        if e.state == "looking" and (e.look_src or e.look_var):
+            return LookPreviewOut(
+                index=e.index,
+                look_status=e.look_status,
+                look_mae=e.look_mae,
+                look_src_url=_look_file_url(source_id, e.look_src),
+                look_var_url=_look_file_url(source_id, e.look_var),
+            )
     return None
 
 
 def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
                 ws: Workspace | None = None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
-    failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt"))
+    failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
     job_id = job.job_id if job is not None else None
     files_ready = (
         source_files_ready(s, ws, job_id) if ws is not None and job_id else s.delivered
@@ -221,6 +273,8 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
             for v in variants
         ],
         in_flight=_in_flight(job, s.source_id),
+        in_flights=_in_flights(job, s.source_id),
+        look_preview=_look_preview(job, s.source_id),
         job_state=job.state if job is not None else None,
         failed=failed,
         created_utc=job.created_utc if job is not None else None,
@@ -303,6 +357,27 @@ def _export_job_out(job: ExportJob) -> ExportJobOut:
     )
 
 
+def _drop_pack_out(pack: DropPack) -> DropPackOut:
+    return DropPackOut(
+        export_id=pack.export_id,
+        created_utc=pack.created_utc,
+        destination_id=pack.destination_id,
+        destination_name=pack.destination_name,
+        folder_id=pack.folder_id,
+        count=pack.count,
+        outcome=pack.outcome,
+        miss_labels=list(pack.miss_labels),
+        files=[
+            DropFileOut(
+                source_id=f.source_id, index=f.index, variant_id=f.variant_id,
+                job_id=f.job_id, drive_file_id=f.drive_file_id,
+                platform_result=f.platform_result, outcome=f.outcome,
+            )
+            for f in pack.files
+        ],
+    )
+
+
 def _drive_status_out(info) -> DriveStatusOut:
     return DriveStatusOut(
         status=info.status,
@@ -311,6 +386,7 @@ def _drive_status_out(info) -> DriveStatusOut:
         auth_mode=info.auth_mode,
         connected_email=info.connected_email,
         oauth_available=info.oauth_available,
+        share_email=read_share_email(),
     )
 
 
@@ -374,6 +450,7 @@ def create_app(
             data_dir, fallback_store._runner,
             object_store=getattr(fallback_store, "_object_store", None),
             gallery_keep_jobs=getattr(fallback_store, "_keep", None),
+            gallery_keep_hours=getattr(fallback_store, "_keep_hours", None),
         )
         auth_secret = load_or_create_secret(
             os.path.join(auth_dir, "secret"),
@@ -536,7 +613,7 @@ def create_app(
 
     def _account_email() -> str | None:
         info = _drive_info()
-        return info.connected_email or info.sa_email
+        return read_share_email() or info.connected_email or info.sa_email
 
     def _require_drive() -> None:
         info = _drive_info()
@@ -657,6 +734,7 @@ def create_app(
             hq=int(q.get("hq") or 0),
             last_job_utc=last_job_utc,
             last_error=last_error,
+            experience=getattr(ws, "experience", None) or "agency",
         )
 
     def _default_login_exchange(
@@ -790,7 +868,8 @@ def create_app(
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok"}
+        raw = (os.environ.get("VARIANT_LAB") or "").strip().lower()
+        return {"status": "ok", "lab": raw in {"1", "true", "yes"}}
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
         assert tenants is not None
@@ -808,6 +887,10 @@ def create_app(
             role=user.role,
             is_admin=is_admin_email(user.email, admin_email),
             has_password=bool(fresh.password_hash),
+            experience=resolve_experience(
+                workspace_experience=getattr(ws, "experience", None) if ws else None,
+                email=user.email,
+            ),
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:
@@ -993,6 +1076,17 @@ def create_app(
         assert tenants is not None
         return [_admin_workspace_out(ws) for ws in tenants.list_workspaces()]
 
+    @app.patch("/api/admin/workspaces/{workspace_id}", response_model=AdminWorkspaceOut)
+    def admin_patch_workspace(
+        request: Request, workspace_id: str, body: WorkspaceExperienceIn,
+    ) -> AdminWorkspaceOut:
+        _require_admin(request)
+        assert tenants is not None
+        ws = tenants.set_workspace_experience(workspace_id, body.experience)
+        if ws is None:
+            raise HTTPException(status_code=404, detail="workspace not found")
+        return _admin_workspace_out(ws)
+
     @app.delete("/api/admin/users/{email}", status_code=204)
     def admin_delete_user(request: Request, email: str) -> None:
         _require_admin(request)
@@ -1062,11 +1156,12 @@ def create_app(
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
-                          quality_mode: str = Form("fast")) -> CreateJobResponse:
+                          quality_mode: str = Form("fast"),
+                          generate_captions: bool = Form(False)) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
+            quality_mode=quality_mode, generate_captions=generate_captions,
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1111,6 +1206,7 @@ def create_app(
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
         quality_mode: str = Form("fast"),
+        generate_captions: bool = Form(False),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1125,7 +1221,7 @@ def create_app(
             paths.append((meta["filename"], meta["path"]))
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
+            quality_mode=quality_mode, generate_captions=generate_captions,
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1161,6 +1257,7 @@ def create_app(
                 paths, count=body.count,
                 allow_creative_escalate=body.allow_creative_escalate,
                 quality_mode=body.quality_mode,
+                generate_captions=body.generate_captions,
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1247,6 +1344,16 @@ def create_app(
         return [DiagnosticsItem(source_id=v.source_id, index=v.index, filename=v.filename,
                                 status=v.status, quality=v.quality)
                 for v in store.diagnostics()]
+
+    @app.get("/api/look/{source_id}/{filename}")
+    def look_still(source_id: str, filename: str):
+        """Source vs variant JPEG stills for the look-first visual test."""
+        if not str(filename).startswith("look_") or not str(filename).endswith(".jpg"):
+            raise HTTPException(status_code=404, detail="look still not found")
+        path = store.find_variant(source_id, filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="look still not found")
+        return FileResponse(path, media_type="image/jpeg")
 
     @app.get("/api/variants/{source_id}/{filename}")
     def variant_file(source_id: str, filename: str):
@@ -1737,6 +1844,13 @@ def create_app(
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
         ExportRunner(_drive(), app.state.exports).start(job)
         return _export_job_out(job)
+
+    @app.get("/api/drive/exports", response_model=list[DropPackOut])
+    def list_exports() -> list[DropPackOut]:
+        packs = build_drop_packs(
+            app.state.exports.list(), app.state.destinations, store,
+        )
+        return [_drop_pack_out(p) for p in packs]
 
     @app.post("/api/drive/exports/split", status_code=201, response_model=SplitExportOut)
     def split_export(body: ExportSplitIn) -> SplitExportOut:

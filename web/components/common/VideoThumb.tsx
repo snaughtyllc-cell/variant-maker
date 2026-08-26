@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { paintVideoFrame, videoFrameSrc } from "@/lib/media";
+import { cssAspectRatio, DEFAULT_CSS_ASPECT, paintVideoFrame, videoFrameSrc } from "@/lib/media";
 
 interface VideoThumbProps {
   src: string;
@@ -12,6 +12,11 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [inView, setInView] = useState(false);
+  const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
+
+  useEffect(() => {
+    setAspect(DEFAULT_CSS_ASPECT);
+  }, [src]);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -29,6 +34,14 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
     io.observe(el);
     return () => io.disconnect();
   }, []);
+
+  function applyVideoAspect(video: HTMLVideoElement | null) {
+    if (!video) return;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setAspect(cssAspectRatio(video.videoWidth, video.videoHeight));
+    }
+    paintVideoFrame(video);
+  }
 
   function handleMouseEnter() {
     const v = videoRef.current;
@@ -48,7 +61,9 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
       ref={boxRef}
       className={className}
       style={{
-        aspectRatio: "9 / 16",
+        aspectRatio: aspect,
+        width: "100%",
+        alignSelf: "start",
         borderRadius: 6,
         position: "relative",
         overflow: "hidden",
@@ -65,12 +80,12 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
           preload="metadata"
           muted
           playsInline
-          onLoadedMetadata={() => paintVideoFrame(videoRef.current)}
-          onLoadedData={() => paintVideoFrame(videoRef.current)}
+          onLoadedMetadata={() => applyVideoAspect(videoRef.current)}
+          onLoadedData={() => applyVideoAspect(videoRef.current)}
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "cover",
+            objectFit: "contain",
             display: "block",
           }}
         />

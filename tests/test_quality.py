@@ -42,12 +42,19 @@ def test_quality_render_strips_rebuild_keeps_warp(monkeypatch, tmp_path):
     params["video"].update({
         "resample_px": -8, "resample_flags": "spline",
         "rebuild_scale": 0.72, "warp_k1": 0.008,
+        "grain": 44.0, "noise_chroma": True, "luma_shade": 96.0,
     })
     quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
     assert captured["platform"] == "none"
     assert captured["video"]["resample_px"] == 0
     assert captured["video"]["rebuild_scale"] == 1.0
     assert captured["video"]["warp_k1"] == 0.008
+    # Grain stays in the VMAF proxy (including chroma-only talking-head noise).
+    assert captured["video"]["grain"] == 44.0
+    assert captured["video"]["noise_chroma"] is True
+    # Low-freq shade leftover is stripped on the VMAF proxy. Look-first
+    # scores the actual file instead.
+    assert captured["video"]["luma_shade"] == 0.0
 
 
 @pytest.mark.integration

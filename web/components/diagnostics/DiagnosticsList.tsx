@@ -10,6 +10,7 @@ interface DiagnosticsListProps {
 export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
   // Summary counts
   const belowFloorCount = items.filter((d) => d.status === "best_effort").length;
+  const uniquenessMissCount = items.filter((d) => d.status === "uniqueness_fail").length;
   const corruptCount = items.filter((d) => d.status === "corrupt").length;
 
   // Group by source_id, preserving insertion order
@@ -42,7 +43,7 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
               style={{
                 fontSize: 17,
                 display: "block",
-                color: "#ffd08a",
+                color: "#8e6119",
               }}
             >
               {belowFloorCount}
@@ -62,7 +63,27 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
               style={{
                 fontSize: 17,
                 display: "block",
-                color: "#fca5a5",
+                color: "#a33f3d",
+              }}
+            >
+              {uniquenessMissCount}
+            </b>
+            <span style={{ fontSize: 10.5, color: "var(--color-muted)" }}>couldn't unique</span>
+          </div>
+          <div
+            style={{
+              background: "var(--color-panel2)",
+              border: "1px solid var(--color-line)",
+              borderRadius: 10,
+              padding: "8px 13px",
+              textAlign: "center",
+            }}
+          >
+            <b
+              style={{
+                fontSize: 17,
+                display: "block",
+                color: "#a33f3d",
               }}
             >
               {corruptCount}
@@ -90,7 +111,7 @@ export function DiagnosticsList({ items, onRegenerate }: DiagnosticsListProps) {
         >
           <span style={{ fontSize: 18 }}>✓</span>
           <span>
-            Nothing in Diagnostics — only best-effort / corrupt variants appear here.
+            Nothing in Diagnostics — only uniqueness-miss / best-effort / corrupt variants appear here.
             Incomplete runs show as shortfall on Gallery until they finish.
           </span>
         </div>

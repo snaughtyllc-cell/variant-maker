@@ -15,7 +15,13 @@ def test_health_ok():
     client = TestClient(create_app())
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    assert resp.json() == {"status": "ok", "lab": False}
+
+
+def test_health_lab_flag(monkeypatch):
+    monkeypatch.setenv("VARIANT_LAB", "1")
+    client = TestClient(create_app())
+    assert client.get("/api/health").json() == {"status": "ok", "lab": True}
 
 
 def _client(tmp_path, plan=None):
@@ -217,6 +223,38 @@ def test_get_job_exposes_in_flight_from_event_log(tmp_path):
     assert detail["sources"][0]["in_flight"] == {
         "index": 2, "state": "uniqueness", "attempt": 0, "max_attempts": 0,
     }
+    assert detail["sources"][0]["in_flights"] == [{
+        "index": 2, "state": "uniqueness", "attempt": 0, "max_attempts": 0,
+    }]
+
+
+def test_get_job_exposes_parallel_in_flights(tmp_path):
+    from variant_maker.server.events import VariantEvent
+
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    job.state = "running"
+    sid = job.sources[0].source_id
+    job.events.append(VariantEvent(source_id=sid, index=1, state="rendering"))
+    job.events.append(VariantEvent(source_id=sid, index=2, state="rendering"))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    flights = detail["sources"][0]["in_flights"]
+    assert [f["index"] for f in flights] == [1, 2]
+    assert {f["state"] for f in flights} == {"rendering"}
+    assert detail["sources"][0]["in_flight"]["index"] == 2
+
+    job.events.append(VariantEvent(
+        source_id=sid, index=1, state="done", status="ok", filename="v01.mp4",
+    ))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    flights = detail["sources"][0]["in_flights"]
+    assert [f["index"] for f in flights] == [2]
+    assert detail["sources"][0]["in_flight"]["index"] == 2
 
 
 def test_done_job_does_not_keep_rendering_in_flight(tmp_path):
@@ -234,7 +272,49 @@ def test_done_job_does_not_keep_rendering_in_flight(tmp_path):
     detail = client.get(f"/api/jobs/{job_id}").json()
     assert detail["state"] == "done"
     assert detail["sources"][0]["in_flight"] is None
+    assert detail["sources"][0]["in_flights"] == []
     assert detail.get("error") in (None, "")
+
+
+def test_get_job_exposes_look_preview_from_looking_event(tmp_path):
+    from variant_maker.server.events import VariantEvent
+
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    sid = job.sources[0].source_id
+    preview = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["look_preview"]
+    assert preview["look_src_url"] == f"/api/look/{sid}/look_v01_src.jpg"
+    assert preview["look_var_url"] == f"/api/look/{sid}/look_v01.jpg"
+    assert preview["look_status"] == "ok"
+    job.state = "running"
+    job.events.append(VariantEvent(
+        source_id=sid, index=1, state="uniqueness",
+    ))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["sources"][0]["in_flight"]["state"] == "uniqueness"
+    assert detail["sources"][0]["look_preview"]["look_src_url"].endswith("look_v01_src.jpg")
+
+
+def test_look_stills_served_and_non_jpg_rejected(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    sid = job.sources[0].source_id
+    v = job.sources[0].variants[0]
+    resp = client.get(f"/api/look/{sid}/{v.look_src}")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/jpeg")
+    blocked = client.get(f"/api/look/{sid}/{v.filename}")
+    assert blocked.status_code == 404
 
 
 def test_gallery_groups_sources_ok_only(tmp_path):
@@ -251,6 +331,24 @@ def test_gallery_groups_sources_ok_only(tmp_path):
     assert gallery[0]["job_state"] == "done"
     assert all(v["status"] == "ok" for v in gallery[0]["variants"])
     assert gallery[0]["variants"][0]["uniqueness"] == 0.42
+
+
+def test_gallery_hides_uniqueness_fail(tmp_path):
+    """Under 19 bits is not a Drive/gallery ready file. It still counts as failed."""
+    client, store = _client(tmp_path, plan={2: "uniqueness_fail"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "3"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    gallery = client.get("/api/gallery").json()
+    assert gallery[0]["delivered"] == 2
+    assert gallery[0]["shortfall"] == 1
+    assert gallery[0]["failed"] == 1
+    assert all(v["status"] == "ok" for v in gallery[0]["variants"])
+    diag = client.get("/api/diagnostics").json()
+    assert len(diag) == 1
+    assert diag[0]["status"] == "uniqueness_fail"
+    assert diag[0]["quality"]["bits"] == 12
 
 
 def test_gallery_lists_newest_job_first(tmp_path):
@@ -651,7 +749,7 @@ def test_delete_source_endpoint_removes_gallery_card(tmp_path):
 def test_cli_build_app_serves_health(tmp_path):
     from variant_maker.server.cli import build_app
     client = TestClient(build_app(str(tmp_path)))
-    assert client.get("/api/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok", "lab": False}
 
 
 def test_make_runner_local():
@@ -724,3 +822,20 @@ def test_resolve_runner_auto_local_when_env_incomplete(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     assert cli.resolve_runner(None) == "local"
     assert cli.resolve_runner("runpod") == "runpod"
+
+
+def test_create_job_generate_captions_attaches_copy(tmp_path):
+    client, store = _client(tmp_path)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("boil.mp4", b"x", "video/mp4"))],
+        data={"count": "2", "generate_captions": "true"},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    store.wait(job_id, timeout=5)
+    variants = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"]
+    captions = [v.get("caption") or "" for v in variants if v["status"] == "ok"]
+    assert captions
+    assert "Copy 1 of 2" in captions[0]
+    assert captions[0] != captions[1]

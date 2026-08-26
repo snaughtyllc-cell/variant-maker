@@ -5,6 +5,7 @@ import { VariantOut } from "@/lib/types";
 import { sourceUrl } from "@/lib/api";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
+import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
 
@@ -16,6 +17,10 @@ interface VariantSheetProps {
   onClose: () => void;
   onNav: (delta: number) => void;
   onRegenerate: () => void;
+}
+
+function captionOf(v: { caption?: string | null }): string | null | undefined {
+  return v.caption;
 }
 
 export function VariantSheet({
@@ -60,12 +65,14 @@ export function VariantSheet({
       <Dialog.Portal>
         {/* Overlay — dims the Gallery behind */}
         <Dialog.Overlay
+          className="variant-sheet-overlay"
           style={{
             position: "fixed",
             inset: 0,
-            background: "#05050880",
-            backdropFilter: "blur(1px)",
+            background: "rgba(23, 42, 46, 0.32)",
+            backdropFilter: "blur(3px)",
             zIndex: 50,
+            touchAction: "none",
           }}
         />
 
@@ -73,17 +80,22 @@ export function VariantSheet({
         <Dialog.Content
           aria-describedby={undefined}
           className="variant-sheet"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
           style={{
             position: "fixed",
             top: 0,
             right: 0,
             bottom: 0,
             width: 430,
-            background: "linear-gradient(180deg, #0e0e15, #0b0b11)",
-            borderLeft: "1px solid var(--color-line2)",
-            boxShadow: "-20px 0 50px #000000aa",
+            maxWidth: "100vw",
+            background: "#fbfdfd",
+            borderLeft: "1px solid #c7dde0",
+            boxShadow: "-20px 0 50px rgba(22, 58, 65, 0.22)",
             display: "flex",
             flexDirection: "column",
+            overflow: "hidden",
+            overscrollBehavior: "contain",
             zIndex: 51,
             outline: "none",
             animation: "vm-slidein 0.25s ease",
@@ -96,8 +108,18 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header — above the video layer; padded out of the iPhone status bar */}
-          <div className="variant-sheet__header">
+          {/* Header — row of ‹ title › ✕; never stacks, never scrolls away */}
+          <div
+            className="variant-sheet__header"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "12px 14px",
+              borderBottom: "1px solid #d4e3e6",
+              flexShrink: 0,
+            }}
+          >
             {/* Prev */}
             <button
               type="button"
@@ -108,7 +130,7 @@ export function VariantSheet({
                 width: 44,
                 height: 44,
                 borderRadius: 8,
-                background: "#16161f",
+                background: "#f3f8f9",
                 border: "1px solid var(--color-line)",
                 display: "flex",
                 alignItems: "center",
@@ -163,7 +185,7 @@ export function VariantSheet({
                 width: 44,
                 height: 44,
                 borderRadius: 8,
-                background: "#16161f",
+                background: "#f3f8f9",
                 border: "1px solid var(--color-line)",
                 display: "flex",
                 alignItems: "center",
@@ -201,8 +223,19 @@ export function VariantSheet({
             </Dialog.Close>
           </div>
 
-          {/* Body — scrollable; minHeight 0 so iOS actually scrolls past the video */}
-          <div className="variant-sheet__body">
+          {/* Body — only scroll container; Radix locks document scroll while open */}
+          <div
+            className="variant-sheet__body"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              overflowX: "hidden",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
+              padding: "14px 16px 28px",
+            }}
+          >
             {/* Compare slider — beforeRef/afterRef wired in from sheet */}
             <CompareSlider
               beforeSrc={sourceUrl(sourceId)}
@@ -215,13 +248,11 @@ export function VariantSheet({
               <ScrubBar videos={[beforeRef, afterRef]} />
             </div>
 
-            {/* Quality rows */}
+            <CaptionBlock caption={captionOf(variant)} />
+
             <QualityPanel
-              quality={variant.quality}
               uniqueness={variant.uniqueness}
               uniquenessStatus={variant.uniqueness_status}
-              uniquenessTarget={variant.uniqueness_target}
-              escalated={variant.escalated}
               bestEffort={variant.status === "best_effort"}
             />
 

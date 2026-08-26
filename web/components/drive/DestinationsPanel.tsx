@@ -10,6 +10,11 @@ import {
   updateDestination,
 } from "@/lib/api";
 import { oauthErrorMessage, truncateFolderId } from "@/lib/drive";
+import {
+  DRIVE_SHARE_BODY,
+  DRIVE_SHARE_HEADING,
+  driveShareEmail,
+} from "@/lib/driveShareCopy";
 import type { Destination, DriveStatus } from "@/lib/types";
 
 type TestResult = { ok: boolean; message: string };
@@ -34,6 +39,7 @@ export function DestinationsPanel() {
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [oauthBanner, setOauthBanner] = useState<string | null>(null);
+  const [copiedShare, setCopiedShare] = useState(false);
 
   async function refresh() {
     setIsLoading(true);
@@ -155,6 +161,20 @@ export function DestinationsPanel() {
   const connectedEmail = status?.connected_email || status?.sa_email || null;
   const oauthAvailable = Boolean(status?.oauth_available);
   const isOauth = status?.auth_mode === "oauth";
+  const shareEmail = driveShareEmail(status?.share_email);
+  const shareMismatch =
+    connectedEmail != null &&
+    connectedEmail.toLowerCase() !== shareEmail.toLowerCase();
+
+  async function copyShareEmail() {
+    try {
+      await navigator.clipboard.writeText(shareEmail);
+      setCopiedShare(true);
+      window.setTimeout(() => setCopiedShare(false), 1600);
+    } catch {
+      setCopiedShare(false);
+    }
+  }
 
   return (
     <div>
@@ -163,16 +183,65 @@ export function DestinationsPanel() {
           style={{
             padding: "12px 16px",
             marginBottom: 18,
-            background: "#1c1608",
-            border: "1px solid #3a2c10",
+            background: "#fff8eb",
+            border: "1px solid #efdfbd",
             borderRadius: 12,
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           {oauthBanner}
         </div>
       )}
+      {/* Share-email is the operator path until Connect-your-own-Google is the default. */}
+      <div
+        data-testid="drive-share-card"
+        style={{
+          background: "var(--color-panel)",
+          border: "1px solid var(--color-line)",
+          borderRadius: 14,
+          padding: 16,
+          marginBottom: 18,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
+          {DRIVE_SHARE_HEADING}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <code
+            data-testid="drive-share-email"
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "var(--color-text)",
+              background: "var(--color-panel2)",
+              border: "1px solid var(--color-line)",
+              borderRadius: 9,
+              padding: "8px 12px",
+              flex: 1,
+              minWidth: 180,
+            }}
+          >
+            {shareEmail}
+          </code>
+          <button type="button" onClick={copyShareEmail} style={secondaryBtnStyle}>
+            {copiedShare ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45 }}>
+          {DRIVE_SHARE_BODY}
+        </div>
+        {shareMismatch && (
+          <div style={{ fontSize: 12, color: "#8e6119", lineHeight: 1.45 }}>
+            Studio is still signed in as {connectedEmail}. Reconnect Google as {shareEmail}{" "}
+            so shared folders actually open — operators should not share with a personal inbox.
+          </div>
+        )}
+      </div>
+
       {/* Connection card */}
       <div
         style={{
@@ -232,7 +301,7 @@ export function DestinationsPanel() {
                 Connect Google
               </a>
             ) : (
-              <div style={{ fontSize: 12, color: "#ffd08a" }}>
+              <div style={{ fontSize: 12, color: "#8e6119" }}>
                 OAuth client not set on this Pod — ask an admin to set{" "}
                 <code>VARIANT_DRIVE_OAUTH_CLIENT_ID</code> /{" "}
                 <code>VARIANT_DRIVE_OAUTH_CLIENT_SECRET</code>.
@@ -251,22 +320,20 @@ export function DestinationsPanel() {
             gap: 6,
             padding: "12px 16px",
             marginBottom: 18,
-            background: "#1c1608",
-            border: "1px solid #3a2c10",
+            background: "#fff8eb",
+            border: "1px solid #efdfbd",
             borderRadius: 12,
             fontSize: 12.5,
-            color: "#ffd08a",
+            color: "#8e6119",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠</span>
             <b>{status!.message}</b>
           </div>
-          {status!.auth_mode === "service_account" && status!.sa_email && (
-            <div style={{ color: "var(--color-muted)", fontSize: 12 }}>
-              Share folders as Editor with {status!.sa_email}
-            </div>
-          )}
+          <div style={{ color: "var(--color-muted)", fontSize: 12 }}>
+            Share folders as Editor with {shareEmail}
+          </div>
         </div>
       )}
 
@@ -288,7 +355,7 @@ export function DestinationsPanel() {
           Add destination
         </div>
         {driveNotReady && status && (
-          <div style={{ fontSize: 12, color: "#ffd08a" }}>{status.message}</div>
+          <div style={{ fontSize: 12, color: "#8e6119" }}>{status.message}</div>
         )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input
@@ -314,7 +381,7 @@ export function DestinationsPanel() {
               fontSize: 12.5,
               fontWeight: 700,
               color: "#fff",
-              background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+              background: "var(--ink)",
               border: "none",
               padding: "9px 16px",
               borderRadius: 9,
@@ -370,7 +437,7 @@ export function DestinationsPanel() {
             {isEditing ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {driveNotReady && status && (
-                  <div style={{ fontSize: 12, color: "#ffd08a" }}>{status.message}</div>
+                  <div style={{ fontSize: 12, color: "#8e6119" }}>{status.message}</div>
                 )}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <input
@@ -423,7 +490,7 @@ export function DestinationsPanel() {
                       style={{
                         fontSize: 11.5,
                         marginTop: 4,
-                        color: testResult.ok ? "#7bf2a8" : "var(--color-red)",
+                        color: testResult.ok ? "#247955" : "var(--color-red)",
                       }}
                     >
                       {testResult.ok ? "✓ " : "✕ "}
@@ -495,7 +562,7 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 12.5,
   fontWeight: 700,
   color: "#fff",
-  background: "linear-gradient(135deg, #7c5cff, #ff4d8d)",
+  background: "var(--ink)",
   border: "none",
   padding: "8px 14px",
   borderRadius: 9,

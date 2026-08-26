@@ -3,6 +3,7 @@ import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
 import { isFileReady } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
+import { CaptionSnippet } from "./CaptionSnippet";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -12,12 +13,15 @@ interface VariantCardProps {
   onToggle: () => void;
 }
 
+function captionOf(v: { caption?: string | null }): string | null | undefined {
+  return v.caption;
+}
+
 export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCardProps) {
   const ready = isFileReady(variant);
-  const vmaf = variant.quality?.vmaf != null ? Math.round(variant.quality.vmaf) : null;
-  const spatialOk = variant.quality?.spatial_ok === true;
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
   const uniquenessOk = variant.uniqueness_status === "ok";
+  const uniquenessFloorFail = variant.uniqueness_status === "below_floor";
 
   const badge = (
     <div
@@ -31,22 +35,6 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         background: "linear-gradient(transparent, #000000bb)",
       }}
     >
-      {/* VMAF badge */}
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 800,
-          padding: "1px 5px",
-          borderRadius: 5,
-          background: vmaf != null ? "#0b3d1f" : "#1e1e2a",
-          color: vmaf != null ? "#7bf2a8" : "#888",
-          border: vmaf != null ? "1px solid #134d28" : "1px solid #333",
-          lineHeight: 1.4,
-        }}
-      >
-        {vmaf ?? "–"}
-      </span>
-      {/* Uniqueness badge */}
       {uniquenessPct != null && (
         <span
           style={{
@@ -54,9 +42,9 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             fontWeight: 800,
             padding: "1px 5px",
             borderRadius: 5,
-            background: uniquenessOk ? "#072830" : "#3d2200",
-            color: uniquenessOk ? "#22d3ee" : "#f59e0b",
-            border: `1px solid ${uniquenessOk ? "#0c3d47" : "#4d2e00"}`,
+            background: uniquenessFloorFail ? "#3d1210" : uniquenessOk ? "#072830" : "#3d2200",
+            color: uniquenessFloorFail ? "#f0a8a4" : uniquenessOk ? "#22d3ee" : "#f59e0b",
+            border: `1px solid ${uniquenessFloorFail ? "#5a2a28" : uniquenessOk ? "#0c3d47" : "#4d2e00"}`,
             lineHeight: 1.4,
           }}
         >
@@ -80,19 +68,6 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           {ESCALATED_BADGE}
         </span>
       )}
-      {/* Spatial tick — ONLY when spatial_ok === true */}
-      {spatialOk && (
-        <span
-          style={{
-            marginLeft: "auto",
-            fontSize: 9,
-            color: "#7bf2a8",
-            fontWeight: 700,
-          }}
-        >
-          ✓ spatial
-        </span>
-      )}
     </div>
   );
 
@@ -107,21 +82,6 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         zIndex: 2,
       }}
     >
-      {variant.platform_result === "passed" && (
-        <span
-          style={{
-            fontSize: 8,
-            fontWeight: 800,
-            padding: "1px 5px",
-            borderRadius: 5,
-            background: "#0b3d1f",
-            color: "#7bf2a8",
-            border: "1px solid #134d28",
-          }}
-        >
-          ✓
-        </span>
-      )}
       {variant.platform_result === "duplicate_reject" && (
         <span
           style={{
@@ -129,28 +89,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             fontWeight: 800,
             padding: "1px 5px",
             borderRadius: 5,
-            background: "#2c2210",
-            color: "#ffd08a",
-            border: "1px solid #5a4416",
+            background: "#fff8eb",
+            color: "#8e6119",
+            border: "1px solid #efdfbd",
           }}
         >
           ⚠
-        </span>
-      )}
-      {variant.platform_result === "flagged" && (
-        <span
-          title="Flagged"
-          style={{
-            fontSize: 8,
-            fontWeight: 800,
-            padding: "1px 5px",
-            borderRadius: 5,
-            background: "#2c1018",
-            color: "#ff9aa8",
-            border: "1px solid #5a1a28",
-          }}
-        >
-          ⚑
         </span>
       )}
       {variant.post_url && (
@@ -176,13 +120,14 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
     <div
       onClick={ready ? onOpen : undefined}
       style={{
-        aspectRatio: "9 / 16",
-        borderRadius: 9,
         position: "relative",
+        width: "100%",
+        alignSelf: "start",
+        borderRadius: 9,
         overflow: "hidden",
         cursor: ready ? "pointer" : "default",
-        border: selected ? "1px solid #7c5cff" : "1px solid var(--color-line)",
-        boxShadow: selected ? "0 0 0 2px #7c5cff44" : undefined,
+        border: selected ? "1px solid #0caab8" : "1px solid var(--color-line)",
+        boxShadow: selected ? "0 0 0 2px #0caab844" : undefined,
         transition: "transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease",
         opacity: ready ? 1 : 0.7,
       }}
@@ -193,11 +138,10 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLDivElement).style.transform = "";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = selected ? "0 0 0 2px #7c5cff44" : "";
-        (e.currentTarget as HTMLDivElement).style.borderColor = selected ? "#7c5cff" : "var(--color-line)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = selected ? "0 0 0 2px #0caab844" : "";
+        (e.currentTarget as HTMLDivElement).style.borderColor = selected ? "#0caab8" : "var(--color-line)";
       }}
     >
-      {/* Selection checkbox */}
       <input
         type="checkbox"
         disabled={!ready}
@@ -217,52 +161,54 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           height: 13,
           zIndex: 3,
           cursor: "pointer",
-          accentColor: "#7c5cff",
+          accentColor: "#0caab8",
         }}
       />
 
-      {/* Index label */}
-      <span
-        style={{
-          position: "absolute",
-          top: 5,
-          left: 22,
-          fontSize: 9,
-          color: "#fff",
-          opacity: 0.8,
-          fontWeight: 700,
-          textShadow: "0 1px 3px #000",
-          zIndex: 2,
-          pointerEvents: "none",
-        }}
-      >
-        v{String(variant.index).padStart(2, "0")}
-      </span>
-      {ready ? (
-        <VideoThumb src={variant.file_url} className="absolute inset-0 w-full h-full" />
-      ) : (
-        <div
-          className="absolute inset-0"
+      <div style={{ position: "relative" }}>
+        <span
           style={{
-            background: "#14141d",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 8,
-            textAlign: "center",
-            fontSize: 10,
+            position: "absolute",
+            top: 5,
+            left: 22,
+            fontSize: 9,
+            color: "#fff",
+            opacity: 0.8,
             fontWeight: 700,
-            color: "#ffd08a",
+            textShadow: "0 1px 3px #000",
+            zIndex: 2,
+            pointerEvents: "none",
           }}
         >
-          Not on Studio
+          v{String(variant.index).padStart(2, "0")}
+        </span>
+        {ready ? (
+          <VideoThumb src={variant.file_url} />
+        ) : (
+          <div
+            style={{
+              aspectRatio: "9 / 16",
+              width: "100%",
+              background: "#dce9eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 8,
+              textAlign: "center",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#8e6119",
+            }}
+          >
+            Not on Studio
+          </div>
+        )}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {topBadges}
+          {badge}
         </div>
-      )}
-      {/* Overlay with badges */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        {topBadges}
-        {badge}
       </div>
+      <CaptionSnippet caption={captionOf(variant)} />
     </div>
   );
 }

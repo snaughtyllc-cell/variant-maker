@@ -33,7 +33,7 @@ export function VariantStepper({
     width: 44,
     height: 44,
     borderRadius: 8,
-    background: "#1c1c28",
+    background: "#fbfdfd",
     border: "1px solid var(--color-line)",
     display: "flex",
     alignItems: "center",
@@ -47,29 +47,12 @@ export function VariantStepper({
   };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        background: "var(--color-panel2)",
-        border: "1px solid var(--color-line)",
-        borderRadius: 11,
-        padding: "10px 14px",
-      }}
-    >
-      <p
-        style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: ".7px",
-          color: "var(--color-muted2)",
-          margin: "0 0 6px",
-          fontWeight: 700,
-        }}
-      >
+    <div className="studio-stepper">
+      <p className="studio-stepper__label">
         2 · Variants each
       </p>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 26, fontWeight: 800 }}>{value}</div>
+      <div className="studio-stepper__value-row">
+        <div className="studio-stepper__value">{value}</div>
         <div style={{ display: "flex", gap: 6 }}>
           <button style={btnStyle} onClick={decrement} aria-label="Decrease variants">
             –
@@ -79,7 +62,7 @@ export function VariantStepper({
           </button>
         </div>
       </div>
-      <div style={{ fontSize: 10.5, color: "var(--color-muted2)", marginTop: 6 }}>
+      <div className="studio-stepper__hint">
         {fileCount > 0
           ? `per video · ${fileCount} clip${fileCount !== 1 ? "s" : ""} → ${total} total`
           : "per video · add clips above"}

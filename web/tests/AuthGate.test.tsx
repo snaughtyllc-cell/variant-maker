@@ -25,6 +25,10 @@ vi.mock("@/components/nav/TopNav", () => ({
   TopNav: () => <div>TopNav</div>,
 }));
 
+vi.mock("@/components/nav/LabBanner", () => ({
+  LabBanner: () => null,
+}));
+
 import { AuthGate } from "@/components/auth/AuthGate";
 
 const AUTH_OFF: AuthMe = {
@@ -66,6 +70,16 @@ beforeEach(() => {
 });
 
 describe("AuthGate", () => {
+  it("uses the light boot screen while auth is loading", () => {
+    const { container } = render(
+      <AuthGate>
+        <div>Studio</div>
+      </AuthGate>,
+    );
+    expect(container.querySelector(".vf-boot")).toBeInTheDocument();
+    expect(screen.queryByText("Studio")).not.toBeInTheDocument();
+  });
+
   it("keeps the studio visible when login is off", () => {
     me.isLoading = false;
     me.data = AUTH_OFF;

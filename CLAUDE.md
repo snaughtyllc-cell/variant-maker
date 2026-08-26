@@ -9,6 +9,11 @@ degraded re-encodes. This tool IS the deliverable.
 
 Full design: `docs/spec.md`. Build steps: `PLAN.md`.
 
+Studio UI redesigns must start from `docs/ops/studio-ia.md` and
+`web/lib/studioDestinations.ts` — not the v1 four-screen list in old
+specs (Studio / Gallery / variant panel / Diagnostics). Live tabs also
+include Drops, Workflows, Drive, Team, and Admin.
+
 ## Scope guards (do not drift)
 - **NOT a detector.** A local "would-the-platform-catch-this" predictor is a *later* project.
   For now the real platform is the oracle; we test variants on it and label them. The only
@@ -40,6 +45,9 @@ Full design: `docs/spec.md`. Build steps: `PLAN.md`.
 6. **Every variant gates through the quality guard.** Below floor → reduce strength & regen.
 7. **The manifest is the reproduction contract** (exact cmd + params), not byte-equality.
    x264/neural ops are not bit-deterministic. Keep the `platform_result` slot.
+8. **Look is a real-frame gate, not VMAF.** Score the output file (`look.py`) before uniqueness
+   escalate. VMAF and SSIM bits signed off on `lookaqmtp` lava. Do not redraw Rejected rows
+   in `docs/ops/look-learnings.md` to buy bits.
 
 ## Workflow (matches the user's existing setup)
 - **TDD.** Red → green → refactor. Write the failing test first, then implement.
@@ -70,8 +78,9 @@ ruff check .                    # lint
 | `quality.py` | ✅ done | histogram sanity + VMAF quality-render guard |
 | `pipeline.py` | ✅ done | per-variant loop, uniqueness + auto-tune → manifest |
 | `autotune.py` | ✅ done | bisection; quality fail → milder; source/peer miss → stronger |
-| `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). Medium should *score* ~55–65% on talking-head. Do not raise the gate to 32. |
-| `cli.py` | ✅ done | options + `pipeline.run` |
+| `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). Not a look check. Do not buy % with shade, 720 snow, or Pixel AI scramble. |
+| `look.py` | ✅ done | Visual gate on the **actual** encode (`coarse_luma_v1`, fail if max MAE > 38). Stills emit on `looking`; uniqueness work overlaps so Generate wait stays uniqueness-bound. Log: `docs/ops/look-learnings.md`. |
+| `cli.py` | ✅ done | options + `pipeline.run` (`--look-first` = one medium + stills) |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
 | Fast resample | ✅ done | reconstructive `rebuild_scale` + VMAF-capped `warp_k1`; HQ skipped |
 
