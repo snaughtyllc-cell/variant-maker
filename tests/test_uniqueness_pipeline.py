@@ -341,10 +341,38 @@ def test_uniqueness_work_starts_before_stills_finish(monkeypatch, tmp_path):
     assert looking_kw[0].get("look_src") == "look_v01_src.jpg"
 
 
-def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
-    """Generate wait stays uniqueness-bound: stills + MAE overlap SSIM."""
+def test_mae_runs_after_uniqueness_returns(monkeypatch, tmp_path):
+    """Coarse MAE must not share the Fast CPU with 8-wide SSIM."""
     _stub_common(monkeypatch)
-    started = threading.Barrier(3, timeout=2)
+    uniq_done = threading.Event()
+    order: list[str] = []
+
+    def fake_uniq(_src, _variant, target=None):
+        time.sleep(0.05)
+        order.append("uniq")
+        uniq_done.set()
+        return _ok_score()
+
+    def fake_mae(*_a, **_k):
+        assert uniq_done.is_set()
+        order.append("mae")
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+    monkeypatch.setattr(pipeline.look, "score_look", fake_mae)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg)
+    assert order == ["uniq", "mae"]
+
+
+def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
+    """Generate wait stays uniqueness-bound: stills overlap SSIM. MAE is after."""
+    _stub_common(monkeypatch)
+    started = threading.Barrier(2, timeout=2)
     slice_s = 0.18
     t_start: dict[str, float] = {}
     t_end: dict[str, float] = {}
@@ -356,16 +384,6 @@ def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
         t_end["stills"] = time.perf_counter()
         return {"look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg"}
 
-    def slow_mae(*_a, **_k):
-        started.wait()
-        t_start["mae"] = time.perf_counter()
-        time.sleep(slice_s)
-        t_end["mae"] = time.perf_counter()
-        return {
-            "look_status": "ok", "look_metric": "coarse_luma_v1",
-            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
-        }
-
     def slow_uniq(_src, _variant, target=None):
         started.wait()
         t_start["uniq"] = time.perf_counter()
@@ -374,14 +392,13 @@ def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
         return _ok_score()
 
     monkeypatch.setattr(pipeline.look, "write_look_stills", slow_stills)
-    monkeypatch.setattr(pipeline.look, "score_look", slow_mae)
     monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", slow_uniq)
 
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
     pipeline.run(cfg)
 
     span = max(t_end.values()) - min(t_start.values())
-    # Serial look-then-uniqueness would be ~3 slices. Overlap is ~1.
+    # Serial stills-then-uniqueness would be ~2 slices. Overlap is ~1.
     assert span < 1.7 * slice_s, span
 
 

@@ -29,10 +29,11 @@ see a frame. That is the wrong order.
 2. **Look gate** — `variant_maker/look.py` scores the *actual* output
    (coarse 16×28 luma MAE, fail if max > 38). Pipeline writes stills and
    emits `looking` as soon as the first encode exists. Uniqueness SSIM
-   starts at the same time (not after stills/MAE), so Generate wait stays
-   uniqueness-bound. Look fail keeps the medium file and does **not**
-   escalate. If medium looks ok and uniqueness still misses, a look-fail
-   strong escalate rolls back to medium.
+   starts at the same time as the two JPEG stills (not after them), so
+   Generate wait stays uniqueness-bound. Coarse MAE runs after uniqueness
+   so 8-wide Fast SSIM is not fighting extra ffmpeg. Look fail keeps the
+   medium file and does **not** escalate. If medium looks ok and
+   uniqueness still misses, a look-fail strong escalate rolls back to medium.
 3. **Stills** — mid-frame source vs variant JPEGs next to the mp4.
    Studio progress shows them on `looking` so an upload is a visual test
    first. Variant sheet / quality panel show look ok/fail.

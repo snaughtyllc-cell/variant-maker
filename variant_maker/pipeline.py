@@ -272,21 +272,19 @@ def run(config: dict, *, on_event=None) -> Manifest:
         def _look_then_uniqueness() -> dict:
             """Stills on the card first. Uniqueness work starts immediately.
 
-            Wall clock is max(uniqueness, stills, MAE), not the sum. Serial
-            look-then-uniqueness added a few seconds per copy; SSIM is the
-            slow part, so overlapping it keeps Generate wait uniqueness-bound.
-            MAE is a blotch backstop for escalate, not the wait.
+            Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
+            Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
+            on Fast contended the CPU and stretched the uniqueness phase.
             """
             nonlocal look_info
-            with ThreadPoolExecutor(max_workers=2) as look_ex:
+            with ThreadPoolExecutor(max_workers=1) as look_ex:
                 uniq_f = look_ex.submit(_score_uniqueness_now)
-                mae_f = look_ex.submit(look.score_look, src.path, path)
                 look_info = {**look_info, **_write_look_stills()}
                 _emit_looking()
                 emit("uniqueness", index=i)
                 scored = uniq_f.result()
-                look_info = {**look_info, **mae_f.result()}
-                return scored
+            look_info = {**look_info, **look.score_look(src.path, path)}
+            return scored
 
         def _snapshot_medium() -> dict:
             """Keep the look-ok medium file so a blotchy escalate can roll back."""
