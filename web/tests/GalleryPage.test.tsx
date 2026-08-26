@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceOut, VariantOut } from "@/lib/types";
 
@@ -85,5 +85,22 @@ describe("Gallery variant sheet open", () => {
     expect(routerReplace).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     pushState.mockRestore();
+  });
+
+  it("offers Select all and Save to phone without a variant count on Select all", () => {
+    render(<GalleryContent />);
+    const toolbar = screen.getByRole("region", { name: /gallery controls/i });
+    expect(within(toolbar).getByRole("button", { name: "Select all" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeDisabled();
+    expect(within(toolbar).getByText("Select clips first")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /select all \(/i })).not.toBeInTheDocument();
+  });
+
+  it("enables Save to phone after a clip is selected", () => {
+    render(<GalleryContent />);
+    const toolbar = screen.getByRole("region", { name: /gallery controls/i });
+    fireEvent.click(screen.getByLabelText(/select v03/i));
+    expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeEnabled();
+    expect(within(toolbar).queryByText("Select clips first")).not.toBeInTheDocument();
   });
 });

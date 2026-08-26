@@ -4,17 +4,18 @@ import { SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
 import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
-import { okVariantKeys, selectionHasAllOk } from "@/lib/drive";
+import { okVariantKeys, selectAllLabel, selectionHasAllOk } from "@/lib/drive";
 import {
   canShareVideoFiles,
-  downloadVideoFiles,
   fetchVariantFiles,
   phoneShareHintCopy,
   readyShareableVariants,
+  saveOrShareVideoFiles,
   shareEmptyCopy,
-  shareVideoFiles,
+  shareVideosBusyLabel,
   shareVideosLabel,
   zipSecondaryCopy,
+  zipVisibleOnDevice,
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
 import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
@@ -41,6 +42,7 @@ export function SourceGroup({
   const [zipMsg, setZipMsg] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [canShare, setCanShare] = useState(false);
+  const [showZip, setShowZip] = useState(true);
 
   const hasShortfall = source.shortfall > 0;
   const filesReady = filesReadyCount(source);
@@ -50,7 +52,13 @@ export function SourceGroup({
   const canSaveVideos = shareable.length > 0 && !stillRunning;
 
   useEffect(() => {
-    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const matchMedia =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia.bind(window)
+        : undefined;
+    setCanShare(canShareVideoFiles(nav));
+    setShowZip(zipVisibleOnDevice(matchMedia));
   }, []);
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
@@ -90,12 +98,7 @@ export function SourceGroup({
         return;
       }
       const nav = typeof navigator === "undefined" ? undefined : navigator;
-      if (nav && typeof nav.share === "function" && canShareVideoFiles(nav, files)) {
-        const share = nav.share.bind(nav);
-        const result = await shareVideoFiles(files, (data) => share(data));
-        if (result === "shared" || result === "aborted") return;
-      }
-      downloadVideoFiles(files);
+      await saveOrShareVideoFiles(files, { share: nav });
     } catch {
       setZipMsg(shareEmptyCopy());
     } finally {
@@ -177,7 +180,7 @@ export function SourceGroup({
   const thumbSrc = thumbUrl ?? sourceUrl(source.source_id);
   const okCount = okVariantKeys([source]).length;
   const sourceAllSelected = selectionHasAllOk(selected, [source]);
-  const sourceSelectLabel = sourceAllSelected ? "Deselect" : `Select ${okCount}`;
+  const sourceSelectLabel = selectAllLabel(sourceAllSelected);
 
   return (
     <div
@@ -318,20 +321,16 @@ export function SourceGroup({
                 opacity: shareBusy ? 0.7 : 1,
               }}
             >
-              {shareBusy
-                ? canShare
-                  ? "Sharing…"
-                  : "Saving…"
-                : shareVideosLabel(canShare)}
+              {shareBusy ? shareVideosBusyLabel() : shareVideosLabel(canShare)}
             </button>
           )}
-          {filesReady > 0 && !stillRunning && (
+          {filesReady > 0 && !stillRunning && showZip && (
             <a
               href={sourceZipUrl(source.source_id)}
               download
               title={zipSecondaryCopy()}
               onClick={handleZip}
-              style={{ fontSize: 11, color: "var(--color-muted)", textDecoration: "none" }}
+              className="gallery-zip-link"
             >
               Download ZIP
             </a>

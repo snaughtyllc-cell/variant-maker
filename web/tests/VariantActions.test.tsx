@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VariantOut } from "@/lib/types";
 
 vi.mock("@/lib/api", () => ({
@@ -33,6 +33,11 @@ function variant(over: Partial<VariantOut> = {}): VariantOut {
 beforeEach(() => {
   vi.mocked(setPlatformResult).mockReset();
   vi.mocked(setPlatformResult).mockResolvedValue({} as VariantOut);
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(navigator, "canShare");
+  Reflect.deleteProperty(navigator, "share");
 });
 
 describe("VariantActions customer actions", () => {
@@ -78,5 +83,15 @@ describe("VariantActions customer actions", () => {
     await waitFor(() => {
       expect(onRegenerate).toHaveBeenCalled();
     });
+  });
+
+  it("labels Save to Photos when the share sheet can take the clip", () => {
+    Object.defineProperty(navigator, "canShare", {
+      configurable: true,
+      value: () => true,
+    });
+    render(<VariantActions sourceId="s1" variant={variant()} onRegenerate={() => {}} />);
+    expect(screen.getByRole("button", { name: /save to photos/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Download/ })).not.toBeInTheDocument();
   });
 });

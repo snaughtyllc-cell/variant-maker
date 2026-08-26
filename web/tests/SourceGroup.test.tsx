@@ -75,37 +75,53 @@ afterEach(() => {
 });
 
 describe("SourceGroup phone save/share", () => {
-  it("shows Save videos as the pack action and ZIP as a quieter secondary", () => {
+  it("shows Save to phone as the pack action and ZIP as a quieter secondary on desktop", () => {
     render(<SourceGroup source={source()} {...props} />);
-    expect(screen.getByRole("button", { name: /save videos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save to phone/i })).toBeInTheDocument();
     const zip = screen.getByRole("link", { name: /download zip/i });
     expect(zip).toHaveAttribute("href", "/api/sources/s1/zip");
     expect(zip.getAttribute("title")).toBe(zipSecondaryCopy());
-    expect(zip.getAttribute("style") ?? "").toMatch(/color:\s*var\(--color-muted\)/);
-    expect(screen.getByRole("button", { name: /save videos/i }).getAttribute("title")).toBe(
+    expect(zip).toHaveClass("gallery-zip-link");
+    expect(screen.getByRole("button", { name: /save to phone/i }).getAttribute("title")).toBe(
       phoneShareHintCopy(),
     );
+    expect(screen.getByRole("button", { name: /select all/i })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Diagnostics/i);
   });
 
-  it("labels Share videos when the browser can share files", () => {
+  it("labels Save to Photos when the browser can share files", () => {
     Object.defineProperty(navigator, "canShare", {
       configurable: true,
       value: () => true,
     });
     render(<SourceGroup source={source()} {...props} />);
-    expect(screen.getByRole("button", { name: /share videos/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save videos/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save to photos/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save to phone/i })).not.toBeInTheDocument();
   });
 
-  it("hides Save videos while the job is still running", () => {
+  it("hides ZIP on coarse-pointer (phone) devices", async () => {
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query === "(pointer: coarse)",
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as MediaQueryList);
+    render(<SourceGroup source={source()} {...props} />);
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: /download zip/i })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /save to phone/i })).toBeInTheDocument();
+  });
+
+  it("hides Save to phone while the job is still running", () => {
     render(
       <SourceGroup
         source={source({ job_state: "running", in_flight: { index: 3, state: "rendering", attempt: 0, max_attempts: 2 } })}
         {...props}
       />,
     );
-    expect(screen.queryByRole("button", { name: /save videos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save to phone/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /download zip/i })).not.toBeInTheDocument();
   });
 
@@ -128,7 +144,7 @@ describe("SourceGroup phone save/share", () => {
 
     try {
       render(<SourceGroup source={source()} {...props} />);
-      fireEvent.click(screen.getByRole("button", { name: /save videos/i }));
+      fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
 
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
@@ -155,11 +171,13 @@ describe("SourceGroup phone save/share", () => {
     );
 
     render(<SourceGroup source={source()} {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: /share videos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save to photos/i }));
 
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    const payload = share.mock.calls[0][0] as { files: File[] };
-    expect(payload.files.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(2));
+    expect(share.mock.calls.map((c) => (c[0] as { files: File[] }).files.map((f) => f.name))).toEqual([
+      ["v01.mp4"],
+      ["v02.mp4"],
+    ]);
   });
 
   it("does not fetch variants that are not ready or not ok", async () => {
@@ -179,7 +197,7 @@ describe("SourceGroup phone save/share", () => {
         {...props}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /save videos/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(vi.mocked(fetch).mock.calls.map((c) => String(c[0]))).toEqual([
       "/api/variants/s1/v03.mp4",

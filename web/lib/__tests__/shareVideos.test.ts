@@ -6,10 +6,16 @@ import {
   isShareableVideo,
   phoneShareHintCopy,
   readyShareableVariants,
+  saveNoneSelectedCopy,
+  saveOrShareVideoFiles,
+  selectedShareableVariants,
   shareEmptyCopy,
   shareVideoFiles,
+  shareVideoFilesSequentially,
+  shareVideosBusyLabel,
   shareVideosLabel,
   zipSecondaryCopy,
+  zipVisibleOnDevice,
 } from "@/lib/shareVideos";
 
 afterEach(() => {
@@ -161,17 +167,99 @@ describe("downloadVideoFiles", () => {
   });
 });
 
-describe("copy", () => {
-  it("labels Share when canShare is true", () => {
-    expect(shareVideosLabel(true)).toBe("Share videos");
-    expect(shareVideosLabel(false)).toBe("Save videos");
+describe("shareVideoFilesSequentially", () => {
+  it("shares one file per sheet so iOS can show Save Video", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    const shareFn = vi.fn(async () => {});
+    expect(await shareVideoFilesSequentially(files, shareFn)).toBe("shared");
+    expect(shareFn).toHaveBeenCalledTimes(2);
+    expect(shareFn.mock.calls[0][0].files.map((f) => f.name)).toEqual(["v01.mp4"]);
+    expect(shareFn.mock.calls[1][0].files.map((f) => f.name)).toEqual(["v02.mp4"]);
   });
 
-  it("keeps ZIP as a secondary desktop action and skips Files-app unzip", () => {
+  it("stops on the first abort when nothing was saved yet", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    expect(
+      await shareVideoFilesSequentially(files, async () => {
+        throw new DOMException("canceled", "AbortError");
+      }),
+    ).toBe("aborted");
+  });
+});
+
+describe("saveOrShareVideoFiles", () => {
+  it("falls back to per-file download when share is unavailable", async () => {
+    const file = new File(["x"], "v01.mp4", { type: "video/mp4" });
+    const download = vi.fn();
+    expect(await saveOrShareVideoFiles([file], { download })).toBe("downloaded");
+    expect(download).toHaveBeenCalledWith([file]);
+  });
+
+  it("shares sequentially when canShare accepts a probe file", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    const share = vi.fn(async () => {});
+    const download = vi.fn();
+    expect(
+      await saveOrShareVideoFiles(files, {
+        share: { canShare: () => true, share },
+        download,
+      }),
+    ).toBe("shared");
+    expect(share).toHaveBeenCalledTimes(2);
+    expect(download).not.toHaveBeenCalled();
+  });
+});
+
+describe("selectedShareableVariants", () => {
+  it("keeps selected ok-ready clips with file urls", () => {
+    expect(
+      selectedShareableVariants(
+        [
+          {
+            source_id: "s1",
+            filename: "a.mp4",
+            requested: 2,
+            delivered: 2,
+            shortfall: 0,
+            variants: [
+              { filename: "v01.mp4", file_url: "/a", status: "ok", index: 1 } as never,
+              { filename: "v02.mp4", file_url: "/b", status: "ok", index: 2 } as never,
+              { filename: "v03.mp4", file_url: "/c", status: "best_effort", index: 3 } as never,
+            ],
+          },
+        ],
+        new Set(["s1:1", "s1:3"]),
+      ),
+    ).toEqual([{ file_url: "/a", filename: "v01.mp4" }]);
+  });
+});
+
+describe("copy", () => {
+  it("labels Save to Photos when the share sheet can take videos", () => {
+    expect(shareVideosLabel(true)).toBe("Save to Photos");
+    expect(shareVideosLabel(false)).toBe("Save to phone");
+    expect(shareVideosBusyLabel()).toBe("Saving…");
+    expect(saveNoneSelectedCopy()).toBe("Select clips first");
+  });
+
+  it("keeps ZIP as a secondary desktop action and names the Files-app trap", () => {
     expect(zipSecondaryCopy()).toMatch(/ZIP/i);
     expect(zipSecondaryCopy()).toMatch(/desktop/i);
-    expect(phoneShareHintCopy()).toMatch(/unzip/i);
-    expect(phoneShareHintCopy()).toMatch(/Files/i);
+    expect(zipSecondaryCopy()).toMatch(/Files/i);
+    expect(phoneShareHintCopy()).toMatch(/Save Video/i);
+    expect(phoneShareHintCopy()).toMatch(/Photos/i);
+    expect(zipVisibleOnDevice(() => ({ matches: true }))).toBe(false);
+    expect(zipVisibleOnDevice(() => ({ matches: false }))).toBe(true);
+    expect(zipVisibleOnDevice(undefined)).toBe(true);
     expect(zipSecondaryCopy() + phoneShareHintCopy() + shareEmptyCopy()).not.toMatch(/Diagnostics/i);
   });
 });

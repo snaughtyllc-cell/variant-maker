@@ -20,6 +20,17 @@ import {
   sendDisabledReason,
   withOkSelection,
 } from "@/lib/drive";
+import {
+  canShareVideoFiles,
+  fetchVariantFiles,
+  phoneShareHintCopy,
+  saveNoneSelectedCopy,
+  saveOrShareVideoFiles,
+  selectedShareableVariants,
+  shareEmptyCopy,
+  shareVideosBusyLabel,
+  shareVideosLabel,
+} from "@/lib/shareVideos";
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
@@ -45,6 +56,9 @@ export function GalleryContent() {
   const [sheetQuery, setSheetQuery] = useState<{ sourceId: string; index: number } | null | undefined>(
     undefined,
   );
+  const [canShare, setCanShare] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -54,6 +68,10 @@ export function GalleryContent() {
         setDestinations(dests);
       })
       .catch((e) => console.error("Failed to load Drive status", e));
+  }, []);
+
+  useEffect(() => {
+    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
   }, []);
 
   function handleToggleVariant(key: string) {
@@ -142,6 +160,25 @@ export function GalleryContent() {
     setSelected((prev) => withOkSelection(prev, [source], select));
   }
 
+  async function handleSaveSelected() {
+    if (saveBusy || okRefs.length === 0) return;
+    setSaveBusy(true);
+    setSaveMsg(null);
+    try {
+      const files = await fetchVariantFiles(selectedShareableVariants(allSources, selected));
+      if (files.length === 0) {
+        setSaveMsg(shareEmptyCopy());
+        return;
+      }
+      const nav = typeof navigator === "undefined" ? undefined : navigator;
+      await saveOrShareVideoFiles(files, { share: nav });
+    } catch {
+      setSaveMsg(shareEmptyCopy());
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
   function handleRemoveSource(source: SourceOut) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -167,7 +204,7 @@ export function GalleryContent() {
           <div>
             <p className="workspace-heading__eyebrow">Review library</p>
             <h1>Gallery</h1>
-            <p className="workspace-heading__copy">Finished packs by source. Review quality, keep the strongest variants, and send selected copies to Drive.</p>
+            <p className="workspace-heading__copy">Finished packs by source. Select clips, then Save to Photos on a phone — or send copies to Drive.</p>
           </div>
         </header>
       </section>
@@ -181,9 +218,15 @@ export function GalleryContent() {
         selectedCount={okRefs.length}
         sendDisabledReason={disabledReason}
         onSend={() => setSendModalOpen(true)}
-        selectAllLabel={selectAllLabel(allVisibleSelected, visibleOkCount)}
+        selectAllLabel={selectAllLabel(allVisibleSelected)}
         selectAllDisabled={visibleOkCount === 0}
         onSelectAll={handleSelectAllVisible}
+        saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(canShare)}
+        saveBusy={saveBusy}
+        saveDisabledReason={okRefs.length === 0 ? saveNoneSelectedCopy() : null}
+        saveHint={phoneShareHintCopy()}
+        onSave={() => { void handleSaveSelected(); }}
+        saveMsg={saveMsg}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}

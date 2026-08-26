@@ -1,7 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
+import {
+  canShareVideoFiles,
+  fetchVariantFiles,
+  isShareableVideo,
+  phoneShareHintCopy,
+  saveOrShareVideoFiles,
+  shareVideosBusyLabel,
+  shareVideosLabel,
+} from "@/lib/shareVideos";
 import { PostLinkField } from "./PostLinkField";
 
 interface VariantActionsProps {
@@ -13,6 +22,28 @@ interface VariantActionsProps {
 export function VariantActions({ sourceId, variant, onRegenerate }: VariantActionsProps) {
   const [busy, setBusy] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
+  }, []);
+
+  async function handleSaveVariant(e: React.MouseEvent) {
+    e.preventDefault();
+    if (saveBusy || !isShareableVideo(variant)) return;
+    setSaveBusy(true);
+    try {
+      const files = await fetchVariantFiles([{ file_url: variant.file_url, filename: variant.filename }]);
+      if (files.length === 0) return;
+      const nav = typeof navigator === "undefined" ? undefined : navigator;
+      await saveOrShareVideoFiles(files, { share: nav });
+    } catch (err) {
+      console.error("Save variant failed", err);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
 
   async function handleRegenerate() {
     if (busy) return;
@@ -122,29 +153,57 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           gap: 9,
         }}
       >
-        <a
-          href={variant.file_url}
-          download={variant.filename}
-          style={{
-            gridColumn: "span 2",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "11px",
-            borderRadius: 10,
-            background: "var(--ink)",
-            border: "none",
-            color: "#f7fbfb",
-            boxShadow: "none",
-            textDecoration: "none",
-            cursor: "pointer",
-          }}
-        >
-          ⬇ Download variant
-        </a>
+        {canShare ? (
+          <button
+            type="button"
+            title={phoneShareHintCopy()}
+            onClick={handleSaveVariant}
+            disabled={saveBusy}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              cursor: saveBusy ? "wait" : "pointer",
+              opacity: saveBusy ? 0.7 : 1,
+            }}
+          >
+            ⬇ {saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true)}
+          </button>
+        ) : (
+          <a
+            href={variant.file_url}
+            download={variant.filename}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              textDecoration: "none",
+              cursor: "pointer",
+            }}
+          >
+            ⬇ Download variant
+          </a>
+        )}
 
         <button
           onClick={handleRegenerate}

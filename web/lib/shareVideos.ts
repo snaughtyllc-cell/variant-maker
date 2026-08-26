@@ -1,4 +1,5 @@
 import { isFileReady } from "./gallery";
+import type { SourceOut } from "./types";
 
 export type ShareNavigatorLike = {
   canShare?: (data?: { files?: File[] }) => boolean;
@@ -15,6 +16,8 @@ export type ShareableVariant = {
   file_ready?: boolean;
   status?: string;
 };
+
+export type SaveOrShareResult = ShareVideoResult | "downloaded";
 
 function isAbortError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "name" in err && (err as { name: string }).name === "AbortError";
@@ -51,6 +54,29 @@ export async function shareVideoFiles(
   }
 }
 
+export async function shareVideoFilesSequentially(
+  files: File[],
+  shareFn?: ShareFn,
+): Promise<ShareVideoResult> {
+  if (!shareFn || files.length === 0) return "unsupported";
+  let shared = 0;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      await shareFn({ files: [file], title: file.name });
+      shared += 1;
+    } catch (err) {
+      if (isAbortError(err)) return shared > 0 ? "shared" : "aborted";
+      if (shared === 0) return "unsupported";
+      const rest = files.slice(i);
+      const leftover = await shareVideoFiles(rest, shareFn);
+      if (leftover === "shared" || leftover === "aborted") return "shared";
+      return "unsupported";
+    }
+  }
+  return "shared";
+}
+
 export function isShareableVideo<T extends ShareableVariant>(
   variant: T,
 ): variant is T & { file_url: string } {
@@ -63,6 +89,21 @@ export function readyShareableVariants<T extends ShareableVariant>(
   variants: T[],
 ): Array<T & { file_url: string }> {
   return variants.filter(isShareableVideo);
+}
+
+export function selectedShareableVariants(
+  sources: SourceOut[],
+  selected: Set<string>,
+): Array<{ file_url: string; filename: string }> {
+  const out: Array<{ file_url: string; filename: string }> = [];
+  for (const source of sources) {
+    for (const variant of source.variants) {
+      if (!selected.has(`${source.source_id}:${variant.index}`)) continue;
+      if (!isShareableVideo(variant)) continue;
+      out.push({ file_url: variant.file_url, filename: variant.filename });
+    }
+  }
+  return out;
 }
 
 export async function fetchVariantFiles(
@@ -98,18 +139,52 @@ export function downloadVideoFiles(
   }
 }
 
+export async function saveOrShareVideoFiles(
+  files: File[],
+  options?: {
+    share?: ShareNavigatorLike | null;
+    download?: (files: File[]) => void;
+  },
+): Promise<SaveOrShareResult> {
+  if (files.length === 0) return "unsupported";
+  const shareNav = options?.share;
+  const shareFn =
+    shareNav && typeof shareNav.share === "function" ? shareNav.share.bind(shareNav) : undefined;
+  const probe = files.slice(0, 1);
+  if (shareFn && canShareVideoFiles(shareNav, probe)) {
+    const result = await shareVideoFilesSequentially(files, shareFn);
+    if (result === "shared" || result === "aborted") return result;
+  }
+  (options?.download ?? downloadVideoFiles)(files);
+  return "downloaded";
+}
+
 export function shareVideosLabel(canShare: boolean): string {
-  return canShare ? "Share videos" : "Save videos";
+  return canShare ? "Save to Photos" : "Save to phone";
+}
+
+export function shareVideosBusyLabel(): string {
+  return "Saving…";
+}
+
+export function zipVisibleOnDevice(
+  matchMedia?: ((query: string) => { matches: boolean }) | null,
+): boolean {
+  return matchMedia?.("(pointer: coarse)")?.matches !== true;
 }
 
 export function zipSecondaryCopy(): string {
-  return "Desktop ZIP of the pack. On a phone, Save or Share videos instead — that skips the Files-app unzip.";
+  return "Desktop ZIP of the pack. On a phone ZIP lands in Files — use Save to Photos instead.";
 }
 
 export function phoneShareHintCopy(): string {
-  return "Saves or shares the mp4s so you can post without unzipping in Files.";
+  return "Opens the share sheet. Tap Save Video to put the clip in Photos — not Files.";
 }
 
 export function shareEmptyCopy(): string {
   return "Those videos never copied back from the GPU. Wait a moment and try again, or Regenerate.";
+}
+
+export function saveNoneSelectedCopy(): string {
+  return "Select clips first";
 }
