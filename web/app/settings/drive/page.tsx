@@ -13,7 +13,7 @@ export default function DriveSettingsPage() {
           <p className="workspace-heading__eyebrow">Delivery setup</p>
           <h1>Drive</h1>
           <div className="workspace-heading__copy">
-            Share the VaryForge Drive email with your folder, paste the link, then add destinations and Drop Ledger.
+            Share the varimo Drive email with your folder, paste the link, then add destinations and Drop Ledger.
             Captions are written from Studio Generate.
             <DriveLoginNote />
           </div>

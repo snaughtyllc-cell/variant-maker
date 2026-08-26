@@ -40,7 +40,7 @@ row + progress card.
 | Gallery | `/gallery` | everyone | yes | 24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
-| Drive | `/settings/drive` | everyone | yes | Share VaryForge Drive email, paste folder link, captions, Drop Ledger, password. |
+| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |

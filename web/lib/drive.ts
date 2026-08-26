@@ -52,10 +52,8 @@ export function withOkSelection(
   return next;
 }
 
-export function selectAllLabel(allSelected: boolean, okCount: number): string {
-  if (okCount === 0) return "Select all";
-  if (allSelected) return "Deselect all";
-  return `Select all (${okCount})`;
+export function selectAllLabel(allSelected: boolean, _okCount?: number): string {
+  return allSelected ? "Deselect all" : "Select all";
 }
 
 export function oauthErrorMessage(reason: string | null | undefined): string {

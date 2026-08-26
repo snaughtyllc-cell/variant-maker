@@ -1,4 +1,4 @@
-name: Build VaryForge Fast CPU worker (lab)
+name: Build varimo Fast CPU worker (lab)
 
 # Experiment image only. Does not overwrite variant-fast:latest (live).
 on:

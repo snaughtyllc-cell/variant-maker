@@ -1,7 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
+import {
+  fillFileCache,
+  filesReadyNow,
+  isShareableVideo,
+  phoneShareHintCopy,
+  saveOrShareVideoFiles,
+  shareVideosBusyLabel,
+  shareVideosLabel,
+  shouldOfferPhotosSave,
+} from "@/lib/shareVideos";
 import { PostLinkField } from "./PostLinkField";
 
 interface VariantActionsProps {
@@ -13,6 +23,36 @@ interface VariantActionsProps {
 export function VariantActions({ sourceId, variant, onRegenerate }: VariantActionsProps) {
   const [busy, setBusy] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [offerPhotos, setOfferPhotos] = useState(false);
+  const fileCacheRef = useRef(new Map<string, File>());
+
+  const saveRef = isShareableVideo(variant)
+    ? [{ file_url: variant.file_url, filename: variant.filename }]
+    : [];
+
+  useEffect(() => {
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
+  }, []);
+
+  function handleSaveVariant(e: React.MouseEvent) {
+    e.preventDefault();
+    if (saveBusy || saveRef.length === 0) return;
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const ready = filesReadyNow(fileCacheRef.current, saveRef);
+    setSaveBusy(true);
+    const run = async (files: File[]) => {
+      if (files.length === 0) return;
+      await saveOrShareVideoFiles(files, {
+        share: nav,
+        userAgent: nav?.userAgent,
+        maxTouchPoints: nav?.maxTouchPoints,
+      });
+    };
+    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, saveRef).then(run);
+    void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
+  }
 
   async function handleRegenerate() {
     if (busy) return;
@@ -122,29 +162,57 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           gap: 9,
         }}
       >
-        <a
-          href={variant.file_url}
-          download={variant.filename}
-          style={{
-            gridColumn: "span 2",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "11px",
-            borderRadius: 10,
-            background: "var(--ink)",
-            border: "none",
-            color: "#f7fbfb",
-            boxShadow: "none",
-            textDecoration: "none",
-            cursor: "pointer",
-          }}
-        >
-          ⬇ Download variant
-        </a>
+        {offerPhotos ? (
+          <button
+            type="button"
+            title={phoneShareHintCopy()}
+            onClick={handleSaveVariant}
+            disabled={saveBusy}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              cursor: saveBusy ? "wait" : "pointer",
+              opacity: saveBusy ? 0.7 : 1,
+            }}
+          >
+            ⬇ {saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true)}
+          </button>
+        ) : (
+          <a
+            href={variant.file_url}
+            download={variant.filename}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              textDecoration: "none",
+              cursor: "pointer",
+            }}
+          >
+            ⬇ Download variant
+          </a>
+        )}
 
         <button
           onClick={handleRegenerate}
