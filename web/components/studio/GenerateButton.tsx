@@ -21,21 +21,27 @@ export function GenerateButton({
   complete,
 }: GenerateButtonProps) {
   const isDisabled = disabled || busy || fileCount === 0;
+  const inProgress = Boolean(busy || (jobId && !complete));
+  const label = busy || (jobId && !complete)
+    ? "Generating…"
+    : complete
+      ? "Generate another"
+      : "Generate";
+  const support = inProgress
+    ? "in progress — Cancel on the live run if this was a mistake"
+    : complete
+      ? "Starts a new pack from the clips on this page"
+      : generatePackLabel(fileCount, perVideo);
 
   return (
     <button
       onClick={onClick}
       disabled={isDisabled}
       className="studio-generate-button"
+      data-complete={complete || undefined}
     >
-      {busy ? "Generating…" : jobId ? (complete ? "New run first" : "Generating…") : "Generate"}
-      <small>
-        {busy || (jobId && !complete)
-          ? "in progress — Cancel on the live run if this was a mistake"
-          : jobId && complete
-            ? "New run clears this pack"
-            : generatePackLabel(fileCount, perVideo)}
-      </small>
+      {label}
+      <small>{support}</small>
     </button>
   );
 }

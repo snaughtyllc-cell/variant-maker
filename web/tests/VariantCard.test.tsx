@@ -4,7 +4,7 @@ import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
 import { ESCALATED_TITLE } from "@/lib/format";
 
-function variant(over: Partial<VariantOut> = {}): VariantOut {
+function variant(over: Partial<VariantOut> & { caption?: string | null } = {}): VariantOut {
   return {
     index: 1,
     filename: "v01.mp4",
@@ -42,7 +42,7 @@ describe("VariantCard platform badges", () => {
     expect(screen.queryByText("⚑")).not.toBeInTheDocument();
   });
 
-  it("shows a flagged badge", () => {
+  it("does not show a flagged chip to customers", () => {
     render(
       <VariantCard
         variant={variant({ platform_result: "flagged" })}
@@ -52,8 +52,22 @@ describe("VariantCard platform badges", () => {
         onToggle={() => {}}
       />,
     );
-    const badge = screen.getByTitle("Flagged");
-    expect(badge).toHaveTextContent("⚑");
+    expect(screen.queryByTitle("Flagged")).not.toBeInTheDocument();
+    expect(screen.queryByText("⚑")).not.toBeInTheDocument();
+    expect(screen.queryByText("✓")).not.toBeInTheDocument();
+  });
+
+  it("keeps a duplicate-reject mark", () => {
+    render(
+      <VariantCard
+        variant={variant({ platform_result: "duplicate_reject" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("⚠")).toBeInTheDocument();
   });
 });
 
@@ -61,7 +75,16 @@ describe("VariantCard uniqueness", () => {
   it("shows uniqueness percent (higher = more different)", () => {
     render(
       <VariantCard
-        variant={variant()}
+        variant={variant({
+          quality: {
+            vmaf: 95,
+            histogram_ok: true,
+            regen_count: 0,
+            passed: true,
+            spatial_vmaf: 92,
+            spatial_ok: true,
+          },
+        })}
         sourceId="s1"
         onOpen={() => {}}
         selected={false}
@@ -70,6 +93,8 @@ describe("VariantCard uniqueness", () => {
     );
     expect(screen.getByText("50%")).toBeInTheDocument();
     expect(screen.queryByText("esc")).not.toBeInTheDocument();
+    expect(screen.queryByText("95")).not.toBeInTheDocument();
+    expect(screen.queryByText(/spatial/i)).not.toBeInTheDocument();
   });
 
   it("shows an esc badge next to uniqueness when escalated", () => {
@@ -88,6 +113,21 @@ describe("VariantCard uniqueness", () => {
     expect(esc).toHaveAttribute("title", ESCALATED_TITLE);
   });
 
+  it("uses the red uniqueness badge under the 30% ship floor", () => {
+    render(
+      <VariantCard
+        variant={variant({ uniqueness: 18 / 64, uniqueness_status: "below_floor" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const badge = screen.getByText("28%");
+    expect(badge).toBeInTheDocument();
+    expect(badge.style.background).toBe("rgb(61, 18, 16)");
+  });
+
   it("marks a variant that has a pasted live post link", () => {
     render(
       <VariantCard
@@ -99,6 +139,23 @@ describe("VariantCard uniqueness", () => {
       />,
     );
     expect(screen.getByText("link")).toBeInTheDocument();
+  });
+
+  it("shows a caption snippet under the clip when present", () => {
+    render(
+      <VariantCard
+        variant={variant({
+          caption: "  If you didnt know a good boil this line is long enough to snip past eighty characters for sure  ",
+        })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const preview = screen.getByText(/If you didnt know a good boil/);
+    expect(preview).toBeInTheDocument();
+    expect(preview.textContent).toMatch(/…$/);
   });
 });
 

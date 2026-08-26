@@ -81,13 +81,31 @@ class RunPodServerlessRunner:
             out_dir=out_dir, source_id=source_id, on_event=on_event,
         )
 
+    def _fetch_named(self, source_id: str, out_dir: str, name: str | None) -> None:
+        if not name:
+            return
+        base = os.path.basename(str(name))
+        if base in ("", ".", "..") or base != str(name):
+            return
+        dest = os.path.join(out_dir, base)
+        if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+            return
+        try:
+            self._store.get(f"outputs/{source_id}/{base}", dest)
+        except Exception:
+            return
+
     def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
                         on_event: Callable[[VariantEvent], None]) -> SourceResult:
+        os.makedirs(out_dir, exist_ok=True)
         variants_meta: list[dict] = []
         manifest_key = None
         for chunk in chunks:
             if chunk.get("type") == "progress":
                 e = chunk["event"]
+                if e.get("state") == "looking":
+                    self._fetch_named(source_id, out_dir, e.get("look_src"))
+                    self._fetch_named(source_id, out_dir, e.get("look_var"))
                 on_event(VariantEvent(
                     source_id=source_id, index=e["index"], state=e["state"],
                     attempt=e.get("attempt", 0), max_attempts=e.get("max_attempts", 0),
@@ -101,16 +119,21 @@ class RunPodServerlessRunner:
                     preset_used=e.get("preset_used"),
                     strength_final=e.get("strength_final"),
                     platform_result=e.get("platform_result"),
+                    look_status=e.get("look_status"),
+                    look_mae=e.get("look_mae"),
+                    look_src=e.get("look_src"),
+                    look_var=e.get("look_var"),
                 ))
             elif chunk.get("type") == "result":
                 variants_meta = chunk.get("variants", [])
                 manifest_key = chunk.get("manifest_key")
 
-        os.makedirs(out_dir, exist_ok=True)
         variants = []
         for v in variants_meta:
             local = os.path.join(out_dir, v["filename"])
             self._store.get(v["key"], local)
+            self._fetch_named(source_id, out_dir, v.get("look_src"))
+            self._fetch_named(source_id, out_dir, v.get("look_var"))
             variants.append(VariantResult(
                 index=v["index"], filename=v["filename"],
                 status=v["status"], quality=v["quality"], path=local,
@@ -122,6 +145,10 @@ class RunPodServerlessRunner:
                 strength_final=v.get("strength_final"),
                 escalated=bool(v.get("escalated", False)),
                 platform_result=v.get("platform_result"),
+                look_status=v.get("look_status"),
+                look_mae=v.get("look_mae"),
+                look_src=v.get("look_src"),
+                look_var=v.get("look_var"),
             ))
         manifest_path = os.path.join(out_dir, "manifest.json")
         if manifest_key:

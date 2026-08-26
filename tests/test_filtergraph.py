@@ -1,5 +1,7 @@
 import re
 
+import pytest
+
 from variant_maker import filtergraph
 from variant_maker.platforms import get_platform, resolve_platform
 from variant_maker.probe import ColorTags, SourceInfo
@@ -363,6 +365,51 @@ def test_talking_head_720_sample_draws_cloud_without_phone_grain():
     assert len(dust) == 1
     assert 11 <= dust[0] <= 13
     assert "c0f=t+u" in vf
+
+
+def test_strong_720_talking_head_does_not_draw_luma_shade():
+    """lookaqmtp lava is rejected. Medium 720 stays signed cloud+dust. Leftover shade does not draw."""
+    from dataclasses import replace
+
+    from variant_maker.presets import MEDIUM, STRONG
+    from variant_maker.sampler import derive_seed, sample
+
+    canvas = replace(REELS, width=720, height=1280)
+    src = make_src(w=720, h=1280)
+    strong = sample(STRONG, derive_seed(11, 5), shot="talking_head", width=720, height=1280)
+    vf = filtergraph.build_video_filters(strong, src, canvas)
+    assert "luma_shade" not in strong["video"]
+    assert strong["video"]["chroma_cloud"] == pytest.approx(7.0)
+    assert strong["video"]["luma_dust"] == pytest.approx(13.0)
+    assert "scale=8:14" not in vf
+    assert "gblur=sigma=10" not in vf
+    assert "gblur=sigma=4" in vf
+    assert vf.count("noise=") == 2
+    assert "c1s=7" in vf
+    c1s = [int(x) for x in re.findall(r"c1s=(\d+)", vf)]
+    assert c1s and max(c1s) <= 7
+    assert "alls=" not in vf
+    medium = sample(MEDIUM, derive_seed(11, 5), shot="talking_head", width=720, height=1280)
+    vf_m = filtergraph.build_video_filters(medium, src, canvas)
+    assert "luma_shade" not in medium["video"]
+    assert "scale=8:14" not in vf_m
+    leftover = make_params(video={
+        "grain": 50.0, "noise_chroma": True, "noise_seed": 7,
+        "chroma_cloud": 5, "luma_dust": 12, "luma_shade": 140,
+    })
+    vf_cap = filtergraph.build_video_filters(leftover, src, canvas)
+    assert "scale=8:14" not in vf_cap
+    assert "gblur=sigma=10" not in vf_cap
+    assert "c0s=100" not in vf_cap
+    assert "c0s=140" not in vf_cap
+
+
+def test_luma_shade_never_applies_leftover():
+    v = {"luma_shade": 96}
+    assert filtergraph.luma_shade_applies(v, 720, 1280) is False
+    assert filtergraph.luma_shade_applies(v, 1080, 1920) is False
+    assert filtergraph.luma_shade_applies({"luma_shade": 0}, 720, 1280) is False
+    assert filtergraph.luma_shade_applies({}, 720, 1280) is False
 
 
 def test_apply_luma_dust_strength_caps_and_skips_phone_scale():

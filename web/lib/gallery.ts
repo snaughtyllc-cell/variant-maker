@@ -42,3 +42,31 @@ export function sortSources(sources: SourceOut[], by: "newest"): SourceOut[] {
     return 0;
   });
 }
+
+/** `?v=<source_id>:<variant.index>` from the Gallery address bar. */
+export function parseGalleryVariantQuery(
+  raw: string | null | undefined,
+): { sourceId: string; index: number } | null {
+  if (!raw) return null;
+  const colonIdx = raw.lastIndexOf(":");
+  if (colonIdx <= 0) return null;
+  const sourceId = raw.slice(0, colonIdx);
+  const parsed = Number.parseInt(raw.slice(colonIdx + 1), 10);
+  if (!sourceId || Number.isNaN(parsed)) return null;
+  return { sourceId, index: parsed };
+}
+
+export function gallerySearchPath(sourceId?: string | null, index?: number | null): string {
+  if (!sourceId || index == null) return "/gallery";
+  return `/gallery?v=${sourceId}:${index}`;
+}
+
+/**
+ * Update the address bar without a Next.js navigation.
+ * `router.push` remounts Gallery (Suspense flash + dialog replay = "glitching").
+ */
+export function pushGallerySearch(path: string): void {
+  if (typeof window === "undefined") return;
+  if (`${window.location.pathname}${window.location.search}` === path) return;
+  window.history.pushState(null, "", path);
+}

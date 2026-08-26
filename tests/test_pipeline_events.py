@@ -49,6 +49,16 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         },
     )
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
+    monkeypatch.setattr(
+        pipeline.look, "score_look",
+        lambda *a, **k: {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        },
+    )
+    monkeypatch.setattr(pipeline.look, "write_look_stills", lambda *a, **k: {
+        "look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg",
+    })
 
     events = []
     done_kwargs = []
@@ -73,10 +83,11 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
 
     by_index = {1: [e for e in events if e[1] == 1], 2: [e for e in events if e[1] == 2]}
 
-    # variant 1 passes first try: rendering(attempt=0) -> checking -> uniqueness -> done
+    # variant 1 passes first try: rendering -> checking -> looking -> uniqueness -> done
     assert by_index[1] == [
         ("rendering", 1, 0, None),
         ("checking", 1, None, None),
+        ("looking", 1, None, None),
         ("uniqueness", 1, None, None),
         ("done", 1, None, None),
     ]
@@ -89,6 +100,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         ("rerolling", 2, 1, 3),
         ("rendering", 2, 1, None),
         ("checking", 2, None, None),
+        ("looking", 2, None, None),
         ("uniqueness", 2, None, None),
         ("done", 2, None, None),
     ]
@@ -96,8 +108,10 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
     # done events carry status + filename + uniqueness scores for progressive UI.
     assert len(done_kwargs) == 2
     for kw in done_kwargs:
-        assert kw.get("status") in ("ok", "best_effort", "corrupt")
+        assert kw.get("status") in ("ok", "best_effort", "corrupt", "uniqueness_fail")
         assert kw.get("filename")
         assert kw.get("uniqueness") == 0.5
         assert kw.get("uniqueness_status") == "ok"
         assert kw.get("uniqueness_metric") == "ssim_bits_v1"
+        assert kw.get("look_status") == "ok"
+        assert kw.get("look_src") == "look_v01_src.jpg"

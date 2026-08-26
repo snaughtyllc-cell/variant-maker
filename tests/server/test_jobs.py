@@ -164,6 +164,18 @@ def test_gallery_and_diagnostics_split_by_status(tmp_path):
     assert diag[0].status == "best_effort"
 
 
+def test_diagnostics_includes_uniqueness_fail(tmp_path):
+    store = _store(tmp_path, plan={2: "uniqueness_fail"})
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    gallery = store.gallery()
+    assert [v.status for v in gallery[0].variants if v.status == "ok"] == ["ok"]
+    diag = store.diagnostics()
+    assert len(diag) == 1
+    assert diag[0].status == "uniqueness_fail"
+    assert diag[0].uniqueness_status == "below_floor"
+
+
 def test_find_variant_and_source_file(tmp_path):
     store = _store(tmp_path)
     job = store.create_job([("a.mp4", b"orig-bytes")], count=2)
@@ -705,3 +717,15 @@ def test_delete_job_drops_r2_prefixes(tmp_path):
     assert objects.list_prefix(f"inputs/{sid}/") == []
     assert objects.list_prefix(f"outputs/{sid}/") == []
     assert objects.list_prefix("outputs/other/") == ["outputs/other/v01.mp4"]
+
+
+def test_create_job_generate_captions_is_unique_per_index(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("boil.mp4", b"x")], count=2, generate_captions=True)
+    store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    caps = [v.caption for v in done.sources[0].variants]
+    assert caps[0] and caps[1]
+    assert caps[0] != caps[1]
+    assert "Copy 1 of 2" in caps[0]
+    assert "Copy 2 of 2" in caps[1]

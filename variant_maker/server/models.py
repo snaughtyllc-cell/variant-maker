@@ -22,6 +22,19 @@ class VariantOut(BaseModel):
     platform_result: str | None = None
     post_url: str | None = None
     file_ready: bool = True
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src_url: str | None = None
+    look_var_url: str | None = None
+    caption: str | None = None
+
+
+class LookPreviewOut(BaseModel):
+    index: int
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src_url: str | None = None
+    look_var_url: str | None = None
 
 
 class PlatformResultIn(BaseModel):
@@ -48,8 +61,10 @@ class SourceOut(BaseModel):
     shortfall: int
     variants: list[VariantOut] = []
     in_flight: InFlightOut | None = None
+    in_flights: list[InFlightOut] = []
+    look_preview: LookPreviewOut | None = None
     job_state: str | None = None  # "running" | "done" | "cancelled"
-    failed: int = 0               # best_effort + corrupt count (Diagnostics population)
+    failed: int = 0               # best_effort + corrupt + uniqueness_fail (Diagnostics)
     created_utc: str | None = None
     files_ready: int = 0          # ok variants whose mp4 is on Studio disk
     copy_status: Literal["ok", "copying", "missing"] = "ok"
@@ -121,6 +136,7 @@ class DriveStatusOut(BaseModel):
     auth_mode: str | None = None
     connected_email: str | None = None
     oauth_available: bool = False
+    share_email: str | None = None
 
 
 class DestinationOut(BaseModel):
@@ -268,6 +284,7 @@ class JobFromDriveIn(BaseModel):
     count: int
     quality_mode: str = "fast"
     allow_creative_escalate: bool = True
+    generate_captions: bool = False
 
 
 class WorkflowSummaryOut(BaseModel):
@@ -382,6 +399,7 @@ class AuthMeOut(BaseModel):
     role: Literal["owner", "member"] | None = None
     is_admin: bool = False
     has_password: bool = False
+    experience: Literal["solo", "agency"] = "agency"
 
 
 class PasswordLoginIn(BaseModel):
@@ -423,6 +441,7 @@ class AdminWorkspaceOut(BaseModel):
     hq: int = 0
     last_job_utc: str | None = None
     last_error: str | None = None
+    experience: Literal["solo", "agency"] = "agency"
 
 
 class WorkspaceInviteIn(BaseModel):
@@ -438,3 +457,7 @@ class TeamOut(BaseModel):
 
 class AdminViewIn(BaseModel):
     workspace_id: str | None = None
+
+
+class WorkspaceExperienceIn(BaseModel):
+    experience: Literal["solo", "agency"]

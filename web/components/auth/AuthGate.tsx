@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { LabBanner } from "@/components/nav/LabBanner";
 import { TopNav } from "@/components/nav/TopNav";
 import { useAuthMe } from "@/lib/useAuthMe";
 
@@ -31,6 +32,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <LabBanner />
       {!isLogin && <TopNav />}
       {isLogin ? children : <div className="app-main">{children}</div>}
     </>

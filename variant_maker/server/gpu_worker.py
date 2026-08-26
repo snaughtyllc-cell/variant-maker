@@ -37,7 +37,22 @@ def _progress_chunk(state: str, kw: dict) -> dict:
         "preset_used": kw.get("preset_used"),
         "strength_final": kw.get("strength_final"),
         "platform_result": kw.get("platform_result"),
+        "look_status": kw.get("look_status"),
+        "look_mae": kw.get("look_mae"),
+        "look_src": kw.get("look_src"),
+        "look_var": kw.get("look_var"),
     }}
+
+
+def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | None) -> None:
+    if not name:
+        return
+    base = os.path.basename(str(name))
+    if base in ("", ".", "..") or base != str(name):
+        return
+    path = os.path.join(out_dir, base)
+    if os.path.isfile(path):
+        store.put(f"outputs/{source_id}/{base}", path)
 
 
 def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
@@ -77,6 +92,9 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     holder: dict = {}
 
     def emit(state: str, **kw) -> None:
+        if state == "looking":
+            _put_named(store, source_id, out_dir, kw.get("look_src"))
+            _put_named(store, source_id, out_dir, kw.get("look_var"))
         q.put(_progress_chunk(state, kw))
 
     def work() -> None:
@@ -103,6 +121,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     for v in manifest.variants:
         key = f"outputs/{source_id}/{v.filename}"
         store.put(key, os.path.join(out_dir, v.filename))
+        _put_named(store, source_id, out_dir, getattr(v, "look_src", None))
+        _put_named(store, source_id, out_dir, getattr(v, "look_var", None))
         variants.append({
             "index": v.index, "filename": v.filename,
             "status": v.status, "quality": v.quality, "key": key,
@@ -114,6 +134,10 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
             "strength_final": getattr(v, "strength_final", None),
             "escalated": bool(getattr(v, "escalated", False)),
             "platform_result": getattr(v, "platform_result", None),
+            "look_status": getattr(v, "look_status", None),
+            "look_mae": getattr(v, "look_mae", None),
+            "look_src": getattr(v, "look_src", None),
+            "look_var": getattr(v, "look_var", None),
         })
     manifest_key = f"outputs/{source_id}/manifest.json"
     store.put(manifest_key, os.path.join(out_dir, "manifest.json"))

@@ -15,6 +15,7 @@ from typing import Literal
 from variant_maker.normalize import maybe_normalize_upload
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
+from .caption_ai import captions_for_source
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
@@ -83,6 +84,11 @@ class VariantInfo:
     escalated: bool = False
     platform_result: str | None = None
     post_url: str | None = None
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
+    caption: str | None = None
 
 
 @dataclass
@@ -92,6 +98,7 @@ class JobSource:
     requested: int
     variants: list[VariantInfo] = field(default_factory=list)
     runpod_job_id: str | None = None
+    planned_captions: list[str] = field(default_factory=list)
 
     @property
     def delivered(self) -> int:
@@ -100,6 +107,14 @@ class JobSource:
     @property
     def shortfall(self) -> int:
         return max(0, self.requested - self.delivered)
+
+
+def _caption_for(source: JobSource, index: int) -> str | None:
+    caps = source.planned_captions or []
+    i = int(index) - 1
+    if 0 <= i < len(caps):
+        return caps[i]
+    return None
 
 
 @dataclass
@@ -114,6 +129,7 @@ class Job:
     quality_mode: str = "fast"
     error: str | None = None
     created_seq: int = 0
+    generate_captions: bool = False
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -186,6 +202,9 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "uniqueness_target": v.uniqueness_target, "preset_used": v.preset_used,
         "strength_final": v.strength_final, "escalated": v.escalated,
         "platform_result": v.platform_result, "post_url": v.post_url,
+        "look_status": v.look_status, "look_mae": v.look_mae,
+        "look_src": v.look_src, "look_var": v.look_var,
+        "caption": v.caption,
     }
 
 
@@ -235,6 +254,11 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         escalated=bool(data.get("escalated") or False),
         platform_result=data.get("platform_result"),
         post_url=data.get("post_url") or None,
+        look_status=data.get("look_status"),
+        look_mae=data.get("look_mae"),
+        look_src=data.get("look_src"),
+        look_var=data.get("look_var"),
+        caption=data.get("caption") or None,
     )
 
 
@@ -256,6 +280,10 @@ def _event_from_dict(data: dict) -> VariantEvent:
         preset_used=data.get("preset_used"),
         strength_final=data.get("strength_final"),
         platform_result=data.get("platform_result"),
+        look_status=data.get("look_status"),
+        look_mae=data.get("look_mae"),
+        look_src=data.get("look_src"),
+        look_var=data.get("look_var"),
     )
 
 
@@ -268,6 +296,7 @@ def _job_to_dict(job: Job) -> dict:
         "state": job.state,
         "quality_mode": job.quality_mode,
         "allow_creative_escalate": job.allow_creative_escalate,
+        "generate_captions": job.generate_captions,
         "error": job.error,
         "sources": [
             {
@@ -275,6 +304,7 @@ def _job_to_dict(job: Job) -> dict:
                 "filename": s.filename,
                 "requested": s.requested,
                 "runpod_job_id": s.runpod_job_id,
+                "planned_captions": list(s.planned_captions or []),
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -294,6 +324,7 @@ def _job_from_dict(data: dict) -> Job:
             filename=str(raw.get("filename") or sid),
             requested=int(raw.get("requested") or 0),
             runpod_job_id=raw.get("runpod_job_id"),
+            planned_captions=[str(c) for c in (raw.get("planned_captions") or []) if str(c).strip()],
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -318,6 +349,7 @@ def _job_from_dict(data: dict) -> Job:
         quality_mode=normalize_quality_mode(data.get("quality_mode")),
         error=data.get("error"),
         created_seq=created_seq,
+        generate_captions=bool(data.get("generate_captions") or False),
     )
 
 
@@ -358,7 +390,8 @@ class JobStore:
 
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
-                    quality_mode: str = "fast") -> Job:
+                    quality_mode: str = "fast",
+                    generate_captions: bool = False) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -366,11 +399,15 @@ class JobStore:
             self._ws.save_upload(job_id, source_id, filename, data)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-        return self._start_job(job_id, sources, count, allow_creative_escalate, quality_mode)
+        return self._start_job(
+            job_id, sources, count, allow_creative_escalate, quality_mode,
+            generate_captions=generate_captions,
+        )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
                                allow_creative_escalate: bool = True,
-                               quality_mode: str = "fast") -> Job:
+                               quality_mode: str = "fast",
+                               generate_captions: bool = False) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -381,17 +418,25 @@ class JobStore:
             os.replace(abs_path, dest)
             source = JobSource(source_id=source_id, filename=filename, requested=count)
             sources.append(source)
-        return self._start_job(job_id, sources, count, allow_creative_escalate, quality_mode)
+        return self._start_job(
+            job_id, sources, count, allow_creative_escalate, quality_mode,
+            generate_captions=generate_captions,
+        )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
-                    allow_creative_escalate: bool,                     quality_mode: str = "fast") -> Job:
+                    allow_creative_escalate: bool, quality_mode: str = "fast",
+                    generate_captions: bool = False) -> Job:
+        if generate_captions:
+            for source in sources:
+                source.planned_captions = captions_for_source(source.filename, source.requested)
         with self._lock:
             self._seq += 1
             created_seq = self._seq
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
                    quality_mode=normalize_quality_mode(quality_mode),
-                   created_seq=created_seq)
+                   created_seq=created_seq,
+                   generate_captions=bool(generate_captions))
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -546,9 +591,16 @@ class JobStore:
                             uniqueness_target=e.uniqueness_target,
                             preset_used=e.preset_used, strength_final=e.strength_final,
                             escalated=e.escalated, platform_result=e.platform_result,
+                            look_status=e.look_status, look_mae=e.look_mae,
+                            look_src=e.look_src, look_var=e.look_var,
+                            caption=_caption_for(source, e.index),
                         ))
                         break
-                if e.state == "done" or token.runpod_job_id:
+                if e.state == "looking":
+                    names = [n for n in (e.look_src, e.look_var) if n]
+                    if names:
+                        self._pull_named_outputs(e.source_id, names)
+                if e.state in ("done", "looking") or token.runpod_job_id:
                     self._persist(job)
 
             for source in job.sources:
@@ -608,6 +660,11 @@ class JobStore:
                         uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
                         preset_used=v.preset_used, strength_final=v.strength_final,
                         escalated=v.escalated, platform_result=v.platform_result,
+                        look_status=getattr(v, "look_status", None),
+                        look_mae=getattr(v, "look_mae", None),
+                        look_src=getattr(v, "look_src", None),
+                        look_var=getattr(v, "look_var", None),
+                        caption=_caption_for(source, v.index),
                     )
                     for v in result.variants
                 ]
@@ -753,6 +810,11 @@ class JobStore:
                         escalated=bool(v.get("escalated") or False),
                         platform_result=v.get("platform_result"),
                         post_url=v.get("post_url") or None,
+                        look_status=v.get("look_status") or quality.get("look_status"),
+                        look_mae=v.get("look_mae") if v.get("look_mae") is not None else quality.get("look_mae"),
+                        look_src=v.get("look_src"),
+                        look_var=v.get("look_var"),
+                        caption=v.get("caption") or None,
                     ))
                 sources.append(source)
             if not sources:
@@ -783,7 +845,7 @@ class JobStore:
         with self._lock:
             for job in self._jobs.values():
                 for s in job.sources:
-                    out.extend(v for v in s.variants if v.status in ("best_effort", "corrupt"))
+                    out.extend(v for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
         return out
 
     def _locate(self, source_id: str) -> tuple[str, JobSource] | None:
@@ -815,19 +877,28 @@ class JobStore:
         self._pull_missing_outputs(source_id)
         return path if os.path.isfile(path) else None
 
-    def _pull_missing_outputs(self, source_id: str) -> None:
-        """Copy variant mp4s from object storage when job.json has them but disk doesn't."""
+    def _pull_named_outputs(self, source_id: str, names: list[str]) -> None:
         fetch = getattr(self._runner, "fetch_outputs", None)
-        if not callable(fetch):
+        if not callable(fetch) or not names:
             return
         loc = self._locate(source_id)
         if loc is None:
             return
-        job_id, source = loc
-        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
-        if not names:
-            return
+        job_id, _ = loc
         fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
+
+    def _pull_missing_outputs(self, source_id: str) -> None:
+        """Copy variant mp4s and look stills from object storage when disk is missing them."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return
+        _, source = loc
+        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
+        for v in source.variants:
+            for n in (v.look_src, v.look_var):
+                if n:
+                    names.append(n)
+        self._pull_named_outputs(source_id, names)
 
     def _refresh_copy_error(self, job: Job) -> None:
         """Surface a VA-facing error when GPU metadata is ok but mp4s never landed."""
@@ -891,6 +962,11 @@ class JobStore:
                 uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
                 preset_used=v.preset_used, strength_final=v.strength_final,
                 escalated=v.escalated, platform_result=v.platform_result,
+                look_status=getattr(v, "look_status", None),
+                look_mae=getattr(v, "look_mae", None),
+                look_src=getattr(v, "look_src", None),
+                look_var=getattr(v, "look_var", None),
+                caption=_caption_for(source, start + v.index),
             ))
         return source
 

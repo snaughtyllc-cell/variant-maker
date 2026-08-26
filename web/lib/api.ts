@@ -65,7 +65,7 @@ export const sourceUrl = (sourceId: string) => `/api/sources/${sourceId}/source`
 export const eventsUrl = (jobId: string) => `/api/jobs/${jobId}/events`;
 export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`;
 
-export const getHealth = () => fetch("/api/health").then(json<{ status: string }>);
+export const getHealth = () => fetch("/api/health").then(json<{ status: string; lab?: boolean }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
 export const getQueue = () => fetch("/api/queue").then(json<QueueSnapshot>);
 export const getJob = (id: string) =>
@@ -129,13 +129,16 @@ export async function createJob(
   count: number,
   allowCreativeEscalate: boolean = true,
   qualityMode: "fast" | "hq" = "fast",
+  generateCaptions: boolean = false,
 ): Promise<CreateJobResponse> {
+  const captions = generateCaptions ? "true" : "false";
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
     const fd = new FormData();
     fd.append("count", String(count));
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
     fd.append("quality_mode", qualityMode);
+    fd.append("generate_captions", captions);
     for (const f of files) fd.append("files", f, f.name);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
@@ -149,6 +152,7 @@ export async function createJob(
   fd.append("count", String(count));
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
   fd.append("quality_mode", qualityMode);
+  fd.append("generate_captions", captions);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -312,6 +316,7 @@ export function createJobFromDrive(opts: {
   count: number;
   qualityMode?: "fast" | "hq";
   allowCreativeEscalate?: boolean;
+  generateCaptions?: boolean;
 }): Promise<CreateJobResponse> {
   return fetch("/api/jobs/from-drive", {
     method: "POST",
@@ -322,6 +327,7 @@ export function createJobFromDrive(opts: {
       count: opts.count,
       quality_mode: opts.qualityMode ?? "fast",
       allow_creative_escalate: opts.allowCreativeEscalate ?? true,
+      generate_captions: opts.generateCaptions ?? false,
     }),
   }).then(json<CreateJobResponse>);
 }
@@ -455,6 +461,7 @@ export const LOGGED_OUT_ME: AuthMe = {
   role: null,
   is_admin: false,
   has_password: false,
+  experience: "agency",
 };
 
 export async function getAuthMe(): Promise<AuthMe> {
@@ -502,6 +509,17 @@ export async function deleteInvite(id: string): Promise<void> {
 
 export const listAdminWorkspaces = () =>
   fetch("/api/admin/workspaces").then(json<AdminWorkspace[]>);
+
+export function setWorkspaceExperience(
+  id: string,
+  experience: "solo" | "agency",
+): Promise<AdminWorkspace> {
+  return fetch(`/api/admin/workspaces/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ experience }),
+  }).then(json<AdminWorkspace>);
+}
 
 export async function removeAdminUser(email: string): Promise<void> {
   const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: "DELETE" });

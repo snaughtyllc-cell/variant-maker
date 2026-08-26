@@ -1,7 +1,13 @@
-# variant-maker
+# varimo
+
+**Many originals from one master.**
 
 Local-first AI video variant generator. One source video → N variants that read as real,
 original videos (not degraded re-encodes) → plus a manifest.
+
+> `varimo` is the product name. The repo, the Python package (`variant_maker/`), and the
+> CLI (`variant-maker`, `variant-farm`, `variant-server`) keep their existing names.
+> Brand assets and usage rules live in [`brand/`](brand/README.md).
 
 - **Tier 1 (FFmpeg, CPU):** correct color, budgeted transforms, in-loop quality guard.
 - **Tier 2 (neural, GPU, optional):** Real-ESRGAN upscale, RIFE interpolation, content

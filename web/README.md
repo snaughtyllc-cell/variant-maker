@@ -1,6 +1,6 @@
-# variant-maker control plane — web frontend
+# varimo Studio — web frontend
 
-Next.js 16 App Router UI for the variant-maker engine.
+Next.js 16 App Router UI for the variant-maker engine (the `varimo` control plane).
 Pure client of the FastAPI backend via a same-origin dev proxy.
 
 **Redesign / Codex:** do not use the old four-screen list
@@ -138,7 +138,7 @@ route is missing from that catalog.
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
 | **Team** | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | **Admin** | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
-| **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`below_floor` / `corrupt` / `best_effort`). Operators never use this. |
+| **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | **Login** | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
 
 Nested (not tabs — a redesign must still include them):

@@ -16,8 +16,13 @@ off, for local/dev). Nav space stays for Team / later tools.
 Operators must **not** open Google Cloud, OAuth clients, or APIs. That is
 **Jeff-once** on the VaryForge GCP project (`VARIANT_DRIVE_OAUTH_*` on Railway).
 
-**What they should do:** Settings → Drive → **Connect Google** as the Google
-account that already owns the folders. Paste a folder link. No share-with-Jeff.
+**What they should do:** Settings → Drive → **copy the VaryForge email** →
+share that address as Editor on their folder → paste the folder link. No
+share-with-Jeff.
+
+Connect Google as *their* account stays the later path. Until that is the
+default, Studio shows `drive@varyforge.app` (or `VARIANT_DRIVE_SHARE_EMAIL`)
+with a copy button. Jeff-once: create that mailbox and Connect it on Studio.
 
 That path **already exists** per workspace. The sell-blocker is Google’s
 **unverified app** screen (Drive is a restricted scope: `.../auth/drive` plus

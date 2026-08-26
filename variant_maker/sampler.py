@@ -213,6 +213,7 @@ def disable_fast_pixel_ops(params: dict) -> dict:
     video["resample_px"] = 0
     video["rebuild_scale"] = 1.0
     video["warp_k1"] = 0.0
+    video["luma_shade"] = 0.0
     return {**params, "video": video}
 
 
@@ -297,11 +298,11 @@ def sample(
                 _shrink_toward_calm(raw, work, _LOOK_AXES, budget / look_spent)
 
     if shot_grain is not None:
-        cloud_r = chroma_cloud_range_for_shot(preset, shot)
+        cloud_r = chroma_cloud_range_for_shot(preset, shot, width, height)
         if cloud_r is not None:
             # Remap from the (possibly shrunk) grain — no extra RNG.
             raw["chroma_cloud"] = _remap_range(raw["grain"], shot_grain, cloud_r)
-        dust_r = luma_dust_range_for_shot(preset, shot)
+        dust_r = luma_dust_range_for_shot(preset, shot, width, height)
         if dust_r is not None:
             raw["luma_dust"] = _remap_range(raw["grain"], shot_grain, dust_r)
 

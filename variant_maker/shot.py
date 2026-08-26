@@ -50,7 +50,11 @@ SHOT_MOTION = "motion"
 # so copies sit near c0s=12 to clear the 24-bit gate without redrawing
 # 15–17. Filtergraph caps leftover 14–20 at 13. Luma-only, not stacked c1s.
 # 1080 talking-head stays 34–42. Derived from grain — no extra RNG.
-# Gate stays 24. Do not expect 55% on a still 720 face.
+# Gate stays 24. Do not expect 55% on a still 720 face. AQMTp-class tight
+# 720 faces stay ~18 bits on signed medium. Strong 720 TH does NOT draw
+# luma shade — lookaqmtp (8×14 c0s=100) was lava on the face. Look-first
+# (`look.py` / docs/ops/look-learnings.md) gates actual frames. Medium
+# stays the signed SaveInta look.
 _REBUILD_FOR_SHOT = {
     ("subtle", SHOT_TALKING_HEAD): Range(0.94, 0.99),
     ("subtle", SHOT_MOTION): Range(0.94, 0.99),
@@ -69,6 +73,10 @@ _CHROMA_CLOUD_FOR_SHOT = Range(4, 7)
 # little much. 8–12 (`quietdustmed` c0s=9) was usable but 23 bits. 11–13
 # aims at the 24-bit gate. Luma-only so we do not restack c1s 12–15 snow.
 _LUMA_DUST_FOR_SHOT = Range(11, 13)
+# Strong 720 talking-head pins the top of the signed cloud/dust band.
+# Not luma shade (lookaqmtp rejected).
+_CHROMA_CLOUD_720_TH_STRONG = Range(7, 7)
+_LUMA_DUST_720_TH_STRONG = Range(13, 13)
 
 
 def rebuild_range_for_shot(preset, shot: str | None) -> Range:
@@ -85,18 +93,34 @@ def grain_range_for_shot(preset, shot: str | None) -> Range | None:
     return _GRAIN_FOR_SHOT.get((preset.name, shot))
 
 
-def chroma_cloud_range_for_shot(preset, shot: str | None) -> Range | None:
+def chroma_cloud_range_for_shot(
+    preset, shot: str | None, width: int | None = None, height: int | None = None,
+) -> Range | None:
     """Low-res chroma overlay band for talking-head, or None to skip."""
     if grain_range_for_shot(preset, shot) is None:
         return None
+    if preset.name == "strong" and is_phone_canvas(width, height):
+        return _CHROMA_CLOUD_720_TH_STRONG
     return _CHROMA_CLOUD_FOR_SHOT
 
 
-def luma_dust_range_for_shot(preset, shot: str | None) -> Range | None:
+def luma_dust_range_for_shot(
+    preset, shot: str | None, width: int | None = None, height: int | None = None,
+) -> Range | None:
     """720 talking-head luma dust band, or None to skip (motion / no shot)."""
     if grain_range_for_shot(preset, shot) is None:
         return None
+    if preset.name == "strong" and is_phone_canvas(width, height):
+        return _LUMA_DUST_720_TH_STRONG
     return _LUMA_DUST_FOR_SHOT
+
+
+def luma_shade_range_for_shot(
+    preset, shot: str | None, width: int | None = None, height: int | None = None,
+) -> Range | None:
+    """Always None. lookaqmtp 8×14 c0s=100 was lava; leftover shade must not draw."""
+    del preset, shot, width, height
+    return None
 
 
 # Instagram downloads land at 720. Centered caption-safe keep 0.92–0.96 scores

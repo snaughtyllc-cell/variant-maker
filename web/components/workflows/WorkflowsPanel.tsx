@@ -365,13 +365,15 @@ export function WorkflowsPanel() {
           <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Quality</span>
             <select
-              value={qualityMode}
-              onChange={(e) => setQualityMode(e.target.value as "fast" | "hq")}
+              value="fast"
+              onChange={() => setQualityMode("fast")}
               disabled={destinations.length === 0 || driveNotReady}
               style={inputStyle(destinations.length === 0 || driveNotReady)}
             >
               <option value="fast">Fast</option>
-              <option value="hq">HQ</option>
+              <option value="hq" disabled>
+                HQ — coming soon
+              </option>
             </select>
           </label>
 

@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import os
 import random
+import shutil
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from . import autotune, quality, uniqueness
+from . import autotune, look, quality, uniqueness
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
@@ -26,7 +27,9 @@ from .shot import classify_shot
 # (~55–65% UI) on a matching canvas (portrait 1080×1920 or landscape 1920×1080).
 # Usable 720 Fast lands ~24–27 bits (~38–42%) when crop punches from the top —
 # still a pass. Centered 0.92 keep on Instagram 720 scored 20 bits and never
-# cleared; do not tell operators to re-upload 1080.
+# cleared; do not tell operators to re-upload 1080. AQMTp-class tight faces
+# miss medium (~18 bits). Do not buy 24 with shade (lookaqmtp lava). Look-first
+# (`look.py`) stills overlap uniqueness so Generate wait stays uniqueness-bound.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
@@ -90,6 +93,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
     auto_tune = config.get("auto_tune")
     if auto_tune is None:
         auto_tune = config.get("quality_mode", "fast") != "hq"
+    look_first = bool(config.get("look_first"))
+    if look_first:
+        # One medium encode + stills. Visual test, not a uniqueness hunt.
+        count = 1
+        allow_creative_escalate = False
+        auto_tune = False
+        uniq_strengths = [1.0]
 
     master_seed = config.get("seed")
     if master_seed is None:
@@ -237,6 +247,73 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 on_regen=lambda n, mx: emit("rerolling", index=i, attempt=n, max_attempts=mx),
             )
 
+        def _emit_looking() -> None:
+            emit(
+                "looking", index=i, filename=fname,
+                look_status=look_info.get("look_status"),
+                look_mae=look_info.get("look_mae"),
+                look_mae_max=look_info.get("look_mae_max"),
+                look_src=look_info.get("look_src"),
+                look_var=look_info.get("look_var"),
+            )
+
+        def _write_look_stills() -> dict:
+            try:
+                return look.write_look_stills(src.path, path, out_dir, i)
+            except (OSError, ValueError, subprocess.CalledProcessError):
+                return {}
+
+        def _score_uniqueness_now() -> dict:
+            scored = uniqueness.score_uniqueness(
+                src.path, path, target=uniqueness_target,
+            )
+            return _apply_peer_status(scored, _peer_bits(path))
+
+        def _look_then_uniqueness() -> dict:
+            """Stills on the card first. Uniqueness work starts immediately.
+
+            Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
+            Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
+            on Fast contended the CPU and stretched the uniqueness phase.
+            """
+            nonlocal look_info
+            with ThreadPoolExecutor(max_workers=1) as look_ex:
+                uniq_f = look_ex.submit(_score_uniqueness_now)
+                look_info = {**look_info, **_write_look_stills()}
+                _emit_looking()
+                emit("uniqueness", index=i)
+                scored = uniq_f.result()
+            look_info = {**look_info, **look.score_look(src.path, path)}
+            return scored
+
+        def _snapshot_medium() -> dict:
+            """Keep the look-ok medium file so a blotchy escalate can roll back."""
+            snap = path + ".look_medium.mp4"
+            shutil.copy2(path, snap)
+            return {
+                "path": snap,
+                "look": dict(look_info),
+                "u": dict(u),
+                "r": dict(r) if r is not None else None,
+                "preset_used": preset_used,
+            }
+
+        def _restore_medium_if_look_fail(snap: dict) -> None:
+            """Escalate is uniqueness-only. Look fail keeps the medium encode."""
+            nonlocal look_info, u, r, preset_used, escalated
+            if look_info.get("look_status") != "fail":
+                if os.path.isfile(snap["path"]):
+                    os.remove(snap["path"])
+                return
+            os.replace(snap["path"], path)
+            look_info = snap["look"]
+            u = snap["u"]
+            r = snap["r"]
+            preset_used = snap["preset_used"]
+            escalated = False
+            look_info = {**look_info, **_write_look_stills()}
+            _emit_looking()
+
         def _peer_bits(variant_path: str) -> int | None:
             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
 
@@ -280,7 +357,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
         # Uniqueness gate: light preset at rising strengths, quality regen inside each
         # attempt as before. Source bits AND same-batch peer bits must clear. If none
         # clears, spend one creative escalate at the strong preset (still quality-gated)
-        # and accept whatever it scores — leave below_target visible, never fake a score.
+        # and only then apply the 19-bit ship floor. 19–23 on the *first* pass is
+        # still a miss — escalate. After the hunt, 19–23 ships as below_target;
+        # under 19 is uniqueness_fail. Never fake a 24-bit score.
         preset_used = preset.name
         escalated = False
         r = None
@@ -288,6 +367,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "uniqueness": None, "uniqueness_status": "unknown",
             "uniqueness_metric": None, "uniqueness_target": uniqueness_target,
             "bits": None, "min_bits_vs_peers": None,
+        }
+        look_info: dict = {
+            "look_status": "unknown", "look_mae": None, "look_mae_max": None,
+            "look_src": None, "look_var": None,
         }
         prev_effective = None
         if auto_tune:
@@ -303,12 +386,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
             def _tune_attempt(strength: float) -> dict:
                 r_try = attempt(strength, preset, gate_quality=False)
-                emit("uniqueness", index=i)
-                u_try = uniqueness.score_uniqueness(
-                    src.path, path, target=uniqueness_target,
-                )
-                peer_min = _peer_bits(path)
-                u_try = _apply_peer_status(u_try, peer_min)
+                u_try = _look_then_uniqueness()
+                peer_min = u_try.get("min_bits_vs_peers")
                 peer_ok = (
                     (not peer_gate)
                     or peer_min is None
@@ -364,16 +443,18 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 and tuned["uniqueness"] >= uniqueness_target
                 and tuned.get("peer_ok", True)
             )
-            if not cleared and allow_creative_escalate:
+            if (
+                not cleared and allow_creative_escalate
+                and look_info.get("look_status") != "fail"
+            ):
+                snap = _snapshot_medium()
                 emit("escalating", index=i)
                 strong = get_preset("strong")
                 r = regen(strong, 1.0)
-                emit("uniqueness", index=i)
-                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                peer_min = _peer_bits(path)
-                u = _apply_peer_status(u, peer_min)
+                u = _look_then_uniqueness()
                 preset_used = strong.name
                 escalated = True
+                _restore_medium_if_look_fail(snap)
         else:
             for strength in uniq_strengths:
                 # Belt-and-suspenders: if two ladder rungs clamp to the same effective
@@ -384,23 +465,22 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     continue
                 prev_effective = effective
                 r = regen(preset, strength)
-                emit("uniqueness", index=i)
-                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                peer_min = _peer_bits(path)
-                u = _apply_peer_status(u, peer_min)
-                if r["passed"] and _gate_ok(u, peer_min):
+                u = _look_then_uniqueness()
+                if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
                     break
             else:
-                if allow_creative_escalate:
+                if (
+                    allow_creative_escalate
+                    and look_info.get("look_status") != "fail"
+                ):
+                    snap = _snapshot_medium()
                     emit("escalating", index=i)
                     strong = get_preset("strong")
                     r = regen(strong, 1.0)
-                    emit("uniqueness", index=i)
-                    u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                    peer_min = _peer_bits(path)
-                    u = _apply_peer_status(u, peer_min)
+                    u = _look_then_uniqueness()
                     preset_used = strong.name
                     escalated = True
+                    _restore_medium_if_look_fail(snap)
 
         if r is not None and r.get("vmaf") is None:
             qr = path + ".qr.mp4"
@@ -425,6 +505,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         if spatial_ok is False:
             status = "corrupt"
+        elif uniqueness.status_for_bits(u.get("bits"), target=uniqueness_target) == "below_floor":
+            # Missed 24 after the hunt, and missed the 19-bit / 30% post-escalate
+            # ship floor. Do not count this as a delivered ok file.
+            u["uniqueness_status"] = "below_floor"
+            status = "uniqueness_fail"
         elif r["passed"]:
             status = "ok"
         else:
@@ -436,9 +521,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
             "bits": u.get("bits"),
             "min_bits_vs_peers": u.get("min_bits_vs_peers"),
+            "look_status": look_info.get("look_status"),
+            "look_mae": look_info.get("look_mae"),
+            "look_mae_max": look_info.get("look_mae_max"),
         }
-        # Accept into the peer set only when we ship a real file (any non-corrupt status).
-        if status != "corrupt" and os.path.exists(path):
+        # Accept into the peer set only when we ship a usable file.
+        if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
             with kept_lock:
                 kept_paths.append(path)
 
@@ -447,6 +535,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
             uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
             escalated=escalated, preset_used=preset_used, strength_final=last_strength,
+            look_status=look_info.get("look_status"),
+            look_mae=look_info.get("look_mae"),
+            look_src=look_info.get("look_src"),
+            look_var=look_info.get("look_var"),
         )
 
         return VariantRecord(
@@ -458,6 +550,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
             uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
             preset_used=preset_used, strength_final=last_strength, escalated=escalated,
+            look_status=look_info.get("look_status"),
+            look_mae=look_info.get("look_mae"),
+            look_src=look_info.get("look_src"),
+            look_var=look_info.get("look_var"),
         )
 
     indices = range(1, count + 1)

@@ -19,6 +19,7 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
 
   const reason = diagnosticsReason(item);
   const isCorrupt = item.status === "corrupt";
+  const isUniquenessMiss = item.status === "uniqueness_fail";
   const padded = `v${String(item.index).padStart(2, "0")}`;
   const regenCount = item.quality.regen_count ?? 0;
 
@@ -131,6 +132,21 @@ export function DiagnosticsRow({ item, onRegenerate }: DiagnosticsRowProps) {
             }}
           >
             CORRUPT
+          </span>
+        ) : isUniquenessMiss ? (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              padding: "3px 9px",
+              borderRadius: 999,
+              flexShrink: 0,
+              color: "#a33f3d",
+              background: "#fff3f1",
+              border: "1px solid #efc5c0",
+            }}
+          >
+            COULDN'T UNIQUE
           </span>
         ) : (
           <span

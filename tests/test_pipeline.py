@@ -8,7 +8,7 @@ from conftest import HAS_FFMPEG
 from variant_maker import pipeline
 from variant_maker.neural import upscale
 from variant_maker.probe import probe
-from variant_maker.uniqueness import DEFAULT_TARGET, MIN_PEER_BITS, TARGET_BITS
+from variant_maker.uniqueness import DEFAULT_TARGET, FLOOR_BITS, MIN_PEER_BITS, TARGET_BITS
 
 
 def test_default_uniqueness_target_is_24_bits():
@@ -23,6 +23,7 @@ def test_default_uniqueness_target_is_24_bits():
     assert TARGET_BITS == 24
     assert pipeline.DEFAULT_UNIQUENESS_TARGET == DEFAULT_TARGET
     assert pipeline.DEFAULT_UNIQUENESS_TARGET == 24 / 64
+    assert FLOOR_BITS == 19
     assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == MIN_PEER_BITS
     assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 24
     assert pipeline.FAST_TUNE_MAX_ITERS == 1

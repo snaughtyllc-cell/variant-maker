@@ -5,9 +5,13 @@ OAuth client on Railway.
 
 ## What operators do
 
-Settings → Drive → **Connect Google** as the Google account that owns the
-folders → paste a folder link. They do **not** share a folder with Jeff’s
-Gmail. Per-workspace token.
+Settings → Drive → copy the VaryForge share email (`drive@varyforge.app`) →
+share that address as **Editor** on the Google Drive folder → paste the
+folder link. They do **not** share a folder with Jeff’s Gmail.
+
+Connect Google is Jeff-once: sign Studio in as `drive@varyforge.app` so
+those shared folders actually open. Per-operator “use my Google account”
+is later.
 
 ## What blocks them
 
@@ -21,11 +25,17 @@ screen → Test users). Do that the same day as the invite.
 
 Do not ask them to create a GCP project or enable APIs.
 
-## Tools-email fallback (only if they refuse OAuth)
+## Tools-email (current operator path)
 
-A branded address (`drive@varyforge.app`), share one folder as Editor. Show
-that human address in Studio, never `*.iam.gserviceaccount.com`. Still
-third-party share — worse than Connect Google as *their* account.
+Operators share a branded address (`drive@varyforge.app`) as Editor, then
+paste the folder link. Show that human address in Studio with a copy
+button — never Jeff’s Gmail, never `*.iam.gserviceaccount.com`.
+
+Jeff-once: create the mailbox, Connect Google as that account on Studio,
+set `VARIANT_DRIVE_SHARE_EMAIL` if it is not the default.
+
+Connect-your-own-Google stays the later path (unverified OAuth app). Do
+not ask operators to share with a personal inbox in the meantime.
 
 ## Verification (later)
 

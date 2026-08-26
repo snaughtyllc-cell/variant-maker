@@ -1,8 +1,9 @@
 export interface Quality {
   vmaf: number; histogram_ok: boolean; regen_count: number; passed: boolean;
   spatial_vmaf: number | null; spatial_ok: boolean | null;
+  bits?: number | null;
 }
-export type Status = "ok" | "best_effort" | "corrupt";
+export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
 export interface VariantOut {
   index: number; filename: string; status: Status; quality: Quality; file_url: string;
@@ -12,17 +13,31 @@ export interface VariantOut {
   escalated?: boolean; platform_result?: PlatformResult | null;
   post_url?: string | null;
   file_ready?: boolean;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
+  caption?: string | null;
 }
 export interface InFlightOut {
   index: number;
-  state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating";
+  state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating";
   attempt: number;
   max_attempts: number;
+}
+export interface LookPreviewOut {
+  index: number;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
 }
 export interface SourceOut {
   source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
   variants: VariantOut[];
   in_flight?: InFlightOut | null;
+  in_flights?: InFlightOut[];
+  look_preview?: LookPreviewOut | null;
   job_state?: "running" | "done" | string | null;
   failed?: number;
   created_utc?: string | null;
@@ -51,10 +66,10 @@ export interface QueueSnapshot {
 }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
-export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt"; quality: Quality; }
+export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }
 export interface VariantEvent {
   source_id: string; index: number;
-  state: "rendering" | "checking" | "rerolling" | "uniqueness" | "escalating" | "done";
+  state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating" | "done";
   attempt: number; max_attempts: number;
   status: string | null; quality: Quality | null; filename: string | null;
   uniqueness?: number | null;
@@ -63,6 +78,12 @@ export interface VariantEvent {
   uniqueness_target?: number | null;
   escalated?: boolean;
   platform_result?: PlatformResult | null;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_src?: string | null;
+  look_var?: string | null;
+  look_src_url?: string | null;
+  look_var_url?: string | null;
 }
 export const VMAF_FLOOR = 90;
 
@@ -74,6 +95,7 @@ export interface DriveStatus {
   auth_mode?: string | null;
   connected_email?: string | null;
   oauth_available?: boolean;
+  share_email?: string | null;
 }
 export interface Destination {
   id: string;
@@ -219,6 +241,7 @@ export interface AuthMe {
   role: AuthRole | null;
   is_admin: boolean;
   has_password: boolean;
+  experience?: "solo" | "agency";
 }
 
 export interface Invite {
@@ -253,6 +276,7 @@ export interface AdminWorkspace {
   hq: number;
   last_job_utc: string | null;
   last_error: string | null;
+  experience?: "solo" | "agency";
 }
 
 export interface DropLedgerStatus {

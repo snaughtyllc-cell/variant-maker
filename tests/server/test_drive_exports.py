@@ -43,7 +43,10 @@ def test_build_export_files_filters_non_ok(tmp_path):
     job.sources[0].variants.append(VariantInfo(
         source_id="s1", index=2, filename="v02.mp4", status="best_effort", quality={},
     ))
-    files = build_export_files(store, [VariantRef("s1", 1), VariantRef("s1", 2)])
+    job.sources[0].variants.append(VariantInfo(
+        source_id="s1", index=3, filename="v03.mp4", status="uniqueness_fail", quality={"bits": 12},
+    ))
+    files = build_export_files(store, [VariantRef("s1", 1), VariantRef("s1", 2), VariantRef("s1", 3)])
     assert len(files) == 1 and files[0].filename == "v01.mp4"
 
 
