@@ -144,7 +144,8 @@ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     assert record.escalated is False
     assert record.preset_used == "medium"
     assert record.look_status == "fail"
-    assert record.uniqueness_status == "below_target"
+    assert record.uniqueness_status == "below_floor"
+    assert record.status == "uniqueness_fail"
 
 
 def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
@@ -167,7 +168,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: _ok_score(
-            0.1, bits=18, status="below_target",
+            20 / 64, bits=20, status="below_target",
         ),
     )
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
@@ -177,15 +178,17 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     assert record.preset_used == "medium"
     assert record.look_status == "ok"
     assert record.uniqueness_status == "below_target"
-    assert record.uniqueness == 0.1
+    assert record.status == "ok"
+    assert record.uniqueness == 20 / 64
 
 
 def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
+    """19–23 bits still ship as ok files (missed 38%, above 30% floor)."""
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
         lambda src_path, variant_path, target=None: _ok_score(
-            0.1, bits=6, status="below_target",
+            20 / 64, bits=20, status="below_target",
         ),
     )
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
@@ -194,6 +197,40 @@ def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
     assert record.escalated is False
     assert record.preset_used == "medium"
     assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+
+
+def test_below_floor_does_not_ship_as_ok(monkeypatch, tmp_path):
+    """Under 19 bits (~30%) is uniqueness_fail — not a Drive/gallery ready file."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            12 / 64, bits=12, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.uniqueness_status == "below_floor"
+    assert record.status == "uniqueness_fail"
+
+
+def test_nineteen_bits_still_ships_as_ok(monkeypatch, tmp_path):
+    """19 bits (~30% UI) is the fail-forward floor — still a Drive file."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(
+            19 / 64, bits=19, status="below_target",
+        ),
+    )
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+    assert record.uniqueness == 19 / 64
 
 
 def test_look_first_one_encode_no_escalate(monkeypatch, tmp_path):

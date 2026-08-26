@@ -88,6 +88,21 @@ describe("VariantCard uniqueness", () => {
     expect(esc).toHaveAttribute("title", ESCALATED_TITLE);
   });
 
+  it("uses the red uniqueness badge under the 30% ship floor", () => {
+    render(
+      <VariantCard
+        variant={variant({ uniqueness: 18 / 64, uniqueness_status: "below_floor" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const badge = screen.getByText("28%");
+    expect(badge).toBeInTheDocument();
+    expect(badge.style.background).toBe("rgb(61, 18, 16)");
+  });
+
   it("marks a variant that has a pasted live post link", () => {
     render(
       <VariantCard

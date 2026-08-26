@@ -229,7 +229,7 @@ def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
 def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
                 ws: Workspace | None = None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
-    failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt"))
+    failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
     job_id = job.job_id if job is not None else None
     files_ready = (
         source_files_ready(s, ws, job_id) if ws is not None and job_id else s.delivered

@@ -17,7 +17,8 @@ DEFAULT_PRESET = "medium"
 DEFAULT_PLATFORM = "tiktok"   # social canvas follows source AR (9:16 or 16:9)
 DEFAULT_QUALITY_MODE = "fast"  # Tier-1 CPU, no GPU
 MAX_REGEN = 3
-# Fast vs-source *gate*: 24 bits (~38% UI). TikFusion floor is ~18. Raising the
+# Fast vs-source *gate*: 24 bits (~38% UI). Fail-forward floor is 19 bits
+# (~30% UI), just above TikFusion's ~18. Raising the
 # gate to 32 forced talking-head 20-packs onto strong. Medium crop + rebuild_scale
 # sized so those packs *score* ~35–42 bits (~55–65% UI) without changing the gate.
 UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET

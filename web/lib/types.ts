@@ -1,8 +1,9 @@
 export interface Quality {
   vmaf: number; histogram_ok: boolean; regen_count: number; passed: boolean;
   spatial_vmaf: number | null; spatial_ok: boolean | null;
+  bits?: number | null;
 }
-export type Status = "ok" | "best_effort" | "corrupt";
+export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
 export interface VariantOut {
   index: number; filename: string; status: Status; quality: Quality; file_url: string;
@@ -63,7 +64,7 @@ export interface QueueSnapshot {
 }
 export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
-export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt"; quality: Quality; }
+export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }
 export interface VariantEvent {
   source_id: string; index: number;
   state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating" | "done";

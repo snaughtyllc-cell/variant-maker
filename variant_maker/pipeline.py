@@ -503,6 +503,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         if spatial_ok is False:
             status = "corrupt"
+        elif uniqueness.status_for_bits(u.get("bits"), target=uniqueness_target) == "below_floor":
+            # Missed 24 and missed the 19-bit / 30% fail-forward floor. Do not
+            # count this as a delivered ok file (Drive / gallery ready).
+            u["uniqueness_status"] = "below_floor"
+            status = "uniqueness_fail"
         elif r["passed"]:
             status = "ok"
         else:
@@ -518,8 +523,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
         }
-        # Accept into the peer set only when we ship a real file (any non-corrupt status).
-        if status != "corrupt" and os.path.exists(path):
+        # Accept into the peer set only when we ship a usable file.
+        if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
             with kept_lock:
                 kept_paths.append(path)
 

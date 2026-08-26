@@ -300,6 +300,24 @@ def test_gallery_groups_sources_ok_only(tmp_path):
     assert gallery[0]["variants"][0]["uniqueness"] == 0.42
 
 
+def test_gallery_hides_uniqueness_fail(tmp_path):
+    """Under 19 bits is not a Drive/gallery ready file. It still counts as failed."""
+    client, store = _client(tmp_path, plan={2: "uniqueness_fail"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "3"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    gallery = client.get("/api/gallery").json()
+    assert gallery[0]["delivered"] == 2
+    assert gallery[0]["shortfall"] == 1
+    assert gallery[0]["failed"] == 1
+    assert all(v["status"] == "ok" for v in gallery[0]["variants"])
+    diag = client.get("/api/diagnostics").json()
+    assert len(diag) == 1
+    assert diag[0]["status"] == "uniqueness_fail"
+    assert diag[0]["quality"]["bits"] == 12
+
+
 def test_gallery_lists_newest_job_first(tmp_path):
     """Sources must sort by job created_utc, not filename or job-id order."""
     client, store = _client(tmp_path)

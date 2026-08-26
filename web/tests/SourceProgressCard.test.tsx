@@ -48,4 +48,34 @@ describe("SourceProgressCard in-flight slot", () => {
     expect(screen.getByAltText("Variant").getAttribute("src")).toBe("/api/look/s1/look_v01.jpg");
     expect(screen.getByText("look")).toBeTruthy();
   });
+
+  it("labels a uniqueness miss as couldn't unique", () => {
+    render(
+      <SourceProgressCard
+        source={{
+          ...base,
+          requested: 1,
+          done: 1,
+          variants: [{
+            index: 1,
+            filename: "v01.mp4",
+            status: "uniqueness_fail",
+            quality: {
+              vmaf: 96,
+              histogram_ok: true,
+              regen_count: 0,
+              passed: true,
+              spatial_vmaf: null,
+              spatial_ok: null,
+            },
+            file_url: "/api/variants/s1/v01.mp4",
+            uniqueness: 18 / 64,
+            uniqueness_status: "below_floor",
+          }],
+        }}
+      />,
+    );
+    expect(screen.getByText("couldn't unique")).toBeTruthy();
+    expect(screen.getByText("28%")).toBeTruthy();
+  });
 });

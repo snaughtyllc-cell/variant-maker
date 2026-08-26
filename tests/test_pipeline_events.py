@@ -108,7 +108,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
     # done events carry status + filename + uniqueness scores for progressive UI.
     assert len(done_kwargs) == 2
     for kw in done_kwargs:
-        assert kw.get("status") in ("ok", "best_effort", "corrupt")
+        assert kw.get("status") in ("ok", "best_effort", "corrupt", "uniqueness_fail")
         assert kw.get("filename")
         assert kw.get("uniqueness") == 0.5
         assert kw.get("uniqueness_status") == "ok"

@@ -29,7 +29,7 @@ class VariantRecord:
     # Live permalink the VA pasted after posting (not a Drive file id).
     post_url: str | None = None
     uniqueness: float | None = None
-    uniqueness_status: str | None = None  # ok|below_target|unknown
+    uniqueness_status: str | None = None  # ok|below_target|below_floor|unknown
     uniqueness_metric: str | None = None
     uniqueness_target: float | None = None
     preset_used: str | None = None

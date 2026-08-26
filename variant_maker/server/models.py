@@ -62,7 +62,7 @@ class SourceOut(BaseModel):
     in_flight: InFlightOut | None = None
     look_preview: LookPreviewOut | None = None
     job_state: str | None = None  # "running" | "done" | "cancelled"
-    failed: int = 0               # best_effort + corrupt count (Diagnostics population)
+    failed: int = 0               # best_effort + corrupt + uniqueness_fail (Diagnostics)
     created_utc: str | None = None
     files_ready: int = 0          # ok variants whose mp4 is on Studio disk
     copy_status: Literal["ok", "copying", "missing"] = "ok"

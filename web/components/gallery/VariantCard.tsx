@@ -18,6 +18,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
   const spatialOk = variant.quality?.spatial_ok === true;
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
   const uniquenessOk = variant.uniqueness_status === "ok";
+  const uniquenessFloorFail = variant.uniqueness_status === "below_floor";
 
   const badge = (
     <div
@@ -54,9 +55,9 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             fontWeight: 800,
             padding: "1px 5px",
             borderRadius: 5,
-            background: uniquenessOk ? "#072830" : "#3d2200",
-            color: uniquenessOk ? "#22d3ee" : "#f59e0b",
-            border: `1px solid ${uniquenessOk ? "#0c3d47" : "#4d2e00"}`,
+            background: uniquenessFloorFail ? "#3d1210" : uniquenessOk ? "#072830" : "#3d2200",
+            color: uniquenessFloorFail ? "#f0a8a4" : uniquenessOk ? "#22d3ee" : "#f59e0b",
+            border: `1px solid ${uniquenessFloorFail ? "#5a2a28" : uniquenessOk ? "#0c3d47" : "#4d2e00"}`,
             lineHeight: 1.4,
           }}
         >

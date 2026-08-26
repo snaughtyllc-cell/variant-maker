@@ -40,6 +40,7 @@ describe("escalated copy", () => {
     expect(ESCALATED_TITLE.toLowerCase()).toContain("not a fail");
     expect(ESCALATED_TITLE.toLowerCase()).toContain("original");
     expect(ESCALATED_TITLE).toMatch(/38%/);
+    expect(ESCALATED_TITLE).toMatch(/30%/);
     expect(ESCALATED_TITLE).toMatch(/55/);
     expect(ESCALATED_TITLE).toMatch(/65/);
   });
@@ -52,6 +53,16 @@ describe("diagnosticsReason", () => {
     expect(r.corrupt).toBe(false);
     expect(r.metric).toContain("84.2");
     expect(r.metric).toContain("90");
+  });
+  it("marks uniqueness_fail as a ship miss, not a Drive file", () => {
+    const r = diagnosticsReason({
+      source_id: "s", index: 3, filename: "v03.mp4", status: "uniqueness_fail",
+      quality: q({ vmaf: 96, passed: true, bits: 12 }),
+    });
+    expect(r.corrupt).toBe(false);
+    expect(r.title.toLowerCase()).toContain("couldn't unique");
+    expect(r.metric).toContain("12");
+    expect(r.metric).toContain("30%");
   });
   it("corrupt reason carries the spatial metric", () => {
     const r = diagnosticsReason({ source_id: "s", index: 7, filename: "v07.mp4", status: "corrupt", quality: q({ passed: false, spatial_ok: false, spatial_vmaf: 22.0 }) });

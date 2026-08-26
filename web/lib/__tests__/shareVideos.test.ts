@@ -102,6 +102,7 @@ describe("ready shareable variants", () => {
     expect(isShareableVideo({ file_url: "/a", filename: "a.mp4", file_ready: true, status: "ok" })).toBe(true);
     expect(isShareableVideo({ file_url: "/a", filename: "a.mp4", file_ready: false })).toBe(false);
     expect(isShareableVideo({ file_url: "/a", filename: "a.mp4", status: "best_effort" })).toBe(false);
+    expect(isShareableVideo({ file_url: "/a", filename: "a.mp4", status: "uniqueness_fail" })).toBe(false);
     expect(isShareableVideo({ filename: "a.mp4", status: "ok" })).toBe(false);
   });
 

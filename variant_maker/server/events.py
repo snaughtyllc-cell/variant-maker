@@ -14,7 +14,7 @@ class VariantEvent:
     state: str
     attempt: int = 0          # rerolling: which retry (1..max_attempts)
     max_attempts: int = 0
-    status: str | None = None     # done: "ok" | "best_effort" | "corrupt"
+    status: str | None = None     # done: "ok" | "best_effort" | "corrupt" | "uniqueness_fail"
     quality: dict | None = None   # done: vmaf/histogram_ok/spatial_ok/regen_count
     filename: str | None = None   # done: rendered file name
     # done: uniqueness meters — must travel with progressive polls, not only final replace.

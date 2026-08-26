@@ -238,6 +238,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
               vmafRounded == null ? "muted" : vmafRounded >= 93 ? "green" : vmafRounded >= 90 ? "amber" : "red";
             const uniquenessPct = v.uniqueness != null ? Math.round(v.uniqueness * 100) : null;
             const isBestEffort = v.status === "best_effort";
+            const uniquenessMiss = v.status === "uniqueness_fail";
             return (
               <VideoThumb
                 key={v.index}
@@ -246,7 +247,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
                   <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
                     {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}
                     {uniquenessPct != null && (
-                      <Badge color={v.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
+                      <Badge color={uniquenessMiss ? "red" : v.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
                     )}
                     {v.escalated && (
                       <span title={ESCALATED_TITLE}>
@@ -254,6 +255,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
                       </span>
                     )}
                     {isBestEffort && <Badge color="amber">best effort</Badge>}
+                    {uniquenessMiss && <Badge color="red">couldn't unique</Badge>}
                   </div>
                 }
               />

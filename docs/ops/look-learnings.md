@@ -62,6 +62,6 @@ Platform flags after a drop stay in Phase 12
 
 `variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Stills land on the Generate card as soon as the first encode exists; two JPEGs overlap uniqueness SSIM so Generate wait stays uniqueness-bound. MAE is a blotch backstop **after** uniqueness (do not run it beside 8-wide SSIM — that contended Fast CPU). Crop on a signed talking-head can trip MAE even when the stills look fine; Jeff’s eye on the stills is the oracle, not the red/green. Look fail still blocks escalate. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
 
-If the first encode looks ok and uniqueness still misses, strong escalate may not replace that file: a look-fail escalate rolls back to medium.
+**19 bits / ~30%** is the fail-forward floor: after the 24-bit hunt, files at 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%.
 
 Leftover `luma_shade` params must not draw. Filtergraph ignores them.

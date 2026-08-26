@@ -54,9 +54,11 @@ function QRow({
   );
 }
 
-function Meter({ pct, green, amber }: { pct: number; green?: boolean; amber?: boolean }) {
+function Meter({ pct, green, amber, red }: { pct: number; green?: boolean; amber?: boolean; red?: boolean }) {
   const bg = green
     ? "linear-gradient(90deg, #22c55e, #7bf2a8)"
+    : red
+    ? "linear-gradient(90deg, #ef4444, #f0a8a4)"
     : amber
     ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
     : "#3a3a4a";
@@ -116,6 +118,7 @@ export function QualityPanel({
   const rerollPct = (quality.regen_count / 3) * 100;
   const uniquenessPct = uniqueness != null ? pct01(uniqueness) : null;
   const uniquenessOk = uniquenessStatus === "ok";
+  const uniquenessFloorFail = uniquenessStatus === "below_floor";
   // Same SSIM-bits scale: similarity = 1 − uniqueness (lower better).
   const similarity = uniqueness != null ? similarityFromUniqueness(uniqueness) : null;
   const similarityPct = similarity != null ? pct01(similarity) : null;
@@ -259,13 +262,13 @@ export function QualityPanel({
       <QRow label="Uniqueness">
         {uniquenessPct != null ? (
           <>
-            <Meter pct={uniquenessPct} green={uniquenessOk} amber={!uniquenessOk} />
+            <Meter pct={uniquenessPct} green={uniquenessOk} amber={!uniquenessOk && !uniquenessFloorFail} red={uniquenessFloorFail} />
             <span
               style={{
                 fontSize: 12.5,
                 fontWeight: 800,
                 flexShrink: 0,
-                color: uniquenessOk ? "#247955" : "#a56b17",
+                color: uniquenessOk ? "#247955" : uniquenessFloorFail ? "#a33f3d" : "#a56b17",
               }}
             >
               {uniquenessPct}%
@@ -295,7 +298,7 @@ export function QualityPanel({
             margin: "-4px 2px 8px",
           }}
         >
-          target ≥ {pct01(uniquenessTarget)}% vs the original · 1080 medium ~55–65% · usable 720 ~40–50%
+          target ≥ {pct01(uniquenessTarget)}% vs the original · ship floor 30% · 1080 medium ~55–65% · usable 720 ~40–50%
         </div>
       )}
 

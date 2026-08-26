@@ -164,6 +164,18 @@ def test_gallery_and_diagnostics_split_by_status(tmp_path):
     assert diag[0].status == "best_effort"
 
 
+def test_diagnostics_includes_uniqueness_fail(tmp_path):
+    store = _store(tmp_path, plan={2: "uniqueness_fail"})
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    gallery = store.gallery()
+    assert [v.status for v in gallery[0].variants if v.status == "ok"] == ["ok"]
+    diag = store.diagnostics()
+    assert len(diag) == 1
+    assert diag[0].status == "uniqueness_fail"
+    assert diag[0].uniqueness_status == "below_floor"
+
+
 def test_find_variant_and_source_file(tmp_path):
     store = _store(tmp_path)
     job = store.create_job([("a.mp4", b"orig-bytes")], count=2)

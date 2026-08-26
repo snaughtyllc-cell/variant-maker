@@ -36,4 +36,19 @@ describe("AdvancedPanel output copy", () => {
     expect(screen.queryByRole("combobox")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveDisplayValue("Fast");
   });
+
+  it("explains the 38% pass line and 30% ship floor", () => {
+    render(
+      <AdvancedPanel
+        allowCreativeEscalate={true}
+        onAllowCreativeEscalateChange={noop}
+        qualityMode="fast"
+        onQualityModeChange={noop}
+      />,
+    );
+    fireEvent.click(screen.getByText("Advanced"));
+    expect(screen.getByText(/Pass is 38%/)).toBeInTheDocument();
+    expect(screen.getByText(/30% and up still ships/)).toBeInTheDocument();
+    expect(screen.getByText(/Under 30%/)).toBeInTheDocument();
+  });
 });

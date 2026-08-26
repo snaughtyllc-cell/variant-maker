@@ -35,6 +35,11 @@ METRIC_VERSION = "ssim_bits_v1"
 # Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
+# Fail-forward floor. Target stays 24 (~38% UI). After medium + one escalate,
+# 19 bits (~30% UI) still ships as below_target. Under 19 is below TikFusion's
+# ~18-bit / ~28% floor — do not push those files.
+FLOOR_BITS = 19
+DEFAULT_FLOOR = FLOOR_BITS / 64.0  # 19/64 ≈ 0.297 → 30% UI
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
 # vs each other; 24 keeps them spread without forcing strong.
 MIN_PEER_BITS = 24
@@ -77,6 +82,20 @@ def _probe_duration(path: str) -> float:
 def bits_from_ssim(mean_ssim: float) -> int:
     """TikFusion conversion: bits ∈ [0, 64], higher = more different."""
     return int(round((1.0 - float(mean_ssim)) * 64))
+
+
+def status_for_bits(bits: int | None, *, target: float | None) -> str:
+    """Pass line is ``target`` (24 bits). Hard floor is FLOOR_BITS (19 / ~30%)."""
+    if bits is None:
+        return "unknown"
+    if target is None:
+        return "ok"
+    score = max(0.0, min(1.0, float(bits) / 64.0))
+    if score >= float(target):
+        return "ok"
+    if int(bits) >= FLOOR_BITS:
+        return "below_target"
+    return "below_floor"
 
 
 def similarity_from_uniqueness(uniqueness: float) -> float:
@@ -208,17 +227,13 @@ def score_uniqueness(
     try:
         bits = bits_vs(src_path, variant_path)
         score = max(0.0, min(1.0, bits / 64.0))
-        if target is None:
-            status = "ok"
-        elif score >= target:
-            status = "ok"
-        else:
-            status = "below_target"
+        status = status_for_bits(bits, target=target)
         return {
             "uniqueness": score,
             "uniqueness_status": status,
             "uniqueness_metric": METRIC_VERSION,
             "uniqueness_target": target,
+            "uniqueness_floor": DEFAULT_FLOOR,
             "bits": bits,
         }
     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):

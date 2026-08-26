@@ -17,6 +17,7 @@ const sources: SourceOut[] = [{
   variants: [
     { index: 1, filename: "v01.mp4", status: "ok", quality: {}, file_url: "/x" },
     { index: 2, filename: "v02.mp4", status: "best_effort", quality: {}, file_url: "/y" },
+    { index: 3, filename: "v03.mp4", status: "uniqueness_fail", quality: {}, file_url: "/z" },
   ],
   failed: 1,
 }];

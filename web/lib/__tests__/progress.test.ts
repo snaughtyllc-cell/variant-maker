@@ -53,6 +53,18 @@ describe("progress reducer", () => {
     expect(s.variants[0]).toMatchObject({ index: 1, filename: "v01.mp4", status: "ok", file_url: "/api/variants/s1/v01.mp4" });
   });
 
+  it("done(uniqueness_fail) bumps done but not delivered", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "done", index: 2, status: "uniqueness_fail",
+      uniqueness: 12 / 64, uniqueness_status: "below_floor",
+      quality: q, filename: "v02.mp4",
+    }));
+    expect(r.bySource.s1.done).toBe(1);
+    expect(r.bySource.s1.delivered).toBe(0);
+    expect(r.bySource.s1.variants[0].status).toBe("uniqueness_fail");
+  });
+
   it("done(best_effort) bumps done but not delivered", () => {
     let r = base();
     r = reduceEvent(r, ev({ state: "done", index: 2, status: "best_effort", quality: { ...q, passed: false }, filename: "v02.mp4" }));

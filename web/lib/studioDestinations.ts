@@ -80,7 +80,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Diagnostics",
     audience: "admin",
     tab: "extra",
-    summary: "Failed encodes (below_floor / corrupt / best_effort). Operators never use this.",
+    summary: "Failed encodes (uniqueness miss / corrupt / best_effort). Operators never use this.",
   },
   {
     href: "/login",

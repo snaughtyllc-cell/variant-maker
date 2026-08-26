@@ -45,11 +45,16 @@ class FakeRunner:
                 source_id=source_id, index=i, state="looking", filename=fname,
                 look_status="ok", look_mae=8.0, look_src=look_src, look_var=look_var,
             ))
-            uniq = 0.42 if status == "ok" else None
-            uniq_status = "ok" if status == "ok" else "unknown"
-            uniq_metric = "ssim_bits_v1" if status == "ok" else None
             uniq_target = 24 / 64
-            quality = {"vmaf": 95.0 if status == "ok" else 50.0, "bits": 27 if status == "ok" else None}
+            if status == "ok":
+                uniq, uniq_status, uniq_metric = 0.42, "ok", "ssim_bits_v1"
+                quality = {"vmaf": 95.0, "bits": 27, "passed": True, "histogram_ok": True, "regen_count": 0}
+            elif status == "uniqueness_fail":
+                uniq, uniq_status, uniq_metric = 12 / 64, "below_floor", "ssim_bits_v1"
+                quality = {"vmaf": 95.0, "bits": 12, "passed": True, "histogram_ok": True, "regen_count": 0}
+            else:
+                uniq, uniq_status, uniq_metric = None, "unknown", None
+                quality = {"vmaf": 50.0, "bits": None, "passed": False, "histogram_ok": True, "regen_count": 3}
             on_event(VariantEvent(
                 source_id=source_id, index=i, state="done",
                 status=status, quality=quality, filename=fname,

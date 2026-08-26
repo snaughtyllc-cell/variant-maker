@@ -811,7 +811,7 @@ class JobStore:
         with self._lock:
             for job in self._jobs.values():
                 for s in job.sources:
-                    out.extend(v for v in s.variants if v.status in ("best_effort", "corrupt"))
+                    out.extend(v for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
         return out
 
     def _locate(self, source_id: str) -> tuple[str, JobSource] | None:
