@@ -24,7 +24,8 @@ Platform flags after a drop stay in Phase 12
 | 2026-08-22 | SaveInta 720 TH `cleargate24a` / `13cd292` | Medium: crop 0.86–0.90 from top, chroma cloud **4–7** `gblur=4`, luma dust **11–13**. No shade. | 26/28 bits, VMAF 96–98 | **Yea ship it.** Live pin later `7dae269`. |
 | 2026-08-22 | 1080 talking-head | Chroma grain **34–42** on 1080 pixels | ~40 bits (62%), VMAF 98 | 55–65% uniqueness band. Do not clone onto 720. |
 | 2026-08-24 | Caption-word 1080 `wordcrop856e` | keep **0.92–0.96**, x/y 0.35–0.65 | 38/42 bits, VMAF ~100 | **yea way better** than keep 0.84 eating a word. |
-| 2026-08-25 | SaveInta Fast 8/20 `7dae269` | Same signed medium. Fail-forward uniqueness. | 25–27 bits, all medium | Wait-time shipped. Live Fast. |
+| 2026-08-25 | SaveInta Fast 8/20 `7dae269` | Same signed medium. Fail-forward uniqueness. | 25–27 bits, all medium | Wait-time shipped. Was live Fast. |
+| **2026-08-26** | SaveInta lab Fast 8 `472ab60` / live Fast 2 smoke | Stills overlap uniqueness; MAE after SSIM | **25–27 bits**, all medium. Lab 8 worker **3.1 min** (prior live uniqueness-only 8 was **4.2 min**) | Stills look like source. MAE can still trip on crop — stills are the oracle. **Shipped live** (`sha256:e7474975…`, no `VF_LAB`). |
 | 2026-08-25 | SaveInta lab `looksaveinta` / `4540720` | Medium, **shade-off** | 24–27 bits, VMAF 95–99 | Control pack. Do not put shade on medium. |
 
 ## Usable (look OK, uniqueness under 24)
