@@ -59,7 +59,7 @@ Platform flags after a drop stay in Phase 12
 
 ## Engine backstop
 
-`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Runs on the real encode **before** uniqueness escalate. Studio shows source vs variant stills on `looking` so an upload is a visual test first, not a uniqueness % after eight files. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
+`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Stills land on the Generate card as soon as the first encode exists. Uniqueness SSIM overlaps stills + MAE (wall clock is uniqueness, not the sum). Look fail still blocks escalate. Studio shows source vs variant stills on `looking` so an upload is a visual test first, not a uniqueness % after eight files. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
 
 If the first encode looks ok and uniqueness still misses, strong escalate may not replace that file: a look-fail escalate rolls back to medium.
 

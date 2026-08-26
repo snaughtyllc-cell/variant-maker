@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 
 import pytest
-
-from variant_maker import look
 from conftest import HAS_FFMPEG
+
+from variant_maker import look, uniqueness
 
 pytestmark = pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
 
@@ -92,6 +93,36 @@ def test_lookaqmtp_real_pack_fails_look():
         pytest.skip("lookaqmtp clips not on this machine")
     assert look.score_look(src, lava)["look_status"] == "fail"
     assert look.score_look(src, medium)["look_status"] == "ok"
+
+
+def test_stills_and_mae_are_not_the_uniqueness_wait(tmp_path):
+    """Side-channel stills + coarse MAE must finish inside the SSIM uniqueness budget.
+
+    Overlap only keeps Generate wait flat if uniqueness is the slower of the two.
+    """
+    src = _clip(str(tmp_path / "src.mp4"), seconds=1.5, w=640, h=1120)
+    dest = str(tmp_path / "v.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", src,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dest,
+        ],
+        check=True,
+        capture_output=True,
+    )
+    t0 = time.perf_counter()
+    look.write_look_stills(src, dest, str(tmp_path), 1)
+    stills_s = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    look.score_look(src, dest)
+    mae_s = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    uniqueness.score_uniqueness(src, dest, target=uniqueness.DEFAULT_TARGET)
+    uniq_s = time.perf_counter() - t0
+    # SSIM extracts 6 frames + 3 SSIM pairs. Stills are 2 JPEGs; MAE is 3 tiny blends.
+    # Overlap wall is max(stills, MAE, uniqueness). Uniqueness must be that max.
+    assert uniq_s >= stills_s
+    assert uniq_s >= mae_s
 
 
 def test_write_look_stills(tmp_path):

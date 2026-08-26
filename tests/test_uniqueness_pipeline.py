@@ -3,6 +3,9 @@ escalate to the strong preset if none of them clear the target. ffmpeg/probe/uni
 are monkeypatched so this runs as a fast unit test."""
 from __future__ import annotations
 
+import threading
+import time
+
 from variant_maker import pipeline
 from variant_maker.uniqueness import DEFAULT_TARGET
 
@@ -303,6 +306,83 @@ def test_emits_uniqueness_and_escalating_states(monkeypatch, tmp_path):
         "escalating", "rendering", "checking", "looking", "uniqueness",
         "done",
     ]
+
+
+def test_uniqueness_work_starts_before_stills_finish(monkeypatch, tmp_path):
+    """Stills are a side channel. Uniqueness must not wait for JPEGs."""
+    _stub_common(monkeypatch)
+    uniq_started = threading.Event()
+    stills_entered = threading.Event()
+
+    def fake_stills(*_a, **_k):
+        stills_entered.set()
+        assert uniq_started.wait(timeout=1.0), "uniqueness thread must already be running"
+        return {"look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg"}
+
+    def fake_uniq(_src, _variant, target=None):
+        uniq_started.set()
+        assert stills_entered.wait(timeout=1.0)
+        return _ok_score()
+
+    monkeypatch.setattr(pipeline.look, "write_look_stills", fake_stills)
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+
+    events: list[str] = []
+    looking_kw: list[dict] = []
+
+    def record(state, **kw):
+        events.append(state)
+        if state == "looking":
+            looking_kw.append(kw)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg, on_event=record)
+    assert events.index("looking") < events.index("uniqueness")
+    assert looking_kw[0].get("look_src") == "look_v01_src.jpg"
+
+
+def test_look_overlap_wall_clock_is_max_not_sum(monkeypatch, tmp_path):
+    """Generate wait stays uniqueness-bound: stills + MAE overlap SSIM."""
+    _stub_common(monkeypatch)
+    started = threading.Barrier(3, timeout=2)
+    slice_s = 0.18
+    t_start: dict[str, float] = {}
+    t_end: dict[str, float] = {}
+
+    def slow_stills(*_a, **_k):
+        started.wait()
+        t_start["stills"] = time.perf_counter()
+        time.sleep(slice_s)
+        t_end["stills"] = time.perf_counter()
+        return {"look_src": "look_v01_src.jpg", "look_var": "look_v01.jpg"}
+
+    def slow_mae(*_a, **_k):
+        started.wait()
+        t_start["mae"] = time.perf_counter()
+        time.sleep(slice_s)
+        t_end["mae"] = time.perf_counter()
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    def slow_uniq(_src, _variant, target=None):
+        started.wait()
+        t_start["uniq"] = time.perf_counter()
+        time.sleep(slice_s)
+        t_end["uniq"] = time.perf_counter()
+        return _ok_score()
+
+    monkeypatch.setattr(pipeline.look, "write_look_stills", slow_stills)
+    monkeypatch.setattr(pipeline.look, "score_look", slow_mae)
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", slow_uniq)
+
+    cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=False)
+    pipeline.run(cfg)
+
+    span = max(t_end.values()) - min(t_start.values())
+    # Serial look-then-uniqueness would be ~3 slices. Overlap is ~1.
+    assert span < 1.7 * slice_s, span
 
 
 def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):

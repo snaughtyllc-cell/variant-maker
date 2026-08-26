@@ -79,7 +79,7 @@ ruff check .                    # lint
 | `pipeline.py` | ✅ done | per-variant loop, uniqueness + auto-tune → manifest |
 | `autotune.py` | ✅ done | bisection; quality fail → milder; source/peer miss → stronger |
 | `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). Not a look check. Do not buy % with shade, 720 snow, or Pixel AI scramble. |
-| `look.py` | ✅ done | Visual gate on the **actual** encode (`coarse_luma_v1`, fail if max MAE > 38). Emits `looking` + stills **before** uniqueness escalate. Log: `docs/ops/look-learnings.md`. |
+| `look.py` | ✅ done | Visual gate on the **actual** encode (`coarse_luma_v1`, fail if max MAE > 38). Stills emit on `looking`; uniqueness work overlaps so Generate wait stays uniqueness-bound. Log: `docs/ops/look-learnings.md`. |
 | `cli.py` | ✅ done | options + `pipeline.run` (`--look-first` = one medium + stills) |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
 | Fast resample | ✅ done | reconstructive `rebuild_scale` + VMAF-capped `warp_k1`; HQ skipped |

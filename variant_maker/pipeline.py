@@ -29,7 +29,7 @@ from .shot import classify_shot
 # still a pass. Centered 0.92 keep on Instagram 720 scored 20 bits and never
 # cleared; do not tell operators to re-upload 1080. AQMTp-class tight faces
 # miss medium (~18 bits). Do not buy 24 with shade (lookaqmtp lava). Look-first
-# (`look.py`) runs on the actual encode before uniqueness escalate.
+# (`look.py`) stills overlap uniqueness so Generate wait stays uniqueness-bound.
 DEFAULT_UNIQUENESS_TARGET = uniqueness.DEFAULT_TARGET
 # Wider ladder so medium can clear the vs-source gate before the one creative escalate.
 DEFAULT_UNIQ_STRENGTHS = [1.0, 1.4, 1.8]
@@ -247,16 +247,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 on_regen=lambda n, mx: emit("rerolling", index=i, attempt=n, max_attempts=mx),
             )
 
-        def _look_after_render() -> dict:
-            """Score the real file and write stills before uniqueness escalate."""
-            nonlocal look_info
-            scored = look.score_look(src.path, path)
-            stills: dict = {}
-            try:
-                stills = look.write_look_stills(src.path, path, out_dir, i)
-            except (OSError, ValueError, subprocess.CalledProcessError):
-                stills = {}
-            look_info = {**scored, **stills}
+        def _emit_looking() -> None:
             emit(
                 "looking", index=i, filename=fname,
                 look_status=look_info.get("look_status"),
@@ -265,7 +256,37 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 look_src=look_info.get("look_src"),
                 look_var=look_info.get("look_var"),
             )
-            return look_info
+
+        def _write_look_stills() -> dict:
+            try:
+                return look.write_look_stills(src.path, path, out_dir, i)
+            except (OSError, ValueError, subprocess.CalledProcessError):
+                return {}
+
+        def _score_uniqueness_now() -> dict:
+            scored = uniqueness.score_uniqueness(
+                src.path, path, target=uniqueness_target,
+            )
+            return _apply_peer_status(scored, _peer_bits(path))
+
+        def _look_then_uniqueness() -> dict:
+            """Stills on the card first. Uniqueness work starts immediately.
+
+            Wall clock is max(uniqueness, stills, MAE), not the sum. Serial
+            look-then-uniqueness added a few seconds per copy; SSIM is the
+            slow part, so overlapping it keeps Generate wait uniqueness-bound.
+            MAE is a blotch backstop for escalate, not the wait.
+            """
+            nonlocal look_info
+            with ThreadPoolExecutor(max_workers=2) as look_ex:
+                uniq_f = look_ex.submit(_score_uniqueness_now)
+                mae_f = look_ex.submit(look.score_look, src.path, path)
+                look_info = {**look_info, **_write_look_stills()}
+                _emit_looking()
+                emit("uniqueness", index=i)
+                scored = uniq_f.result()
+                look_info = {**look_info, **mae_f.result()}
+                return scored
 
         def _snapshot_medium() -> dict:
             """Keep the look-ok medium file so a blotchy escalate can roll back."""
@@ -292,19 +313,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
             r = snap["r"]
             preset_used = snap["preset_used"]
             escalated = False
-            try:
-                stills = look.write_look_stills(src.path, path, out_dir, i)
-                look_info = {**look_info, **stills}
-            except (OSError, ValueError, subprocess.CalledProcessError):
-                pass
-            emit(
-                "looking", index=i, filename=fname,
-                look_status=look_info.get("look_status"),
-                look_mae=look_info.get("look_mae"),
-                look_mae_max=look_info.get("look_mae_max"),
-                look_src=look_info.get("look_src"),
-                look_var=look_info.get("look_var"),
-            )
+            look_info = {**look_info, **_write_look_stills()}
+            _emit_looking()
 
         def _peer_bits(variant_path: str) -> int | None:
             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
@@ -376,13 +386,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
             def _tune_attempt(strength: float) -> dict:
                 r_try = attempt(strength, preset, gate_quality=False)
-                _look_after_render()
-                emit("uniqueness", index=i)
-                u_try = uniqueness.score_uniqueness(
-                    src.path, path, target=uniqueness_target,
-                )
-                peer_min = _peer_bits(path)
-                u_try = _apply_peer_status(u_try, peer_min)
+                u_try = _look_then_uniqueness()
+                peer_min = u_try.get("min_bits_vs_peers")
                 peer_ok = (
                     (not peer_gate)
                     or peer_min is None
@@ -446,11 +451,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 emit("escalating", index=i)
                 strong = get_preset("strong")
                 r = regen(strong, 1.0)
-                _look_after_render()
-                emit("uniqueness", index=i)
-                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                peer_min = _peer_bits(path)
-                u = _apply_peer_status(u, peer_min)
+                u = _look_then_uniqueness()
                 preset_used = strong.name
                 escalated = True
                 _restore_medium_if_look_fail(snap)
@@ -464,12 +465,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     continue
                 prev_effective = effective
                 r = regen(preset, strength)
-                _look_after_render()
-                emit("uniqueness", index=i)
-                u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                peer_min = _peer_bits(path)
-                u = _apply_peer_status(u, peer_min)
-                if r["passed"] and _gate_ok(u, peer_min):
+                u = _look_then_uniqueness()
+                if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
                     break
             else:
                 if (
@@ -480,11 +477,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     emit("escalating", index=i)
                     strong = get_preset("strong")
                     r = regen(strong, 1.0)
-                    _look_after_render()
-                    emit("uniqueness", index=i)
-                    u = uniqueness.score_uniqueness(src.path, path, target=uniqueness_target)
-                    peer_min = _peer_bits(path)
-                    u = _apply_peer_status(u, peer_min)
+                    u = _look_then_uniqueness()
                     preset_used = strong.name
                     escalated = True
                     _restore_medium_if_look_fail(snap)

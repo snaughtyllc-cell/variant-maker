@@ -87,6 +87,19 @@ describe("progress reducer", () => {
     });
   });
 
+  it("uniqueness keeps lookPreview stills on the card", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "looking", index: 1,
+      look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+      look_status: "ok", look_mae: 12.4,
+    }));
+    r = reduceEvent(r, ev({ state: "uniqueness", index: 1 }));
+    expect(r.bySource.s1.inFlight?.state).toBe("uniqueness");
+    expect(r.bySource.s1.lookPreview?.src).toBe("/api/look/s1/look_v01_src.jpg");
+    expect(r.bySource.s1.lookPreview?.var).toBe("/api/look/s1/look_v01.jpg");
+  });
+
   it("done(ok) carries uniqueness onto the tile", () => {
     let r = base();
     r = reduceEvent(r, ev({
