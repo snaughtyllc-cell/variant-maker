@@ -64,6 +64,12 @@ def test_missing_output_folder_id_raises():
         cfg.from_dict(raw)
 
 
+def test_same_input_and_output_folder_id_raises():
+    raw = _raw(clients={"logan": {"input_folder_id": "SAME", "output_folder_id": "SAME"}})
+    with pytest.raises(cfg.ConfigError, match="different"):
+        cfg.from_dict(raw)
+
+
 def test_missing_auth_raises():
     raw = _raw()
     del raw["auth"]

@@ -1,9 +1,29 @@
 "use client";
+import { useState } from "react";
 import { useRun } from "@/lib/runStore";
+import { cancelJob } from "@/lib/api";
+import { runDeliveredNone, runHasStarted } from "@/lib/progress";
+import { liveRunSubcopy } from "@/lib/hqWaitCopy";
+import {
+  isPreparingJob,
+  preparingHeadline,
+  preparingSubcopy,
+} from "@/lib/prepareCopy";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete } = useRun();
+  const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const [cancelling, setCancelling] = useState(false);
+
+  async function handleCancel() {
+    if (!jobId || complete || cancelling) return;
+    setCancelling(true);
+    try {
+      await cancelJob(jobId);
+    } catch {
+      // Poll will still close the job; keep the button from double-firing.
+    }
+  }
 
   // Empty state — no job running
   if (!jobId) {
@@ -25,8 +45,8 @@ export function ProgressPanel() {
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: "linear-gradient(135deg, #1c1430, #241a44)",
-            border: "1px solid #2e2350",
+            background: "#223a3e",
+            border: "1px solid #355156",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -34,13 +54,13 @@ export function ProgressPanel() {
             marginBottom: 4,
           }}
         >
-          ◈
+          <span style={{ color: "#57dfe6" }}>●</span>
         </div>
         <p
           style={{
             fontSize: 14,
             fontWeight: 700,
-            color: "var(--color-text)",
+            color: "#f1fafb",
             margin: 0,
           }}
         >
@@ -49,19 +69,45 @@ export function ProgressPanel() {
         <p
           style={{
             fontSize: 12,
-            color: "var(--color-muted2)",
+            color: "#b7c9cc",
             margin: 0,
             lineHeight: 1.5,
             maxWidth: 200,
           }}
         >
-          Drop a video and hit Generate — progress shows here
+          Add a video and Generate — live tiles show here
         </p>
       </div>
     );
   }
 
   const sources = Object.values(progress.bySource);
+  const preparing = isPreparingJob(jobId);
+  const started = runHasStarted(progress);
+  const early = !complete && !progress.failed && (preparing || !started);
+  const emptyFail = runDeliveredNone(progress);
+  const failed = progress.failed;
+  const cancelled = Boolean(failed && /cancelled/i.test(failed));
+  const headline = early
+    ? preparingHeadline()
+    : failed
+      ? cancelled
+        ? "Cancelled"
+        : "Run lost"
+      : complete
+        ? emptyFail
+          ? "No variants"
+          : "Complete"
+        : "Generating…";
+  const sub = early
+    ? preparingSubcopy()
+    : failed
+      ? failed
+      : complete
+        ? emptyFail
+          ? "The job ended without any playable variants. Try a smaller 1080p file."
+          : "All variants done — open Gallery, or New run for another pack"
+        : liveRunSubcopy("fast");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -73,54 +119,95 @@ export function ProgressPanel() {
           justifyContent: "space-between",
           marginBottom: 14,
           flexShrink: 0,
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
-            {complete ? "Complete" : "Generating…"}
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#f1fafb" }}>
+            {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2 }}>
-            {complete
-              ? "All variants done"
-              : "Live status updates every second"}
+          <div style={{ fontSize: 11.5, color: "#b7c9cc", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
+            {sub}
           </div>
         </div>
 
-        {/* Live / done pill */}
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: "#14141d",
-            border: "1px solid var(--color-line)",
-            fontSize: 11.5,
-            color: "var(--color-muted)",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {jobId && !complete && !preparing && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={cancelling}
+              style={{
+                background: "#2a0e0e",
+                border: "1px solid #5a1a1a",
+                color: "var(--color-red)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontSize: 13,
+                minHeight: 44,
+                cursor: cancelling ? "wait" : "pointer",
+              }}
+            >
+              {cancelling ? "Stopping…" : "Cancel"}
+            </button>
+          )}
+          {jobId && (
+            <button
+              type="button"
+              className="studio-progress-newrun"
+              onClick={clear}
+              style={{
+                borderRadius: 8,
+                padding: "10px 12px",
+                fontSize: 13,
+                fontWeight: 700,
+                minHeight: 44,
+                cursor: "pointer",
+              }}
+            >
+              New run
+            </button>
+          )}
           <span
+            className="studio-progress-pill"
             style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: complete ? "var(--color-green)" : "var(--color-cyan)",
-              boxShadow: complete
-                ? "0 0 8px #22c55e88"
-                : "0 0 8px #22d3ee99",
-              display: "inline-block",
-              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 999,
+              fontSize: 11.5,
             }}
-          />
-          {complete ? "done" : "live"}
-        </span>
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: complete ? "var(--color-green)" : "var(--color-cyan)",
+                boxShadow: complete
+                  ? "0 0 8px #22c55e88"
+                  : "0 0 8px #22d3ee99",
+                display: "inline-block",
+                flexShrink: 0,
+              }}
+            />
+            {early ? "starting" : complete ? "done" : "live"}
+          </span>
+        </div>
       </div>
 
       {/* Source cards — scrollable */}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {sources.map((source) => (
-          <SourceProgressCard key={source.source_id} source={source} />
+          <SourceProgressCard
+            key={source.source_id}
+            source={source}
+            qualityMode={qualityMode}
+            complete={complete}
+            preparing={early}
+          />
         ))}
       </div>
     </div>

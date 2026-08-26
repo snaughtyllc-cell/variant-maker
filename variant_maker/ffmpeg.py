@@ -1,7 +1,8 @@
 """Phase 5. Build + run one ffmpeg invocation per variant.
 
 Applies color.output_color_args(...) on OUTPUT, -map_metadata -1, -fflags +bitexact,
-libx264 with sampled crf/gop, aac audio. Returns the exact command string for the manifest
+libx264 with sampled crf/gop, aac audio, and a social maxrate ceiling (constrained
+VBR — CRF still picks quality). Returns the exact command string for the manifest
 (the reproduction contract — x264 isn't bit-deterministic, so the cmd + params ARE the record).
 """
 from __future__ import annotations
@@ -11,8 +12,38 @@ import subprocess
 
 from .color import output_color_args, resolve_output_color
 from .filtergraph import build_audio_filters, build_video_filters
-from .platforms import Platform
+from .platforms import Platform, x264_rate_args
 from .probe import SourceInfo
+
+# None = not probed yet. Cached so has_rubberband() does not spawn ffmpeg per variant.
+_rubberband_cached: bool | None = None
+
+
+def has_rubberband() -> bool:
+    """True when this ffmpeg build exposes the rubberband audio filter.
+
+    Never raises: missing ffmpeg, a failed listing, or a listing without the
+    filter all return False. Result is cached at module level.
+    """
+    global _rubberband_cached
+    if _rubberband_cached is not None:
+        return _rubberband_cached
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-filters"],
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        _rubberband_cached = False
+        return False
+    if result.returncode != 0:
+        _rubberband_cached = False
+        return False
+    listing = result.stdout or ""
+    _rubberband_cached = any(
+        "rubberband" in line.split() for line in listing.splitlines()
+    )
+    return _rubberband_cached
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -31,14 +62,17 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
     a = params["audio"]
     out_color = resolve_output_color(src.color)
 
+    vf = build_video_filters(params, src, platform)
+    video_flag = "-filter_complex" if ";" in vf else "-vf"
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-i", src.path,
         "-map_metadata", "-1",
         "-fflags", "+bitexact",
-        "-vf", build_video_filters(params, src, platform),
+        video_flag, vf,
         "-c:v", "libx264", "-preset", "medium",
         "-crf", str(v["crf"]), "-g", str(v["gop"]),
+        *x264_rate_args(platform),
         "-pix_fmt", "yuv420p",
         *output_color_args(out_color),
     ]

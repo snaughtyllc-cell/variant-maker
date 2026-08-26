@@ -1,7 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
+import {
+  fillFileCache,
+  filesReadyNow,
+  isShareableVideo,
+  phoneShareHintCopy,
+  saveOrShareVideoFiles,
+  shareVideosBusyLabel,
+  shareVideosLabel,
+  shouldOfferPhotosSave,
+} from "@/lib/shareVideos";
+import { PostLinkField } from "./PostLinkField";
 
 interface VariantActionsProps {
   sourceId: string;
@@ -11,8 +22,37 @@ interface VariantActionsProps {
 
 export function VariantActions({ sourceId, variant, onRegenerate }: VariantActionsProps) {
   const [busy, setBusy] = useState(false);
-  const [manifestOpen, setManifestOpen] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [offerPhotos, setOfferPhotos] = useState(false);
+  const fileCacheRef = useRef(new Map<string, File>());
+
+  const saveRef = isShareableVideo(variant)
+    ? [{ file_url: variant.file_url, filename: variant.filename }]
+    : [];
+
+  useEffect(() => {
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
+  }, []);
+
+  function handleSaveVariant(e: React.MouseEvent) {
+    e.preventDefault();
+    if (saveBusy || saveRef.length === 0) return;
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const ready = filesReadyNow(fileCacheRef.current, saveRef);
+    setSaveBusy(true);
+    const run = async (files: File[]) => {
+      if (files.length === 0) return;
+      await saveOrShareVideoFiles(files, {
+        share: nav,
+        userAgent: nav?.userAgent,
+        maxTouchPoints: nav?.maxTouchPoints,
+      });
+    };
+    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, saveRef).then(run);
+    void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
+  }
 
   async function handleRegenerate() {
     if (busy) return;
@@ -40,23 +80,8 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
     }
   }
 
-  const manifestJson = JSON.stringify(
-    {
-      index: variant.index,
-      filename: variant.filename,
-      file_url: variant.file_url,
-      status: variant.status,
-      quality: variant.quality,
-      uniqueness: variant.uniqueness,
-      uniqueness_status: variant.uniqueness_status,
-      escalated: variant.escalated,
-      platform_result: variant.platform_result,
-    },
-    null,
-    2,
-  );
-
   const currentResult = variant.platform_result ?? "unknown";
+  const isDuplicate = currentResult === "duplicate_reject";
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -74,8 +99,9 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
         }}
       >
         <span>Actions</span>
-        {currentResult !== "unknown" && (
+        {isDuplicate && (
           <span
+            data-testid="platform-result-badge"
             style={{
               fontSize: 10,
               fontWeight: 800,
@@ -83,67 +109,50 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
               borderRadius: 999,
               textTransform: "none",
               letterSpacing: 0,
-              ...(currentResult === "passed"
-                ? { color: "#7bf2a8", background: "#0c2c1a", border: "1px solid #16502f" }
-                : { color: "#ffd08a", background: "#2c2210", border: "1px solid #5a4416" }),
+              color: "#8e6119",
+              background: "#fff8eb",
+              border: "1px solid #efdfbd",
             }}
           >
-            {currentResult === "passed" ? "✓ Passed upload" : "⚠ Duplicate rejected"}
+            ⚠ Duplicate rejected
           </span>
         )}
       </div>
 
-      {/* Platform outcome — records what the real platform did with this upload */}
+      <PostLinkField sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
+
+      <button
+        onClick={() => handleSetResult("duplicate_reject")}
+        disabled={!!resultBusy}
+        style={{
+          display: "flex",
+          width: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 7,
+          fontSize: 12.5,
+          fontWeight: 700,
+          padding: "10px",
+          marginBottom: 6,
+          borderRadius: 10,
+          background: isDuplicate ? "#fff8eb" : "#f3f8f9",
+          border: `1px solid ${isDuplicate ? "#efdfbd" : "var(--color-line)"}`,
+          color: isDuplicate ? "#8e6119" : "var(--color-text)",
+          cursor: resultBusy ? "not-allowed" : "pointer",
+          opacity: resultBusy && resultBusy !== "duplicate_reject" ? 0.6 : 1,
+        }}
+      >
+        ⚠ {resultBusy === "duplicate_reject" ? "Saving…" : "Duplicate rejected"}
+      </button>
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 9,
+          fontSize: 11,
+          color: "var(--color-muted)",
+          lineHeight: 1.45,
           marginBottom: 9,
         }}
       >
-        <button
-          onClick={() => handleSetResult("passed")}
-          disabled={!!resultBusy}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "10px",
-            borderRadius: 10,
-            background: currentResult === "passed" ? "#0c2c1a" : "#16161f",
-            border: `1px solid ${currentResult === "passed" ? "#16502f" : "var(--color-line)"}`,
-            color: currentResult === "passed" ? "#7bf2a8" : "var(--color-text)",
-            cursor: resultBusy ? "not-allowed" : "pointer",
-            opacity: resultBusy && resultBusy !== "passed" ? 0.6 : 1,
-          }}
-        >
-          ✓ {resultBusy === "passed" ? "Saving…" : "Passed upload"}
-        </button>
-        <button
-          onClick={() => handleSetResult("duplicate_reject")}
-          disabled={!!resultBusy}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "10px",
-            borderRadius: 10,
-            background: currentResult === "duplicate_reject" ? "#2c2210" : "#16161f",
-            border: `1px solid ${currentResult === "duplicate_reject" ? "#5a4416" : "var(--color-line)"}`,
-            color: currentResult === "duplicate_reject" ? "#ffd08a" : "var(--color-text)",
-            cursor: resultBusy ? "not-allowed" : "pointer",
-            opacity: resultBusy && resultBusy !== "duplicate_reject" ? 0.6 : 1,
-          }}
-        >
-          ⚠ {resultBusy === "duplicate_reject" ? "Saving…" : "Duplicate rejected"}
-        </button>
+        Unlabeled = pass. Only mark duplicate when the platform took it down.
       </div>
 
       <div
@@ -153,10 +162,61 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           gap: 9,
         }}
       >
-        {/* Download — spans full width, primary CTA */}
-        <a
-          href={variant.file_url}
-          download={variant.filename}
+        {offerPhotos ? (
+          <button
+            type="button"
+            title={phoneShareHintCopy()}
+            onClick={handleSaveVariant}
+            disabled={saveBusy}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              cursor: saveBusy ? "wait" : "pointer",
+              opacity: saveBusy ? 0.7 : 1,
+            }}
+          >
+            ⬇ {saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true)}
+          </button>
+        ) : (
+          <a
+            href={variant.file_url}
+            download={variant.filename}
+            style={{
+              gridColumn: "span 2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 700,
+              padding: "11px",
+              borderRadius: 10,
+              background: "var(--ink)",
+              border: "none",
+              color: "#f7fbfb",
+              boxShadow: "none",
+              textDecoration: "none",
+              cursor: "pointer",
+            }}
+          >
+            ⬇ Download variant
+          </a>
+        )}
+
+        <button
+          onClick={handleRegenerate}
+          disabled={busy}
           style={{
             gridColumn: "span 2",
             display: "flex",
@@ -167,31 +227,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             fontWeight: 700,
             padding: "11px",
             borderRadius: 10,
-            backgroundImage: "var(--background-image-cta)",
-            border: "none",
-            color: "#fff",
-            boxShadow: "0 4px 14px #ff4d8d33",
-            textDecoration: "none",
-            cursor: "pointer",
-          }}
-        >
-          ⬇ Download variant
-        </a>
-
-        {/* Regenerate this one */}
-        <button
-          onClick={handleRegenerate}
-          disabled={busy}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "11px",
-            borderRadius: 10,
-            background: "#16161f",
+            background: "#f3f8f9",
             border: "1px solid var(--color-line)",
             color: busy ? "var(--color-muted)" : "var(--color-text)",
             cursor: busy ? "not-allowed" : "pointer",
@@ -200,56 +236,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
         >
           ↻ {busy ? "Regenerating…" : "Regenerate this one"}
         </button>
-
-        {/* View manifest entry */}
-        <button
-          onClick={() => setManifestOpen((o) => !o)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "11px",
-            borderRadius: 10,
-            background: "#16161f",
-            border: "1px solid var(--color-line)",
-            color: "var(--color-text)",
-            cursor: "pointer",
-          }}
-        >
-          {"{ }"} View manifest entry
-        </button>
       </div>
-
-      {/* Manifest disclosure */}
-      {manifestOpen && (
-        <div
-          style={{
-            marginTop: 10,
-            background: "#0c0c14",
-            border: "1px solid var(--color-line)",
-            borderRadius: 10,
-            padding: "12px 14px",
-            overflow: "auto",
-          }}
-        >
-          <pre
-            style={{
-              margin: 0,
-              fontSize: 11,
-              color: "var(--color-muted)",
-              fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
-              lineHeight: 1.6,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-            }}
-          >
-            {manifestJson}
-          </pre>
-        </div>
-      )}
     </div>
   );
 }

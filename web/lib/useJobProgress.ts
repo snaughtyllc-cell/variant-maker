@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { eventsUrl, getJob } from "./api";
 import { initRun, reduceEvent, RunProgress } from "./progress";
+import { isPreparingJob } from "./prepareCopy";
 import { VariantEvent } from "./types";
 
 function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJob>>): RunProgress {
@@ -22,35 +23,74 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
         uniqueness_target: v.uniqueness_target ?? null,
         escalated: v.escalated ?? false,
         platform_result: v.platform_result ?? null,
+        look_status: v.look_status ?? null,
+        look_mae: v.look_mae ?? null,
+        look_src_url: v.look_src_url ?? null,
+        look_var_url: v.look_var_url ?? null,
       };
       next = reduceEvent(next, ev);
     }
     // Mid-flight state rides on JobDetail so RunPod-buffered SSE is not required.
-    if (s.in_flight) {
+    const flights = s.in_flights?.length
+      ? s.in_flights
+      : s.in_flight
+        ? [s.in_flight]
+        : [];
+    const cleared = next.bySource[s.source_id];
+    if (cleared) {
+      next = {
+        ...next,
+        bySource: {
+          ...next.bySource,
+          [s.source_id]: { ...cleared, inFlight: undefined, inFlights: {} },
+        },
+      };
+    }
+    for (const f of flights) {
       next = reduceEvent(next, {
         source_id: s.source_id,
-        index: s.in_flight.index,
-        state: s.in_flight.state,
-        attempt: s.in_flight.attempt,
-        max_attempts: s.in_flight.max_attempts,
+        index: f.index,
+        state: f.state,
+        attempt: f.attempt,
+        max_attempts: f.max_attempts,
         status: null,
         quality: null,
         filename: null,
       });
-    } else {
+    }
+    if (s.look_preview) {
       const prev = next.bySource[s.source_id];
-      if (prev?.inFlight) {
+      if (prev) {
         next = {
           ...next,
           bySource: {
             ...next.bySource,
-            [s.source_id]: { ...prev, inFlight: undefined },
+            [s.source_id]: {
+              ...prev,
+              lookPreview: {
+                index: s.look_preview.index,
+                src: s.look_preview.look_src_url || "",
+                var: s.look_preview.look_var_url || "",
+                status: s.look_preview.look_status ?? null,
+                mae: s.look_preview.look_mae ?? null,
+              },
+            },
           },
         };
       }
     }
   }
-  if (detail.state === "done") next = reduceEvent(next, { state: "job-done" });
+  if (detail.state === "done" || detail.state === "cancelled") {
+    const cleared: RunProgress = {
+      ...next,
+      complete: true,
+      failed: detail.error || next.failed || null,
+      bySource: Object.fromEntries(
+        Object.entries(next.bySource).map(([id, s]) => [id, { ...s, inFlight: undefined, inFlights: {} }]),
+      ),
+    };
+    next = reduceEvent(cleared, { state: "job-done" });
+  }
   return next;
 }
 
@@ -62,11 +102,13 @@ export function useJobProgress(
   const runRef = useRef(run);
   runRef.current = run;
   const sourcesKey = sources.map((s) => s.source_id).join(",");
+  const preparing = isPreparingJob(jobId);
   useEffect(() => {
     if (!jobId || sources.length === 0) return;
     const fresh = initRun(sources);
     runRef.current = fresh;
     setRun(fresh);
+    if (isPreparingJob(jobId)) return;
 
     // SSE still helps locally; RunPod's HTTP proxy often buffers it forever.
     const es = new EventSource(eventsUrl(jobId));
@@ -91,9 +133,19 @@ export function useJobProgress(
         const next = applyJobDetail(runRef.current, detail);
         runRef.current = next;
         setRun(next);
-        if (detail.state === "done") es.close();
-      } catch {
-        // ignore transient proxy errors
+        if (detail.state === "done" || detail.state === "cancelled") es.close();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.startsWith("404")) {
+          const next: RunProgress = {
+            ...runRef.current,
+            complete: true,
+            failed: "This run is gone (Studio restarted or the job never saved). Generate again.",
+          };
+          runRef.current = next;
+          setRun(next);
+          es.close();
+        }
       }
     };
     poll();
@@ -106,5 +158,6 @@ export function useJobProgress(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, sourcesKey]);
+  if (preparing) return initRun(sources);
   return run;
 }

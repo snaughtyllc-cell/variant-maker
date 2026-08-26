@@ -18,6 +18,7 @@ import threading
 from dataclasses import dataclass, field
 
 from variant_maker.farm.drive import DriveClient
+from variant_maker.server.captions import caption_filename
 from variant_maker.server.drive_names import unique_upload_name
 from variant_maker.server.jobs import JobStore
 
@@ -30,6 +31,7 @@ class ExportError(Exception):
 class VariantRef:
     source_id: str
     index: int
+    caption: str | None = None
 
 
 @dataclass
@@ -70,7 +72,8 @@ def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[Expo
         if local_path is None:
             continue
         files.append(ExportFile(
-            source_id=ref.source_id, index=ref.index, filename=variant.filename,
+            source_id=ref.source_id, index=ref.index,
+            filename=caption_filename(ref.caption, variant.filename),
             local_path=local_path, status="pending",
         ))
     if not files:
@@ -101,10 +104,31 @@ class ExportStore:
         path = self._path(export_id)
         if not os.path.exists(path):
             return None
-        with open(path, encoding="utf-8") as f:
-            raw = json.load(f)
-        files = [ExportFile(**item) for item in raw.pop("files", [])]
-        return ExportJob(files=files, **raw)
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = json.load(f)
+            files = [ExportFile(**item) for item in raw.pop("files", [])]
+            return ExportJob(files=files, **raw)
+        except (OSError, json.JSONDecodeError, TypeError, KeyError, ValueError):
+            return None
+
+    def list(self) -> list[ExportJob]:
+        """Newest export jobs first. Skips temp/corrupt files."""
+        if not os.path.isdir(self._dir):
+            return []
+        jobs: list[ExportJob] = []
+        try:
+            names = os.listdir(self._dir)
+        except OSError:
+            return []
+        for name in names:
+            if not name.endswith(".json") or name.startswith("."):
+                continue
+            job = self.get(name[:-5])
+            if job is not None:
+                jobs.append(job)
+        jobs.sort(key=lambda j: (j.created_utc or "", j.export_id), reverse=True)
+        return jobs
 
     def save(self, job: ExportJob) -> None:
         path = self._path(job.export_id)
@@ -127,6 +151,15 @@ class ExportStore:
         return os.path.join(self._dir, f"{export_id}.json")
 
 
+def _concrete_store(store: ExportStore) -> ExportStore:
+    """Pin the tenant ExportStore. AttrProxy is request-scoped; the upload thread
+    has no tenant context, so a proxy get() would miss the job and leave 0 / N."""
+    inner = getattr(store, "_inner", None)
+    if callable(inner):
+        return inner()
+    return store
+
+
 class ExportRunner:
     """Uploads an `ExportJob`'s files to Drive sequentially, on a background thread."""
 
@@ -135,6 +168,7 @@ class ExportRunner:
         self._store = export_store
 
     def start(self, job: ExportJob) -> None:
+        self._store = _concrete_store(self._store)
         job.state = "running"
         self._store.save(job)
         threading.Thread(target=self._run, args=(job.export_id,), daemon=True).start()

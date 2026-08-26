@@ -169,19 +169,20 @@ Two checks, run on every variant; fail → reduce strength and regenerate (bound
 
 | Video param | subtle | medium | strong |
 |---|---|---|---|
-| crop punch-in (kept, rescaled) | 0.98–1.00 | 0.95–0.98 | 0.90–0.95 |
+| crop punch-in (kept, rescaled) | 0.98–1.00 | 0.92–0.96 | 0.88–0.93 |
 | rotation deg (`safe` only) | 0 | ±0.3 | ±0.8 |
 | brightness (zero-mean) | ±0.01 | ±0.025 | ±0.04 |
 | contrast | 0.99–1.01 | 0.97–1.03 | 0.95–1.06 |
 | saturation (zero-mean) | 0.99–1.02 | 0.96–1.05 | 0.92–1.10 |
 | gamma | 0.99–1.01 | 0.97–1.03 | 0.95–1.05 |
 | hue deg | ±1 | ±3 | ±6 |
-| grain (see Tier 2 note) | 3–6 | 6–12 | 12–20 |
+| grain (see Tier 2 note) | 3–6 | 7–12 | 10–16 |
 | unsharp | off | ~0.3 | ~0.4 |
 | speed `s` | 0.99–1.01 | 0.98–1.02 | 0.96–1.04 |
 | trim/end (s) | 0–0.10 | 0.10–0.30 | 0.20–0.50 |
 | CRF | 18–20 | 19–22 | 20–23 |
 | GOP | 48/60 | 48/60/90 | 60/90/120 |
+| Social maxrate (reels/tiktok/shorts) | 12M ceiling (constrained VBR; `none` uncapped) | same | same |
 
 | Audio param | subtle | medium | strong |
 |---|---|---|---|

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useJobProgress } from "@/lib/useJobProgress";
 
 class MockES {
@@ -32,5 +32,81 @@ describe("useJobProgress", () => {
   it("waits until sources are known before opening", () => {
     renderHook(() => useJobProgress("j1", []));
     expect(MockES.last).toBeNull();
+  });
+
+  it("clears v01 rendering when poll says the job is done (GPU timeout)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 1, created_utc: "", state: "done",
+        error: "GPU job failed or hit the 20-minute limit.",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 1, delivered: 0, shortfall: 1,
+          variants: [],
+          in_flight: { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() => useJobProgress("j1", sources));
+    await waitFor(() => {
+      expect(result.current.complete).toBe(true);
+    });
+    expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.bySource.s1.inFlights).toEqual({});
+    expect(result.current.failed).toMatch(/20-minute/);
+  });
+
+  it("clears v01 rendering when poll says the job was cancelled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 1, created_utc: "", state: "cancelled",
+        error: "Cancelled — New run when you want another pack.",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 1, delivered: 0, shortfall: 1,
+          variants: [],
+          in_flight: { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() => useJobProgress("j1", sources));
+    await waitFor(() => {
+      expect(result.current.complete).toBe(true);
+    });
+    expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.bySource.s1.inFlights).toEqual({});
+    expect(result.current.failed).toMatch(/Cancelled/);
+  });
+
+  it("keeps every live copy from in_flights on poll", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 8, created_utc: "", state: "running",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 8, delivered: 0, shortfall: 8,
+          variants: [],
+          in_flight: { index: 2, state: "rendering", attempt: 0, max_attempts: 0 },
+          in_flights: [
+            { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+            { index: 2, state: "rendering", attempt: 0, max_attempts: 0 },
+          ],
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() =>
+      useJobProgress("j1", [{ source_id: "s1", filename: "a.mp4", requested: 8 }]),
+    );
+    await waitFor(() => {
+      expect(Object.keys(result.current.bySource.s1.inFlights)).toHaveLength(2);
+    });
+    expect(result.current.bySource.s1.inFlights[1]?.state).toBe("rendering");
+    expect(result.current.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    expect(result.current.complete).toBe(false);
+  });
+
+  it("does not construct EventSource for a preparing jobId", () => {
+    const { result, unmount } = renderHook(() => useJobProgress("preparing", sources));
+    expect(MockES.last).toBeNull();
+    expect(result.current.complete).toBe(false);
+    expect(result.current.bySource.s1.requested).toBe(1);
+    unmount();
   });
 });

@@ -2,7 +2,7 @@
 name = "variant-maker"
 version = "0.2.0"
 description = "Local-first AI video variant generator (FFmpeg core + optional neural quality layer)"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
 ]

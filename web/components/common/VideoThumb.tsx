@@ -1,5 +1,6 @@
 "use client";
-import { ReactNode, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { cssAspectRatio, DEFAULT_CSS_ASPECT, paintVideoFrame, videoFrameSrc } from "@/lib/media";
 
 interface VideoThumbProps {
   src: string;
@@ -8,7 +9,39 @@ interface VideoThumbProps {
 }
 
 export function VideoThumb({ src, badge, className }: VideoThumbProps) {
+  const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [inView, setInView] = useState(false);
+  const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
+
+  useEffect(() => {
+    setAspect(DEFAULT_CSS_ASPECT);
+  }, [src]);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) setInView(e.isIntersecting);
+      },
+      { rootMargin: "120px", threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  function applyVideoAspect(video: HTMLVideoElement | null) {
+    if (!video) return;
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setAspect(cssAspectRatio(video.videoWidth, video.videoHeight));
+    }
+    paintVideoFrame(video);
+  }
 
   function handleMouseEnter() {
     const v = videoRef.current;
@@ -21,14 +54,16 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
     const v = videoRef.current;
     if (!v) return;
     v.pause();
-    v.currentTime = 0;
   }
 
   return (
     <div
+      ref={boxRef}
       className={className}
       style={{
-        aspectRatio: "9 / 16",
+        aspectRatio: aspect,
+        width: "100%",
+        alignSelf: "start",
         borderRadius: 6,
         position: "relative",
         overflow: "hidden",
@@ -38,19 +73,23 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <video
-        ref={videoRef}
-        src={src}
-        preload="metadata"
-        muted
-        playsInline
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-        }}
-      />
+      {inView && (
+        <video
+          ref={videoRef}
+          src={videoFrameSrc(src)}
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedMetadata={() => applyVideoAspect(videoRef.current)}
+          onLoadedData={() => applyVideoAspect(videoRef.current)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            display: "block",
+          }}
+        />
+      )}
       {badge && (
         <div
           style={{

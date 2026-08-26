@@ -5,6 +5,7 @@ import { VariantOut } from "@/lib/types";
 import { sourceUrl } from "@/lib/api";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
+import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
 
@@ -16,6 +17,10 @@ interface VariantSheetProps {
   onClose: () => void;
   onNav: (delta: number) => void;
   onRegenerate: () => void;
+}
+
+function captionOf(v: { caption?: string | null }): string | null | undefined {
+  return v.caption;
 }
 
 export function VariantSheet({
@@ -60,29 +65,37 @@ export function VariantSheet({
       <Dialog.Portal>
         {/* Overlay — dims the Gallery behind */}
         <Dialog.Overlay
+          className="variant-sheet-overlay"
           style={{
             position: "fixed",
             inset: 0,
-            background: "#05050880",
-            backdropFilter: "blur(1px)",
+            background: "rgba(23, 42, 46, 0.32)",
+            backdropFilter: "blur(3px)",
             zIndex: 50,
+            touchAction: "none",
           }}
         />
 
         {/* Panel — right-docked slide-over */}
         <Dialog.Content
           aria-describedby={undefined}
+          className="variant-sheet"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
           style={{
             position: "fixed",
             top: 0,
             right: 0,
             bottom: 0,
             width: 430,
-            background: "linear-gradient(180deg, #0e0e15, #0b0b11)",
-            borderLeft: "1px solid var(--color-line2)",
-            boxShadow: "-20px 0 50px #000000aa",
+            maxWidth: "100vw",
+            background: "#fbfdfd",
+            borderLeft: "1px solid #c7dde0",
+            boxShadow: "-20px 0 50px rgba(22, 58, 65, 0.22)",
             display: "flex",
             flexDirection: "column",
+            overflow: "hidden",
+            overscrollBehavior: "contain",
             zIndex: 51,
             outline: "none",
             animation: "vm-slidein 0.25s ease",
@@ -95,33 +108,35 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header */}
+          {/* Header — row of ‹ title › ✕; never stacks, never scrolls away */}
           <div
+            className="variant-sheet__header"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              padding: "14px 16px",
-              borderBottom: "1px solid var(--color-line)",
+              gap: 8,
+              padding: "12px 14px",
+              borderBottom: "1px solid #d4e3e6",
               flexShrink: 0,
             }}
           >
             {/* Prev */}
             <button
+              type="button"
               onClick={() => onNav(-1)}
               disabled={isFirst}
               aria-label="Previous variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
-                background: "#16161f",
+                background: "#f3f8f9",
                 border: "1px solid var(--color-line)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: isFirst ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isFirst ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isFirst ? 0.4 : 1,
@@ -162,20 +177,21 @@ export function VariantSheet({
 
             {/* Next */}
             <button
+              type="button"
               onClick={() => onNav(+1)}
               disabled={isLast}
               aria-label="Next variant"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
-                background: "#16161f",
+                background: "#f3f8f9",
                 border: "1px solid var(--color-line)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: isLast ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 14,
+                fontSize: 22,
                 cursor: isLast ? "not-allowed" : "pointer",
                 flexShrink: 0,
                 opacity: isLast ? 0.4 : 1,
@@ -186,10 +202,11 @@ export function VariantSheet({
 
             {/* Close */}
             <Dialog.Close
+              type="button"
               aria-label="Close"
               style={{
-                width: 30,
-                height: 30,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 background: "transparent",
                 border: "none",
@@ -206,12 +223,17 @@ export function VariantSheet({
             </Dialog.Close>
           </div>
 
-          {/* Body — scrollable */}
+          {/* Body — only scroll container; Radix locks document scroll while open */}
           <div
+            className="variant-sheet__body"
             style={{
-              overflow: "auto",
-              padding: 16,
               flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              overflowX: "hidden",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
+              padding: "14px 16px 28px",
             }}
           >
             {/* Compare slider — beforeRef/afterRef wired in from sheet */}
@@ -226,13 +248,11 @@ export function VariantSheet({
               <ScrubBar videos={[beforeRef, afterRef]} />
             </div>
 
-            {/* Quality rows */}
+            <CaptionBlock caption={captionOf(variant)} />
+
             <QualityPanel
-              quality={variant.quality}
               uniqueness={variant.uniqueness}
               uniquenessStatus={variant.uniqueness_status}
-              uniquenessTarget={variant.uniqueness_target}
-              escalated={variant.escalated}
               bestEffort={variant.status === "best_effort"}
             />
 

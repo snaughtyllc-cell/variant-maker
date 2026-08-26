@@ -3,11 +3,33 @@ import os
 import subprocess
 
 import pytest
+from conftest import HAS_FFMPEG
 
 from variant_maker import pipeline
-from variant_maker.probe import probe
 from variant_maker.neural import upscale
-from conftest import HAS_FFMPEG
+from variant_maker.probe import probe
+from variant_maker.uniqueness import DEFAULT_TARGET, FLOOR_BITS, MIN_PEER_BITS, TARGET_BITS
+
+
+def test_default_uniqueness_target_is_24_bits():
+    """Fast vs-source *gate* stays 24/64 (~38% UI). Do not raise it to 32.
+
+    Medium talking-head should *score* ~35–42 bits (~55–65% UI) so packs clear
+    without escalate. A 32-bit gate sat in strong's band and escalated all 20.
+    Peer floor stays 24. Escalate remains for misses. Fast autotune is one
+    medium encode then escalate — five-step bisection is how a 720 Fast 20
+    hit executionTimeout.
+    """
+    assert TARGET_BITS == 24
+    assert pipeline.DEFAULT_UNIQUENESS_TARGET == DEFAULT_TARGET
+    assert pipeline.DEFAULT_UNIQUENESS_TARGET == 24 / 64
+    assert FLOOR_BITS == 19
+    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == MIN_PEER_BITS
+    assert pipeline.DEFAULT_MIN_BITS_VS_PEERS == 24
+    assert pipeline.FAST_TUNE_MAX_ITERS == 1
+    assert pipeline.use_face_protect("fast") is False
+    assert pipeline.use_face_protect("hq") is True
+
 
 HAS_RESR = upscale.available("models/realesrgan")
 

@@ -68,13 +68,14 @@ export function FileList({ files, durations, onRemove }: FileListProps) {
           </div>
           <button
             onClick={() => onRemove(i)}
+            className="touch-hit"
             style={{
               background: "none",
               border: "none",
               color: "var(--color-muted2)",
-              fontSize: 14,
+              fontSize: 16,
               cursor: "pointer",
-              padding: "0 2px",
+              padding: "0 8px",
               lineHeight: 1,
             }}
             aria-label={`Remove ${file.name}`}

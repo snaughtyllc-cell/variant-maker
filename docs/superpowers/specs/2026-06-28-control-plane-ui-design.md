@@ -1,5 +1,9 @@
 # Control-Plane UI — Stage 1 Design
 
+> **IA superseded.** Navigation here is v1 (Studio · Gallery · Diagnostics).
+> Current destinations are in [`docs/ops/studio-ia.md`](../../ops/studio-ia.md)
+> and `web/lib/studioDestinations.ts`. Use those for any redesign.
+
 **Date:** 2026-06-28
 **Status:** Approved (brainstorm) — pending spec review
 **Scope:** Stage 1 of the variant-maker control plane. Local, zero-config UI over the existing engine.

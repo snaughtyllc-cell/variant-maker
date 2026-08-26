@@ -85,3 +85,23 @@ def test_note_file_id_links_existing_sha(tmp_path):
     led.note_file_id("id2", "shaA")
     assert led.sha_for_file_id("id2") == "shaA"
     assert Ledger(str(tmp_path / "ledger.json")).sha_for_file_id("id2") == "shaA"
+
+
+def test_mark_running_is_not_done_and_reloads(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    led = Ledger(path)
+    led.mark_running("shaR", job_id="job1", file_id="idR", md5="m", filename="clip.mp4", ts=9.0)
+    rec = led.get("shaR")
+    assert rec["status"] == "running"
+    assert rec["job_id"] == "job1"
+    assert rec["filename"] == "clip.mp4"
+    assert led.is_running("shaR") is True
+    assert led.is_done("shaR") is False
+    assert led.seen_file("idR", "m") == "shaR"
+    assert led.running_records()[0][0] == "shaR"
+
+    reloaded = Ledger(path)
+    assert reloaded.is_running("shaR") is True
+    reloaded.mark_done("shaR", output_folder_id="OUT", variant_count=2, file_id="idR", md5="m")
+    assert reloaded.is_running("shaR") is False
+    assert reloaded.is_done("shaR") is True

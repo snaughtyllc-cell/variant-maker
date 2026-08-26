@@ -19,8 +19,22 @@ class Workspace:
         os.makedirs(out, exist_ok=True)
         return out
 
+    def job_meta_path(self, job_id: str) -> str:
+        return os.path.join(self.root, "jobs", job_id, "job.json")
+
     def variant_path(self, job_id: str, source_id: str, filename: str) -> str:
         return os.path.join(self.source_out_dir(job_id, source_id), filename)
+
+    def job_dir(self, job_id: str) -> str:
+        return os.path.join(self.root, "jobs", job_id)
+
+    def remove_source(self, job_id: str, source_id: str) -> None:
+        import shutil
+        shutil.rmtree(self._source_dir(job_id, source_id), ignore_errors=True)
+
+    def remove_job(self, job_id: str) -> None:
+        import shutil
+        shutil.rmtree(self.job_dir(job_id), ignore_errors=True)
 
     def save_upload(self, job_id: str, source_id: str, filename: str, data: bytes) -> str:
         path = self.source_in_path(job_id, source_id, filename)
@@ -48,10 +62,29 @@ class Workspace:
     def oauth_token_path(self) -> str:
         return os.path.join(self.drive_dir(), "oauth_token.json")
 
+    def oauth_pending_path(self) -> str:
+        return os.path.join(self.drive_dir(), "oauth_pending.json")
+
     def drop_sheet_config_path(self) -> str:
         return os.path.join(self.drive_dir(), "drop_sheet.json")
 
     def exports_dir(self) -> str:
         d = os.path.join(self.drive_dir(), "exports")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def workflows_path(self) -> str:
+        return os.path.join(self.drive_dir(), "workflows.json")
+
+    def captions_path(self) -> str:
+        return os.path.join(self.drive_dir(), "captions.json")
+
+    def workflow_ledger_path(self, workflow_id: str) -> str:
+        d = os.path.join(self.drive_dir(), "workflow-ledgers")
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, f"{workflow_id}.json")
+
+    def workflow_work_dir(self) -> str:
+        d = os.path.join(self.root, "workflow-work")
         os.makedirs(d, exist_ok=True)
         return d

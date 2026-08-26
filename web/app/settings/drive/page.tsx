@@ -1,41 +1,29 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
+import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
+import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
+import { PasswordPanel } from "@/components/auth/PasswordPanel";
+import { Cloud } from "lucide-react";
 
 export default function DriveSettingsPage() {
   return (
-    <main style={{ minHeight: "100vh" }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 14,
-          padding: "18px 20px 4px",
-        }}
-      >
+    <main className="drive-page">
+      <div className="workspace-heading">
+        <span className="workspace-heading__icon"><Cloud size={19} /></span>
         <div>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: "var(--color-text)",
-            }}
-          >
-            Drive destinations
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--color-muted)",
-              marginTop: 2,
-            }}
-          >
-            Manage the Google Drive folders variants can be exported to.
+          <p className="workspace-heading__eyebrow">Delivery setup</p>
+          <h1>Drive</h1>
+          <div className="workspace-heading__copy">
+            Share the varimo Drive email with your folder, paste the link, then add destinations and Drop Ledger.
+            Captions are written from Studio Generate.
+            <DriveLoginNote />
           </div>
         </div>
       </div>
-
-      <div style={{ padding: "14px 20px 22px" }}>
+      <div>
+        <PasswordPanel />
         <DestinationsPanel />
+        <div style={{ height: 28 }} />
+        <DropLedgerPanel />
       </div>
     </main>
   );

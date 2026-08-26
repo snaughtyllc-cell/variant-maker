@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
 import "./globals.css";
 import { RunProvider } from "../lib/runStore";
-import { TopNav } from "../components/nav/TopNav";
+import { AuthGate } from "../components/auth/AuthGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,9 +14,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Brand typeface — the varimo wordmark only. UI copy stays on Geist.
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
 export const metadata: Metadata = {
-  title: "Variant Studio",
-  description: "Local zero-config video variant studio",
+  title: "varimo",
+  description: "Many originals from one master — video variant studio, Fast daily packs from your phone or desktop",
+  appleWebApp: {
+    capable: true,
+    title: "varimo",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#e8f6f8",
 };
 
 // Prevent static HTML shells from being cached by RunPod's CDN with stale JS refs.
@@ -31,12 +51,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-text">
         <RunProvider>
-          <TopNav />
-          {children}
+          <AuthGate>{children}</AuthGate>
         </RunProvider>
       </body>
     </html>

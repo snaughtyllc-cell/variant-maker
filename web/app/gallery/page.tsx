@@ -1,12 +1,43 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { FolderOpen } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
-import { filterSources, sortSources } from "@/lib/gallery";
-import { okVariantRefs, sendDisabledReason } from "@/lib/drive";
+import {
+  filterSources,
+  sortSources,
+  filesReadyCount,
+  parseGalleryVariantQuery,
+  gallerySearchPath,
+  pushGallerySearch,
+} from "@/lib/gallery";
+import {
+  okVariantKeys,
+  okVariantRefs,
+  selectAllLabel,
+  selectionHasAllOk,
+  sendDisabledReason,
+  withOkSelection,
+} from "@/lib/drive";
+import {
+  fillFileCache,
+  filesReadyNow,
+  phoneShareHintCopy,
+  preparingClipsCopy,
+  saveNoneSelectedCopy,
+  saveOrShareVideoFiles,
+  selectedShareableVariants,
+  shareEmptyCopy,
+  shareLoadingCopy,
+  shareOutcomeMessage,
+  shareRetryCopy,
+  shareVideosBusyLabel,
+  shareVideosLabel,
+  shouldOfferPhotosSave,
+} from "@/lib/shareVideos";
 import { getDriveStatus, listDestinations } from "@/lib/api";
-import type { Destination, DriveStatus } from "@/lib/types";
+import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
@@ -15,10 +46,9 @@ import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
 
-function GalleryContent() {
+export function GalleryContent() {
   const { data: sources, mutate, isLoading } = useGallery();
   const { complete } = useRun();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -28,6 +58,15 @@ function GalleryContent() {
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sheetQuery, setSheetQuery] = useState<{ sourceId: string; index: number } | null | undefined>(
+    undefined,
+  );
+  const [offerPhotos, setOfferPhotos] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
+  const [clipsPrepared, setClipsPrepared] = useState(false);
+  const fileCacheRef = useRef(new Map<string, File>());
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -37,6 +76,11 @@ function GalleryContent() {
         setDestinations(dests);
       })
       .catch((e) => console.error("Failed to load Drive status", e));
+  }, []);
+
+  useEffect(() => {
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
   }, []);
 
   function handleToggleVariant(key: string) {
@@ -55,39 +99,29 @@ function GalleryContent() {
     }
   }, [complete, mutate]);
 
-  // Parse ?v=<source_id>:<index>
-  const vParam = searchParams.get("v");
-  let sheetSourceId: string | null = null;
-  let sheetIndex: number | null = null;
+  // `undefined` = follow the address bar (deep link). Local value opens/closes
+  // immediately so we never wait on a Next.js remount.
+  const urlQuery = parseGalleryVariantQuery(searchParams.get("v"));
+  const activeQuery = sheetQuery === undefined ? urlQuery : sheetQuery;
 
-  if (vParam) {
-    const colonIdx = vParam.lastIndexOf(":");
-    if (colonIdx > 0) {
-      sheetSourceId = vParam.slice(0, colonIdx);
-      const idxStr = vParam.slice(colonIdx + 1);
-      const parsed = parseInt(idxStr, 10);
-      if (!isNaN(parsed)) sheetIndex = parsed;
-    }
-  }
-
-  // Resolve source for the sheet
   const allSources = sources ?? [];
-  const sheetSource = sheetSourceId
-    ? allSources.find((s) => s.source_id === sheetSourceId)
+  const sheetSource = activeQuery
+    ? allSources.find((s) => s.source_id === activeQuery.sourceId)
     : undefined;
-
-  // Resolve variant.index (1-based) to array position via findIndex
+  const sheetIndex = activeQuery?.index ?? null;
   const pos =
     sheetSource && sheetIndex !== null
       ? sheetSource.variants.findIndex((v) => v.index === sheetIndex)
       : -1;
 
   function handleOpenVariant(sourceId: string, index: number) {
-    router.push(`/gallery?v=${sourceId}:${index}`, { scroll: false });
+    setSheetQuery({ sourceId, index });
+    pushGallerySearch(gallerySearchPath(sourceId, index));
   }
 
   function handleSheetClose() {
-    router.push("/gallery", { scroll: false });
+    setSheetQuery(null);
+    pushGallerySearch(gallerySearchPath());
   }
 
   function handleSheetNav(delta: number) {
@@ -96,16 +130,113 @@ function GalleryContent() {
       Math.max(0, pos + delta),
       sheetSource.variants.length - 1,
     );
-    router.push(`/gallery?v=${sheetSource.source_id}:${sheetSource.variants[next].index}`, { scroll: false });
+    const index = sheetSource.variants[next].index;
+    setSheetQuery({ sourceId: sheetSource.source_id, index });
+    pushGallerySearch(gallerySearchPath(sheetSource.source_id, index));
   }
+
+  useEffect(() => {
+    function onPop() {
+      setSheetQuery(parseGalleryVariantQuery(new URLSearchParams(window.location.search).get("v")));
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
-  const totalVariants = allSources.reduce((acc, s) => acc + s.delivered, 0);
+  const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
   const okRefs = okVariantRefs(allSources, selected);
+  const selectedJobIds = [
+    ...new Set(
+      okRefs
+        .map((r) => allSources.find((s) => s.source_id === r.source_id)?.job_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const splitJobId = selectedJobIds.length === 1 ? selectedJobIds[0] : undefined;
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
+  const visibleOkCount = okVariantKeys(sorted).length;
+  const allVisibleSelected = selectionHasAllOk(selected, sorted);
+  const selectedKey = [...selected].sort().join(",");
+  const selectedVariants = selectedShareableVariants(allSources, selected);
+
+  useEffect(() => {
+    if (selectedVariants.length === 0) {
+      setClipsPrepared(false);
+      setPendingShareFiles(null);
+      setSaveMsg(null);
+      return;
+    }
+    let cancelled = false;
+    setClipsPrepared(false);
+    void fillFileCache(fileCacheRef.current, selectedVariants).then((files) => {
+      if (cancelled) return;
+      setClipsPrepared(files.length === selectedVariants.length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, sources]);
+
+  function handleSelectAllVisible() {
+    setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
+  }
+
+  function handleToggleSelectSource(source: SourceOut, select: boolean) {
+    setSelected((prev) => withOkSelection(prev, [source], select));
+  }
+
+  function handleSaveSelected() {
+    if (saveBusy || okRefs.length === 0) return;
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const ready = filesReadyNow(fileCacheRef.current, selectedVariants, pendingShareFiles);
+    if (!ready) {
+      setSaveBusy(true);
+      setSaveMsg(shareLoadingCopy());
+      void fillFileCache(fileCacheRef.current, selectedVariants)
+        .then((files) => {
+          setClipsPrepared(files.length === selectedVariants.length);
+          setPendingShareFiles(files.length ? files : null);
+          setSaveMsg(files.length ? shareRetryCopy() : shareEmptyCopy());
+        })
+        .catch(() => setSaveMsg(shareEmptyCopy()))
+        .finally(() => setSaveBusy(false));
+      return;
+    }
+    setSaveBusy(true);
+    setSaveMsg(null);
+    void saveOrShareVideoFiles(ready, {
+      share: nav,
+      userAgent: nav?.userAgent,
+      maxTouchPoints: nav?.maxTouchPoints,
+    })
+      .then((outcome) => {
+        if (outcome.result === "needs_gesture") {
+          setPendingShareFiles(outcome.remaining);
+          setSaveMsg(shareOutcomeMessage(outcome));
+          return;
+        }
+        setPendingShareFiles(null);
+        if (outcome.result === "unsupported") setSaveMsg(shareEmptyCopy());
+      })
+      .catch(() => setSaveMsg(shareEmptyCopy()))
+      .finally(() => setSaveBusy(false));
+  }
+
+  function handleRemoveSource(source: SourceOut) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const prefix = `${source.source_id}:`;
+      for (const key of [...next]) {
+        if (key.startsWith(prefix)) next.delete(key);
+      }
+      return next;
+    });
+    mutate();
+  }
 
   function handleSendModalClose() {
     setSendModalOpen(false);
@@ -113,7 +244,17 @@ function GalleryContent() {
   }
 
   return (
-    <>
+    <main className="workspace-page gallery-page">
+      <section className="workspace-page-shell">
+        <header className="workspace-heading">
+          <span className="workspace-heading__icon"><FolderOpen size={19} /></span>
+          <div>
+            <p className="workspace-heading__eyebrow">Review library</p>
+            <h1>Gallery</h1>
+            <p className="workspace-heading__copy">Finished packs by source. Select clips, then Save to Photos on a phone — or send copies to Drive.</p>
+          </div>
+        </header>
+      </section>
       <GalleryToolbar
         count={allSources.length}
         variantCount={totalVariants}
@@ -121,13 +262,28 @@ function GalleryContent() {
         onFilter={setFilterMode}
         sort={sort}
         onSort={setSort}
-        selectedCount={selected.size}
+        selectedCount={okRefs.length}
         sendDisabledReason={disabledReason}
         onSend={() => setSendModalOpen(true)}
+        selectAllLabel={selectAllLabel(allVisibleSelected)}
+        selectAllDisabled={visibleOkCount === 0}
+        onSelectAll={handleSelectAllVisible}
+        saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
+        saveBusy={saveBusy}
+        saveDisabledReason={
+          okRefs.length === 0
+            ? saveNoneSelectedCopy()
+            : offerPhotos && !clipsPrepared && !pendingShareFiles
+              ? preparingClipsCopy()
+              : null
+        }
+        saveHint={phoneShareHintCopy()}
+        onSave={() => { handleSaveSelected(); }}
+        saveMsg={saveMsg}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div style={{ padding: "8px 20px 22px" }}>
+      <div className="gallery-content" style={{ padding: "8px 16px 22px" }}>
         {isLoading && (
           <div
             style={{
@@ -163,7 +319,7 @@ function GalleryContent() {
             <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
               {filterMode === "shortfall"
                 ? "All sources have delivered their full requested count."
-                : "Start a run in the Studio — results appear here after each source completes."}
+                : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
             </div>
           </div>
         )}
@@ -176,6 +332,8 @@ function GalleryContent() {
             onRegenerate={() => mutate()}
             selected={selected}
             onToggleVariant={handleToggleVariant}
+            onToggleSelectSource={handleToggleSelectSource}
+            onRemove={() => handleRemoveSource(source)}
           />
         ))}
       </div>
@@ -198,17 +356,17 @@ function GalleryContent() {
         <SendToDriveModal
           refs={okRefs}
           destinations={destinations}
+          jobId={splitJobId}
           onClose={handleSendModalClose}
         />
       )}
-    </>
+    </main>
   );
 }
 
 export default function GalleryPage() {
   return (
-    <main style={{ minHeight: "100vh" }}>
-      <Suspense
+    <Suspense
         fallback={
           <div
             style={{
@@ -223,9 +381,8 @@ export default function GalleryPage() {
             Loading…
           </div>
         }
-      >
-        <GalleryContent />
-      </Suspense>
-    </main>
+    >
+      <GalleryContent />
+    </Suspense>
   );
 }

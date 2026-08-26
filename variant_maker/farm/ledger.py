@@ -30,6 +30,13 @@ class Ledger:
         rec = self._by_sha.get(sha)
         return bool(rec and rec["status"] == "done")
 
+    def is_running(self, sha: str) -> bool:
+        rec = self._by_sha.get(sha)
+        return bool(rec and rec["status"] == "running")
+
+    def running_records(self) -> list[tuple[str, dict]]:
+        return [(sha, rec) for sha, rec in self._by_sha.items() if rec.get("status") == "running"]
+
     def attempts(self, sha: str) -> int:
         rec = self._by_sha.get(sha)
         return rec["attempts"] if rec else 0
@@ -48,6 +55,21 @@ class Ledger:
         return None
 
     # ---- mutations (write-through) ----
+    def mark_running(self, sha: str, *, job_id: str, file_id: str | None = None,
+                     md5: str | None = None, filename: str | None = None,
+                     ts: float | None = None) -> None:
+        rec = self._by_sha.get(sha, {"attempts": 0, "output_folder_id": None, "variant_count": 0})
+        rec.update(status="running", job_id=job_id, error=None, ts=_ts(ts))
+        if filename is not None:
+            rec["filename"] = filename
+        rec.setdefault("output_folder_id", None)
+        rec.setdefault("variant_count", 0)
+        rec.setdefault("filename", filename)
+        self._by_sha[sha] = rec
+        if file_id is not None:
+            self._by_file_id[file_id] = {"sha": sha, "md5": md5}
+        self._save()
+
     def mark_done(self, sha: str, *, output_folder_id: str, variant_count: int,
                   file_id: str | None = None, md5: str | None = None,
                   ts: float | None = None) -> None:

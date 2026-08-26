@@ -91,6 +91,10 @@ def from_dict(raw: dict) -> FarmConfig:
             raise ConfigError(f"client {name!r}: input_folder_id is required")
         if not out_id:
             raise ConfigError(f"client {name!r}: output_folder_id is required")
+        if in_id == out_id:
+            raise ConfigError(
+                f"client {name!r}: input_folder_id and output_folder_id must be different"
+            )
         recipe = Recipe(
             preset=c.get("preset", defaults.preset),
             count=c.get("count", defaults.count),

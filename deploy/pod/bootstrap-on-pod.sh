@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run this ONCE inside a RunPod GPU/CPU Pod terminal to install + start VaryForge UI.
+# Run this ONCE inside a RunPod GPU/CPU Pod terminal to install + start the varimo Studio UI.
 # Safe to re-run: skips clone if present, rebuilds deps, then starts.
 set -euo pipefail
 
@@ -71,7 +71,7 @@ mkdir -p "$DATA_DIR"
 chmod +x "$APP_DIR/deploy/pod/start.sh"
 
 echo ""
-echo "==> Starting VaryForge (API + UI)"
+echo "==> Starting varimo (API + UI)"
 echo "    Open RunPod Connect → HTTP Service Port 3000"
 echo "    or: https://<POD_ID>-3000.proxy.runpod.net"
 echo ""
