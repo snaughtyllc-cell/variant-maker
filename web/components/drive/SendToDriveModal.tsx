@@ -54,7 +54,7 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<ExportJob[] | null>(null);
   const [jobRoles, setJobRoles] = useState<Record<string, string>>({});
-  const [captions, setCaptions] = useState<string[]>(() => refs.map(() => ""));
+  const [captions, setCaptions] = useState<string[]>(() => refs.map((r) => r.caption?.trim() || ""));
   const [fromBank, setFromBank] = useState(false);
   const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
   const [bankId, setBankId] = useState(CUSTOM_CAPTION_SOURCE);
@@ -81,7 +81,7 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
 
   useEffect(() => {
     if (isCustomCaptionSource(bankId)) {
-      setCaptions(refs.map(() => ""));
+      setCaptions(refs.map((r) => r.caption?.trim() || ""));
       setFromBank(false);
       return;
     }
@@ -93,11 +93,13 @@ export function SendToDriveModal({ refs, destinations, jobId, onClose }: SendToD
           setCaptions(out.captions);
           setFromBank(true);
         } else {
-          setCaptions(refs.map(() => ""));
+          setCaptions(refs.map((r) => r.caption?.trim() || ""));
           setFromBank(false);
         }
       })
-      .catch(() => {/* keep blank captions; VA can type them */});
+      .catch(() => {
+        setCaptions(refs.map((r) => r.caption?.trim() || ""));
+      });
     return () => { cancelled = true; };
   }, [refs.length, bankId]);
 

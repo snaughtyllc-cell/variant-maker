@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { VariantOut } from "@/lib/types";
+import { captionEmptyCopy, captionPreviewLabel, uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { VariantSheet } from "@/components/variant/VariantSheet";
 
 vi.mock("@/lib/api", () => ({
@@ -72,7 +73,15 @@ describe("VariantSheet layout", () => {
     );
     expect(screen.queryByAltText("Source still")).not.toBeInTheDocument();
     expect(screen.queryByAltText("Variant still")).not.toBeInTheDocument();
-    expect(screen.getByText("Look")).toBeInTheDocument();
+    expect(screen.getByText(captionPreviewLabel())).toBeInTheDocument();
+    expect(screen.getByText(captionEmptyCopy())).toBeInTheDocument();
+    expect(screen.getByText(uniquenessCustomerLabel())).toBeInTheDocument();
+    expect(screen.queryByText("Look fail")).not.toBeInTheDocument();
+    expect(screen.queryByText("VMAF")).not.toBeInTheDocument();
+    expect(screen.queryByText("View manifest")).not.toBeInTheDocument();
+    expect(screen.queryByText("Passed upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Flagged")).not.toBeInTheDocument();
+    expect(screen.queryByText("Look")).not.toBeInTheDocument();
   });
 });
 

@@ -26,6 +26,7 @@ class VariantOut(BaseModel):
     look_mae: float | None = None
     look_src_url: str | None = None
     look_var_url: str | None = None
+    caption: str | None = None
 
 
 class LookPreviewOut(BaseModel):
@@ -283,6 +284,7 @@ class JobFromDriveIn(BaseModel):
     count: int
     quality_mode: str = "fast"
     allow_creative_escalate: bool = True
+    generate_captions: bool = False
 
 
 class WorkflowSummaryOut(BaseModel):
@@ -397,6 +399,7 @@ class AuthMeOut(BaseModel):
     role: Literal["owner", "member"] | None = None
     is_admin: bool = False
     has_password: bool = False
+    experience: Literal["solo", "agency"] = "agency"
 
 
 class PasswordLoginIn(BaseModel):
@@ -438,6 +441,7 @@ class AdminWorkspaceOut(BaseModel):
     hq: int = 0
     last_job_utc: str | None = None
     last_error: str | None = None
+    experience: Literal["solo", "agency"] = "agency"
 
 
 class WorkspaceInviteIn(BaseModel):
@@ -453,3 +457,7 @@ class TeamOut(BaseModel):
 
 class AdminViewIn(BaseModel):
     workspace_id: str | None = None
+
+
+class WorkspaceExperienceIn(BaseModel):
+    experience: Literal["solo", "agency"]

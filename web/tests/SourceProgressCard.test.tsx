@@ -47,6 +47,12 @@ describe("SourceProgressCard in-flight slot", () => {
     expect(screen.getByTestId("slot-1").querySelector(".vf-live-shimmer")).toBeNull();
   });
 
+  it("labels waiting slots as starting while the job is preparing", () => {
+    render(<SourceProgressCard source={{ ...base, requested: 8 }} preparing />);
+    expect(screen.getAllByText("starting")).toHaveLength(8);
+    expect(screen.queryByText("queued")).toBeNull();
+  });
+
   it("keeps every live copy on its own tile instead of hopping one slot", () => {
     render(
       <SourceProgressCard

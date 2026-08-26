@@ -1,4 +1,4 @@
-name: Build VaryForge Fast CPU worker
+name: Build varimo Fast CPU worker
 
 on:
   push:

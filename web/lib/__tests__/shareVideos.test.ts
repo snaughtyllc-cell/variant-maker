@@ -1,16 +1,36 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
+  cacheHasAll,
   canShareVideoFiles,
+  cloneShareFiles,
   downloadVideoFiles,
   fetchVariantFiles,
+  filesReadyNow,
+  fillFileCache,
+  isAppleMobile,
   isShareableVideo,
+  peekCachedFiles,
   phoneShareHintCopy,
+  preparingClipsCopy,
   readyShareableVariants,
+  saveNoneSelectedCopy,
+  saveOrShareVideoFiles,
+  selectedShareableVariants,
   shareEmptyCopy,
+  shareLoadingCopy,
+  shareRetryCopy,
+  shouldOfferPhotosSave,
   shareVideoFiles,
+  shareVideosBusyLabel,
   shareVideosLabel,
   zipSecondaryCopy,
+  zipVisibleOnDevice,
 } from "@/lib/shareVideos";
+
+const SAFARI_IPHONE =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+const CHROME_IPHONE =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.6099.119 Mobile/15E148 Safari/604.1";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -65,7 +85,9 @@ describe("shareVideoFiles", () => {
   it("returns shared when shareFn resolves", async () => {
     const file = new File(["x"], "v01.mp4", { type: "video/mp4" });
     const shareFn = vi.fn(async (data: { files: File[] }) => {
-      expect(data.files).toEqual([file]);
+      expect(data.files).toHaveLength(1);
+      expect(data.files[0].name).toBe("v01.mp4");
+      expect(data.files[0].type).toBe("video/mp4");
     });
     expect(await shareVideoFiles([file], shareFn)).toBe("shared");
     expect(shareFn).toHaveBeenCalledTimes(1);
@@ -161,17 +183,169 @@ describe("downloadVideoFiles", () => {
   });
 });
 
-describe("copy", () => {
-  it("labels Share when canShare is true", () => {
-    expect(shareVideosLabel(true)).toBe("Share videos");
-    expect(shareVideosLabel(false)).toBe("Save videos");
+describe("cloneShareFiles", () => {
+  it("stamps a fresh video/mp4 File so Safari can share the same clips again", () => {
+    const original = new File(["a"], "v01", { type: "application/octet-stream" });
+    const [clone] = cloneShareFiles([original]);
+    expect(clone).not.toBe(original);
+    expect(clone.name).toBe("v01.mp4");
+    expect(clone.type).toBe("video/mp4");
+  });
+});
+
+describe("saveOrShareVideoFiles", () => {
+  it("falls back to per-file download when share is unavailable on desktop", async () => {
+    const file = new File(["x"], "v01.mp4", { type: "video/mp4" });
+    const download = vi.fn();
+    expect(
+      await saveOrShareVideoFiles([file], {
+        download,
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0",
+      }),
+    ).toEqual({
+      result: "downloaded",
+      remaining: [],
+    });
+    expect(download).toHaveBeenCalledWith([file]);
   });
 
-  it("keeps ZIP as a secondary desktop action and skips Files-app unzip", () => {
+  it("shares every selected clip in one Safari sheet", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    const share = vi.fn(async () => {});
+    const download = vi.fn();
+    expect(
+      await saveOrShareVideoFiles(files, {
+        share: { canShare: () => true, share },
+        download,
+        userAgent: SAFARI_IPHONE,
+        maxTouchPoints: 5,
+      }),
+    ).toEqual({ result: "shared", remaining: [] });
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share.mock.calls[0][0].files.map((f: File) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
+    expect(share.mock.calls[0][0]).not.toHaveProperty("title");
+    expect(share.mock.calls[0][0]).not.toHaveProperty("url");
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("does not Safari-download when iOS blocks share — keeps clips for another tap", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    const share = vi.fn(async () => {
+      throw new DOMException("The request is not allowed", "NotAllowedError");
+    });
+    const download = vi.fn();
+    expect(
+      await saveOrShareVideoFiles(files, {
+        share: { canShare: () => true, share },
+        download,
+        userAgent: SAFARI_IPHONE,
+        maxTouchPoints: 5,
+      }),
+    ).toEqual({ result: "needs_gesture", remaining: files, reason: "retry" });
+    expect(download).not.toHaveBeenCalled();
+  });
+
+  it("still tries the share sheet on Chrome iPhone instead of Drive/Files download", async () => {
+    const files = [
+      new File(["a"], "v01.mp4", { type: "video/mp4" }),
+      new File(["b"], "v02.mp4", { type: "video/mp4" }),
+    ];
+    const share = vi.fn(async () => {});
+    const download = vi.fn();
+    expect(
+      await saveOrShareVideoFiles(files, {
+        share: { share },
+        download,
+        userAgent: CHROME_IPHONE,
+        maxTouchPoints: 5,
+      }),
+    ).toEqual({ result: "shared", remaining: [] });
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share.mock.calls[0][0].files.map((f: File) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
+    expect(download).not.toHaveBeenCalled();
+    expect(isAppleMobile(CHROME_IPHONE, 5)).toBe(true);
+  });
+});
+
+describe("variant file cache", () => {
+  it("fills missing urls and peeks without refetching", async () => {
+    const cache = new Map<string, File>();
+    const variants = [
+      { file_url: "/a", filename: "v01.mp4" },
+      { file_url: "/b", filename: "v02.mp4" },
+    ];
+    const fetchFn = vi.fn(async (url: string) => {
+      return new Response(url, { status: 200, headers: { "Content-Type": "video/mp4" } });
+    });
+    expect(cacheHasAll(cache, variants)).toBe(false);
+    expect(filesReadyNow(cache, variants)).toBeNull();
+    const files = await fillFileCache(cache, variants, fetchFn as unknown as typeof fetch);
+    expect(files.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
+    expect(cacheHasAll(cache, variants)).toBe(true);
+    expect(peekCachedFiles(cache, variants)).toEqual(files);
+    expect(filesReadyNow(cache, variants)?.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
+    const pending = [files[1]];
+    expect(filesReadyNow(cache, variants, pending)).toEqual(pending);
+    fetchFn.mockClear();
+    await fillFileCache(cache, variants, fetchFn as unknown as typeof fetch);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("selectedShareableVariants", () => {
+  it("keeps selected ok-ready clips with file urls", () => {
+    expect(
+      selectedShareableVariants(
+        [
+          {
+            source_id: "s1",
+            filename: "a.mp4",
+            requested: 2,
+            delivered: 2,
+            shortfall: 0,
+            variants: [
+              { filename: "v01.mp4", file_url: "/a", status: "ok", index: 1 } as never,
+              { filename: "v02.mp4", file_url: "/b", status: "ok", index: 2 } as never,
+              { filename: "v03.mp4", file_url: "/c", status: "best_effort", index: 3 } as never,
+            ],
+          },
+        ],
+        new Set(["s1:1", "s1:3"]),
+      ),
+    ).toEqual([{ file_url: "/a", filename: "v01.mp4" }]);
+  });
+});
+
+describe("copy", () => {
+  it("labels Save to Photos when the share sheet can take videos", () => {
+    expect(shareVideosLabel(true)).toBe("Save to Photos");
+    expect(shareVideosLabel(false)).toBe("Save to phone");
+    expect(shouldOfferPhotosSave({ share: async () => {} })).toBe(true);
+    expect(shouldOfferPhotosSave({}, SAFARI_IPHONE, 5)).toBe(true);
+    expect(shareVideosBusyLabel()).toBe("Saving…");
+    expect(saveNoneSelectedCopy()).toBe("Select clips first");
+    expect(preparingClipsCopy()).toBe("Preparing clips…");
+    expect(shareLoadingCopy()).toMatch(/Preparing clips/i);
+    expect(shareRetryCopy()).toMatch(/Tap Save to Photos again/i);
+    expect(phoneShareHintCopy()).toMatch(/Save Videos/i);
+    expect(shareRetryCopy() + shareLoadingCopy()).not.toMatch(/Diagnostics/i);
+  });
+
+  it("keeps ZIP as a secondary desktop action and names the Files-app trap", () => {
     expect(zipSecondaryCopy()).toMatch(/ZIP/i);
     expect(zipSecondaryCopy()).toMatch(/desktop/i);
-    expect(phoneShareHintCopy()).toMatch(/unzip/i);
-    expect(phoneShareHintCopy()).toMatch(/Files/i);
+    expect(zipSecondaryCopy()).toMatch(/Files/i);
+    expect(phoneShareHintCopy()).toMatch(/Save Video/i);
+    expect(phoneShareHintCopy()).toMatch(/Photos/i);
+    expect(zipVisibleOnDevice(() => ({ matches: true }))).toBe(false);
+    expect(zipVisibleOnDevice(() => ({ matches: false }))).toBe(true);
+    expect(zipVisibleOnDevice(undefined)).toBe(true);
     expect(zipSecondaryCopy() + phoneShareHintCopy() + shareEmptyCopy()).not.toMatch(/Diagnostics/i);
   });
 });

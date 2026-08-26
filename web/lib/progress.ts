@@ -147,3 +147,14 @@ export function runDeliveredNone(progress: RunProgress): boolean {
   if (sources.length === 0) return true;
   return sources.every((s) => s.delivered === 0);
 }
+
+/** True once a copy is encoding or already delivered — not still waiting on the GPU. */
+export function runHasStarted(progress: RunProgress): boolean {
+  return Object.values(progress.bySource).some(
+    (s) =>
+      s.delivered > 0
+      || s.done > 0
+      || Boolean(s.inFlight)
+      || Object.keys(s.inFlights || {}).length > 0,
+  );
+}

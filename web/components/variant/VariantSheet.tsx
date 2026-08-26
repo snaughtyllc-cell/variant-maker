@@ -5,6 +5,7 @@ import { VariantOut } from "@/lib/types";
 import { sourceUrl } from "@/lib/api";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
+import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
 
@@ -16,6 +17,10 @@ interface VariantSheetProps {
   onClose: () => void;
   onNav: (delta: number) => void;
   onRegenerate: () => void;
+}
+
+function captionOf(v: { caption?: string | null }): string | null | undefined {
+  return v.caption;
 }
 
 export function VariantSheet({
@@ -243,16 +248,12 @@ export function VariantSheet({
               <ScrubBar videos={[beforeRef, afterRef]} />
             </div>
 
-            {/* Quality rows */}
+            <CaptionBlock caption={captionOf(variant)} />
+
             <QualityPanel
-              quality={variant.quality}
               uniqueness={variant.uniqueness}
               uniquenessStatus={variant.uniqueness_status}
-              uniquenessTarget={variant.uniqueness_target}
-              escalated={variant.escalated}
               bestEffort={variant.status === "best_effort"}
-              lookStatus={variant.look_status}
-              lookMae={variant.look_mae}
             />
 
             {/* Actions */}

@@ -1,6 +1,6 @@
 # Ops runbook: Studio Google Drive OAuth on RunPod
 
-**Audience:** operators redeploying / migrating the VaryForge Pod  
+**Audience:** operators redeploying / migrating the varimo Pod  
 **Auth path that works:** Web OAuth client (**not** service-account JSON keys)  
 **Branch:** `tier1` (OAuth extension for Studio Drive export)
 

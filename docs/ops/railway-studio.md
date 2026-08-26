@@ -1,4 +1,4 @@
-# VaryForge Studio on Railway + RunPod serverless
+# varimo Studio on Railway + RunPod serverless
 
 Railway hosts the **product** (Studio UI + `variant-server`). RunPod serverless
 hosts the **engine** (ffmpeg + optional HQ GPU). Object storage is the mailbox
