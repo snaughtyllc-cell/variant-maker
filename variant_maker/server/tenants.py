@@ -16,6 +16,8 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from variant_maker.server.experience import Experience, normalize_experience
+
 InviteKind = Literal["join", "new_workspace"]
 MemberRole = Literal["owner", "member"]
 
@@ -45,6 +47,7 @@ class WorkspaceInfo:
     id: str
     name: str
     created_utc: str
+    experience: Experience = "agency"
 
 
 @dataclass
@@ -93,6 +96,17 @@ def _user_payload(user: UserInfo) -> dict:
     if user.password_hash:
         payload["password_hash"] = user.password_hash
     return payload
+
+
+def _parse_workspace(raw: object, workspace_id: str) -> WorkspaceInfo | None:
+    if not isinstance(raw, dict):
+        return None
+    return WorkspaceInfo(
+        id=str(raw.get("id") or workspace_id),
+        name=str(raw.get("name") or workspace_id),
+        created_utc=str(raw.get("created_utc") or ""),
+        experience=normalize_experience(raw.get("experience")),
+    )
 
 
 def _now() -> str:
@@ -149,11 +163,7 @@ class TenantStore:
             raw = self._load()["workspaces"].get(workspace_id)
         if not isinstance(raw, dict):
             return None
-        return WorkspaceInfo(
-            id=str(raw.get("id") or workspace_id),
-            name=str(raw.get("name") or workspace_id),
-            created_utc=str(raw.get("created_utc") or ""),
-        )
+        return _parse_workspace(raw, workspace_id)
 
     def get_user(self, email: str) -> UserInfo | None:
         key = normalize_email(email)
@@ -318,14 +328,22 @@ class TenantStore:
             spaces = self._load()["workspaces"]
         out: list[WorkspaceInfo] = []
         for ws_id, raw in spaces.items():
-            if not isinstance(raw, dict):
-                continue
-            out.append(WorkspaceInfo(
-                id=str(raw.get("id") or ws_id),
-                name=str(raw.get("name") or ws_id),
-                created_utc=str(raw.get("created_utc") or ""),
-            ))
+            parsed = _parse_workspace(raw, str(ws_id))
+            if parsed is not None:
+                out.append(parsed)
         return out
+
+    def set_workspace_experience(self, workspace_id: str, experience: Experience) -> WorkspaceInfo | None:
+        kind = normalize_experience(experience)
+        with self._lock:
+            data = self._load()
+            raw = data["workspaces"].get(workspace_id)
+            if not isinstance(raw, dict):
+                return None
+            raw["experience"] = kind
+            data["workspaces"][workspace_id] = raw
+            self._save(data)
+        return _parse_workspace(raw, workspace_id)
 
 
 def migrate_legacy_data(data_dir: str, workspace_id: str) -> bool:

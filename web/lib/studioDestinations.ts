@@ -59,7 +59,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Share the VaryForge Drive email with a folder, paste the link, captions, Drop Ledger, password.",
+      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, password.",
   },
   {
     href: "/team",

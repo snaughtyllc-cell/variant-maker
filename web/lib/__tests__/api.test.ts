@@ -62,7 +62,17 @@ describe("createJob posts multipart with files + count", () => {
     const body = (init as RequestInit).body as FormData;
     expect(body.get("count")).toBe("3");
     expect(body.get("quality_mode")).toBe("fast");
+    expect(body.get("generate_captions")).toBe("false");
     expect(body.getAll("files").length).toBe(1);
+  });
+
+  it("sends generate_captions true when requested", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", true);
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("generate_captions")).toBe("true");
   });
 
   it("sends quality_mode hq when requested", async () => {
@@ -100,7 +110,10 @@ describe("createJob posts multipart with files + count", () => {
     const out = await api.createJob([f], 20);
     expect(out.job_id).toBe("j1");
     expect(offset0).toBe(2);
-    expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/jobs/from-uploads")).toBe(true);
+    const fromUploads = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs/from-uploads");
+    expect(fromUploads).toBeTruthy();
+    const fromBody = (fromUploads![1] as RequestInit).body as FormData;
+    expect(fromBody.get("generate_captions")).toBe("false");
   });
 });
 
@@ -280,6 +293,27 @@ describe("createJobFromDrive", () => {
       count: 20,
       quality_mode: "hq",
       allow_creative_escalate: false,
+      generate_captions: false,
+    });
+  });
+
+  it("sends generate_captions true when requested", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1"],
+      count: 3,
+      generateCaptions: true,
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1"],
+      count: 3,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: true,
     });
   });
 });
@@ -376,6 +410,7 @@ describe("auth API", () => {
     role: null,
     is_admin: false,
     has_password: false,
+    experience: "agency",
   };
 
   it("getAuthMe GETs /api/auth/me", async () => {
@@ -468,6 +503,22 @@ describe("admin API", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/admin/users/va%40x.com");
     expect((init as RequestInit).method).toBe("DELETE");
+  });
+
+  it("setWorkspaceExperience PATCHes /api/admin/workspaces/:id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "ws_va", name: "Maya", owner_email: "maya@example.com",
+        member_count: 1, members: [], running: 0, fast: 0, hq: 0,
+        last_job_utc: null, last_error: null, experience: "solo",
+      }), { status: 200 }),
+    );
+    const out = await api.setWorkspaceExperience("ws_va", "solo");
+    expect(out.experience).toBe("solo");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/admin/workspaces/ws_va");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ experience: "solo" });
   });
 
   it("setAdminView POSTs workspace_id", async () => {

@@ -101,4 +101,12 @@ describe("useJobProgress", () => {
     expect(result.current.bySource.s1.inFlights[2]?.state).toBe("rendering");
     expect(result.current.complete).toBe(false);
   });
+
+  it("does not construct EventSource for a preparing jobId", () => {
+    const { result, unmount } = renderHook(() => useJobProgress("preparing", sources));
+    expect(MockES.last).toBeNull();
+    expect(result.current.complete).toBe(false);
+    expect(result.current.bySource.s1.requested).toBe(1);
+    unmount();
+  });
 });

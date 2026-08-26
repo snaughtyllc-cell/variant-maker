@@ -26,6 +26,7 @@ vi.mock("@/lib/api", () => ({
   deleteInvite: vi.fn(),
   setAdminView: vi.fn(),
   removeAdminUser: vi.fn(),
+  setWorkspaceExperience: vi.fn(),
 }));
 
 import {
@@ -33,6 +34,7 @@ import {
   listInvites,
   removeAdminUser,
   setAdminView,
+  setWorkspaceExperience,
 } from "@/lib/api";
 import AdminPage from "@/app/admin/page";
 
@@ -64,6 +66,7 @@ const workspaces: AdminWorkspace[] = [
     hq: 0,
     last_job_utc: "2026-08-20T00:00:00Z",
     last_error: null,
+    experience: "agency",
   },
 ];
 
@@ -80,6 +83,10 @@ beforeEach(() => {
   vi.mocked(listInvites).mockResolvedValue(invites);
   vi.mocked(setAdminView).mockResolvedValue(undefined);
   vi.mocked(removeAdminUser).mockResolvedValue(undefined);
+  vi.mocked(setWorkspaceExperience).mockResolvedValue({
+    ...workspaces[0],
+    experience: "solo",
+  });
 });
 
 describe("Admin page", () => {
@@ -121,6 +128,15 @@ describe("Admin page", () => {
     render(<AdminPage />);
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("lets the admin switch a workspace to solo", async () => {
+    render(<AdminPage />);
+    const select = await screen.findByLabelText("Experience for Maya");
+    fireEvent.change(select, { target: { value: "solo" } });
+    await waitFor(() => {
+      expect(setWorkspaceExperience).toHaveBeenCalledWith("ws_va", "solo");
     });
   });
 });

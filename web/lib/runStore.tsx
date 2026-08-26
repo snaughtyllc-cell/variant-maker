@@ -5,6 +5,7 @@ import { getJob } from "./api";
 import { useJobProgress } from "./useJobProgress";
 import { RunProgress } from "./progress";
 import { QualityMode } from "./hqWaitCopy";
+import { isPreparingJob, PREPARING_JOB_ID } from "./prepareCopy";
 
 type RunSource = { source_id: string; filename: string; requested: number };
 
@@ -20,6 +21,7 @@ interface RunCtx {
   progress: RunProgress;
   complete: boolean;
   qualityMode: QualityMode;
+  beginPrepare: (sources: RunSource[]) => void;
   start: (resp: CreateJobResponse, qualityMode?: QualityMode) => void;
   clear: () => void;
 }
@@ -37,7 +39,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
     const saved = sessionStorage.getItem("vm.job");
-    if (!saved) return;
+    if (!saved || isPreparingJob(saved)) {
+      if (saved) sessionStorage.removeItem("vm.job");
+      return;
+    }
     setJobId(saved);
     setQualityMode(readStoredQuality());
     // sources will be empty after a hard reload — fetch once to seed them
@@ -64,6 +69,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const progress = useJobProgress(jobId, sources);
   const complete = progress.complete;
 
+  function beginPrepare(srcs: RunSource[]) {
+    setSources(srcs);
+    setJobId(PREPARING_JOB_ID);
+  }
+
   function start(resp: CreateJobResponse, _qualityMode: QualityMode = "fast") {
     const id = resp.job_id;
     const srcs: RunSource[] = resp.sources.map((s) => ({
@@ -87,7 +97,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, start, clear }}>
+    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, beginPrepare, start, clear }}>
       {children}
     </Ctx.Provider>
   );

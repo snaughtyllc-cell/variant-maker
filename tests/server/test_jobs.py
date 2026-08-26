@@ -717,3 +717,15 @@ def test_delete_job_drops_r2_prefixes(tmp_path):
     assert objects.list_prefix(f"inputs/{sid}/") == []
     assert objects.list_prefix(f"outputs/{sid}/") == []
     assert objects.list_prefix("outputs/other/") == ["outputs/other/v01.mp4"]
+
+
+def test_create_job_generate_captions_is_unique_per_index(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("boil.mp4", b"x")], count=2, generate_captions=True)
+    store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    caps = [v.caption for v in done.sources[0].variants]
+    assert caps[0] and caps[1]
+    assert caps[0] != caps[1]
+    assert "Copy 1 of 2" in caps[0]
+    assert "Copy 2 of 2" in caps[1]

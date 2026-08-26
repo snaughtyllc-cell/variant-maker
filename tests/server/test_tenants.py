@@ -182,3 +182,13 @@ def test_provision_new_workspace_invite(tmp_path):
     )
     assert jeff is not None
     assert ops.workspace_id != jeff.workspace_id
+
+
+def test_set_workspace_experience_defaults_agency(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Ops")
+    assert ws.experience == "agency"
+    updated = store.set_workspace_experience(ws.id, "solo")
+    assert updated is not None and updated.experience == "solo"
+    got = store.get_workspace(ws.id)
+    assert got is not None and got.experience == "solo"

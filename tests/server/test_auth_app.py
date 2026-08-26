@@ -517,6 +517,25 @@ def test_google_only_account_cannot_set_password_from_login(tmp_path):
     assert again.json()["has_password"] is True
 
 
+def test_workspace_experience_assignment(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    assert ops.get("/api/auth/me").json()["experience"] == "agency"
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    patched = jeff.patch(f"/api/admin/workspaces/{ops_id}", json={"experience": "solo"})
+    assert patched.status_code == 200
+    assert patched.json()["experience"] == "solo"
+    assert ops.get("/api/auth/me").json()["experience"] == "solo"
+    assert jeff.get("/api/auth/me").json()["experience"] == "agency"
+    assert ops.patch(
+        f"/api/admin/workspaces/{ops_id}", json={"experience": "agency"},
+    ).status_code == 403
+
+
 def test_password_set_requires_login(tmp_path):
     app, _ = _auth_app(tmp_path)
     anon = TestClient(app)

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { eventsUrl, getJob } from "./api";
 import { initRun, reduceEvent, RunProgress } from "./progress";
+import { isPreparingJob } from "./prepareCopy";
 import { VariantEvent } from "./types";
 
 function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJob>>): RunProgress {
@@ -101,11 +102,13 @@ export function useJobProgress(
   const runRef = useRef(run);
   runRef.current = run;
   const sourcesKey = sources.map((s) => s.source_id).join(",");
+  const preparing = isPreparingJob(jobId);
   useEffect(() => {
     if (!jobId || sources.length === 0) return;
     const fresh = initRun(sources);
     runRef.current = fresh;
     setRun(fresh);
+    if (isPreparingJob(jobId)) return;
 
     // SSE still helps locally; RunPod's HTTP proxy often buffers it forever.
     const es = new EventSource(eventsUrl(jobId));
@@ -155,5 +158,6 @@ export function useJobProgress(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, sourcesKey]);
+  if (preparing) return initRun(sources);
   return run;
 }
