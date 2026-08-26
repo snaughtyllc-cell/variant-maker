@@ -21,6 +21,7 @@ import { experienceLabel, normalizeExperience } from "@/lib/experience";
 import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
 import { EXTRA_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
+import { VarimoMark } from "../brand/VarimoMark";
 
 const ICONS = {
   "/": GalleryHorizontalEnd,
@@ -67,9 +68,9 @@ export function TopNav() {
   return (
     <>
       <header className="vf-topbar">
-        <Link className="vf-brand" href="/" aria-label="VaryForge Studio home">
-          <span className="vf-brand-mark" aria-hidden="true" />
-          <span>VaryForge</span>
+        <Link className="vf-brand" href="/" aria-label="varimo Studio home">
+          <VarimoMark className="vf-brand-mark" size={21} />
+          <span>varimo</span>
         </Link>
 
         <nav className="vf-desktop-nav" aria-label="Primary navigation">

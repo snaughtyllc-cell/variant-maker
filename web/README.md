@@ -1,6 +1,6 @@
-# variant-maker control plane — web frontend
+# varimo Studio — web frontend
 
-Next.js 16 App Router UI for the variant-maker engine.
+Next.js 16 App Router UI for the variant-maker engine (the `varimo` control plane).
 Pure client of the FastAPI backend via a same-origin dev proxy.
 
 **Redesign / Codex:** do not use the old four-screen list

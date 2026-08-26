@@ -1,11 +1,11 @@
-# Codex prompt — deploy VaryForge Studio to Railway
+# Codex prompt — deploy varimo Studio to Railway
 
 Paste the block below into Codex (it already has Railway auth). After it
 returns a public URL, we wire RunPod serverless + object storage.
 
 ---
 
-You are deploying **VaryForge Studio** (repo `snaughtyllc-cell/variant-maker`)
+You are deploying **varimo Studio** (repo `snaughtyllc-cell/variant-maker`)
 to Railway. Use the current git branch (or `cursor/railway-runpod-split-c975`
 if you are not already on it).
 
