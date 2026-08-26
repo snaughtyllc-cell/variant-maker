@@ -17,6 +17,7 @@ const sources: SourceOut[] = [{
   variants: [
     { index: 1, filename: "v01.mp4", status: "ok", quality: {}, file_url: "/x" },
     { index: 2, filename: "v02.mp4", status: "best_effort", quality: {}, file_url: "/y" },
+    { index: 3, filename: "v03.mp4", status: "uniqueness_fail", quality: {}, file_url: "/z" },
   ],
   failed: 1,
 }];
@@ -25,6 +26,25 @@ describe("okVariantRefs", () => {
   it("keeps only ok selected", () => {
     const sel = new Set(["s1:1", "s1:2"]);
     expect(okVariantRefs(sources, sel)).toEqual([{ source_id: "s1", index: 1 }]);
+  });
+
+  it("includes caption when the variant has one", () => {
+    const withCaption: SourceOut[] = [{
+      source_id: "s1", filename: "a.mp4", requested: 1, delivered: 1, shortfall: 0,
+      variants: [
+        {
+          index: 1,
+          filename: "v01.mp4",
+          status: "ok",
+          quality: {},
+          file_url: "/x",
+          caption: "POV boil #reels",
+        } as SourceOut["variants"][number],
+      ],
+    }];
+    expect(okVariantRefs(withCaption, new Set(["s1:1"]))).toEqual([
+      { source_id: "s1", index: 1, caption: "POV boil #reels" },
+    ]);
   });
 });
 
@@ -55,10 +75,11 @@ describe("select all ok variants", () => {
     expect([...cleared]).toEqual(["other:9"]);
   });
 
-  it("labels the toolbar action", () => {
-    expect(selectAllLabel(false, 20)).toBe("Select all (20)");
+  it("labels the toolbar action without a count", () => {
+    expect(selectAllLabel(false, 20)).toBe("Select all");
     expect(selectAllLabel(true, 20)).toBe("Deselect all");
     expect(selectAllLabel(false, 0)).toBe("Select all");
+    expect(selectAllLabel(true)).toBe("Deselect all");
   });
 });
 

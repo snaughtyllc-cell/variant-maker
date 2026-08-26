@@ -97,12 +97,12 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is AI upscale for 1–3 hero takes.
+                Fast is the usual ~20. HQ is coming soon.
               </span>
             </span>
             <select
-              value={qualityMode}
-              onChange={(e) => onQualityModeChange(e.target.value === "hq" ? "hq" : "fast")}
+              value="fast"
+              onChange={() => onQualityModeChange("fast")}
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
@@ -115,11 +115,13 @@ export function AdvancedPanel({
               }}
             >
               <option value="fast">Fast</option>
-              <option value="hq">HQ (Phase 8)</option>
+              <option value="hq" disabled>
+                HQ — coming soon
+              </option>
             </select>
           </div>
 
-          {hqHint && (
+          {hqHint && qualityMode === "hq" && (
             <p
               style={{
                 margin: "10px 0 0",
@@ -154,10 +156,10 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Pass is 38%. 1080 medium often
-                lands 55–65%. 720 Fast with a clean look lands ~40–50% — still
-                a pass. If medium misses 38%, one strong pass runs and the tile
-                shows esc — that is not a fail.
+                file is scored vs the original. Pass is 38%. If medium misses
+                38%, one strong pass always runs. Only after that hunt: 30%
+                and up still ships. Under 30% is a uniqueness miss — not a
+                Drive file.
               </span>
             </span>
             <input

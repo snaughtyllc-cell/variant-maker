@@ -26,6 +26,10 @@ from . import __version__
 @click.option("--jobs", default=1, show_default=True)
 @click.option("--dry-run", is_flag=True, help="print plan + commands, render nothing")
 @click.option(
+    "--look-first", is_flag=True,
+    help="one medium encode + source/variant stills; look gate, no uniqueness hunt",
+)
+@click.option(
     "--auto-tune/--no-auto-tune", default=None,
     help="bisect strength to the uniqueness target (default: on for Fast, off for HQ)",
 )
@@ -34,7 +38,13 @@ from . import __version__
 def main(**config):
     """Generate N look-good variants of INPUT plus a manifest."""
     from . import pipeline
-    pipeline.run(config)
+    m = pipeline.run(config)
+    if config.get("look_first") and m.variants:
+        v = m.variants[0]
+        click.echo(
+            f"look {v.look_status} mae={v.look_mae} "
+            f"stills={v.look_src or '-'} {v.look_var or '-'}"
+        )
 
 
 if __name__ == "__main__":

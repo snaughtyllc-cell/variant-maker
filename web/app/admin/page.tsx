@@ -8,6 +8,7 @@ import {
   listInvites,
   removeAdminUser,
   setAdminView,
+  setWorkspaceExperience,
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
@@ -68,6 +69,18 @@ export default function AdminPage() {
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to open workspace");
       setOpeningId(null);
+    }
+  }
+
+  async function handleExperience(workspaceId: string, experience: "solo" | "agency") {
+    setFormError(null);
+    try {
+      await setWorkspaceExperience(workspaceId, experience);
+      setWorkspaces((prev) =>
+        prev.map((ws) => (ws.id === workspaceId ? { ...ws, experience } : ws)),
+      );
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to update experience");
     }
   }
 
@@ -163,7 +176,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: "var(--color-muted)", textAlign: "left" }}>
-                {["Name", "Owner", "Members", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
+                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
                   <th key={h || "open"} style={{ padding: "10px 12px", fontWeight: 600 }}>
                     {h}
                   </th>
@@ -173,7 +186,7 @@ export default function AdminPage() {
             <tbody>
               {loading && workspaces.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
+                  <td colSpan={10} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
                     Loading…
                   </td>
                 </tr>
@@ -229,6 +242,26 @@ export default function AdminPage() {
                           );
                         })
                       )}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <select
+                        aria-label={`Experience for ${ws.name}`}
+                        value={ws.experience ?? "agency"}
+                        onChange={(e) =>
+                          handleExperience(ws.id, e.target.value as "solo" | "agency")
+                        }
+                        style={{
+                          background: "var(--color-panel2)",
+                          border: "1px solid var(--color-line)",
+                          borderRadius: 8,
+                          padding: "6px 8px",
+                          fontSize: 12,
+                          color: "var(--color-text)",
+                        }}
+                      >
+                        <option value="solo">Solo</option>
+                        <option value="agency">Agency</option>
+                      </select>
                     </td>
                     <td style={{ padding: "10px 12px" }}>{ws.running}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.fast}</td>

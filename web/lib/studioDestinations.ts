@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast vs HQ, Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -59,7 +59,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Connect Google, destinations, caption bank, Drop Ledger, password.",
+      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, password.",
   },
   {
     href: "/team",
@@ -80,7 +80,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Diagnostics",
     audience: "admin",
     tab: "extra",
-    summary: "Failed encodes (below_floor / corrupt / best_effort). Operators never use this.",
+    summary: "Failed encodes (uniqueness miss / corrupt / best_effort). Operators never use this.",
   },
   {
     href: "/login",

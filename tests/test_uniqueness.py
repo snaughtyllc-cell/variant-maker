@@ -24,6 +24,8 @@ def test_bits_from_ssim_math():
     assert uniqueness.bits_from_ssim(1.0 - uniqueness.TARGET_BITS / 64) == uniqueness.TARGET_BITS
     assert uniqueness.TARGET_BITS == 24
     assert uniqueness.DEFAULT_TARGET == uniqueness.TARGET_BITS / 64
+    assert uniqueness.FLOOR_BITS == 19
+    assert uniqueness.DEFAULT_FLOOR == uniqueness.FLOOR_BITS / 64
     # Sibling floor matches vs-source: 24 bits so a Fast 20-pack stays on medium.
     assert uniqueness.MIN_PEER_BITS == 24
     assert uniqueness.DEFAULT_PEER == uniqueness.MIN_PEER_BITS
@@ -40,6 +42,18 @@ def test_fast_gate_fits_medium_talking_head_headroom():
     talking_head_medium_typical = 35
     assert uniqueness.TARGET_BITS == 24
     assert uniqueness.TARGET_BITS < talking_head_medium_typical
+    assert uniqueness.FLOOR_BITS == 19
+    assert uniqueness.FLOOR_BITS < uniqueness.TARGET_BITS
+
+
+def test_status_for_bits_two_line_floor():
+    """Target 24 (~38%). Fail-forward 19 (~30%). Under 19 is not a push."""
+    assert uniqueness.status_for_bits(24, target=uniqueness.DEFAULT_TARGET) == "ok"
+    assert uniqueness.status_for_bits(23, target=uniqueness.DEFAULT_TARGET) == "below_target"
+    assert uniqueness.status_for_bits(19, target=uniqueness.DEFAULT_TARGET) == "below_target"
+    assert uniqueness.status_for_bits(18, target=uniqueness.DEFAULT_TARGET) == "below_floor"
+    assert uniqueness.status_for_bits(0, target=uniqueness.DEFAULT_TARGET) == "below_floor"
+    assert uniqueness.status_for_bits(None, target=uniqueness.DEFAULT_TARGET) == "unknown"
 
 
 def test_similarity_is_one_minus_uniqueness():
@@ -48,7 +62,7 @@ def test_similarity_is_one_minus_uniqueness():
     assert uniqueness.similarity_from_uniqueness(1.0) == 0.0
 
 
-def test_identical_videos_low_bits_below_target():
+def test_identical_videos_low_bits_below_floor():
     with tempfile.TemporaryDirectory() as d:
         a = os.path.join(d, "a.mp4")
         b = os.path.join(d, "b.mp4")
@@ -58,7 +72,7 @@ def test_identical_videos_low_bits_below_target():
         assert r["uniqueness_metric"] == "ssim_bits_v1"
         assert r["bits"] is not None and r["bits"] < 8
         assert r["uniqueness"] is not None and r["uniqueness"] < uniqueness.DEFAULT_TARGET
-        assert r["uniqueness_status"] == "below_target"
+        assert r["uniqueness_status"] == "below_floor"
         assert r["uniqueness_target"] == uniqueness.DEFAULT_TARGET
 
 
@@ -120,7 +134,7 @@ def test_landscape_identical_clips_stay_low_bits():
         _tiny_mp4(b, lavfi=pattern)
         r = uniqueness.score_uniqueness(a, b, target=uniqueness.DEFAULT_TARGET)
         assert r["bits"] is not None and r["bits"] < 8
-        assert r["uniqueness_status"] == "below_target"
+        assert r["uniqueness_status"] == "below_floor"
 
 
 def test_missing_file_unknown():

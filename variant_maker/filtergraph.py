@@ -97,6 +97,12 @@ def apply_luma_dust_strength(dust: float) -> int:
     return max(1, min(round(g), _LUMA_DUST_MAX))
 
 
+def luma_shade_applies(v: dict, width: int | None, height: int | None) -> bool:
+    """Always false. lookaqmtp 8×14 c0s=100 was lava (look-learnings). Leftover params must not draw."""
+    del v, width, height
+    return False
+
+
 def chroma_cloud_size(width: int, height: int, factor: int = _CHROMA_CLOUD_FACTOR) -> tuple[int, int]:
     """Even low-res grid for the chroma overlay (720×1280 → 80×142)."""
     w = max(int(width), 2)
@@ -319,17 +325,21 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
 
     ow = platform.width or src.width
     oh = platform.height or src.height
+    extras: list[str] = []
     if chroma_cloud_applies(v, ow, oh):
-        graph = _chroma_cloud_graph(
-            apply_chroma_cloud_strength(float(v.get("chroma_cloud") or 0.0)),
-            int(ow),
-            int(oh),
-            v.get("noise_seed"),
+        extras.append(
+            _chroma_cloud_graph(
+                apply_chroma_cloud_strength(float(v.get("chroma_cloud") or 0.0)),
+                int(ow),
+                int(oh),
+                v.get("noise_seed"),
+            )
         )
         dust = apply_luma_dust_strength(float(v.get("luma_dust") or 0.0))
         if dust:
-            graph = f"{graph},{_luma_dust_filter(dust, v.get('noise_seed'))}"
-        return f"{','.join(parts)},{graph},format=yuv420p"
+            extras.append(_luma_dust_filter(dust, v.get("noise_seed")))
+    if extras:
+        return f"{','.join(parts)},{','.join(extras)},format=yuv420p"
 
     parts.append("format=yuv420p")
     return ",".join(parts)

@@ -2,9 +2,13 @@ import pytest
 
 from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
+    _VIDEO_AXES,
     CROP_OFFSET_HI,
     CROP_OFFSET_LO,
-    _VIDEO_AXES,
+    CROP_Y_KEEP_BOTTOM_HI,
+    CROP_Y_KEEP_BOTTOM_LO,
+    RESAMPLE_FLAGS,
+    RESAMPLE_PX_CHOICES,
     _axis_distortion,
     clamp_strength,
     clamp_trims,
@@ -12,8 +16,6 @@ from variant_maker.sampler import (
     disable_fast_pixel_ops,
     sample,
     total_distortion,
-    RESAMPLE_FLAGS,
-    RESAMPLE_PX_CHOICES,
 )
 
 # A deterministic spread of per-variant seeds for distribution tests.
@@ -205,6 +207,30 @@ def test_crop_offset_stays_off_caption_edges():
         assert v["crop_y_frac"] < 0.8
 
 
+def test_instagram_720_crop_punches_from_top_and_keeps_bottom():
+    """Timed 720 talking-head: centered keep 0.92 = 20 bits (miss). y→1.0 keep
+    0.86–0.90 = 25–26 bits and does not slide onto a bottom caption."""
+    assert CROP_Y_KEEP_BOTTOM_LO == pytest.approx(0.90)
+    assert CROP_Y_KEEP_BOTTOM_HI == pytest.approx(1.00)
+    for s in SEEDS[:200]:
+        v = sample(MEDIUM, s, shot="talking_head", width=720, height=1280)["video"]
+        assert 0.86 - 1e-9 <= v["crop_keep"] <= 0.90 + 1e-9
+        assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+        assert v["crop_y_frac"] > 0.8
+    # 1080 talking-head keeps the signed caption-safe center band.
+    for s in SEEDS[:80]:
+        v = sample(MEDIUM, s, shot="talking_head", width=1080, height=1920)["video"]
+        assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
+        assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
+
+
+def test_instagram_720_motion_keeps_bottom_captions_without_th_punch():
+    v = sample(MEDIUM, SEEDS[0], shot="motion", width=720, height=1280)["video"]
+    assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
+    assert v["crop_y_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+
+
 def test_crop_offset_axes_are_zero_mean():
     """Fingerprint offset axes must not systematically drift toward one edge."""
     for axis in ("crop_x_frac", "crop_y_frac"):
@@ -241,8 +267,9 @@ def test_crop_keep_is_unbudgeted_fingerprint():
 def test_medium_crop_range_is_tighter_than_identity():
     """Face-only keep=0.72 scored *worse* SSIM. 0.84–0.90 with a 0..1 window
     cropped a burned-in word on live pack ced7cbec7c49 (keep 0.84, y=0.14).
-    Medium now punches 4–8% and stays centered. Escalate is a bit tighter,
-    not face-zoom. Gate stays 24.
+    1080 medium stays 4–8% centered. Instagram 720 talking-head remaps keep
+    (see test_instagram_720_crop). Escalate is a bit tighter, not face-zoom.
+    Gate stays 24.
     """
     assert MEDIUM.crop_keep.lo == pytest.approx(0.92)
     assert MEDIUM.crop_keep.hi == pytest.approx(0.96)
@@ -448,6 +475,11 @@ def test_disable_fast_pixel_ops_zeros_resample_rebuild_and_warp():
     assert out["video"]["warp_k1"] == 0.0
     assert p["video"]["rebuild_scale"] < 1.0
     assert out["video"]["crop_keep"] == p["video"]["crop_keep"]
+    shaded = sample(STRONG, derive_seed(1, 4), shot="talking_head", width=720, height=1280)
+    assert "luma_shade" not in shaded["video"]
+    hq = disable_fast_pixel_ops(shaded)
+    assert hq["video"]["luma_shade"] == 0.0
+    assert hq["video"]["crop_keep"] == shaded["video"]["crop_keep"]
 
 
 def test_shot_none_matches_omitted_shot():
@@ -574,3 +606,28 @@ def test_talking_head_luma_dust_from_grain_no_extra_rng():
     )
     assert luma_dust_range_for_shot(MEDIUM, "motion") is None
     assert luma_dust_range_for_shot(MEDIUM, None) is None
+
+
+def test_strong_720_talking_head_does_not_draw_luma_shade():
+    """lookaqmtp lava is rejected. Strong 720 still pins cloud 7 / dust 13."""
+    from variant_maker.shot import luma_shade_range_for_shot
+
+    seed = derive_seed(11, 5)
+    plain = sample(STRONG, seed)
+    med = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    head = sample(STRONG, seed, shot="talking_head", width=720, height=1280)
+    assert "luma_shade" not in plain["video"]
+    assert "luma_shade" not in med["video"]
+    assert "luma_shade" not in head["video"]
+    assert luma_shade_range_for_shot(STRONG, "talking_head", 720, 1280) is None
+    assert head["video"]["chroma_cloud"] == pytest.approx(7.0)
+    assert head["video"]["luma_dust"] == pytest.approx(13.0)
+    assert head["video"]["crop_x_frac"] == plain["video"]["crop_x_frac"]
+    assert head["video"]["resample_px"] == plain["video"]["resample_px"]
+    wide = sample(STRONG, seed, shot="talking_head", width=1080, height=1920)
+    assert "luma_shade" not in wide["video"]
+    grain_span = 58.0 - 46.0
+    expect_cloud = 4.0 + (wide["video"]["grain"] - 46.0) / grain_span * 3.0
+    assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
+    moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
+    assert "luma_shade" not in moved["video"]

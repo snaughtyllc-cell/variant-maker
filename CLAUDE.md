@@ -45,6 +45,9 @@ include Drops, Workflows, Drive, Team, and Admin.
 6. **Every variant gates through the quality guard.** Below floor → reduce strength & regen.
 7. **The manifest is the reproduction contract** (exact cmd + params), not byte-equality.
    x264/neural ops are not bit-deterministic. Keep the `platform_result` slot.
+8. **Look is a real-frame gate, not VMAF.** Score the output file (`look.py`) before uniqueness
+   escalate. VMAF and SSIM bits signed off on `lookaqmtp` lava. Do not redraw Rejected rows
+   in `docs/ops/look-learnings.md` to buy bits.
 
 ## Workflow (matches the user's existing setup)
 - **TDD.** Red → green → refactor. Write the failing test first, then implement.
@@ -75,8 +78,9 @@ ruff check .                    # lint
 | `quality.py` | ✅ done | histogram sanity + VMAF quality-render guard |
 | `pipeline.py` | ✅ done | per-variant loop, uniqueness + auto-tune → manifest |
 | `autotune.py` | ✅ done | bisection; quality fail → milder; source/peer miss → stronger |
-| `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). 1080 talking-head medium *can* score ~55–65% (chroma 34–42). Usable 720 Fast lands ~40–50% — still a pass. Do not raise the gate to 32. Do not buy % with 720 snow or Pixel AI scramble. |
-| `cli.py` | ✅ done | options + `pipeline.run` |
+| `uniqueness.py` | ✅ done | SSIM bits; **gate** 24 vs source / 24 vs peers (~38% UI). Not a look check. Do not buy % with shade, 720 snow, or Pixel AI scramble. |
+| `look.py` | ✅ done | Visual gate on the **actual** encode (`coarse_luma_v1`, fail if max MAE > 38). Stills emit on `looking`; uniqueness work overlaps so Generate wait stays uniqueness-bound. Log: `docs/ops/look-learnings.md`. |
+| `cli.py` | ✅ done | options + `pipeline.run` (`--look-first` = one medium + stills) |
 | `neural/*` | ✅ Phase 8-10 | Tier 2: upscale, interpolate, protect (HQ) |
 | Fast resample | ✅ done | reconstructive `rebuild_scale` + VMAF-capped `warp_k1`; HQ skipped |
 

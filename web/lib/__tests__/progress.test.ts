@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initRun, reduceEvent, runDeliveredNone } from "@/lib/progress";
+import { initRun, reduceEvent, runDeliveredNone, runHasStarted } from "@/lib/progress";
 import { VariantEvent } from "@/lib/types";
 
 const q = { vmaf: 95, histogram_ok: true, regen_count: 0, passed: true, spatial_vmaf: null, spatial_ok: null };
@@ -20,8 +20,23 @@ describe("progress reducer", () => {
     let r = base();
     r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
     expect(r.bySource.s1.inFlight).toEqual({ index: 1, state: "rendering", attempt: 0, max_attempts: 0 });
+    expect(r.bySource.s1.inFlights[1]).toEqual({ index: 1, state: "rendering", attempt: 0, max_attempts: 0 });
     r = reduceEvent(r, ev({ state: "checking", index: 1 }));
     expect(r.bySource.s1.inFlight?.state).toBe("checking");
+    expect(r.bySource.s1.inFlights[1]?.state).toBe("checking");
+  });
+
+  it("keeps every live copy in inFlights when Fast encodes in parallel", () => {
+    let r = base();
+    r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
+    r = reduceEvent(r, ev({ state: "rendering", index: 2 }));
+    expect(Object.keys(r.bySource.s1.inFlights)).toHaveLength(2);
+    expect(r.bySource.s1.inFlights[1]?.state).toBe("rendering");
+    expect(r.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    r = reduceEvent(r, ev({ state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4" }));
+    expect(r.bySource.s1.inFlights[1]).toBeUndefined();
+    expect(r.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    expect(r.bySource.s1.inFlight?.index).toBe(2);
   });
 
   it("rerolling carries attempt/max", () => {
@@ -50,7 +65,20 @@ describe("progress reducer", () => {
     expect(s.delivered).toBe(1);
     expect(s.done).toBe(1);
     expect(s.inFlight).toBeUndefined();
+    expect(s.inFlights).toEqual({});
     expect(s.variants[0]).toMatchObject({ index: 1, filename: "v01.mp4", status: "ok", file_url: "/api/variants/s1/v01.mp4" });
+  });
+
+  it("done(uniqueness_fail) bumps done but not delivered", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "done", index: 2, status: "uniqueness_fail",
+      uniqueness: 12 / 64, uniqueness_status: "below_floor",
+      quality: q, filename: "v02.mp4",
+    }));
+    expect(r.bySource.s1.done).toBe(1);
+    expect(r.bySource.s1.delivered).toBe(0);
+    expect(r.bySource.s1.variants[0].status).toBe("uniqueness_fail");
   });
 
   it("done(best_effort) bumps done but not delivered", () => {
@@ -70,7 +98,37 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.variants).toHaveLength(1);
   });
 
-    it("done(ok) carries uniqueness onto the tile", () => {
+    it("looking sets inFlight and lookPreview stills", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "looking", index: 1,
+      look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+      look_status: "ok", look_mae: 12.4,
+    }));
+    expect(r.bySource.s1.inFlight?.state).toBe("looking");
+    expect(r.bySource.s1.lookPreview).toEqual({
+      index: 1,
+      src: "/api/look/s1/look_v01_src.jpg",
+      var: "/api/look/s1/look_v01.jpg",
+      status: "ok",
+      mae: 12.4,
+    });
+  });
+
+  it("uniqueness keeps lookPreview stills on the card", () => {
+    let r = base();
+    r = reduceEvent(r, ev({
+      state: "looking", index: 1,
+      look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+      look_status: "ok", look_mae: 12.4,
+    }));
+    r = reduceEvent(r, ev({ state: "uniqueness", index: 1 }));
+    expect(r.bySource.s1.inFlight?.state).toBe("uniqueness");
+    expect(r.bySource.s1.lookPreview?.src).toBe("/api/look/s1/look_v01_src.jpg");
+    expect(r.bySource.s1.lookPreview?.var).toBe("/api/look/s1/look_v01.jpg");
+  });
+
+  it("done(ok) carries uniqueness onto the tile", () => {
     let r = base();
     r = reduceEvent(r, ev({
       state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
@@ -81,10 +139,28 @@ describe("progress reducer", () => {
     });
   });
 
-  it("job-done marks complete", () => {
+  it("done(ok) carries look stills onto the tile", () => {
     let r = base();
+    r = reduceEvent(r, ev({
+      state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4",
+      look_status: "fail", look_mae: 51, look_src: "look_v01_src.jpg", look_var: "look_v01.jpg",
+    }));
+    expect(r.bySource.s1.variants[0]).toMatchObject({
+      look_status: "fail",
+      look_mae: 51,
+      look_src_url: "/api/look/s1/look_v01_src.jpg",
+      look_var_url: "/api/look/s1/look_v01.jpg",
+    });
+  });
+
+  it("job-done marks complete and drops live slots", () => {
+    let r = base();
+    r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
+    r = reduceEvent(r, ev({ state: "rendering", index: 2 }));
     r = reduceEvent(r, { state: "job-done" });
     expect(r.complete).toBe(true);
+    expect(r.bySource.s1.inFlight).toBeUndefined();
+    expect(r.bySource.s1.inFlights).toEqual({});
   });
 
   it("is immutable (returns a new object)", () => {
@@ -103,5 +179,11 @@ describe("progress reducer", () => {
     }));
     r = reduceEvent(r, { state: "job-done" });
     expect(runDeliveredNone(r)).toBe(false);
+  });
+
+  it("runHasStarted is false until a copy is encoding or delivered", () => {
+    const idle = base();
+    expect(runHasStarted(idle)).toBe(false);
+    expect(runHasStarted(reduceEvent(idle, ev({ state: "rendering", index: 1 })))).toBe(true);
   });
 });

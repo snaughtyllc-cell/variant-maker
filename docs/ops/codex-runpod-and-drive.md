@@ -68,7 +68,7 @@ The four `R2_*` values must be **identical** on Railway and on the RunPod endpoi
 
 ## Prompt B — GPU host / RunPod (build image + serverless endpoint)
 
-Run this on an **amd64 Linux + Docker** machine (the existing VaryForge GPU Pod is fine).
+Run this on an **amd64 Linux + Docker** machine (the existing varimo GPU Pod is fine).
 Repo: `snaughtyllc-cell/variant-maker`, branch `cursor/railway-runpod-split-c975` (or `tier1` after merge).
 
 1. `docker build -f deploy/runpod/Dockerfile -t <registry>/variant-cp:latest .`
