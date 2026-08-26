@@ -35,6 +35,7 @@ Platform flags after a drop stay in Phase 12
 | 2026-08-22 | SaveInta `quietdustmed` | dust 8–12, c0s=9 | **23** | Jeff: **that's usable.** Under gate. |
 | 2026-08-25 | AQMTp medium (first-pass / shade-off) | Signed 720 medium | **18** | Tight face fills 576. Files look like the source. Gate miss is uniqueness-hard, not look-hard. |
 | **2026-08-26** | AQMTp Gallery `lookshadeoff` / `21ae9d3` (`AQMTp-720.mp4`) | Shade-off 720 TH. Medium cloud 4–7 + dust 11–13; strong pins 7/13. **No shade.** | **17–21** | Jeff: **yea it looks good just scored low.** Do not pin. Do not redraw shade. |
+| **2026-08-26** | Lab Fast `f05d803` AQMTp escalate (`aqmtpfloor`) | Same signed shade-off recipe. Strong after 24 miss. | **19/19** | Ships as `below_target` (30% floor). Not a uniqueness hunt. |
 
 ## Rejected (do not redraw)
 
@@ -62,6 +63,6 @@ Platform flags after a drop stay in Phase 12
 
 `variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Stills land on the Generate card as soon as the first encode exists; two JPEGs overlap uniqueness SSIM so Generate wait stays uniqueness-bound. MAE is a blotch backstop **after** uniqueness (do not run it beside 8-wide SSIM — that contended Fast CPU). Crop on a signed talking-head can trip MAE even when the stills look fine; Jeff’s eye on the stills is the oracle, not the red/green. Look fail still blocks escalate. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
 
-**19 bits / ~30%** is the fail-forward floor: after the 24-bit hunt, files at 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%.
+**19 bits / ~30%** is the fail-forward floor: after the 24-bit hunt, files at 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%. Lab Fast `f05d803` (`sha256:00564ea3…`): SaveInta Fast 2 shipped **26/26**. AQMTp escalate shipped **19/19** `below_target`. AQMTp medium-only: **16 uniqueness_fail** + **19 ok**. Live Fast stays `472ab60`.
 
 Leftover `luma_shade` params must not draw. Filtergraph ignores them.
