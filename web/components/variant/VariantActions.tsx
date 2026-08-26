@@ -1,15 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
 import {
-  canShareVideoFiles,
-  fetchVariantFiles,
+  fillFileCache,
+  filesReadyNow,
   isShareableVideo,
   phoneShareHintCopy,
   saveOrShareVideoFiles,
   shareVideosBusyLabel,
   shareVideosLabel,
+  shouldOfferPhotosSave,
 } from "@/lib/shareVideos";
 import { PostLinkField } from "./PostLinkField";
 
@@ -23,26 +24,34 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
   const [busy, setBusy] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
-  const [canShare, setCanShare] = useState(false);
+  const [offerPhotos, setOfferPhotos] = useState(false);
+  const fileCacheRef = useRef(new Map<string, File>());
+
+  const saveRef = isShareableVideo(variant)
+    ? [{ file_url: variant.file_url, filename: variant.filename }]
+    : [];
 
   useEffect(() => {
-    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
   }, []);
 
-  async function handleSaveVariant(e: React.MouseEvent) {
+  function handleSaveVariant(e: React.MouseEvent) {
     e.preventDefault();
-    if (saveBusy || !isShareableVideo(variant)) return;
+    if (saveBusy || saveRef.length === 0) return;
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const ready = filesReadyNow(fileCacheRef.current, saveRef);
     setSaveBusy(true);
-    try {
-      const files = await fetchVariantFiles([{ file_url: variant.file_url, filename: variant.filename }]);
+    const run = async (files: File[]) => {
       if (files.length === 0) return;
-      const nav = typeof navigator === "undefined" ? undefined : navigator;
-      await saveOrShareVideoFiles(files, { share: nav });
-    } catch (err) {
-      console.error("Save variant failed", err);
-    } finally {
-      setSaveBusy(false);
-    }
+      await saveOrShareVideoFiles(files, {
+        share: nav,
+        userAgent: nav?.userAgent,
+        maxTouchPoints: nav?.maxTouchPoints,
+      });
+    };
+    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, saveRef).then(run);
+    void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
   }
 
   async function handleRegenerate() {
@@ -153,7 +162,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           gap: 9,
         }}
       >
-        {canShare ? (
+        {offerPhotos ? (
           <button
             type="button"
             title={phoneShareHintCopy()}

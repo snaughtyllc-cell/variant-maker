@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
@@ -21,15 +21,20 @@ import {
   withOkSelection,
 } from "@/lib/drive";
 import {
-  canShareVideoFiles,
-  fetchVariantFiles,
+  fillFileCache,
+  filesReadyNow,
   phoneShareHintCopy,
+  preparingClipsCopy,
   saveNoneSelectedCopy,
   saveOrShareVideoFiles,
   selectedShareableVariants,
   shareEmptyCopy,
+  shareLoadingCopy,
+  shareOutcomeMessage,
+  shareRetryCopy,
   shareVideosBusyLabel,
   shareVideosLabel,
+  shouldOfferPhotosSave,
 } from "@/lib/shareVideos";
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
@@ -56,9 +61,12 @@ export function GalleryContent() {
   const [sheetQuery, setSheetQuery] = useState<{ sourceId: string; index: number } | null | undefined>(
     undefined,
   );
-  const [canShare, setCanShare] = useState(false);
+  const [offerPhotos, setOfferPhotos] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
+  const [clipsPrepared, setClipsPrepared] = useState(false);
+  const fileCacheRef = useRef(new Map<string, File>());
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -71,7 +79,8 @@ export function GalleryContent() {
   }, []);
 
   useEffect(() => {
-    setCanShare(canShareVideoFiles(typeof navigator === "undefined" ? undefined : navigator));
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
   }, []);
 
   function handleToggleVariant(key: string) {
@@ -151,6 +160,26 @@ export function GalleryContent() {
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
   const visibleOkCount = okVariantKeys(sorted).length;
   const allVisibleSelected = selectionHasAllOk(selected, sorted);
+  const selectedKey = [...selected].sort().join(",");
+  const selectedVariants = selectedShareableVariants(allSources, selected);
+
+  useEffect(() => {
+    if (selectedVariants.length === 0) {
+      setClipsPrepared(false);
+      setPendingShareFiles(null);
+      setSaveMsg(null);
+      return;
+    }
+    let cancelled = false;
+    setClipsPrepared(false);
+    void fillFileCache(fileCacheRef.current, selectedVariants).then((files) => {
+      if (cancelled) return;
+      setClipsPrepared(files.length === selectedVariants.length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, sources]);
 
   function handleSelectAllVisible() {
     setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
@@ -160,23 +189,41 @@ export function GalleryContent() {
     setSelected((prev) => withOkSelection(prev, [source], select));
   }
 
-  async function handleSaveSelected() {
+  function handleSaveSelected() {
     if (saveBusy || okRefs.length === 0) return;
+    const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const ready = filesReadyNow(fileCacheRef.current, selectedVariants, pendingShareFiles);
+    if (!ready) {
+      setSaveBusy(true);
+      setSaveMsg(shareLoadingCopy());
+      void fillFileCache(fileCacheRef.current, selectedVariants)
+        .then((files) => {
+          setClipsPrepared(files.length === selectedVariants.length);
+          setPendingShareFiles(files.length ? files : null);
+          setSaveMsg(files.length ? shareRetryCopy() : shareEmptyCopy());
+        })
+        .catch(() => setSaveMsg(shareEmptyCopy()))
+        .finally(() => setSaveBusy(false));
+      return;
+    }
     setSaveBusy(true);
     setSaveMsg(null);
-    try {
-      const files = await fetchVariantFiles(selectedShareableVariants(allSources, selected));
-      if (files.length === 0) {
-        setSaveMsg(shareEmptyCopy());
-        return;
-      }
-      const nav = typeof navigator === "undefined" ? undefined : navigator;
-      await saveOrShareVideoFiles(files, { share: nav });
-    } catch {
-      setSaveMsg(shareEmptyCopy());
-    } finally {
-      setSaveBusy(false);
-    }
+    void saveOrShareVideoFiles(ready, {
+      share: nav,
+      userAgent: nav?.userAgent,
+      maxTouchPoints: nav?.maxTouchPoints,
+    })
+      .then((outcome) => {
+        if (outcome.result === "needs_gesture") {
+          setPendingShareFiles(outcome.remaining);
+          setSaveMsg(shareOutcomeMessage(outcome));
+          return;
+        }
+        setPendingShareFiles(null);
+        if (outcome.result === "unsupported") setSaveMsg(shareEmptyCopy());
+      })
+      .catch(() => setSaveMsg(shareEmptyCopy()))
+      .finally(() => setSaveBusy(false));
   }
 
   function handleRemoveSource(source: SourceOut) {
@@ -221,11 +268,17 @@ export function GalleryContent() {
         selectAllLabel={selectAllLabel(allVisibleSelected)}
         selectAllDisabled={visibleOkCount === 0}
         onSelectAll={handleSelectAllVisible}
-        saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(canShare)}
+        saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
         saveBusy={saveBusy}
-        saveDisabledReason={okRefs.length === 0 ? saveNoneSelectedCopy() : null}
+        saveDisabledReason={
+          okRefs.length === 0
+            ? saveNoneSelectedCopy()
+            : offerPhotos && !clipsPrepared && !pendingShareFiles
+              ? preparingClipsCopy()
+              : null
+        }
         saveHint={phoneShareHintCopy()}
-        onSave={() => { void handleSaveSelected(); }}
+        onSave={() => { handleSaveSelected(); }}
         saveMsg={saveMsg}
       />
 
