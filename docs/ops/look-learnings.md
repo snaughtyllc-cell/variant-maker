@@ -55,7 +55,7 @@ Platform flags after a drop stay in Phase 12
 
 | Hole | What we know | What we will not do |
 |---|---|---|
-| AQMTp-class tight 720 talking-head that already fills 576 | Source self-bits ~18. Signed medium **18**. Shade bought 24+ and **failed look**. Shade-off Fast 8 `lookshadeoff`: **17–21 bits**, Jeff **look signed** (“looks good just scored low”). Hole is uniqueness, not look. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie/lighting overlays. Retune medium so SaveInta picks up shade. Pin live from `lookshadeoff`. |
+| AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Pin live from `lookshadeoff`. |
 
 ## Engine backstop
 

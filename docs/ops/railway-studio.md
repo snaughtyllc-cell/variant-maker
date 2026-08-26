@@ -91,7 +91,7 @@ RunPod **CPU** serverless endpoint from that image:
 
 - Compute type: **CPU**. Instance with **8+ cores** (e.g. `cpu3g-8-32`).
 - Start command is already `python -u /app/deploy/runpod/cp_handler.py`.
-- Min workers **0**, max workers 1–2, idle timeout **600s**, FlashBoot on.
+- Min workers **0**, max workers **4** (team Fast; HQ GPU max **3**), idle timeout **600s**, FlashBoot on.
 - Execution timeout **3600s** (a 20-pack must not die at 10–20 min).
 - Same `R2_*` env as the GPU endpoint.
 

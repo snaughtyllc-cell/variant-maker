@@ -6,7 +6,7 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 |---|---|---|
 | Image tag | `variant-fast:latest` (digest-pinned on the endpoint) | `variant-fast:lab` |
 | Endpoint | `RUNPOD_FAST_ENDPOINT_ID` on Railway | `RUNPOD_FAST_LAB_ENDPOINT_ID` (not on production Railway) |
-| Workers | max 2 | max 1, min 0 |
+| Workers | max **4** (CPU) | max 1, min 0 |
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
@@ -40,7 +40,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
 Live Fast `j0b1q4iuunzhnq` is on `sha256:5f815e72…` / `7dae269` (720 Fast 20
 complete: fail-forward uniqueness + crop leftover from the top, **no `VF_LAB`**,
-max 2, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not**
+max **4**, idle 600). Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id. Do **not**
 PATCH live to test the next experiment — use lab. Do **not** re-pin live to a
 new ship-loop `:latest` digest until that build is tested. Writeup:
 `docs/ops/live-pin-7dae269-2026-08-25.md`.
