@@ -68,7 +68,7 @@ from .drop_ledger import (
     write_sheet_id_file,
 )
 from .drops import DropPack, build_drop_packs
-from .events import event_to_dict
+from .events import VariantEvent, event_to_dict
 from .jobs import (
     Job,
     JobSource,
@@ -190,12 +190,31 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
     )
 
 
+def _in_flights(job: Job | None, source_id: str) -> list[InFlightOut]:
+    """Latest live state per variant index. Fast runs several copies at once."""
+    if job is None or job.state in ("done", "cancelled"):
+        return []
+    latest: dict[int, VariantEvent] = {}
+    for e in job.events:
+        if e.source_id != source_id:
+            continue
+        latest[e.index] = e
+    out: list[InFlightOut] = []
+    for idx in sorted(latest):
+        e = latest[idx]
+        if e.state in _IN_FLIGHT_STATES:
+            out.append(InFlightOut(
+                index=e.index, state=e.state, attempt=e.attempt, max_attempts=e.max_attempts,
+            ))
+    return out
+
+
 def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
-    if job is None:
-        return None
-    # A finished job must not keep "v01 rendering" — last event is often rendering
-    # when RunPod kills HQ at the 20-minute cap.
-    if job.state in ("done", "cancelled"):
+    """Newest live copy (Gallery 'still running'). Prefer ``_in_flights`` for Studio.
+
+    Walk newest-first and skip finished indexes — a done v01 must not hide v02–v08.
+    """
+    if job is None or job.state in ("done", "cancelled"):
         return None
     for e in reversed(job.events):
         if e.source_id != source_id:
@@ -204,8 +223,6 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
             return InFlightOut(
                 index=e.index, state=e.state, attempt=e.attempt, max_attempts=e.max_attempts,
             )
-        if e.state == "done":
-            return None
     return None
 
 
@@ -252,6 +269,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
             for v in variants
         ],
         in_flight=_in_flight(job, s.source_id),
+        in_flights=_in_flights(job, s.source_id),
         look_preview=_look_preview(job, s.source_id),
         job_state=job.state if job is not None else None,
         failed=failed,

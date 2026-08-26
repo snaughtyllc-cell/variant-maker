@@ -60,6 +60,7 @@ class SourceOut(BaseModel):
     shortfall: int
     variants: list[VariantOut] = []
     in_flight: InFlightOut | None = None
+    in_flights: list[InFlightOut] = []
     look_preview: LookPreviewOut | None = None
     job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt + uniqueness_fail (Diagnostics)

@@ -51,6 +51,7 @@ describe("useJobProgress", () => {
       expect(result.current.complete).toBe(true);
     });
     expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.bySource.s1.inFlights).toEqual({});
     expect(result.current.failed).toMatch(/20-minute/);
   });
 
@@ -71,6 +72,33 @@ describe("useJobProgress", () => {
       expect(result.current.complete).toBe(true);
     });
     expect(result.current.bySource.s1.inFlight).toBeUndefined();
+    expect(result.current.bySource.s1.inFlights).toEqual({});
     expect(result.current.failed).toMatch(/Cancelled/);
+  });
+
+  it("keeps every live copy from in_flights on poll", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        job_id: "j1", count: 8, created_utc: "", state: "running",
+        sources: [{
+          source_id: "s1", filename: "a.mp4", requested: 8, delivered: 0, shortfall: 8,
+          variants: [],
+          in_flight: { index: 2, state: "rendering", attempt: 0, max_attempts: 0 },
+          in_flights: [
+            { index: 1, state: "rendering", attempt: 0, max_attempts: 0 },
+            { index: 2, state: "rendering", attempt: 0, max_attempts: 0 },
+          ],
+        }],
+      }), { status: 200 }),
+    );
+    const { result } = renderHook(() =>
+      useJobProgress("j1", [{ source_id: "s1", filename: "a.mp4", requested: 8 }]),
+    );
+    await waitFor(() => {
+      expect(Object.keys(result.current.bySource.s1.inFlights)).toHaveLength(2);
+    });
+    expect(result.current.bySource.s1.inFlights[1]?.state).toBe("rendering");
+    expect(result.current.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    expect(result.current.complete).toBe(false);
   });
 });

@@ -1,75 +1,123 @@
 "use client";
-import { SourceProgress } from "@/lib/progress";
+import { InFlight, SourceProgress, VariantTile } from "@/lib/progress";
 import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
 import { VideoThumb } from "@/components/common/VideoThumb";
-import { QualityMode, inFlightLookingLabel, inFlightRenderingLabel } from "@/lib/hqWaitCopy";
+import {
+  QualityMode,
+  inFlightSlotLabel,
+  inFlightSummaryLine,
+  type InFlightVerb,
+} from "@/lib/hqWaitCopy";
 import { ESCALATED_TITLE } from "@/lib/format";
 
 interface SourceProgressCardProps {
   source: SourceProgress;
   qualityMode?: QualityMode;
+  complete?: boolean;
 }
 
-export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgressCardProps) {
+function LiveText({ children, live }: { children: string; live: boolean }) {
+  return (
+    <span className={live ? "vf-live-shimmer" : undefined} style={{ color: "inherit" }}>
+      {children}
+    </span>
+  );
+}
+
+function SlotTile({
+  index,
+  flight,
+  qualityMode,
+}: {
+  index: number;
+  flight?: InFlight;
+  qualityMode: QualityMode;
+}) {
+  const state: InFlightVerb = (flight?.state as InFlightVerb | undefined) ?? "waiting";
+  const live = !!flight;
+  const label = inFlightSlotLabel(state, qualityMode, flight?.attempt, flight?.max_attempts);
+  const idx = String(index).padStart(2, "0");
+  return (
+    <div
+      data-testid={`slot-${index}`}
+      data-slot-state={state}
+      style={{
+        aspectRatio: "9 / 16",
+        width: "100%",
+        alignSelf: "start",
+        borderRadius: 6,
+        background: "#14141d",
+        border: live ? "1px dashed #2a6f76" : "1px dashed var(--color-line2)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        padding: 4,
+        boxShadow: live ? "0 0 0 1px #16c8d322" : "none",
+      }}
+    >
+      <span style={{ fontSize: 9, fontWeight: 800, color: live ? "var(--color-cyan)" : "var(--color-muted2)" }}>
+        v{idx}
+      </span>
+      <span style={{ fontSize: 8, color: live ? "var(--color-cyan)" : "var(--color-muted2)" }}>
+        <LiveText live={live}>{label}</LiveText>
+      </span>
+    </div>
+  );
+}
+
+function DoneThumb({ variant }: { variant: VariantTile }) {
+  const vmaf = variant.quality?.vmaf;
+  const vmafRounded = vmaf != null ? Math.round(vmaf) : null;
+  const badgeColor =
+    vmafRounded == null ? "muted" : vmafRounded >= 93 ? "green" : vmafRounded >= 90 ? "amber" : "red";
+  const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
+  const isBestEffort = variant.status === "best_effort";
+  const uniquenessMiss = variant.status === "uniqueness_fail";
+  return (
+    <VideoThumb
+      src={variant.file_url}
+      badge={
+        <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+          {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}
+          {uniquenessPct != null && (
+            <Badge color={uniquenessMiss ? "red" : variant.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
+          )}
+          {variant.escalated && (
+            <span title={ESCALATED_TITLE}>
+              <Badge color="cyan">⚡</Badge>
+            </span>
+          )}
+          {isBestEffort && <Badge color="amber">best effort</Badge>}
+          {uniquenessMiss && <Badge color="red">couldn't unique</Badge>}
+        </div>
+      }
+    />
+  );
+}
+
+export function SourceProgressCard({
+  source,
+  qualityMode = "fast",
+  complete = false,
+}: SourceProgressCardProps) {
   const { filename, requested, delivered, done, inFlight, lookPreview, variants } = source;
+  const fromMap = source.inFlights || {};
+  const inFlights =
+    Object.keys(fromMap).length > 0
+      ? fromMap
+      : inFlight
+        ? { [inFlight.index]: inFlight }
+        : {};
+  const flights = Object.values(inFlights).sort((a, b) => a.index - b.index);
   const progress = requested > 0 ? done / requested : 0;
-  const isActive = !!inFlight;
-
-  // Status line: can show a live rendering/checking line + a rerolling line simultaneously
-  // because inFlight only tracks the most recent event, we render based on its state
-  const renderStatusLine = () => {
-    if (!inFlight) return null;
-
-    const { index, state, attempt, max_attempts } = inFlight;
-    const idxStr = String(index).padStart(2, "0");
-
-    if (state === "rendering") {
-      return (
-        <span style={{ color: "var(--color-cyan)" }}>
-          {inFlightRenderingLabel(index, qualityMode)}
-        </span>
-      );
-    }
-    if (state === "checking") {
-      return (
-        <span style={{ color: "var(--color-cyan)" }}>
-          ● v{idxStr} checking…
-        </span>
-      );
-    }
-    if (state === "looking") {
-      return (
-        <span style={{ color: "var(--color-cyan)" }}>
-          {inFlightLookingLabel(index)}
-        </span>
-      );
-    }
-    if (state === "rerolling") {
-      return (
-        <>
-          <span style={{ color: "var(--color-amber)" }}>
-            ↻ v{idxStr} re-rolling {attempt}/{max_attempts}
-          </span>
-        </>
-      );
-    }
-    if (state === "uniqueness") {
-      return (
-        <span style={{ color: "var(--color-cyan)" }}>
-          ⟡ v{idxStr} checking uniqueness…
-        </span>
-      );
-    }
-    if (state === "escalating") {
-      return (
-        <span style={{ color: "#c7b8ff" }}>
-          ⚡ v{idxStr} escalating strength…
-        </span>
-      );
-    }
-    return null;
-  };
+  const isActive = !complete && (flights.length > 0 || done < requested);
+  const summary = complete ? null : inFlightSummaryLine(flights, qualityMode);
+  const byIndex = new Map(variants.map((v) => [v.index, v]));
+  const slotCount = complete ? 0 : requested;
+  const showGrid = variants.length > 0 || isActive;
 
   return (
     <div
@@ -85,9 +133,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
         transition: "border-color 0.2s, box-shadow 0.2s",
       }}
     >
-      {/* Header: thumb placeholder + filename + count */}
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-        {/* Thumbnail placeholder — 16:9 aspect for the source preview */}
         <div
           style={{
             width: 48,
@@ -112,19 +158,16 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
             {filename}
           </div>
         </div>
-        {/* delivered / requested count */}
         <div style={{ fontSize: 13, fontWeight: 800, flexShrink: 0 }}>
           <span style={{ color: "var(--color-violet-l)" }}>{delivered}</span>
           <span style={{ color: "var(--color-muted)", fontWeight: 600 }}> / {requested}</span>
         </div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ margin: "11px 0 9px" }}>
         <ProgressBar value={progress} />
       </div>
 
-      {/* Status line */}
       <div
         style={{
           fontSize: 11.5,
@@ -136,7 +179,11 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
           minHeight: 16,
         }}
       >
-        {renderStatusLine()}
+        {summary && (
+          <span style={{ color: "var(--color-cyan)" }}>
+            <LiveText live>{summary}</LiveText>
+          </span>
+        )}
         <span>{delivered} ready</span>
       </div>
 
@@ -220,8 +267,7 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
         </div>
       )}
 
-      {/* Thumbs + in-flight slot (show the dashed tile during v01 too) */}
-      {(variants.length > 0 || inFlight) && (
+      {showGrid && (
         <div
           style={{
             display: "grid",
@@ -231,73 +277,23 @@ export function SourceProgressCard({ source, qualityMode = "fast" }: SourceProgr
             marginTop: 11,
           }}
         >
-          {variants.map((v) => {
-            const vmaf = v.quality?.vmaf;
-            const vmafRounded = vmaf != null ? Math.round(vmaf) : null;
-            const badgeColor =
-              vmafRounded == null ? "muted" : vmafRounded >= 93 ? "green" : vmafRounded >= 90 ? "amber" : "red";
-            const uniquenessPct = v.uniqueness != null ? Math.round(v.uniqueness * 100) : null;
-            const isBestEffort = v.status === "best_effort";
-            const uniquenessMiss = v.status === "uniqueness_fail";
-            return (
-              <VideoThumb
-                key={v.index}
-                src={v.file_url}
-                badge={
-                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-                    {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}
-                    {uniquenessPct != null && (
-                      <Badge color={uniquenessMiss ? "red" : v.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
-                    )}
-                    {v.escalated && (
-                      <span title={ESCALATED_TITLE}>
-                        <Badge color="cyan">⚡</Badge>
-                      </span>
-                    )}
-                    {isBestEffort && <Badge color="amber">best effort</Badge>}
-                    {uniquenessMiss && <Badge color="red">couldn't unique</Badge>}
-                  </div>
-                }
-              />
-            );
-          })}
-
-          {/* Unknown aspect until the file exists — keep a 9:16 dashed slot */}
-          {inFlight && (
-            <div
-              style={{
-                aspectRatio: "9 / 16",
-                width: "100%",
-                alignSelf: "start",
-                borderRadius: 6,
-                background: "#14141d",
-                border: "1px dashed var(--color-line2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span style={{ fontSize: 8, color: "var(--color-muted2)" }}>
-                {inFlight.state === "rerolling"
-                  ? `↻ ${inFlight.attempt}/${inFlight.max_attempts}`
-                  : inFlight.state === "checking"
-                  ? "check"
-                  : inFlight.state === "looking"
-                  ? "look"
-                  : inFlight.state === "uniqueness"
-                  ? "⟡ unique"
-                  : inFlight.state === "escalating"
-                  ? "⚡ escalate"
-                  : qualityMode === "hq"
-                  ? "HQ"
-                  : "render"}
-              </span>
-            </div>
-          )}
+          {complete
+            ? variants.map((v) => <DoneThumb key={v.index} variant={v} />)
+            : Array.from({ length: Math.max(slotCount, variants.length) }, (_, i) => i + 1).map((index) => {
+                const doneVar = byIndex.get(index);
+                if (doneVar) return <DoneThumb key={index} variant={doneVar} />;
+                return (
+                  <SlotTile
+                    key={index}
+                    index={index}
+                    flight={inFlights[index]}
+                    qualityMode={qualityMode}
+                  />
+                );
+              })}
         </div>
       )}
 
-      {/* "N ready" cue — shown once at least one variant is delivered */}
       {delivered > 0 && (
         <div
           style={{

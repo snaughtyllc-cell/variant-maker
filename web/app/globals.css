@@ -294,4 +294,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .vf-viewing-banner { padding: 8px 14px; }
 }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  .vf-live-shimmer { animation: none !important; color: inherit !important; background: none !important; -webkit-text-fill-color: inherit !important; }
+}
+
+@keyframes vf-live-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+.vf-live-shimmer {
+  background-image: linear-gradient(90deg, currentColor 0%, #f4feff 42%, currentColor 78%);
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: vf-live-shimmer 1.5s linear infinite;
+}

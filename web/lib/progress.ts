@@ -1,6 +1,14 @@
 import { VariantEvent, Quality, PlatformResult } from "./types";
 import { variantUrl } from "./api";
 
+export type InFlightState = "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating";
+
+export interface InFlight {
+  index: number;
+  state: InFlightState;
+  attempt: number;
+  max_attempts: number;
+}
 export interface VariantTile {
   index: number; filename: string; status: string; quality: Quality; file_url: string;
   uniqueness?: number | null; uniqueness_status?: string | null;
@@ -13,11 +21,8 @@ export interface VariantTile {
 }
 export interface SourceProgress {
   source_id: string; filename: string; requested: number; delivered: number; done: number;
-  inFlight?: {
-    index: number;
-    state: "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating";
-    attempt: number; max_attempts: number;
-  };
+  inFlight?: InFlight;
+  inFlights: Record<number, InFlight>;
   lookPreview?: {
     index: number;
     src: string;
@@ -35,8 +40,17 @@ export interface RunProgress {
 
 export function initRun(sources: { source_id: string; filename: string; requested: number }[]): RunProgress {
   const bySource: Record<string, SourceProgress> = {};
-  for (const s of sources) bySource[s.source_id] = { ...s, delivered: 0, done: 0, variants: [] };
+  for (const s of sources) bySource[s.source_id] = { ...s, delivered: 0, done: 0, variants: [], inFlights: {} };
   return { bySource, complete: false, failed: null };
+}
+
+function dropFlight(next: SourceProgress, index: number): void {
+  const { [index]: _dropped, ...rest } = next.inFlights || {};
+  next.inFlights = rest;
+  if (next.inFlight?.index === index) {
+    const remaining = Object.values(rest);
+    next.inFlight = remaining.length > 0 ? remaining[remaining.length - 1] : undefined;
+  }
 }
 
 function lookStillUrl(
@@ -50,16 +64,26 @@ function lookStillUrl(
 }
 
 export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-done" }): RunProgress {
-  if (ev.state === "job-done") return { ...run, complete: true, failed: run.failed ?? null };
+  if (ev.state === "job-done") {
+    const bySource = Object.fromEntries(
+      Object.entries(run.bySource).map(([id, s]) => [
+        id,
+        { ...s, inFlight: undefined, inFlights: {} },
+      ]),
+    );
+    return { ...run, complete: true, failed: run.failed ?? null, bySource };
+  }
   const e = ev as VariantEvent;
   const prev = run.bySource[e.source_id];
   if (!prev) return run; // unknown source (shouldn't happen — seeded from CreateJobResponse)
-  const next: SourceProgress = { ...prev, variants: prev.variants };
+  const next: SourceProgress = { ...prev, variants: prev.variants, inFlights: { ...(prev.inFlights || {}) } };
   if (
     e.state === "rendering" || e.state === "checking" || e.state === "looking" ||
     e.state === "rerolling" || e.state === "uniqueness" || e.state === "escalating"
   ) {
-    next.inFlight = { index: e.index, state: e.state, attempt: e.attempt, max_attempts: e.max_attempts };
+    const flight: InFlight = { index: e.index, state: e.state, attempt: e.attempt, max_attempts: e.max_attempts };
+    next.inFlight = flight;
+    next.inFlights[e.index] = flight;
     if (e.state === "looking" && (e.look_src || e.look_var || e.look_src_url || e.look_var_url)) {
       const sid = e.source_id;
       next.lookPreview = {
@@ -94,7 +118,7 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
             }
           : v,
       );
-      if (prev.inFlight?.index === e.index) next.inFlight = undefined;
+      dropFlight(next, e.index);
     } else {
       next.variants = [...prev.variants, {
         index: e.index, filename: e.filename!, status: e.status!, quality: e.quality!,
@@ -111,7 +135,7 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
       }];
       next.done = prev.done + 1;
       if (e.status === "ok") next.delivered = prev.delivered + 1;
-      if (prev.inFlight?.index === e.index) next.inFlight = undefined;
+      dropFlight(next, e.index);
     }
   }
   return { ...run, bySource: { ...run.bySource, [e.source_id]: next } };

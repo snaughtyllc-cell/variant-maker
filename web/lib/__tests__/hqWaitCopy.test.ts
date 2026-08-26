@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { HQ_RENDERING_HINT, inFlightLookingLabel, inFlightRenderingLabel, liveRunSubcopy } from "@/lib/hqWaitCopy";
+import {
+  HQ_RENDERING_HINT,
+  inFlightLookingLabel,
+  inFlightRenderingLabel,
+  inFlightSlotLabel,
+  inFlightSummaryLine,
+  liveRunSubcopy,
+} from "@/lib/hqWaitCopy";
 
 describe("hqWaitCopy", () => {
   it("fast rendering stays the short vNN line", () => {
@@ -17,5 +24,28 @@ describe("hqWaitCopy", () => {
     expect(liveRunSubcopy("hq")).toMatch(/several minutes/i);
     expect(liveRunSubcopy("fast")).not.toMatch(/HQ upscale/i);
     expect(liveRunSubcopy("fast")).toMatch(/20 for one clip/i);
+    expect(liveRunSubcopy("fast")).toMatch(/tile/i);
+  });
+
+  it("slot labels stay short on the tile", () => {
+    expect(inFlightSlotLabel("waiting")).toBe("queued");
+    expect(inFlightSlotLabel("rendering")).toBe("render");
+    expect(inFlightSlotLabel("rendering", "hq")).toBe("HQ");
+    expect(inFlightSlotLabel("looking")).toBe("look");
+  });
+
+  it("summarizes parallel copies without hopping to one vNN", () => {
+    expect(inFlightSummaryLine([{ index: 1, state: "rendering" }])).toBe("● v01 rendering…");
+    expect(inFlightSummaryLine([
+      { index: 1, state: "rendering" },
+      { index: 2, state: "rendering" },
+    ])).toBe("2 rendering");
+    expect(inFlightSummaryLine(
+      Array.from({ length: 8 }, (_, i) => ({ index: i + 1, state: "rendering" })),
+    )).toBe("8 rendering");
+    expect(inFlightSummaryLine([
+      { index: 1, state: "rendering" },
+      { index: 2, state: "looking" },
+    ])).toBe("1 rendering · 1 looking");
   });
 });

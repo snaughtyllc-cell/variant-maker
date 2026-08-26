@@ -35,6 +35,7 @@ export interface SourceOut {
   source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
   variants: VariantOut[];
   in_flight?: InFlightOut | null;
+  in_flights?: InFlightOut[];
   look_preview?: LookPreviewOut | null;
   job_state?: "running" | "done" | string | null;
   failed?: number;

@@ -192,7 +192,12 @@ export function ProgressPanel() {
       {/* Source cards — scrollable */}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {sources.map((source) => (
-          <SourceProgressCard key={source.source_id} source={source} qualityMode={qualityMode} />
+          <SourceProgressCard
+            key={source.source_id}
+            source={source}
+            qualityMode={qualityMode}
+            complete={complete}
+          />
         ))}
       </div>
     </div>

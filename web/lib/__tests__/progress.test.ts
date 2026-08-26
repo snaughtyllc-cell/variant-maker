@@ -20,8 +20,23 @@ describe("progress reducer", () => {
     let r = base();
     r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
     expect(r.bySource.s1.inFlight).toEqual({ index: 1, state: "rendering", attempt: 0, max_attempts: 0 });
+    expect(r.bySource.s1.inFlights[1]).toEqual({ index: 1, state: "rendering", attempt: 0, max_attempts: 0 });
     r = reduceEvent(r, ev({ state: "checking", index: 1 }));
     expect(r.bySource.s1.inFlight?.state).toBe("checking");
+    expect(r.bySource.s1.inFlights[1]?.state).toBe("checking");
+  });
+
+  it("keeps every live copy in inFlights when Fast encodes in parallel", () => {
+    let r = base();
+    r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
+    r = reduceEvent(r, ev({ state: "rendering", index: 2 }));
+    expect(Object.keys(r.bySource.s1.inFlights)).toHaveLength(2);
+    expect(r.bySource.s1.inFlights[1]?.state).toBe("rendering");
+    expect(r.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    r = reduceEvent(r, ev({ state: "done", index: 1, status: "ok", quality: q, filename: "v01.mp4" }));
+    expect(r.bySource.s1.inFlights[1]).toBeUndefined();
+    expect(r.bySource.s1.inFlights[2]?.state).toBe("rendering");
+    expect(r.bySource.s1.inFlight?.index).toBe(2);
   });
 
   it("rerolling carries attempt/max", () => {
@@ -50,6 +65,7 @@ describe("progress reducer", () => {
     expect(s.delivered).toBe(1);
     expect(s.done).toBe(1);
     expect(s.inFlight).toBeUndefined();
+    expect(s.inFlights).toEqual({});
     expect(s.variants[0]).toMatchObject({ index: 1, filename: "v01.mp4", status: "ok", file_url: "/api/variants/s1/v01.mp4" });
   });
 
@@ -137,10 +153,14 @@ describe("progress reducer", () => {
     });
   });
 
-  it("job-done marks complete", () => {
+  it("job-done marks complete and drops live slots", () => {
     let r = base();
+    r = reduceEvent(r, ev({ state: "rendering", index: 1 }));
+    r = reduceEvent(r, ev({ state: "rendering", index: 2 }));
     r = reduceEvent(r, { state: "job-done" });
     expect(r.complete).toBe(true);
+    expect(r.bySource.s1.inFlight).toBeUndefined();
+    expect(r.bySource.s1.inFlights).toEqual({});
   });
 
   it("is immutable (returns a new object)", () => {

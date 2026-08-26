@@ -30,28 +30,32 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       next = reduceEvent(next, ev);
     }
     // Mid-flight state rides on JobDetail so RunPod-buffered SSE is not required.
-    if (s.in_flight) {
+    const flights = s.in_flights?.length
+      ? s.in_flights
+      : s.in_flight
+        ? [s.in_flight]
+        : [];
+    const cleared = next.bySource[s.source_id];
+    if (cleared) {
+      next = {
+        ...next,
+        bySource: {
+          ...next.bySource,
+          [s.source_id]: { ...cleared, inFlight: undefined, inFlights: {} },
+        },
+      };
+    }
+    for (const f of flights) {
       next = reduceEvent(next, {
         source_id: s.source_id,
-        index: s.in_flight.index,
-        state: s.in_flight.state,
-        attempt: s.in_flight.attempt,
-        max_attempts: s.in_flight.max_attempts,
+        index: f.index,
+        state: f.state,
+        attempt: f.attempt,
+        max_attempts: f.max_attempts,
         status: null,
         quality: null,
         filename: null,
       });
-    } else {
-      const prev = next.bySource[s.source_id];
-      if (prev?.inFlight) {
-        next = {
-          ...next,
-          bySource: {
-            ...next.bySource,
-            [s.source_id]: { ...prev, inFlight: undefined },
-          },
-        };
-      }
     }
     if (s.look_preview) {
       const prev = next.bySource[s.source_id];
@@ -81,7 +85,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       complete: true,
       failed: detail.error || next.failed || null,
       bySource: Object.fromEntries(
-        Object.entries(next.bySource).map(([id, s]) => [id, { ...s, inFlight: undefined }]),
+        Object.entries(next.bySource).map(([id, s]) => [id, { ...s, inFlight: undefined, inFlights: {} }]),
       ),
     };
     next = reduceEvent(cleared, { state: "job-done" });

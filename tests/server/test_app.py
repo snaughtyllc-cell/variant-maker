@@ -223,6 +223,38 @@ def test_get_job_exposes_in_flight_from_event_log(tmp_path):
     assert detail["sources"][0]["in_flight"] == {
         "index": 2, "state": "uniqueness", "attempt": 0, "max_attempts": 0,
     }
+    assert detail["sources"][0]["in_flights"] == [{
+        "index": 2, "state": "uniqueness", "attempt": 0, "max_attempts": 0,
+    }]
+
+
+def test_get_job_exposes_parallel_in_flights(tmp_path):
+    from variant_maker.server.events import VariantEvent
+
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    job.state = "running"
+    sid = job.sources[0].source_id
+    job.events.append(VariantEvent(source_id=sid, index=1, state="rendering"))
+    job.events.append(VariantEvent(source_id=sid, index=2, state="rendering"))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    flights = detail["sources"][0]["in_flights"]
+    assert [f["index"] for f in flights] == [1, 2]
+    assert {f["state"] for f in flights} == {"rendering"}
+    assert detail["sources"][0]["in_flight"]["index"] == 2
+
+    job.events.append(VariantEvent(
+        source_id=sid, index=1, state="done", status="ok", filename="v01.mp4",
+    ))
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    flights = detail["sources"][0]["in_flights"]
+    assert [f["index"] for f in flights] == [2]
+    assert detail["sources"][0]["in_flight"]["index"] == 2
 
 
 def test_done_job_does_not_keep_rendering_in_flight(tmp_path):
@@ -240,6 +272,7 @@ def test_done_job_does_not_keep_rendering_in_flight(tmp_path):
     detail = client.get(f"/api/jobs/{job_id}").json()
     assert detail["state"] == "done"
     assert detail["sources"][0]["in_flight"] is None
+    assert detail["sources"][0]["in_flights"] == []
     assert detail.get("error") in (None, "")
 
 
