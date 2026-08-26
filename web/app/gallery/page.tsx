@@ -1,10 +1,17 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
-import { filterSources, sortSources, filesReadyCount } from "@/lib/gallery";
+import {
+  filterSources,
+  sortSources,
+  filesReadyCount,
+  parseGalleryVariantQuery,
+  gallerySearchPath,
+  pushGallerySearch,
+} from "@/lib/gallery";
 import {
   okVariantKeys,
   okVariantRefs,
@@ -23,10 +30,9 @@ import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
 
-function GalleryContent() {
+export function GalleryContent() {
   const { data: sources, mutate, isLoading } = useGallery();
   const { complete } = useRun();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -36,6 +42,9 @@ function GalleryContent() {
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sheetQuery, setSheetQuery] = useState<{ sourceId: string; index: number } | null | undefined>(
+    undefined,
+  );
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -63,39 +72,29 @@ function GalleryContent() {
     }
   }, [complete, mutate]);
 
-  // Parse ?v=<source_id>:<index>
-  const vParam = searchParams.get("v");
-  let sheetSourceId: string | null = null;
-  let sheetIndex: number | null = null;
+  // `undefined` = follow the address bar (deep link). Local value opens/closes
+  // immediately so we never wait on a Next.js remount.
+  const urlQuery = parseGalleryVariantQuery(searchParams.get("v"));
+  const activeQuery = sheetQuery === undefined ? urlQuery : sheetQuery;
 
-  if (vParam) {
-    const colonIdx = vParam.lastIndexOf(":");
-    if (colonIdx > 0) {
-      sheetSourceId = vParam.slice(0, colonIdx);
-      const idxStr = vParam.slice(colonIdx + 1);
-      const parsed = parseInt(idxStr, 10);
-      if (!isNaN(parsed)) sheetIndex = parsed;
-    }
-  }
-
-  // Resolve source for the sheet
   const allSources = sources ?? [];
-  const sheetSource = sheetSourceId
-    ? allSources.find((s) => s.source_id === sheetSourceId)
+  const sheetSource = activeQuery
+    ? allSources.find((s) => s.source_id === activeQuery.sourceId)
     : undefined;
-
-  // Resolve variant.index (1-based) to array position via findIndex
+  const sheetIndex = activeQuery?.index ?? null;
   const pos =
     sheetSource && sheetIndex !== null
       ? sheetSource.variants.findIndex((v) => v.index === sheetIndex)
       : -1;
 
   function handleOpenVariant(sourceId: string, index: number) {
-    router.push(`/gallery?v=${sourceId}:${index}`, { scroll: false });
+    setSheetQuery({ sourceId, index });
+    pushGallerySearch(gallerySearchPath(sourceId, index));
   }
 
   function handleSheetClose() {
-    router.push("/gallery", { scroll: false });
+    setSheetQuery(null);
+    pushGallerySearch(gallerySearchPath());
   }
 
   function handleSheetNav(delta: number) {
@@ -104,8 +103,18 @@ function GalleryContent() {
       Math.max(0, pos + delta),
       sheetSource.variants.length - 1,
     );
-    router.push(`/gallery?v=${sheetSource.source_id}:${sheetSource.variants[next].index}`, { scroll: false });
+    const index = sheetSource.variants[next].index;
+    setSheetQuery({ sourceId: sheetSource.source_id, index });
+    pushGallerySearch(gallerySearchPath(sheetSource.source_id, index));
   }
+
+  useEffect(() => {
+    function onPop() {
+      setSheetQuery(parseGalleryVariantQuery(new URLSearchParams(window.location.search).get("v")));
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);

@@ -1,10 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   copyMissingCopy,
   deliveryComplete,
   filesReadyCount,
   filterSources,
+  gallerySearchPath,
   isFileReady,
+  parseGalleryVariantQuery,
+  pushGallerySearch,
   sortSources,
   zipEmptyCopy,
   removePackCopy,
@@ -59,5 +62,30 @@ describe("gallery helpers", () => {
   it("treats omitted file_ready as present (older Studio payloads)", () => {
     expect(isFileReady({ file_url: "/x" } as never)).toBe(true);
     expect(isFileReady({ file_url: "/x", file_ready: false } as never)).toBe(false);
+  });
+
+  it("parses ?v=source:index from the Gallery address bar", () => {
+    expect(parseGalleryVariantQuery("6bc8f627184a:3")).toEqual({
+      sourceId: "6bc8f627184a",
+      index: 3,
+    });
+    expect(parseGalleryVariantQuery("src:with:colon:2")).toEqual({
+      sourceId: "src:with:colon",
+      index: 2,
+    });
+    expect(parseGalleryVariantQuery("nope")).toBeNull();
+    expect(parseGalleryVariantQuery(null)).toBeNull();
+  });
+
+  it("builds a Gallery path that can be pushed without a Next.js navigation", () => {
+    expect(gallerySearchPath("abc", 3)).toBe("/gallery?v=abc:3");
+    expect(gallerySearchPath()).toBe("/gallery");
+  });
+
+  it("writes the Gallery query with history.pushState, not a page remount", () => {
+    const pushState = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
+    pushGallerySearch("/gallery?v=abc:3");
+    expect(pushState).toHaveBeenCalledWith(null, "", "/gallery?v=abc:3");
+    pushState.mockRestore();
   });
 });
