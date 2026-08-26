@@ -17,6 +17,7 @@ export interface VariantOut {
   look_mae?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  caption?: string | null;
 }
 export interface InFlightOut {
   index: number;
@@ -240,6 +241,7 @@ export interface AuthMe {
   role: AuthRole | null;
   is_admin: boolean;
   has_password: boolean;
+  experience?: "solo" | "agency";
 }
 
 export interface Invite {
@@ -274,6 +276,7 @@ export interface AdminWorkspace {
   hq: number;
   last_job_utc: string | null;
   last_error: string | null;
+  experience?: "solo" | "agency";
 }
 
 export interface DropLedgerStatus {

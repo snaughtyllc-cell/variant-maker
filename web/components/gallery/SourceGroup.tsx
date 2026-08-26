@@ -17,6 +17,7 @@ import {
   zipSecondaryCopy,
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
+import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -58,15 +59,21 @@ export function SourceGroup({
     source.variants.filter((v) => Boolean(v.post_url)).length,
   );
 
-  // Compute avg VMAF
-  const vmafValues = source.variants.map(v => v.quality.vmaf).filter(Boolean);
-  const avgVmaf = vmafValues.length
-    ? Math.round(vmafValues.reduce((a, b) => a + b, 0) / vmafValues.length)
+  const uniquenessValues = source.variants
+    .map((v) => v.uniqueness)
+    .filter((u): u is number => typeof u === "number");
+  const avgUniquenessPct = uniquenessValues.length
+    ? Math.round((uniquenessValues.reduce((a, b) => a + b, 0) / uniquenessValues.length) * 100)
     : null;
-
-  // Spatial checks summary
-  const spatialCount = source.variants.filter(v => v.quality.spatial_ok === true).length;
-  const allSpatial = spatialCount === source.variants.length && source.variants.length > 0;
+  const originalitySummary =
+    avgUniquenessPct != null
+      ? uniquenessValues.length === 1
+        ? `${uniquenessCustomerLabel()} ${avgUniquenessPct}%`
+        : `${uniquenessCustomerLabel()} ${avgUniquenessPct}% avg`
+      : source.variants.length === 0
+        ? "no variants yet"
+        : "";
+  const summaryLine = [originalitySummary, postedCopy].filter(Boolean).join(" · ");
 
   async function handleSaveShare(e: React.MouseEvent) {
     e.preventDefault();
@@ -239,18 +246,11 @@ export function SourceGroup({
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
             {source.filename}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}>
-            {avgVmaf != null && `avg VMAF ${avgVmaf}`}
-            {avgVmaf != null && " · "}
-            {allSpatial && source.variants.length > 0
-              ? "all spatial-checks passed"
-              : spatialCount > 0
-              ? `${spatialCount} of ${source.variants.length} passed spatial`
-              : source.variants.length > 0
-              ? "no spatial checks (Tier-1)"
-              : "no variants yet"}
-            {postedCopy && ` · ${postedCopy}`}
-          </div>
+          {summaryLine ? (
+            <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}>
+              {summaryLine}
+            </div>
+          ) : null}
         </div>
 
         {/* Right side: delivery pill + folder link */}

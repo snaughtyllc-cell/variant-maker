@@ -70,6 +70,7 @@ from .drop_ledger import (
 )
 from .drops import DropPack, build_drop_packs
 from .events import VariantEvent, event_to_dict
+from .experience import resolve_experience
 from .jobs import (
     Job,
     JobSource,
@@ -130,6 +131,7 @@ from .models import (
     WorkflowOut,
     WorkflowSummaryOut,
     WorkflowUpdateIn,
+    WorkspaceExperienceIn,
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
@@ -188,6 +190,7 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         look_mae=v.look_mae,
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
+        caption=getattr(v, "caption", None),
     )
 
 
@@ -731,6 +734,7 @@ def create_app(
             hq=int(q.get("hq") or 0),
             last_job_utc=last_job_utc,
             last_error=last_error,
+            experience=getattr(ws, "experience", None) or "agency",
         )
 
     def _default_login_exchange(
@@ -883,6 +887,10 @@ def create_app(
             role=user.role,
             is_admin=is_admin_email(user.email, admin_email),
             has_password=bool(fresh.password_hash),
+            experience=resolve_experience(
+                workspace_experience=getattr(ws, "experience", None) if ws else None,
+                email=user.email,
+            ),
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:
@@ -1068,6 +1076,17 @@ def create_app(
         assert tenants is not None
         return [_admin_workspace_out(ws) for ws in tenants.list_workspaces()]
 
+    @app.patch("/api/admin/workspaces/{workspace_id}", response_model=AdminWorkspaceOut)
+    def admin_patch_workspace(
+        request: Request, workspace_id: str, body: WorkspaceExperienceIn,
+    ) -> AdminWorkspaceOut:
+        _require_admin(request)
+        assert tenants is not None
+        ws = tenants.set_workspace_experience(workspace_id, body.experience)
+        if ws is None:
+            raise HTTPException(status_code=404, detail="workspace not found")
+        return _admin_workspace_out(ws)
+
     @app.delete("/api/admin/users/{email}", status_code=204)
     def admin_delete_user(request: Request, email: str) -> None:
         _require_admin(request)
@@ -1137,11 +1156,12 @@ def create_app(
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
-                          quality_mode: str = Form("fast")) -> CreateJobResponse:
+                          quality_mode: str = Form("fast"),
+                          generate_captions: bool = Form(False)) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
+            quality_mode=quality_mode, generate_captions=generate_captions,
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1186,6 +1206,7 @@ def create_app(
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
         quality_mode: str = Form("fast"),
+        generate_captions: bool = Form(False),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1200,7 +1221,7 @@ def create_app(
             paths.append((meta["filename"], meta["path"]))
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
+            quality_mode=quality_mode, generate_captions=generate_captions,
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1236,6 +1257,7 @@ def create_app(
                 paths, count=body.count,
                 allow_creative_escalate=body.allow_creative_escalate,
                 quality_mode=body.quality_mode,
+                generate_captions=body.generate_captions,
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)

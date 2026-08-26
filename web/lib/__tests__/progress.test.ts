@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initRun, reduceEvent, runDeliveredNone } from "@/lib/progress";
+import { initRun, reduceEvent, runDeliveredNone, runHasStarted } from "@/lib/progress";
 import { VariantEvent } from "@/lib/types";
 
 const q = { vmaf: 95, histogram_ok: true, regen_count: 0, passed: true, spatial_vmaf: null, spatial_ok: null };
@@ -179,5 +179,11 @@ describe("progress reducer", () => {
     }));
     r = reduceEvent(r, { state: "job-done" });
     expect(runDeliveredNone(r)).toBe(false);
+  });
+
+  it("runHasStarted is false until a copy is encoding or delivered", () => {
+    const idle = base();
+    expect(runHasStarted(idle)).toBe(false);
+    expect(runHasStarted(reduceEvent(idle, ev({ state: "rendering", index: 1 })))).toBe(true);
   });
 });

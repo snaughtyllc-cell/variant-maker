@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
-import { showDiagnosticsNav, showTeamNav } from "@/lib/navAccess";
-import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
+import { experienceLabel, normalizeExperience } from "@/lib/experience";
+import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import { EXTRA_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 
 const ICONS = {
@@ -51,6 +52,7 @@ export function TopNav() {
   const { data: me } = useAuthMe();
   const [moreOpen, setMoreOpen] = useState(false);
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
+  const primaryTabs = visiblePrimaryTabs(me);
 
   async function handleLogout() {
     await logout();
@@ -71,7 +73,7 @@ export function TopNav() {
         </Link>
 
         <nav className="vf-desktop-nav" aria-label="Primary navigation">
-          {PRIMARY_TABS.map(({ href, label }) => {
+          {primaryTabs.map(({ href, label }) => {
             const Icon = ICONS[href as keyof typeof ICONS];
             const active = linkActive(pathname, href);
             return (
@@ -96,7 +98,15 @@ export function TopNav() {
           <StatusStrip />
           {(me?.email || allowedExtras.length > 0) && (
             <>
-              {me?.email && <span className="vf-account-email" title={me.email}>{me.email}</span>}
+              {me?.email && (
+                <span className="vf-account-email" title={me.email}>
+                  {me.email}
+                  <span className="vf-experience-label">
+                    {" "}
+                    {experienceLabel(normalizeExperience(me.experience))}
+                  </span>
+                </span>
+              )}
               {me?.email && <button type="button" className="vf-logout" onClick={handleLogout}><LogOut size={14} /> Log out</button>}
               <button
                 type="button"
@@ -134,8 +144,8 @@ export function TopNav() {
         </div>
       )}
 
-      <nav className="vf-mobile-tabs" aria-label="Primary navigation">
-        {PRIMARY_TABS.map((item) => {
+      <nav className="vf-mobile-tabs" data-count={primaryTabs.length} aria-label="Primary navigation">
+        {primaryTabs.map((item) => {
           const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
           return (

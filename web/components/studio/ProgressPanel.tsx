@@ -2,8 +2,13 @@
 import { useState } from "react";
 import { useRun } from "@/lib/runStore";
 import { cancelJob } from "@/lib/api";
-import { runDeliveredNone } from "@/lib/progress";
+import { runDeliveredNone, runHasStarted } from "@/lib/progress";
 import { liveRunSubcopy } from "@/lib/hqWaitCopy";
+import {
+  isPreparingJob,
+  preparingHeadline,
+  preparingSubcopy,
+} from "@/lib/prepareCopy";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
@@ -77,25 +82,32 @@ export function ProgressPanel() {
   }
 
   const sources = Object.values(progress.bySource);
+  const preparing = isPreparingJob(jobId);
+  const started = runHasStarted(progress);
+  const early = !complete && !progress.failed && (preparing || !started);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
   const cancelled = Boolean(failed && /cancelled/i.test(failed));
-  const headline = failed
-    ? cancelled
-      ? "Cancelled"
-      : "Run lost"
-    : complete
-      ? emptyFail
-        ? "No variants"
-        : "Complete"
-      : "Generating…";
-  const sub = failed
-    ? failed
-    : complete
-      ? emptyFail
-        ? "The job ended without any playable variants. Try a smaller 1080p file."
-        : "All variants done — open Gallery, or New run for another pack"
-      : liveRunSubcopy("fast");
+  const headline = early
+    ? preparingHeadline()
+    : failed
+      ? cancelled
+        ? "Cancelled"
+        : "Run lost"
+      : complete
+        ? emptyFail
+          ? "No variants"
+          : "Complete"
+        : "Generating…";
+  const sub = early
+    ? preparingSubcopy()
+    : failed
+      ? failed
+      : complete
+        ? emptyFail
+          ? "The job ended without any playable variants. Try a smaller 1080p file."
+          : "All variants done — open Gallery, or New run for another pack"
+        : liveRunSubcopy("fast");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -121,7 +133,7 @@ export function ProgressPanel() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {jobId && !complete && (
+          {jobId && !complete && !preparing && (
             <button
               type="button"
               onClick={handleCancel}
@@ -181,7 +193,7 @@ export function ProgressPanel() {
                 flexShrink: 0,
               }}
             />
-            {complete ? "done" : "live"}
+            {early ? "starting" : complete ? "done" : "live"}
           </span>
         </div>
       </div>
@@ -194,6 +206,7 @@ export function ProgressPanel() {
             source={source}
             qualityMode={qualityMode}
             complete={complete}
+            preparing={early}
           />
         ))}
       </div>
