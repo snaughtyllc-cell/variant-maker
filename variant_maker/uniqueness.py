@@ -35,9 +35,9 @@ METRIC_VERSION = "ssim_bits_v1"
 # Local uniqueness gate only — not a platform verdict.
 TARGET_BITS = 24
 DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
-# Fail-forward floor. Target stays 24 (~38% UI). After medium + one escalate,
-# 19 bits (~30% UI) still ships as below_target. Under 19 is below TikFusion's
-# ~18-bit / ~28% floor — do not push those files.
+# Not a skip-escalate shortcut. Hunt 24 first (medium, then one strong).
+# Only *after* that hunt: 19 bits (~30% UI) still ships as below_target.
+# Under 19 is below TikFusion's ~18-bit / ~28% floor — do not push those files.
 FLOOR_BITS = 19
 DEFAULT_FLOOR = FLOOR_BITS / 64.0  # 19/64 ≈ 0.297 → 30% UI
 # Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
@@ -85,7 +85,7 @@ def bits_from_ssim(mean_ssim: float) -> int:
 
 
 def status_for_bits(bits: int | None, *, target: float | None) -> str:
-    """Pass line is ``target`` (24 bits). Hard floor is FLOOR_BITS (19 / ~30%)."""
+    """Pass line is ``target`` (24 bits). After the hunt, FLOOR_BITS (19) still ships."""
     if bits is None:
         return "unknown"
     if target is None:

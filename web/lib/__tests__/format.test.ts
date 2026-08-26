@@ -40,6 +40,7 @@ describe("escalated copy", () => {
     expect(ESCALATED_TITLE.toLowerCase()).toContain("not a fail");
     expect(ESCALATED_TITLE.toLowerCase()).toContain("original");
     expect(ESCALATED_TITLE).toMatch(/38%/);
+    expect(ESCALATED_TITLE).toMatch(/After that hunt/);
     expect(ESCALATED_TITLE).toMatch(/30%/);
     expect(ESCALATED_TITLE).toMatch(/55/);
     expect(ESCALATED_TITLE).toMatch(/65/);

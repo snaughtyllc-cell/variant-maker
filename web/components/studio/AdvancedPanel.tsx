@@ -155,8 +155,9 @@ export function AdvancedPanel({
               >
                 Optimized for uniqueness while keeping a clean look. Even one
                 file is scored vs the original. Pass is 38%. If medium misses
-                38%, one strong pass runs. 30% and up still ships. Under 30%
-                is a uniqueness miss — not a Drive file.
+                38%, one strong pass always runs. Only after that hunt: 30%
+                and up still ships. Under 30% is a uniqueness miss — not a
+                Drive file.
               </span>
             </span>
             <input

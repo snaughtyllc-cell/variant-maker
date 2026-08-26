@@ -183,7 +183,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
 
 
 def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
-    """19–23 bits still ship as ok files (missed 38%, above 30% floor)."""
+    """Advanced off: 19–23 bits ship without a strong pass. Product Fast still hunts 24."""
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
@@ -198,6 +198,54 @@ def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
     assert record.preset_used == "medium"
     assert record.uniqueness_status == "below_target"
     assert record.status == "ok"
+
+
+def test_twenty_bits_on_first_pass_still_escalates(monkeypatch, tmp_path):
+    """19-bit floor is not a first-pass shortcut. 20 bits still hunts 24 via strong."""
+    _stub_common(monkeypatch)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(20 / 64, bits=20, status="below_target")
+        return _ok_score(24 / 64, bits=24, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert n["scores"] == 2
+    assert record.escalated is True
+    assert record.preset_used == "strong"
+    assert record.uniqueness_status == "ok"
+    assert record.status == "ok"
+    assert record.uniqueness == 24 / 64
+
+
+def test_nineteen_after_escalate_ships(monkeypatch, tmp_path):
+    """Only after the 24-bit hunt: 19 bits (~30%) still ships as below_target."""
+    _stub_common(monkeypatch)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(20 / 64, bits=20, status="below_target")
+        return _ok_score(19 / 64, bits=19, status="below_target")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    cfg = _cfg(tmp_path, allow_creative_escalate=True)
+    del cfg["auto_tune"]
+    manifest = pipeline.run(cfg)
+    record = manifest.variants[0]
+    assert n["scores"] == 2
+    assert record.escalated is True
+    assert record.preset_used == "strong"
+    assert record.uniqueness_status == "below_target"
+    assert record.status == "ok"
+    assert record.uniqueness == 19 / 64
 
 
 def test_below_floor_does_not_ship_as_ok(monkeypatch, tmp_path):
@@ -217,7 +265,7 @@ def test_below_floor_does_not_ship_as_ok(monkeypatch, tmp_path):
 
 
 def test_nineteen_bits_still_ships_as_ok(monkeypatch, tmp_path):
-    """19 bits (~30% UI) is the fail-forward floor — still a Drive file."""
+    """19 bits (~30% UI) after the hunt (or with escalate off) is still a Drive file."""
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",

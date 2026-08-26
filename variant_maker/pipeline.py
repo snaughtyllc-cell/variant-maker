@@ -357,7 +357,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
         # Uniqueness gate: light preset at rising strengths, quality regen inside each
         # attempt as before. Source bits AND same-batch peer bits must clear. If none
         # clears, spend one creative escalate at the strong preset (still quality-gated)
-        # and accept whatever it scores — leave below_target visible, never fake a score.
+        # and only then apply the 19-bit ship floor. 19–23 on the *first* pass is
+        # still a miss — escalate. After the hunt, 19–23 ships as below_target;
+        # under 19 is uniqueness_fail. Never fake a 24-bit score.
         preset_used = preset.name
         escalated = False
         r = None
@@ -504,8 +506,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
         if spatial_ok is False:
             status = "corrupt"
         elif uniqueness.status_for_bits(u.get("bits"), target=uniqueness_target) == "below_floor":
-            # Missed 24 and missed the 19-bit / 30% fail-forward floor. Do not
-            # count this as a delivered ok file (Drive / gallery ready).
+            # Missed 24 after the hunt, and missed the 19-bit / 30% post-escalate
+            # ship floor. Do not count this as a delivered ok file.
             u["uniqueness_status"] = "below_floor"
             status = "uniqueness_fail"
         elif r["passed"]:
