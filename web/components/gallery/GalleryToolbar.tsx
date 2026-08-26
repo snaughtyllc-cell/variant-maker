@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { ArrowUpDown, CheckSquare, Download, Send } from "lucide-react";
+import type { FileCacheProgress } from "@/lib/shareVideos";
+import { SavePreparePanel } from "./SavePreparePanel";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -25,6 +27,7 @@ interface GalleryToolbarProps {
   saveHint?: string | null;
   onSave: () => void;
   saveMsg?: string | null;
+  saveProgress?: FileCacheProgress | null;
 }
 
 export function GalleryToolbar({
@@ -46,6 +49,7 @@ export function GalleryToolbar({
   saveHint,
   onSave,
   saveMsg,
+  saveProgress,
 }: GalleryToolbarProps) {
   const sendDisabled = sendDisabledReason != null;
   const saveDisabled = saveDisabledReason != null || !!saveBusy;
@@ -71,7 +75,7 @@ export function GalleryToolbar({
           >
             <Download size={14} /> {saveBusy ? "Saving…" : saveLabel}
           </button>
-          {saveDisabledReason && !saveBusy && <small>{saveDisabledReason}</small>}
+          {saveDisabledReason && !saveBusy && !saveProgress && <small>{saveDisabledReason}</small>}
         </span>
         <span className="gallery-send-wrap">
           <button type="button" className="vf-primary-button" onClick={onSend} disabled={sendDisabled} title={sendDisabledReason ?? undefined}><Send size={14} /> Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}</button>
@@ -79,6 +83,7 @@ export function GalleryToolbar({
         </span>
       </div>
       {saveMsg && <p className="gallery-toolbar__save-msg">{saveMsg}</p>}
+      {saveProgress && saveProgress.total > 0 && <SavePreparePanel progress={saveProgress} />}
     </section>
   );
 }

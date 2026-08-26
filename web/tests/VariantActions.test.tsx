@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
 
 import { setPlatformResult } from "@/lib/api";
 import { VariantActions } from "@/components/variant/VariantActions";
+import { clearSharedVariantFileCache } from "@/lib/shareVideos";
 
 function variant(over: Partial<VariantOut> = {}): VariantOut {
   return {
@@ -36,6 +37,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearSharedVariantFileCache();
   Reflect.deleteProperty(navigator, "canShare");
   Reflect.deleteProperty(navigator, "share");
 });

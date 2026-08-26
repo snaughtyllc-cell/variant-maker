@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
@@ -31,10 +31,13 @@ import {
   shareEmptyCopy,
   shareLoadingCopy,
   shareOutcomeMessage,
+  sharePrepareProgressCopy,
   shareRetryCopy,
   shareVideosBusyLabel,
   shareVideosLabel,
+  sharedVariantFileCache,
   shouldOfferPhotosSave,
+  type FileCacheProgress,
 } from "@/lib/shareVideos";
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
@@ -66,7 +69,7 @@ export function GalleryContent() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
   const [clipsPrepared, setClipsPrepared] = useState(false);
-  const fileCacheRef = useRef(new Map<string, File>());
+  const [saveProgress, setSaveProgress] = useState<FileCacheProgress | null>(null);
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -162,24 +165,28 @@ export function GalleryContent() {
   const allVisibleSelected = selectionHasAllOk(selected, sorted);
   const selectedKey = [...selected].sort().join(",");
   const selectedVariants = selectedShareableVariants(allSources, selected);
+  const selectedUrls = selectedVariants.map((variant) => variant.file_url).join("|");
 
   useEffect(() => {
     if (selectedVariants.length === 0) {
       setClipsPrepared(false);
       setPendingShareFiles(null);
       setSaveMsg(null);
+      setSaveProgress(null);
       return;
     }
     let cancelled = false;
     setClipsPrepared(false);
-    void fillFileCache(fileCacheRef.current, selectedVariants).then((files) => {
+    void fillFileCache(sharedVariantFileCache, selectedVariants, undefined, (progress) => {
+      if (!cancelled) setSaveProgress(progress);
+    }).then((files) => {
       if (cancelled) return;
       setClipsPrepared(files.length === selectedVariants.length);
     });
     return () => {
       cancelled = true;
     };
-  }, [selectedKey, sources]);
+  }, [selectedKey, selectedUrls]);
 
   function handleSelectAllVisible() {
     setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
@@ -192,11 +199,11 @@ export function GalleryContent() {
   function handleSaveSelected() {
     if (saveBusy || okRefs.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(fileCacheRef.current, selectedVariants, pendingShareFiles);
+    const ready = filesReadyNow(sharedVariantFileCache, selectedVariants, pendingShareFiles);
     if (!ready) {
       setSaveBusy(true);
       setSaveMsg(shareLoadingCopy());
-      void fillFileCache(fileCacheRef.current, selectedVariants)
+      void fillFileCache(sharedVariantFileCache, selectedVariants, undefined, setSaveProgress)
         .then((files) => {
           setClipsPrepared(files.length === selectedVariants.length);
           setPendingShareFiles(files.length ? files : null);
@@ -274,12 +281,15 @@ export function GalleryContent() {
           okRefs.length === 0
             ? saveNoneSelectedCopy()
             : offerPhotos && !clipsPrepared && !pendingShareFiles
-              ? preparingClipsCopy()
+              ? saveProgress
+                ? sharePrepareProgressCopy(saveProgress)
+                : preparingClipsCopy()
               : null
         }
         saveHint={phoneShareHintCopy()}
         onSave={() => { handleSaveSelected(); }}
         saveMsg={saveMsg}
+        saveProgress={okRefs.length > 0 ? saveProgress : null}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}

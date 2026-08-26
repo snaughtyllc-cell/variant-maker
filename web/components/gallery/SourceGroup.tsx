@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
 import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
@@ -13,12 +13,16 @@ import {
   saveOrShareVideoFiles,
   shareEmptyCopy,
   shareOutcomeMessage,
+  sharePrepareProgressCopy,
   shareVideosBusyLabel,
   shareVideosLabel,
+  sharedVariantFileCache,
   shouldOfferPhotosSave,
   zipSecondaryCopy,
   zipVisibleOnDevice,
+  type FileCacheProgress,
 } from "@/lib/shareVideos";
+import { SavePreparePanel } from "./SavePreparePanel";
 import { postedCountCopy } from "@/lib/postUrl";
 import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { VariantCard } from "./VariantCard";
@@ -46,7 +50,7 @@ export function SourceGroup({
   const [offerPhotos, setOfferPhotos] = useState(false);
   const [showZip, setShowZip] = useState(true);
   const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
-  const fileCacheRef = useRef(new Map<string, File>());
+  const [prepareProgress, setPrepareProgress] = useState<FileCacheProgress | null>(null);
 
   const hasShortfall = source.shortfall > 0;
   const filesReady = filesReadyCount(source);
@@ -69,7 +73,7 @@ export function SourceGroup({
 
   useEffect(() => {
     if (!canSaveVideos || shareableRefs.length === 0) return;
-    void fillFileCache(fileCacheRef.current, shareableRefs);
+    void fillFileCache(sharedVariantFileCache, shareableRefs);
   }, [canSaveVideos, shareableKey]);
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
@@ -99,7 +103,7 @@ export function SourceGroup({
     e.stopPropagation();
     if (stillRunning || shareBusy || shareableRefs.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(fileCacheRef.current, shareableRefs, pendingShareFiles);
+    const ready = filesReadyNow(sharedVariantFileCache, shareableRefs, pendingShareFiles);
     setShareBusy(true);
     setZipMsg(null);
     const run = async (files: File[]) => {
@@ -120,7 +124,9 @@ export function SourceGroup({
       setPendingShareFiles(null);
       if (outcome.result === "unsupported") setZipMsg(shareEmptyCopy());
     };
-    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, shareableRefs).then(run);
+    const task = ready
+      ? run(ready)
+      : fillFileCache(sharedVariantFileCache, shareableRefs, undefined, setPrepareProgress).then(run);
     void task.catch(() => setZipMsg(shareEmptyCopy())).finally(() => setShareBusy(false));
   }
 
@@ -339,7 +345,11 @@ export function SourceGroup({
                 opacity: shareBusy ? 0.7 : 1,
               }}
             >
-              {shareBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
+              {shareBusy
+                ? prepareProgress && prepareProgress.ready + prepareProgress.failed < prepareProgress.total
+                  ? sharePrepareProgressCopy(prepareProgress)
+                  : shareVideosBusyLabel()
+                : shareVideosLabel(offerPhotos)}
             </button>
           )}
           {filesReady > 0 && !stillRunning && showZip && (
@@ -401,6 +411,11 @@ export function SourceGroup({
           }}
         >
           ⚠ {zipMsg}
+        </div>
+      )}
+      {shareBusy && prepareProgress && prepareProgress.total > 0 && (
+        <div className="gallery-save-progress-wrap">
+          <SavePreparePanel progress={prepareProgress} />
         </div>
       )}
       {copyMissing && (

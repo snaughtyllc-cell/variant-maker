@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceOut, VariantOut } from "@/lib/types";
 
 const routerPush = vi.fn();
@@ -32,6 +32,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { GalleryContent } from "@/app/gallery/page";
+import { clearSharedVariantFileCache } from "@/lib/shareVideos";
 
 function variant(over: Partial<VariantOut> = {}): VariantOut {
   return {
@@ -76,6 +77,11 @@ describe("Gallery variant sheet open", () => {
     searchParams.delete("v");
   });
 
+  afterEach(() => {
+    clearSharedVariantFileCache();
+    vi.unstubAllGlobals();
+  });
+
   it("opens the sheet with history.pushState so Gallery does not remount", () => {
     const pushState = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
     render(<GalleryContent />);
@@ -102,5 +108,32 @@ describe("Gallery variant sheet open", () => {
     fireEvent.click(screen.getByLabelText(/select v03/i));
     expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeEnabled();
     expect(within(toolbar).queryByText("Select clips first")).not.toBeInTheDocument();
+  });
+
+  it("lists each selected clip while it is getting ready to share", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await gate;
+        return new Response("vid", { status: 200, headers: { "Content-Type": "video/mp4" } });
+      }),
+    );
+    render(<GalleryContent />);
+    const toolbar = screen.getByRole("region", { name: /gallery controls/i });
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Select all" }));
+    await waitFor(() => {
+      expect(within(toolbar).getByText(/Getting clip 1 of 1/i)).toBeInTheDocument();
+      expect(within(toolbar).getByText("boil_v03.mp4")).toBeInTheDocument();
+      expect(within(toolbar).getByText("Getting…")).toBeInTheDocument();
+    });
+    release();
+    await waitFor(() => {
+      expect(within(toolbar).getByText(/1 clip ready/i)).toBeInTheDocument();
+      expect(within(toolbar).getByText("Ready")).toBeInTheDocument();
+    });
   });
 });

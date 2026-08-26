@@ -65,4 +65,35 @@ describe("GalleryToolbar select and save", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: /send to drive \(3\)/i })).toBeInTheDocument();
   });
+
+  it("lists each clip while they are getting ready for the share sheet", () => {
+    render(
+      <GalleryToolbar
+        {...toolbarProps}
+        selectedCount={3}
+        sendDisabledReason={null}
+        saveLabel="Save to Photos"
+        saveDisabledReason="Getting clip 2 of 3…"
+        saveProgress={{
+          total: 3,
+          ready: 1,
+          failed: 0,
+          loading: 1,
+          current: "v02.mp4",
+          items: [
+            { file_url: "/a", filename: "v01.mp4", state: "ready" },
+            { file_url: "/b", filename: "v02.mp4", state: "loading" },
+            { file_url: "/c", filename: "v03.mp4", state: "queued" },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Getting clip 2 of 3…")).toBeInTheDocument();
+    expect(screen.getByText("v01.mp4")).toBeInTheDocument();
+    expect(screen.getByText("v02.mp4")).toBeInTheDocument();
+    expect(screen.getByText("v03.mp4")).toBeInTheDocument();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText("Getting…")).toBeInTheDocument();
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+  });
 });

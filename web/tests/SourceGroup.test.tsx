@@ -11,7 +11,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
-import { phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
+import { clearSharedVariantFileCache, phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
 
 const quality = {
   vmaf: 95,
@@ -67,6 +67,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearSharedVariantFileCache();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
@@ -149,8 +150,11 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
       });
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v01.mp4");
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v02.mp4");
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls).toEqual(expect.arrayContaining([
+        "/api/variants/s1/v01.mp4",
+        "/api/variants/s1/v02.mp4",
+      ]));
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
