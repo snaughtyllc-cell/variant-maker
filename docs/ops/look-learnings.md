@@ -33,6 +33,7 @@ Platform flags after a drop stay in Phase 12
 |---|---|---|---|---|
 | 2026-08-22 | SaveInta `quietdustmed` | dust 8–12, c0s=9 | **23** | Jeff: **that's usable.** Under gate. |
 | 2026-08-25 | AQMTp medium (first-pass / shade-off) | Signed 720 medium | **18** | Tight face fills 576. Files look like the source. Gate miss is uniqueness-hard, not look-hard. |
+| **2026-08-26** | AQMTp Gallery `lookshadeoff` / `21ae9d3` (`AQMTp-720.mp4`) | Shade-off 720 TH. Medium cloud 4–7 + dust 11–13; strong pins 7/13. **No shade.** | **17–21** | Jeff: **yea it looks good just scored low.** Do not pin. Do not redraw shade. |
 
 ## Rejected (do not redraw)
 
@@ -54,7 +55,7 @@ Platform flags after a drop stay in Phase 12
 
 | Hole | What we know | What we will not do |
 |---|---|---|
-| AQMTp-class tight 720 talking-head that already fills 576 | Source self-bits ~18. Signed medium **18** `below_target`. Crop-only 14–15. Shade bought 24+ bits and **failed look**. Shade-off Fast 8 `lookshadeoff` (`21ae9d3`): still **17–21 bits**. Some copies fail the coarse luma gate (max of 3 frames) even without shade. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie/lighting overlays. Retune medium so SaveInta picks up shade. Pin live from `lookshadeoff`. |
+| AQMTp-class tight 720 talking-head that already fills 576 | Source self-bits ~18. Signed medium **18**. Shade bought 24+ and **failed look**. Shade-off Fast 8 `lookshadeoff`: **17–21 bits**, Jeff **look signed** (“looks good just scored low”). Hole is uniqueness, not look. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie/lighting overlays. Retune medium so SaveInta picks up shade. Pin live from `lookshadeoff`. |
 
 ## Engine backstop
 
