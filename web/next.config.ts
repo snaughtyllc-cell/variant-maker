@@ -3,6 +3,14 @@ import type { NextConfig } from "next";
 /** @type {import('next').NextConfig} */
 const target = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const nextConfig: NextConfig = {
+  // Tab clicks were hitting next-server every time (Next 15+ default dynamic TTL is 0).
+  // HTML stays no-store below so CDNs cannot pin a stale shell after deploy.
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${target}/api/:path*` }];
   },

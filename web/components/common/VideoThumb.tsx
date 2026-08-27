@@ -13,24 +13,12 @@ export function VideoThumb({ src, poster, badge, className }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const still = (poster || "").trim();
-  const hoveringRef = useRef(false);
   const [inView, setInView] = useState(false);
-  const [wantVideo, setWantVideo] = useState(!still);
   const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
-
-  function safePlay(video: HTMLVideoElement | null) {
-    if (!video) return;
-    video.loop = true;
-    const play = video.play();
-    if (play && typeof play.then === "function") {
-      play.catch(() => {/* autoplay may be blocked; silent fail */});
-    }
-  }
 
   useEffect(() => {
     setAspect(DEFAULT_CSS_ASPECT);
-    setWantVideo(!(poster || "").trim());
-  }, [src, poster]);
+  }, [src]);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -58,22 +46,17 @@ export function VideoThumb({ src, poster, badge, className }: VideoThumbProps) {
   }
 
   function handleMouseEnter() {
-    hoveringRef.current = true;
-    if (still) setWantVideo(true);
-    safePlay(videoRef.current);
+    const v = videoRef.current;
+    if (!v) return;
+    v.loop = true;
+    v.play().catch(() => {/* autoplay may be blocked; silent fail */});
   }
 
   function handleMouseLeave() {
-    hoveringRef.current = false;
-    videoRef.current?.pause();
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
   }
-
-  const showVideo = inView && wantVideo;
-
-  useEffect(() => {
-    if (!showVideo || !still || !hoveringRef.current) return;
-    safePlay(videoRef.current);
-  }, [showVideo, still]);
 
   return (
     <div
@@ -92,26 +75,12 @@ export function VideoThumb({ src, poster, badge, className }: VideoThumbProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {still && (
-        <img
-          src={still}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            display: showVideo ? "none" : "block",
-          }}
-        />
-      )}
-      {showVideo && (
+      {inView && (
         <video
           ref={videoRef}
           src={videoFrameSrc(src)}
           poster={still || undefined}
-          preload={still ? "none" : "metadata"}
+          preload="metadata"
           muted
           playsInline
           onLoadedMetadata={() => applyVideoAspect(videoRef.current)}

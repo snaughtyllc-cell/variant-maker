@@ -79,7 +79,7 @@ export function TopNav() {
             const Icon = ICONS[href as keyof typeof ICONS];
             const active = linkActive(pathname, href);
             return (
-              <Link key={href} href={href} className="vf-nav-link" data-active={active}>
+              <Link key={href} href={href} prefetch className="vf-nav-link" data-active={active}>
                 <Icon size={15} strokeWidth={1.8} /> {label}
               </Link>
             );
@@ -156,7 +156,7 @@ export function TopNav() {
           const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
           return (
-            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} data-active={active}>
+            <Link key={item.href} href={item.href} prefetch aria-current={active ? "page" : undefined} data-active={active}>
               <Icon size={17} strokeWidth={1.8} />
               <span>{item.short ?? item.label}</span>
             </Link>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { VideoThumb } from "@/components/common/VideoThumb";
 
 function setVideoSize(video: HTMLVideoElement, width: number, height: number) {
@@ -37,16 +37,15 @@ describe("VideoThumb", () => {
     expect((container.firstElementChild as HTMLElement).style.aspectRatio).toBe("9 / 16");
   });
 
-  it("shows a JPEG still and skips the mp4 until hover", async () => {
+  it("fetches the mp4 even when a look still exists", () => {
     const { container } = render(
       <VideoThumb src="/v.mp4" poster="/api/look/s1/look_v01.jpg" />,
     );
-    const img = container.querySelector("img") as HTMLImageElement;
-    expect(img).toBeTruthy();
-    expect(img.src).toMatch(/\/api\/look\/s1\/look_v01\.jpg$/);
-    expect(container.querySelector("video")).toBeNull();
-    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
-    await waitFor(() => expect(container.querySelector("video")).toBeTruthy());
+    const video = container.querySelector("video") as HTMLVideoElement;
+    expect(video).toBeTruthy();
+    expect(video.getAttribute("src")).toMatch(/\/v\.mp4/);
+    expect(video.getAttribute("poster")).toMatch(/\/api\/look\/s1\/look_v01\.jpg$/);
+    expect(video.getAttribute("preload")).toBe("metadata");
   });
 
   it("plays on hover and pauses on leave", () => {
