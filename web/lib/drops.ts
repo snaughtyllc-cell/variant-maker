@@ -43,13 +43,6 @@ export function formatSendDay(createdUtc: string): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-export function winRateCopy(packs: DropPack[]): string {
-  const { sent, misses, winRate } = dropStats(packs);
-  if (sent === 0) return DROPS_EMPTY_COPY;
-  const pct = Math.round((winRate ?? 0) * 100);
-  return `${sent} sent · ${misses} miss · ${pct}% pass (unlabeled counts as pass)`;
-}
-
 export function parseDropFilter(raw: string | null): DropFilter {
   if (raw === "week" || raw === "misses" || raw === "flagged_week") return raw;
   return "all";

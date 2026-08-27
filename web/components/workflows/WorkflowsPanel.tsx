@@ -51,17 +51,24 @@ function formatSummary(summary: WorkflowSummary | null): string {
   return parts.length ? parts.join(" · ") : "Sweep complete — nothing new";
 }
 
-/** A pill-style toggle switch backed by a real checkbox (same semantics/props as before). */
+/**
+ * A pill-style toggle switch backed by a real checkbox (same semantics/props as before).
+ * `label` always wires an accessible name to the checkbox; pass `visibleLabel={false}`
+ * when the text is already rendered elsewhere (e.g. a sibling row title) so the name
+ * reaches the checkbox via `aria-label` without printing the text twice on screen.
+ */
 function Switch({
   checked,
   disabled,
   onChange,
   label,
+  visibleLabel = true,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: () => void;
   label?: string;
+  visibleLabel?: boolean;
 }) {
   return (
     <label className="workflow-switch-field">
@@ -72,10 +79,11 @@ function Switch({
           checked={checked}
           disabled={disabled}
           onChange={onChange}
+          aria-label={label && !visibleLabel ? label : undefined}
         />
         <span className="workflow-switch__thumb" aria-hidden="true" />
       </span>
-      {label && <span className="workflow-switch-field__label">{label}</span>}
+      {label && visibleLabel && <span className="workflow-switch-field__label">{label}</span>}
     </label>
   );
 }
@@ -419,8 +427,11 @@ export function WorkflowsPanel() {
           <div className="workflow-form__title">New flow</div>
 
           <div className="workflow-step">
-            <span className="workflow-step__label">01 · Name</span>
+            <label htmlFor="workflow-name" className="workflow-step__label">
+              01 · Name
+            </label>
             <input
+              id="workflow-name"
               className="workflow-field"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -539,21 +550,36 @@ export function WorkflowsPanel() {
           <div className="workflow-toggles">
             <div className="workflow-toggle-row">
               <div className="workflow-toggle-row__title">Watch folder (auto-poll)</div>
-              <Switch checked={enabled} disabled={fieldsDisabled} onChange={() => setEnabled((v) => !v)} />
+              <Switch
+                checked={enabled}
+                disabled={fieldsDisabled}
+                onChange={() => setEnabled((v) => !v)}
+                label="Watch folder (auto-poll)"
+                visibleLabel={false}
+              />
             </div>
             <div className="workflow-toggle-row">
               <div>
                 <div className="workflow-toggle-row__title">Auto-caption from bank</div>
                 <div className="workflow-toggle-row__hint">{workflowAutoCaptionHint()}</div>
               </div>
-              <Switch checked={autoCaption} disabled={fieldsDisabled} onChange={() => setAutoCaption((v) => !v)} />
+              <Switch
+                checked={autoCaption}
+                disabled={fieldsDisabled}
+                onChange={() => setAutoCaption((v) => !v)}
+                label="Auto-caption from bank"
+                visibleLabel={false}
+              />
             </div>
           </div>
 
           {banks.length > 0 && (
             <div className="workflow-step">
-              <span className="workflow-step__label">Caption folder</span>
+              <label htmlFor="workflow-caption-bank" className="workflow-step__label">
+                Caption folder
+              </label>
               <select
+                id="workflow-caption-bank"
                 className="workflow-field"
                 value={captionBankId}
                 onChange={(e) => setCaptionBankId(e.target.value)}

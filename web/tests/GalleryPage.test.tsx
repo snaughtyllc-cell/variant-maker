@@ -103,4 +103,14 @@ describe("Gallery variant sheet open", () => {
     expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeEnabled();
     expect(within(toolbar).queryByText("Select clips first")).not.toBeInTheDocument();
   });
+
+  it("shows the floating toolbar only once a clip is selected", () => {
+    render(<GalleryContent />);
+    expect(screen.queryByRole("toolbar", { name: /selected variants/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/select v03/i));
+
+    const floating = screen.getByRole("toolbar", { name: /selected variants/i });
+    expect(within(floating).getByText("1 variant selected")).toBeInTheDocument();
+  });
 });

@@ -126,6 +126,7 @@ export function QualityPanel({
                 fontFamily: "var(--font-space-grotesk), monospace",
                 fontSize: 9.5,
                 letterSpacing: "0.08em",
+                textTransform: "uppercase",
                 color: "var(--color-muted2)",
               }}
             >

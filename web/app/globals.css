@@ -190,7 +190,7 @@ input, select, textarea { font-size: 16px; }
   .vf-topbar, .vf-mobile-more, .vf-mobile-tabs { display: none; }
 }
 
-.app-main { flex: 1; min-width: 0; }
+.app-main { flex: 1; min-height: 0; min-width: 0; }
 
 /* Shared workspace shell */
 .workspace-page {
@@ -730,7 +730,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .team-page button[style*="linear-gradient"], .admin-page button[style*="linear-gradient"],
 .admin-page button[style*="#7c5cff"], .team-page button[style*="#7c5cff"] { background: var(--ink) !important; box-shadow: none !important; }
 .drive-page input, .drive-page select, .drive-page textarea, .team-page input, .admin-page input { border-color: #c9dde0 !important; }
-.drive-page input:focus, .drive-page select:focus, .drive-page textarea:focus, .team-page input:focus, .admin-page input:focus { border-color: #16c8d3 !important; box-shadow: 0 0 0 3px #cef4f6; }
+.drive-page input:focus, .drive-page select:focus, .drive-page textarea:focus, .team-page input:focus, .admin-page input:focus { border-color: var(--color-cyan) !important; box-shadow: 0 0 0 3px #cef4f6; }
 .team-page table, .admin-page table { background: #fbfdfd; border: 1px solid #d6e5e7; border-radius: 10px; overflow: hidden; }
 .diagnostics-page [style*="#0d0d13"], .diagnostics-page [style*="#16161f"] { background: #f7fbfb !important; }
 .diagnostics-page [style*="#1c1608"], .diagnostics-page [style*="#2c2210"] { background: #fff8eb !important; border-color: #efdfbd !important; color: #8e6119 !important; }
@@ -794,6 +794,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .workflow-switch__input:disabled { cursor: not-allowed; }
 .workflow-switch__thumb { background: #fff; border-radius: 50%; height: 20px; pointer-events: none; transition: transform 160ms ease; width: 20px; }
 .workflow-switch[data-on="true"] .workflow-switch__thumb { transform: translateX(18px); }
+/* .workflow-switch__input is opacity:0, which hides the browser's default
+   :focus-visible outline. Paint focus on the visible track instead so keyboard
+   users can see which switch has focus. */
+.workflow-switch:focus-within { border-radius: 999px; outline: 3px solid #7ee0e6; outline-offset: 3px; }
 
 /* Persistent new-flow panel — a docked inspector, never a modal. */
 .workflow-side { background: #fff; border-top: 1px solid #e1edee; display: flex; flex-direction: column; flex: none; padding: 22px 22px 28px; width: 100%; }
@@ -890,6 +894,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drive-card__row--action { background: none; border-left: none; border-right: none; border-bottom: none; cursor: pointer; font: inherit; text-align: left; }
 .drive-card__row-label { color: #23393e; font-size: 13.5px; font-weight: 600; }
 .drive-card__row-value { color: #8aa0a5; font-family: var(--font-space-grotesk), monospace; font-size: 11.5px; }
+
+.drive-password-form { margin-top: 12px; }
+.drive-password-alert { font-size: 12.5px; margin: 10px 0 0; }
 
 .drive-badge { background: #fbf3df; border-radius: 7px; color: #a9741b; font-family: var(--font-space-grotesk), monospace; font-size: 10.5px; font-weight: 600; padding: 4px 10px; }
 .drive-badge--ok { background: #e8f8f0; color: #12805a; }
