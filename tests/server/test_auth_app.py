@@ -536,6 +536,46 @@ def test_workspace_experience_assignment(tmp_path):
     ).status_code == 403
 
 
+def test_new_workspace_invite_can_set_solo_before_signup(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    inv = jeff.post("/api/auth/invites", json={
+        "email": "ops@x.com",
+        "kind": "new_workspace",
+        "experience": "solo",
+        "workspace_name": "Ops studio",
+    })
+    assert inv.status_code == 201
+    assert inv.json()["experience"] == "solo"
+    assert inv.json()["workspace_name"] == "Ops studio"
+    listed = jeff.get("/api/auth/invites").json()
+    assert listed[0]["experience"] == "solo"
+    _login(ops, "ops")
+    me = ops.get("/api/auth/me").json()
+    assert me["experience"] == "solo"
+    assert me["workspace_name"] == "Ops studio"
+
+
+def test_join_invite_can_target_another_workspace(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    inv = jeff.post("/api/auth/invites", json={
+        "email": "va@x.com", "kind": "join", "workspace_id": ops_id,
+    })
+    assert inv.status_code == 201
+    assert inv.json()["workspace_id"] == ops_id
+    _login(va, "va")
+    assert va.get("/api/auth/me").json()["workspace_id"] == ops_id
+
+
 def test_password_set_requires_login(tmp_path):
     app, _ = _auth_app(tmp_path)
     anon = TestClient(app)

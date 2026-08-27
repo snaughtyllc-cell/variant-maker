@@ -30,6 +30,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import {
+  createInvite,
   listAdminWorkspaces,
   listInvites,
   removeAdminUser,
@@ -81,6 +82,7 @@ beforeEach(() => {
   me.mutate.mockResolvedValue(undefined);
   vi.mocked(listAdminWorkspaces).mockResolvedValue(workspaces);
   vi.mocked(listInvites).mockResolvedValue(invites);
+  vi.mocked(createInvite).mockReset();
   vi.mocked(setAdminView).mockResolvedValue(undefined);
   vi.mocked(removeAdminUser).mockResolvedValue(undefined);
   vi.mocked(setWorkspaceExperience).mockResolvedValue({
@@ -92,7 +94,7 @@ beforeEach(() => {
 describe("Admin page", () => {
   it("lists workspaces and Open switches view then goes home", async () => {
     render(<AdminPage />);
-    expect(await screen.findByText("Maya")).toBeInTheDocument();
+    expect((await screen.findAllByText("Maya")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("maya@example.com").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() => {
@@ -137,6 +139,63 @@ describe("Admin page", () => {
     fireEvent.change(select, { target: { value: "solo" } });
     await waitFor(() => {
       expect(setWorkspaceExperience).toHaveBeenCalledWith("ws_va", "solo");
+    });
+  });
+
+  it("lets the admin pick solo on a new-workspace invite before send", async () => {
+    vi.mocked(createInvite).mockResolvedValue({
+      id: "inv_new",
+      email: "new@example.com",
+      kind: "new_workspace",
+      workspace_id: null,
+      experience: "solo",
+      workspace_name: "New studio",
+      created_utc: "2026-08-27T00:00:00Z",
+    });
+    render(<AdminPage />);
+    fireEvent.change(await screen.findByLabelText("Invite email"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Invite kind"), {
+      target: { value: "new_workspace" },
+    });
+    expect(screen.getByLabelText("Workspace experience")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Workspace experience"), {
+      target: { value: "solo" },
+    });
+    fireEvent.change(screen.getByLabelText("Studio name"), {
+      target: { value: "New studio" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    await waitFor(() => {
+      expect(createInvite).toHaveBeenCalledWith("new@example.com", "new_workspace", {
+        experience: "solo",
+        workspaceName: "New studio",
+      });
+    });
+    expect(await screen.findByText(/New workspace · Solo/)).toBeInTheDocument();
+  });
+
+  it("lets the admin pick an existing workspace on a join invite", async () => {
+    vi.mocked(createInvite).mockResolvedValue({
+      id: "inv_join",
+      email: "helper@example.com",
+      kind: "join",
+      workspace_id: "ws_va",
+      created_utc: "2026-08-27T00:00:00Z",
+    });
+    render(<AdminPage />);
+    fireEvent.change(await screen.findByLabelText("Invite email"), {
+      target: { value: "helper@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Join workspace"), {
+      target: { value: "ws_va" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    await waitFor(() => {
+      expect(createInvite).toHaveBeenCalledWith("helper@example.com", "join", {
+        workspaceId: "ws_va",
+      });
     });
   });
 });

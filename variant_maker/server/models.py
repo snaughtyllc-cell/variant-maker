@@ -415,6 +415,9 @@ class PasswordSetIn(BaseModel):
 class InviteCreateIn(BaseModel):
     email: str
     kind: Literal["join", "new_workspace"]
+    workspace_id: str | None = None
+    experience: Literal["solo", "agency"] | None = None
+    workspace_name: str | None = None
 
 
 class InviteOut(BaseModel):
@@ -423,6 +426,8 @@ class InviteOut(BaseModel):
     kind: Literal["join", "new_workspace"]
     workspace_id: str | None = None
     created_utc: str
+    experience: Literal["solo", "agency"] | None = None
+    workspace_name: str | None = None
 
 
 class AdminMemberOut(BaseModel):

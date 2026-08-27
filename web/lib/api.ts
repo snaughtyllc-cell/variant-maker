@@ -501,11 +501,25 @@ export async function setStudioPassword(password: string): Promise<void> {
 
 export const listInvites = () => fetch("/api/auth/invites").then(json<Invite[]>);
 
-export function createInvite(email: string, kind: InviteKind): Promise<Invite> {
+export function createInvite(
+  email: string,
+  kind: InviteKind,
+  opts?: {
+    workspaceId?: string | null;
+    experience?: "solo" | "agency";
+    workspaceName?: string;
+  },
+): Promise<Invite> {
+  const body: Record<string, string> = { email, kind };
+  if (kind === "join" && opts?.workspaceId) body.workspace_id = opts.workspaceId;
+  if (kind === "new_workspace") {
+    if (opts?.experience) body.experience = opts.experience;
+    if (opts?.workspaceName) body.workspace_name = opts.workspaceName;
+  }
   return fetch("/api/auth/invites", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, kind }),
+    body: JSON.stringify(body),
   }).then(json<Invite>);
 }
 

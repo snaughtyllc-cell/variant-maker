@@ -80,6 +80,30 @@ class Invite:
     kind: InviteKind
     workspace_id: str | None
     created_utc: str
+    experience: Experience | None = None
+    workspace_name: str | None = None
+
+
+def _parse_invite(raw: object, email: str | None = None) -> Invite | None:
+    if not isinstance(raw, dict):
+        return None
+    kind = raw.get("kind")
+    if kind not in ("join", "new_workspace"):
+        return None
+    addr = normalize_email(str(email or raw.get("email") or ""))
+    exp_raw = raw.get("experience")
+    experience = normalize_experience(exp_raw) if str(exp_raw or "").strip() else None
+    name = str(raw.get("workspace_name") or "").strip() or None
+    ws_id = raw.get("workspace_id")
+    return Invite(
+        id=str(raw.get("id") or ""),
+        email=addr,
+        kind=kind,
+        workspace_id=str(ws_id) if ws_id else None,
+        created_utc=str(raw.get("created_utc") or ""),
+        experience=experience,
+        workspace_name=name,
+    )
 
 
 def _parse_user(raw: object, key: str = "") -> UserInfo | None:
@@ -190,23 +214,21 @@ class TenantStore:
             items = list(self._load()["invites"])
         out: list[Invite] = []
         for raw in items:
-            if not isinstance(raw, dict):
-                continue
-            kind = raw.get("kind")
-            if kind not in ("join", "new_workspace"):
-                continue
-            out.append(Invite(
-                id=str(raw.get("id") or ""),
-                email=normalize_email(str(raw.get("email") or "")),
-                kind=kind,
-                workspace_id=raw.get("workspace_id"),
-                created_utc=str(raw.get("created_utc") or ""),
-            ))
+            parsed = _parse_invite(raw)
+            if parsed is not None:
+                out.append(parsed)
         return out
 
-    def create_workspace(self, *, name: str, workspace_id: str | None = None) -> WorkspaceInfo:
-        ws = WorkspaceInfo(id=workspace_id or _new_id("ws"), name=name.strip() or "Workspace",
-                           created_utc=_now())
+    def create_workspace(
+        self, *, name: str, workspace_id: str | None = None,
+        experience: Experience | None = None,
+    ) -> WorkspaceInfo:
+        ws = WorkspaceInfo(
+            id=workspace_id or _new_id("ws"),
+            name=name.strip() or "Workspace",
+            created_utc=_now(),
+            experience=normalize_experience(experience),
+        )
         with self._lock:
             data = self._load()
             data["workspaces"][ws.id] = asdict(ws)
@@ -244,16 +266,27 @@ class TenantStore:
             password_hash=password_hash,
         ))
 
-    def add_invite(self, *, email: str, kind: InviteKind,
-                   workspace_id: str | None) -> Invite:
+    def add_invite(
+        self, *, email: str, kind: InviteKind,
+        workspace_id: str | None,
+        experience: Experience | None = None,
+        workspace_name: str | None = None,
+    ) -> Invite:
         addr = normalize_email(email)
         if not _EMAIL_RE.match(addr):
             raise ValueError("invalid email")
         if kind == "join" and not workspace_id:
             raise ValueError("join invite needs workspace_id")
+        exp = normalize_experience(experience) if kind == "new_workspace" else None
+        label = (workspace_name or "").strip() or None
+        if label and len(label) > 80:
+            label = label[:80].rstrip()
+        if kind != "new_workspace":
+            label = None
         invite = Invite(
             id=_new_id("inv"), email=addr, kind=kind,
             workspace_id=workspace_id, created_utc=_now(),
+            experience=exp, workspace_name=label,
         )
         with self._lock:
             data = self._load()
@@ -286,21 +319,10 @@ class TenantStore:
             found = None
             kept = []
             for raw in data["invites"]:
-                if (
-                    found is None
-                    and isinstance(raw, dict)
-                    and normalize_email(str(raw.get("email") or "")) == addr
-                ):
-                    kind = raw.get("kind")
-                    if kind in ("join", "new_workspace"):
-                        found = Invite(
-                            id=str(raw.get("id") or ""),
-                            email=addr,
-                            kind=kind,
-                            workspace_id=raw.get("workspace_id"),
-                            created_utc=str(raw.get("created_utc") or ""),
-                        )
-                        continue
+                parsed = _parse_invite(raw)
+                if found is None and parsed is not None and parsed.email == addr:
+                    found = parsed
+                    continue
                 kept.append(raw)
             if found is None:
                 return None
@@ -425,7 +447,8 @@ def provision_login(
         return store.upsert_user(UserInfo(
             email=addr, name=name or addr, workspace_id=ws_id, role="member",
         ))
-    ws = store.create_workspace(name=name or addr.split("@")[0] or "Studio")
+    studio = (invite.workspace_name or name or addr.split("@")[0] or "Studio").strip()
+    ws = store.create_workspace(name=studio, experience=invite.experience)
     return store.upsert_user(UserInfo(
         email=addr, name=name or addr, workspace_id=ws.id, role="owner",
     ))
