@@ -22,10 +22,10 @@ const NAV_ICONS = {
 } as const;
 
 /**
- * Desktop-only 240px dark rail — replaces `.vf-desktop-nav` from TopNav.
- * Mounted by TopNav so every existing test that renders `<TopNav />` still
- * sees the full nav tree; CSS (`.vf-sidenav`) hides this below the desktop
- * breakpoint, where the phone top bar + bottom tabs take over unchanged.
+ * Desktop-only 240px dark rail — replaces `.vf-desktop-nav` from the old TopNav.
+ * Mounted alongside TopNav in AuthGate (a sibling, not a child of TopNav);
+ * CSS (`.vf-sidenav`) hides this below the desktop breakpoint, where the phone
+ * top bar + bottom tabs take over unchanged.
  */
 export function SideNav() {
   const pathname = usePathname();
