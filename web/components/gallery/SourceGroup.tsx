@@ -1,16 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
-import { SourceOut } from "@/lib/types";
+import type { Destination, DriveStatus, ExportVariantRef, SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
 import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
-import { okVariantKeys, selectAllLabel, selectionHasAllOk } from "@/lib/drive";
+import {
+  okVariantKeys,
+  okVariantRefs,
+  packActionSelected,
+  selectAllLabel,
+  selectionHasAllOk,
+  sendDisabledReason,
+} from "@/lib/drive";
 import {
   fillFileCache,
   filesReadyNow,
   phoneShareHintCopy,
   readyShareableVariants,
   saveOrShareVideoFiles,
+  selectedShareableVariants,
   shareEmptyCopy,
   shareOutcomeMessage,
   sharePrepareProgressCopy,
@@ -35,11 +43,17 @@ interface SourceGroupProps {
   onToggleVariant: (key: string) => void;
   onToggleSelectSource: (source: SourceOut, select: boolean) => void;
   onRemove: () => void;
+  driveStatus?: DriveStatus | null;
+  destinations?: Destination[];
+  onSendToDrive?: (refs: ExportVariantRef[]) => void;
 }
 
 export function SourceGroup({
   source, onOpenVariant, onRegenerate, selected, onToggleVariant,   onToggleSelectSource,
   onRemove,
+  driveStatus = null,
+  destinations = [],
+  onSendToDrive,
 }: SourceGroupProps) {
   const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
@@ -57,9 +71,13 @@ export function SourceGroup({
   const fullDelivery = deliveryComplete(source);
   const stillRunning = source.job_state === "running" || !!source.in_flight;
   const shareable = readyShareableVariants(source.variants);
-  const shareableRefs = shareable.map((v) => ({ file_url: v.file_url, filename: v.filename }));
+  const actionSelected = packActionSelected(source, selected);
+  const actionShareable = selectedShareableVariants([source], actionSelected);
+  const actionRefs = okVariantRefs([source], actionSelected);
+  const packSelectedCount = okVariantKeys([source]).filter((key) => selected.has(key)).length;
   const canSaveVideos = shareable.length > 0 && !stillRunning;
-  const shareableKey = shareableRefs.map((v) => v.file_url).join("|");
+  const sendReason = sendDisabledReason(driveStatus, destinations, actionRefs);
+  const sendDisabled = sendReason != null || actionRefs.length === 0;
 
   useEffect(() => {
     const nav = typeof navigator === "undefined" ? undefined : navigator;
@@ -70,11 +88,6 @@ export function SourceGroup({
     setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
     setShowZip(zipVisibleOnDevice(matchMedia));
   }, []);
-
-  useEffect(() => {
-    if (!canSaveVideos || shareableRefs.length === 0) return;
-    void fillFileCache(sharedVariantFileCache, shareableRefs);
-  }, [canSaveVideos, shareableKey]);
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
   const shortfallMsg = shortfallCopy(source);
@@ -101,9 +114,9 @@ export function SourceGroup({
   function handleSaveShare(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (stillRunning || shareBusy || shareableRefs.length === 0) return;
+    if (stillRunning || shareBusy || actionShareable.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(sharedVariantFileCache, shareableRefs, pendingShareFiles);
+    const ready = filesReadyNow(sharedVariantFileCache, actionShareable, pendingShareFiles);
     setShareBusy(true);
     setZipMsg(null);
     const run = async (files: File[]) => {
@@ -126,8 +139,15 @@ export function SourceGroup({
     };
     const task = ready
       ? run(ready)
-      : fillFileCache(sharedVariantFileCache, shareableRefs, undefined, setPrepareProgress).then(run);
+      : fillFileCache(sharedVariantFileCache, actionShareable, undefined, setPrepareProgress).then(run);
     void task.catch(() => setZipMsg(shareEmptyCopy())).finally(() => setShareBusy(false));
+  }
+
+  function handleSendToDrive(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (sendDisabled || !onSendToDrive || actionRefs.length === 0) return;
+    onSendToDrive(actionRefs);
   }
 
   async function handleZip(e: React.MouseEvent) {
@@ -350,6 +370,28 @@ export function SourceGroup({
                   ? sharePrepareProgressCopy(prepareProgress)
                   : shareVideosBusyLabel()
                 : shareVideosLabel(offerPhotos)}
+            </button>
+          )}
+          {okCount > 0 && (
+            <button
+              type="button"
+              title={sendReason ?? "Copy selected clips to Drive from Studio — does not download to this device"}
+              onClick={handleSendToDrive}
+              disabled={sendDisabled}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--color-violet-l)",
+                background: "#15101f",
+                border: "1px solid #2c2748",
+                padding: "7px 10px",
+                minHeight: 36,
+                borderRadius: 8,
+                cursor: sendDisabled ? "not-allowed" : "pointer",
+                opacity: sendDisabled ? 0.55 : 1,
+              }}
+            >
+              Send to Drive{packSelectedCount > 0 ? ` (${packSelectedCount})` : ""}
             </button>
           )}
           {filesReady > 0 && !stillRunning && showZip && (

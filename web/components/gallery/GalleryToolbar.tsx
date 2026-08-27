@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpDown, CheckSquare, Download, Send } from "lucide-react";
-import type { FileCacheProgress } from "@/lib/shareVideos";
-import { SavePreparePanel } from "./SavePreparePanel";
+import { ArrowUpDown, CheckSquare } from "lucide-react";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -15,19 +13,9 @@ interface GalleryToolbarProps {
   onFilter: (mode: FilterMode) => void;
   sort: SortMode;
   onSort: (sort: SortMode) => void;
-  selectedCount: number;
-  sendDisabledReason: string | null;
-  onSend: () => void;
   selectAllLabel: string;
   selectAllDisabled?: boolean;
   onSelectAll: () => void;
-  saveLabel: string;
-  saveBusy?: boolean;
-  saveDisabledReason: string | null;
-  saveHint?: string | null;
-  onSave: () => void;
-  saveMsg?: string | null;
-  saveProgress?: FileCacheProgress | null;
 }
 
 export function GalleryToolbar({
@@ -37,22 +25,10 @@ export function GalleryToolbar({
   onFilter,
   sort,
   onSort,
-  selectedCount,
-  sendDisabledReason,
-  onSend,
   selectAllLabel,
   selectAllDisabled,
   onSelectAll,
-  saveLabel,
-  saveBusy,
-  saveDisabledReason,
-  saveHint,
-  onSave,
-  saveMsg,
-  saveProgress,
 }: GalleryToolbarProps) {
-  const sendDisabled = sendDisabledReason != null;
-  const saveDisabled = saveDisabledReason != null || !!saveBusy;
   return (
     <section className="gallery-toolbar" aria-label="Gallery controls">
       <div className="gallery-toolbar__count"><b>{count}</b> sources <span>·</span> <b>{variantCount}</b> finished variants</div>
@@ -65,25 +41,7 @@ export function GalleryToolbar({
         <Link className="gallery-quiet-link" href="/drops?filter=flagged_week" aria-label="Flagged this week">Flagged</Link>
         <button type="button" className="gallery-quiet-link" onClick={() => onSort("newest")}><ArrowUpDown size={14} /> {sort === "newest" ? "Newest" : "Newest"}</button>
         <button type="button" className="gallery-select-all" onClick={onSelectAll} disabled={selectAllDisabled}><CheckSquare size={14} /> {selectAllLabel}</button>
-        <span className="gallery-send-wrap">
-          <button
-            type="button"
-            className="gallery-save-photos"
-            onClick={onSave}
-            disabled={saveDisabled}
-            title={saveHint ?? saveDisabledReason ?? undefined}
-          >
-            <Download size={14} /> {saveBusy ? "Saving…" : saveLabel}
-          </button>
-          {saveDisabledReason && !saveBusy && !saveProgress && <small>{saveDisabledReason}</small>}
-        </span>
-        <span className="gallery-send-wrap">
-          <button type="button" className="vf-primary-button" onClick={onSend} disabled={sendDisabled} title={sendDisabledReason ?? undefined}><Send size={14} /> Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}</button>
-          {sendDisabled && <small>{sendDisabledReason}</small>}
-        </span>
       </div>
-      {saveMsg && <p className="gallery-toolbar__save-msg">{saveMsg}</p>}
-      {saveProgress && saveProgress.total > 0 && <SavePreparePanel progress={saveProgress} />}
     </section>
   );
 }

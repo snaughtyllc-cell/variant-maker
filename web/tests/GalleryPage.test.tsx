@@ -93,24 +93,31 @@ describe("Gallery variant sheet open", () => {
     pushState.mockRestore();
   });
 
-  it("offers Select all and Save to phone without a variant count on Select all", () => {
+  it("keeps toolbar Select all and puts Save and Send on the pack", () => {
     render(<GalleryContent />);
     const toolbar = screen.getByRole("region", { name: /gallery controls/i });
     expect(within(toolbar).getByRole("button", { name: "Select all" })).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeDisabled();
-    expect(within(toolbar).getByText("Select clips first")).toBeInTheDocument();
+    expect(within(toolbar).queryByRole("button", { name: /save to phone/i })).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole("button", { name: /send to drive/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save to phone/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send to drive/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /select all \(/i })).not.toBeInTheDocument();
   });
 
-  it("enables Save to phone after a clip is selected", () => {
+  it("does not download clips when Select all is pressed", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response("vid", { status: 200, headers: { "Content-Type": "video/mp4" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
     render(<GalleryContent />);
     const toolbar = screen.getByRole("region", { name: /gallery controls/i });
-    fireEvent.click(screen.getByLabelText(/select v03/i));
-    expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeEnabled();
-    expect(within(toolbar).queryByText("Select clips first")).not.toBeInTheDocument();
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Select all" }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Getting clip/i)).not.toBeInTheDocument();
   });
 
-  it("lists each selected clip while it is getting ready to share", async () => {
+  it("lists each clip only after Save to phone is pressed on the pack", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -123,17 +130,15 @@ describe("Gallery variant sheet open", () => {
       }),
     );
     render(<GalleryContent />);
-    const toolbar = screen.getByRole("region", { name: /gallery controls/i });
-    fireEvent.click(within(toolbar).getByRole("button", { name: "Select all" }));
+    fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
     await waitFor(() => {
-      expect(within(toolbar).getByText(/Getting clip 1 of 1/i)).toBeInTheDocument();
-      expect(within(toolbar).getByText("boil_v03.mp4")).toBeInTheDocument();
-      expect(within(toolbar).getByText("Getting…")).toBeInTheDocument();
+      expect(screen.getAllByText(/Getting clip 1 of 1/i).length).toBeGreaterThan(0);
+      expect(screen.getByText("boil_v03.mp4")).toBeInTheDocument();
+      expect(screen.getByText("Getting…")).toBeInTheDocument();
     });
     release();
     await waitFor(() => {
-      expect(within(toolbar).getByText(/1 clip ready/i)).toBeInTheDocument();
-      expect(within(toolbar).getByText("Ready")).toBeInTheDocument();
+      expect(screen.queryByText("Getting…")).not.toBeInTheDocument();
     });
   });
 });
