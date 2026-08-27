@@ -906,8 +906,28 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
    in source order — the app's phone chrome (top bar / bottom tabs) is
    untouched by any of this.
    ============================================================================ */
-.drive-body { display: flex; flex-direction: column; gap: 22px; }
-.drive-panel-root { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+/* Full-height cockpit shell (matches the approved Studio bar): a 58px context
+   bar on top of a scrolling two-column body. The integrator suppresses the
+   global desktop header on this route so .drive-topbar is the only 58px bar. */
+.drive-shell { background: var(--color-panel); display: flex; flex-direction: column; min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); }
+.drive-topbar { align-items: center; background: #fff; border-bottom: 1px solid #e1edee; display: flex; flex: none; gap: 14px; height: 58px; padding: 0 22px; }
+.drive-topbar__section { color: #8aa0a5; font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; white-space: nowrap; }
+.drive-topbar__sep { color: #cfe3e5; }
+.drive-topbar__crumb { color: var(--ink); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.drive-topbar__spacer { flex: 1; }
+.drive-topbar__status { align-items: center; border: 1px solid #dceaec; border-radius: 10px; color: #23393e; display: flex; flex: none; font-size: 13px; gap: 7px; height: 34px; padding: 0 13px; white-space: nowrap; }
+.drive-topbar__dot { background: var(--color-green); border-radius: 50%; flex: none; height: 7px; width: 7px; }
+.drive-topbar__test { align-items: center; background: #fff; border: 1px solid #dceaec; border-radius: 10px; color: #23393e; cursor: pointer; display: inline-flex; flex: none; font-size: 13px; gap: 7px; height: 34px; padding: 0 13px; white-space: nowrap; }
+.drive-topbar__test:hover { border-color: #a2c8ce; }
+.drive-topbar__test .material-symbols-rounded { color: #566e73; font-size: 17px; }
+.drive-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 20px; }
+
+.drive-head { display: flex; flex-direction: column; gap: 7px; }
+.drive-head__eyebrow { color: var(--color-violet); font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; margin: 0; text-transform: uppercase; }
+.drive-head__title { color: var(--ink); font-family: var(--font-brand); font-size: clamp(28px, 3vw, 38px); font-weight: 700; letter-spacing: -0.04em; line-height: 1.02; margin: 0; }
+
+.drive-body { display: flex; flex-direction: column; gap: 20px; }
+.drive-panel-root { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .drive-slot-a, .drive-slot-account, .drive-slot-b { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .drive-slot-password > div { margin-bottom: 0 !important; }
 .drive-slot-callout > div { color: #0e5f66 !important; font-size: 12.5px !important; line-height: 1.55 !important; margin: 0 !important; }
@@ -923,7 +943,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
    "drive-share-email" and every string DestinationsPanel.test.tsx locks. */
 .drive-step1-card { background: #0f1a1e; border-radius: 18px; display: flex; flex-direction: column; gap: 14px; padding: 22px; }
 .drive-step1-card__row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
-.drive-step1-card__email { background: #1d3238; border-radius: 12px; color: #eaf6f7; flex: 1; font-family: var(--font-space-grotesk), monospace; font-size: 14px; font-weight: 700; min-width: 180px; padding: 12px 14px; }
+.drive-step1-card__email { align-items: center; background: #1d3238; border-radius: 12px; color: #eaf6f7; display: flex; flex: 1; font-family: var(--font-space-grotesk), monospace; font-size: 14px; font-weight: 700; min-height: 46px; min-width: 180px; padding: 0 14px; }
+.drive-step1-card .drive-btn--aqua { height: 46px; }
 .drive-step1-card__body { color: #9fb7bc; font-size: 13px; line-height: 1.55; }
 .drive-step1-card__mismatch { color: #f0c775; font-size: 12px; line-height: 1.55; }
 
@@ -962,7 +983,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drive-input--url { flex: 1; min-width: 220px; }
 
 .drive-destinations { display: flex; flex-direction: column; gap: 10px; }
-.drive-destinations__head { align-items: center; display: flex; justify-content: space-between; }
+.drive-destinations__head { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.drive-destinations__filter { align-items: center; background: var(--color-panel2); border-radius: 10px; color: var(--color-muted2); display: flex; flex: none; gap: 8px; height: 34px; padding: 0 12px; width: 220px; }
+.drive-destinations__filter .material-symbols-rounded { color: var(--color-muted2); font-size: 17px; }
+.drive-destinations__filter span:last-child { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drive-table { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; overflow: hidden; }
 .drive-table__row { align-items: center; border-bottom: 1px solid #eff5f6; display: grid; gap: 14px; grid-template-columns: 1.4fr 1.2fr 130px auto; padding: 13px 18px; }
 .drive-table__row--head { background: var(--color-panel2); color: #7a9096; font-family: var(--font-space-grotesk), monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; padding: 10px 18px; text-transform: uppercase; }
@@ -986,14 +1010,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drive-callout .material-symbols-rounded { color: var(--color-violet); flex: none; font-size: 18px; }
 
 @media (min-width: 900px) {
-  .drive-body { align-items: start; display: grid; gap: 22px 26px; grid-template-columns: minmax(0, 1fr) 340px; }
+  /* Definite height so .drive-scroll scrolls inside the shell, like Studio. */
+  .drive-shell { height: calc(100dvh - var(--nav-h) - var(--tab-h)); min-height: 0; }
+  .drive-scroll { padding: 26px 30px; }
+  /* Left column: title, then STEP 1 / STEP 2+table. Right column (340px):
+     Drop Ledger, Account, Studio password, workspace/login callout. The right
+     column starts at row 2 so it top-aligns with STEP 1, keeping the title flush
+     to the top of the left column with no coupled-row gap beneath it. */
+  .drive-body { align-items: start; display: grid; gap: 20px 26px; grid-template-columns: minmax(0, 1fr) 340px; }
   .drive-panel-root { display: contents; }
-  .drive-slot-a { grid-column: 1; grid-row: 1; }
-  .drive-slot-account { grid-column: 2; grid-row: 1; }
-  .drive-slot-b { grid-column: 1; grid-row: 2 / span 3; }
+  .drive-head { grid-column: 1; grid-row: 1; }
+  .drive-slot-a { grid-column: 1; grid-row: 2; }
+  .drive-slot-b { grid-column: 1; grid-row: 3 / span 3; }
   .drive-ledger-card { grid-column: 2; grid-row: 2; }
-  .drive-slot-password { grid-column: 2; grid-row: 3; }
-  .drive-slot-callout { grid-column: 2; grid-row: 4; }
+  .drive-slot-account { grid-column: 2; grid-row: 3; }
+  .drive-slot-password { grid-column: 2; grid-row: 4; }
+  .drive-slot-callout { grid-column: 2; grid-row: 5; }
 }
 
 /* StatusStrip remains compact, but is now part of the light shell. */
@@ -1066,7 +1098,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { padding: 14px !important; }
   .workflow-page > .workspace-heading { padding: 16px 14px 0; }
   .workflow-main, .workflow-side { padding: 14px; }
+  /* Phone chrome (top bar + bottom tabs) already gives context — the desktop
+     context bar and the filter pill are desktop-only. */
+  .drive-topbar { display: none; }
+  .drive-scroll { padding: 16px 14px; }
   .drive-body { gap: 16px; }
+  .drive-destinations__filter { display: none; }
   .vf-viewing-banner { padding: 8px 14px; }
   .drops-stats { flex-wrap: wrap; }
   .drops-stat { flex-basis: calc(50% - 7px); }
