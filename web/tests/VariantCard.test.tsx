@@ -160,6 +160,21 @@ describe("VariantCard uniqueness", () => {
 });
 
 describe("VariantCard aspect", () => {
+  it("uses the look still instead of the mp4 when one exists", () => {
+    const { container } = render(
+      <VariantCard
+        variant={variant({ look_var_url: "/api/look/s1/look_v01.jpg" })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const img = container.querySelector("img") as HTMLImageElement;
+    expect(img.src).toMatch(/\/api\/look\/s1\/look_v01\.jpg$/);
+    expect(container.querySelector("video")).toBeNull();
+  });
+
   it("lets VideoThumb own the frame instead of a hardcoded 9:16 card", () => {
     const { container } = render(
       <VariantCard

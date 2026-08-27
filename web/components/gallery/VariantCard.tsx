@@ -1,7 +1,7 @@
 "use client";
 import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
-import { isFileReady } from "@/lib/gallery";
+import { galleryStillUrl, isFileReady } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
 import { CaptionSnippet } from "./CaptionSnippet";
 
@@ -183,7 +183,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           v{String(variant.index).padStart(2, "0")}
         </span>
         {ready ? (
-          <VideoThumb src={variant.file_url} />
+          <VideoThumb src={variant.file_url} poster={galleryStillUrl(variant)} />
         ) : (
           <div
             style={{

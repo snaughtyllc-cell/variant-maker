@@ -5,6 +5,7 @@ import {
   filesReadyCount,
   filterSources,
   gallerySearchPath,
+  galleryStillUrl,
   isFileReady,
   parseGalleryVariantQuery,
   pushGallerySearch,
@@ -62,6 +63,14 @@ describe("gallery helpers", () => {
   it("treats omitted file_ready as present (older Studio payloads)", () => {
     expect(isFileReady({ file_url: "/x" } as never)).toBe(true);
     expect(isFileReady({ file_url: "/x", file_ready: false } as never)).toBe(false);
+  });
+
+  it("prefers the look still for Gallery thumbs", () => {
+    expect(galleryStillUrl({ look_var_url: "/api/look/s1/look_v01.jpg" })).toBe(
+      "/api/look/s1/look_v01.jpg",
+    );
+    expect(galleryStillUrl({ look_var_url: "  " })).toBeUndefined();
+    expect(galleryStillUrl({})).toBeUndefined();
   });
 
   it("parses ?v=source:index from the Gallery address bar", () => {

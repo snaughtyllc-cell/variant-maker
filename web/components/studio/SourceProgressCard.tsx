@@ -86,6 +86,7 @@ function DoneThumb({ variant }: { variant: VariantTile }) {
   return (
     <VideoThumb
       src={variant.file_url}
+      poster={variant.look_var_url || undefined}
       badge={
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
           {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}

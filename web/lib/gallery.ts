@@ -33,6 +33,14 @@ export function isFileReady(variant: { file_ready?: boolean }): boolean {
   return variant.file_ready !== false;
 }
 
+/** JPEG look still for Gallery tiles. Empty = fall back to the mp4. */
+export function galleryStillUrl(
+  variant: { look_var_url?: string | null } | null | undefined,
+): string | undefined {
+  const still = (variant?.look_var_url || "").trim();
+  return still || undefined;
+}
+
 export function sortSources(sources: SourceOut[], by: "newest"): SourceOut[] {
   if (by !== "newest") return sources;
   return [...sources].sort((a, b) => {

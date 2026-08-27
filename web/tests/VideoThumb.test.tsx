@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { VideoThumb } from "@/components/common/VideoThumb";
 
 function setVideoSize(video: HTMLVideoElement, width: number, height: number) {
@@ -35,6 +35,18 @@ describe("VideoThumb", () => {
     setVideoSize(video, 0, 0);
     fireEvent.loadedData(video);
     expect((container.firstElementChild as HTMLElement).style.aspectRatio).toBe("9 / 16");
+  });
+
+  it("shows a JPEG still and skips the mp4 until hover", async () => {
+    const { container } = render(
+      <VideoThumb src="/v.mp4" poster="/api/look/s1/look_v01.jpg" />,
+    );
+    const img = container.querySelector("img") as HTMLImageElement;
+    expect(img).toBeTruthy();
+    expect(img.src).toMatch(/\/api\/look\/s1\/look_v01\.jpg$/);
+    expect(container.querySelector("video")).toBeNull();
+    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
+    await waitFor(() => expect(container.querySelector("video")).toBeTruthy());
   });
 
   it("plays on hover and pauses on leave", () => {
