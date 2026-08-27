@@ -122,4 +122,15 @@ describe("TopNav", () => {
       );
     }
   });
+
+  it("centers the varimo wordmark between a status slot and icon-only More", () => {
+    const { container } = render(<TopNav />);
+    const home = screen.getByRole("link", { name: "varimo Studio home" });
+    expect(home.querySelector(".vf-brand-wordmark")).toHaveTextContent("varimo");
+    expect(container.querySelector(".vf-topbar-status")).toHaveTextContent("status");
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveAttribute("aria-label", "More");
+    expect(more).toHaveClass("vf-more-trigger");
+    expect(more.textContent?.replace(/\s+/g, "")).toBe("");
+  });
 });
