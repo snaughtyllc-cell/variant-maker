@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=block" rel="stylesheet">
+<style>
+  body { margin: 0; background: #E7F1F2; font-family: 'Space Grotesk', Helvetica, sans-serif; }
+  a { color: #0E7C86; text-decoration: none; }
+  a:hover { color: #0F1A1E; }
+  .noscroll::-webkit-scrollbar { display: none; }
+  .noscroll > * { flex-shrink: 0; }
+</style>
+</helmet>
+
+<section style="display: flex; flex-direction: column; gap: 44px; padding: 56px; box-sizing: border-box; background: #E7F1F2;">
+
+  <div style="display: flex; flex-direction: column; gap: 14px; max-width: 900px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; background: #0F1A1E; color: #7EE0E6; padding: 5px 9px; border-radius: 6px;">3A</span>
+      <span style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #5A7176;">Desktop · six screens</span>
+    </div>
+    <div style="font-family: Sora, sans-serif; font-size: 40px; line-height: 1.04; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">The web app is not the phone app stretched.</div>
+    <div style="font-size: 15.5px; line-height: 1.6; color: #566E73; text-wrap: pretty;">Nine nav items and four status chips currently share one top bar, and every page is a single 700px column of stacked cards on a 1440px screen. Desktop gets: a persistent rail that separates the five working pages from Team / Admin / Diagnostics, a slim context bar, two-column pages so setup sits beside live state instead of above it, and a variant view that takes over only the grid pane — rail and pack list stay put, so you never lose your place. Teal palette kept; brand type (Sora + Space Grotesk) and the echo wordmark come from the brand folder, drawn in teal rather than violet.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span>
+          <span style="color: #7EE0E6;">o</span>
+          <span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span>
+          <span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span>
+          <span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navStudio }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: #12B76A;"></div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; color: #7EE0E6;">READY</div>
+          </div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; line-height: 1.5; color: #7E979D;">local · cpu · fast profile</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 14px 8px 0;">
+          <div style="width: 30px; height: 30px; border-radius: 9px; background: #7EE0E6; color: #0B2226; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">SN</div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12.5px; font-weight: 600; color: #EAF6F7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">snaughtyllc</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #6E888E;">Agency plan</div>
+          </div>
+          <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">unfold_more</span>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 16px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">STUDIO</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">New pack</div>
+          <div style="flex: 1;"></div>
+          <div style="height: 34px; width: 260px; border-radius: 10px; background: #F1F7F8; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+            <span class="material-symbols-rounded" style="font-size: 17px; color: #8AA0A5;">search</span>
+            <span style="font-size: 13px; color: #A2B6BA;">Search packs, drops, folders</span>
+          </div>
+          <div style="height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px;">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: #12B76A;"></div>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; color: #0E5F66;">GPU FREE</span>
+          </div>
+        </div>
+
+        <div style="flex: 1; display: flex; min-height: 0;">
+          <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative;">
+          <div class="noscroll" style="flex: 1; overflow: auto; padding: 30px 30px 0; display: flex; flex-direction: column; min-width: 0;">
+            <div style="max-width: 660px; display: flex; flex-direction: column; gap: 26px;">
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">STUDIO</div>
+                <div style="font-family: Sora, sans-serif; font-size: 38px; line-height: 1.02; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">Build a pack</div>
+                <div style="font-size: 14.5px; line-height: 1.55; color: #566E73;">Pick clips, set variants, watch the queue on the right.</div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">01 · SOURCE</div>
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #8AA0A5;">2 clips · 1.4 GB</div>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                  <sc-for list="{{ studioClips }}" as="c" hint-placeholder-count="2">
+                    <div style="flex: 1; border: 1px solid #DCEAEC; border-radius: 14px; background: #FFF; padding: 10px; display: flex; gap: 11px; align-items: center;">
+                      <div style="width: 62px; height: 46px; border-radius: 8px; background: #14252A; position: relative; overflow: hidden; flex-shrink: 0;">
+                        <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.12) 0 5px, transparent 5px 10px);"></div>
+                      </div>
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: #0F1A1E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.name }}</div>
+                        <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #8AA0A5;">{{ c.meta }}</div>
+                      </div>
+                      <span class="material-symbols-rounded" style="font-size: 18px; color: #A2B6BA; cursor: pointer;">close</span>
+                    </div>
+                  </sc-for>
+                  <div style="width: 150px; border: 1.5px dashed #A9CDD1; border-radius: 14px; background: #EEF8F9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer;" style-hover="border-color: #0E7C86; background: #E4F5F6;">
+                    <span class="material-symbols-rounded" style="font-size: 20px; color: #0E7C86;">add</span>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: #0E7C86;">DROP OR ADD</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="height: 40px; padding: 0 16px; border-radius: 11px; background: #0F1A1E; color: #F6FBFB; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer;" style-hover="background: #1D3238;">
+                    <span class="material-symbols-rounded" style="font-size: 18px;">upload_file</span>Upload files</div>
+                  <div style="height: 40px; padding: 0 16px; border-radius: 11px; border: 1px solid #CFE3E5; background: #FFF; color: #23393E; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer;" style-hover="border-color: #0E7C86; color: #0E7C86;">
+                    <span class="material-symbols-rounded" style="font-size: 18px;">cloud</span>From Drive</div>
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #A2B6BA;">MP4 / MOV · up to 1 GB each</div>
+                </div>
+              </div>
+
+              <div style="height: 1px; background: #DCEAEC;"></div>
+
+              <div style="display: flex; flex-direction: column; gap: 14px;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">02 · VARIANTS PER CLIP</div>
+                <div style="display: flex; align-items: center; gap: 22px;">
+                  <div style="display: flex; align-items: baseline; gap: 9px; width: 130px;">
+                    <div style="font-family: Sora, sans-serif; font-size: 46px; font-weight: 700; letter-spacing: -0.05em; color: #0F1A1E; line-height: 0.9;">{{ count }}</div>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #8AA0A5;">each</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 7px;">
+                    <div onClick="{{ dec }}" style="width: 40px; height: 40px; border-radius: 11px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="border-color: #0E7C86;"><span class="material-symbols-rounded" style="font-size: 19px; color: #23393E;">remove</span></div>
+                    <div onClick="{{ inc }}" style="width: 40px; height: 40px; border-radius: 11px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="border-color: #0E7C86;"><span class="material-symbols-rounded" style="font-size: 19px; color: #23393E;">add</span></div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <div onClick="{{ set3 }}" style="height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600; color: #355056; cursor: pointer;" style-hover="border-color: #0E7C86;">3 · speed test</div>
+                    <div onClick="{{ set10 }}" style="height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600; color: #355056; cursor: pointer;" style-hover="border-color: #0E7C86;">10</div>
+                    <div onClick="{{ set20 }}" style="height: 34px; padding: 0 14px; border-radius: 999px; background: #0F1A1E; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600; color: #7EE0E6; cursor: pointer;">20 · usual</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="height: 1px; background: #DCEAEC;"></div>
+
+              <div style="display: flex; flex-direction: column;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86; padding-bottom: 6px;">03 · OPTIONS</div>
+                <div onClick="{{ toggleCaptions }}" style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #EBF3F4; cursor: pointer;">
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-size: 14.5px; font-weight: 600; color: #0F1A1E;">AI captions</div>
+                    <div style="font-size: 12.5px; color: #7A9096;">One post caption per variant, previewed in Gallery</div>
+                  </div>
+                  <div style="width: 46px; height: 27px; border-radius: 999px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{ switchJustify }}; background: {{ switchBg }};"><div style="width: 21px; height: 21px; border-radius: 50%; background: #FFF;"></div></div>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #EBF3F4; cursor: pointer;">
+                  <div style="font-size: 14.5px; font-weight: 600; color: #0F1A1E;">Output size</div>
+                  <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: #7A9096;">Matches source <span class="material-symbols-rounded" style="font-size: 18px; color: #B4C6C9;">chevron_right</span></div>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; cursor: pointer;">
+                  <div style="font-size: 14.5px; font-weight: 600; color: #0F1A1E;">Advanced</div>
+                  <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: #7A9096;">Defaults <span class="material-symbols-rounded" style="font-size: 18px; color: #B4C6C9;">chevron_right</span></div>
+                </div>
+              </div>
+              <div style="height: 96px;"></div>
+            </div>
+          </div>
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 30px 20px; background: linear-gradient(180deg, rgba(246,251,251,0) 0%, #F6FBFB 30%);">
+            <div style="max-width: 660px; display: flex; align-items: center; gap: 12px; height: 60px; border-radius: 15px; background: #7EE0E6; padding: 0 10px 0 20px; box-shadow: 0 12px 28px -12px rgba(14,124,134,0.7); cursor: pointer;">
+              <div style="flex: 1;">
+                <div style="font-family: Sora, sans-serif; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: #0B2226;">Generate</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #10555C;">{{ totalLabel }}</div>
+              </div>
+              <div style="height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid rgba(11,34,38,0.25); display: flex; align-items: center; font-size: 12.5px; font-weight: 600; color: #0B2226;">est. 6 min</div>
+              <div style="width: 40px; height: 40px; border-radius: 11px; background: #0F1A1E; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-rounded" style="font-size: 19px; color: #7EE0E6;">arrow_forward</span></div>
+            </div>
+          </div>
+          </div>
+
+          <div style="width: 400px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 22px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #7EE0E6;">LIVE QUEUE</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #7E979D;">2 running · 6 done</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <sc-for list="{{ queue }}" as="q" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 40px; height: 40px; border-radius: 10px; background: #1D3238; position: relative; overflow: hidden; flex-shrink: 0;">
+                    <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.14) 0 5px, transparent 5px 10px);"></div>
+                  </div>
+                  <div style="flex: 1; display: flex; flex-direction: column; gap: 7px; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #EAF6F7;">
+                      <span style="font-weight: 600;">{{ q.name }}</span>
+                      <span style="font-family: 'Space Grotesk', monospace; color: #7EE0E6;">{{ q.done }}</span>
+                    </div>
+                    <div style="height: 5px; border-radius: 999px; background: #24393F; overflow: hidden;">
+                      <div style="width: {{ q.pct }}; height: 100%; border-radius: 999px; background: #7EE0E6;"></div>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="height: 1px; background: #24393F; margin: 20px 0 16px;"></div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #7EE0E6; padding-bottom: 12px;">JUST FINISHED</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              <sc-for list="{{ finished }}" as="t" hint-placeholder-count="6">
+                <div style="aspect-ratio: 9/16; border-radius: 10px; background: #14252A; position: relative; overflow: hidden;">
+                  <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.10) 0 5px, transparent 5px 10px);"></div>
+                  <div style="position: absolute; top: 6px; left: 6px; font-family: 'Space Grotesk', monospace; font-size: 9.5px; font-weight: 600; color: #A9DEE2; background: rgba(11,34,38,0.7); border-radius: 4px; padding: 2px 5px;">{{ t.v }}</div>
+                  <div style="position: absolute; bottom: 6px; left: 6px; font-family: 'Space Grotesk', monospace; font-size: 9.5px; font-weight: 700; color: {{ t.color }};">{{ t.pct }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex: 1;"></div>
+            <div style="display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #7EE0E6; cursor: pointer;">Open Gallery <span class="material-symbols-rounded" style="font-size: 17px;">arrow_forward</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">STUDIO · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">Setup left, live queue right</div>
+      <sc-for list="{{ noteStudio }}" as="b" hint-placeholder-count="3">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span><span style="color: #7EE0E6;">o</span><span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navGallery }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5F7A80;">ORIGINALITY AVG</div>
+          <div style="font-family: Sora, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; color: #7EE0E6;">58%</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #7E979D;">across 52 variants</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 16px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">GALLERY</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">intro_AQPzxw…mp4</div>
+          <div style="flex: 1;"></div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px; color: #566E73;">folder_open</span>Source folder</div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px; color: #566E73;">folder_zip</span>Download ZIP</div>
+        </div>
+
+        <div style="flex: 1; display: flex; min-height: 0;">
+          <div class="noscroll" style="width: 300px; flex-shrink: 0; border-right: 1px solid #E1EDEE; background: #FFFFFF; overflow: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">PACKS</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #8AA0A5;">6</div>
+            </div>
+            <div style="height: 36px; border-radius: 10px; background: #F1F7F8; display: flex; align-items: center; gap: 8px; padding: 0 11px;">
+              <span class="material-symbols-rounded" style="font-size: 17px; color: #8AA0A5;">search</span>
+              <span style="font-size: 12.5px; color: #A2B6BA;">Filter by source</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <sc-for list="{{ packs }}" as="p" hint-placeholder-count="6">
+                <div style="border-radius: 12px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; padding: 10px; display: flex; gap: 10px; align-items: center; cursor: pointer;">
+                  <div style="width: 34px; height: 46px; border-radius: 7px; background: #14252A; position: relative; overflow: hidden; flex-shrink: 0;">
+                    <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.12) 0 5px, transparent 5px 10px);"></div>
+                  </div>
+                  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+                    <div style="font-size: 12.5px; font-weight: 600; color: #0F1A1E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ p.name }}</div>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #8AA0A5;">{{ p.meta }}</div>
+                  </div>
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 700; color: {{ p.pctColor }};">{{ p.pct }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="noscroll" style="flex: 1; overflow: auto; padding: 22px 24px 96px; display: flex; flex-direction: column; gap: 18px; min-width: 0;">
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">REVIEW LIBRARY</div>
+                <div style="font-family: Sora, sans-serif; font-size: 30px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">20 variants · 52% avg originality</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <div style="height: 34px; padding: 0 13px; border-radius: 999px; background: #0F1A1E; color: #7EE0E6; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600;">ALL 20</div>
+                <div style="height: 34px; padding: 0 13px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; color: #355056; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px;">NEEDS ATTENTION 3</div>
+                <div style="height: 34px; padding: 0 13px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; color: #355056; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px;">SENT</div>
+                <div style="height: 34px; padding: 0 13px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; color: #355056; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px;">FLAGGED</div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
+              <sc-for list="{{ galleryTiles }}" as="t" hint-placeholder-count="15">
+                <div style="display: flex; flex-direction: column; gap: 7px;">
+                  <div style="aspect-ratio: 9/16; border-radius: 13px; background: #14252A; position: relative; overflow: hidden; border: 2px solid {{ t.ring }};">
+                    <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.10) 0 5px, transparent 5px 10px);"></div>
+                    <div style="position: absolute; top: 7px; left: 7px; font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 600; color: #A9DEE2; background: rgba(11,34,38,0.72); border-radius: 5px; padding: 2px 5px;">{{ t.v }}</div>
+                    <div style="position: absolute; top: 7px; right: 7px; width: 17px; height: 17px; border-radius: 50%; border: 2px solid {{ t.check }}; background: {{ t.checkFill }};"></div>
+                    <div style="position: absolute; bottom: 7px; left: 7px; font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 700; color: {{ t.pctColor }}; background: rgba(11,34,38,0.72); border-radius: 5px; padding: 2px 5px;">{{ t.pct }}</div>
+                  </div>
+                  <div style="font-size: 11px; line-height: 1.35; color: #7A9096; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ t.cap }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; height: 56px; border-radius: 16px; background: #0F1A1E; padding: 0 10px 0 18px; box-shadow: 0 18px 40px -16px rgba(15,26,30,0.6);">
+          <div style="font-size: 14px; font-weight: 600; color: #F6FBFB; white-space: nowrap;">4 variants selected</div>
+          <div style="width: 1px; height: 26px; background: #2C4247; margin: 0 4px;"></div>
+          <div style="height: 38px; padding: 0 15px; border-radius: 11px; background: #7EE0E6; color: #0B2226; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px;">cloud_upload</span>Send to Drive</div>
+          <div style="height: 38px; padding: 0 15px; border-radius: 11px; border: 1px solid #2C4247; color: #C9DDE0; display: flex; align-items: center; font-size: 13px; font-weight: 600; cursor: pointer;">Save to Photos</div>
+          <div style="height: 38px; padding: 0 15px; border-radius: 11px; border: 1px solid #2C4247; color: #C9DDE0; display: flex; align-items: center; font-size: 13px; font-weight: 600; cursor: pointer;">Flag</div>
+          <div style="width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 19px; color: #7E979D;">close</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">GALLERY · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">Pack list, then one grid</div>
+      <sc-for list="{{ noteGallery }}" as="b" hint-placeholder-count="3">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span><span style="color: #7EE0E6;">o</span><span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navGallery }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5F7A80;">REVIEWING</div>
+          <div style="font-family: Sora, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; color: #7EE0E6;">v01 / 20</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #7E979D;">4 picked in this pack</div>
+        </div>
+      </div>
+
+      <div class="noscroll" style="width: 300px; flex-shrink: 0; border-right: 1px solid #E1EDEE; background: #FFFFFF; overflow: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">PACKS</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #8AA0A5;">6</div>
+        </div>
+        <div style="height: 36px; border-radius: 10px; background: #F1F7F8; display: flex; align-items: center; gap: 8px; padding: 0 11px;">
+          <span class="material-symbols-rounded" style="font-size: 17px; color: #8AA0A5;">search</span>
+          <span style="font-size: 12.5px; color: #A2B6BA;">Filter by source</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <sc-for list="{{ packs }}" as="p" hint-placeholder-count="6">
+            <div style="border-radius: 12px; border: 1px solid {{ p.border }}; background: {{ p.bg }}; padding: 10px; display: flex; gap: 10px; align-items: center; cursor: pointer;">
+              <div style="width: 34px; height: 46px; border-radius: 7px; background: #14252A; position: relative; overflow: hidden; flex-shrink: 0;">
+                <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.12) 0 5px, transparent 5px 10px);"></div>
+              </div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+                <div style="font-size: 12.5px; font-weight: 600; color: #0F1A1E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ p.name }}</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #8AA0A5;">{{ p.meta }}</div>
+              </div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 700; color: {{ p.pctColor }};">{{ p.pct }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 14px;">
+          <div style="height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #23393E; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px; color: #566E73;">grid_view</span>Back to grid</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">GALLERY</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">intro_AQPzxw…mp4</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 700; color: #0E7C86;">v01</div>
+          <div style="flex: 1;"></div>
+          <div style="display: flex; gap: 6px;">
+            <div style="width: 32px; height: 32px; border-radius: 9px; border: 1px solid #DCEAEC; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 18px; color: #B4C6C9;">chevron_left</span></div>
+            <div style="width: 32px; height: 32px; border-radius: 9px; border: 1px solid #DCEAEC; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 18px; color: #23393E;">chevron_right</span></div>
+          </div>
+        </div>
+
+        <div style="flex: 1; display: flex; min-height: 0;">
+        <div style="flex: 1; background: #14252A; display: flex; flex-direction: column; min-width: 0;">
+          <div style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 22px;">
+            <div style="width: 280px; height: 100%; max-height: 470px; border-radius: 14px; background: #0B171B; position: relative; overflow: hidden;">
+              <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.09) 0 6px, transparent 6px 12px);"></div>
+              <div style="position: absolute; top: 0; bottom: 0; left: 0; width: 48%; background: rgba(11,34,38,0.6); border-right: 2px solid #7EE0E6;"></div>
+              <div style="position: absolute; top: 12px; left: 12px; font-family: 'Space Grotesk', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.16em; color: #C9DDE0; background: rgba(11,34,38,0.8); border-radius: 5px; padding: 4px 8px;">SOURCE</div>
+              <div style="position: absolute; top: 12px; right: 12px; font-family: 'Space Grotesk', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.16em; color: #0B2226; background: #7EE0E6; border-radius: 5px; padding: 4px 8px;">VARIANT</div>
+              <div style="position: absolute; top: 50%; left: 48%; transform: translate(-50%, -50%); width: 42px; height: 42px; border-radius: 50%; background: #7EE0E6; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px -8px rgba(0,0,0,0.7); cursor: grab;"><span class="material-symbols-rounded" style="font-size: 21px; color: #0B2226;">drag_indicator</span></div>
+            </div>
+            <div style="position: absolute; bottom: 26px; left: 0; right: 0; display: flex; justify-content: center;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.1em; color: #7E979D; background: rgba(11,23,27,0.8); border-radius: 999px; padding: 6px 12px;">DRAG THE DIVIDER TO WIPE · SPACE TO PLAY BOTH · ← → TO CHANGE VARIANT</div>
+            </div>
+          </div>
+
+          <div style="flex-shrink: 0; padding: 0 26px; display: flex; align-items: center; gap: 14px; height: 54px;">
+            <span class="material-symbols-rounded" style="font-size: 28px; color: #7EE0E6; cursor: pointer;">play_circle</span>
+            <div style="flex: 1; height: 4px; border-radius: 999px; background: #24393F; position: relative;">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 32%; border-radius: 999px; background: #7EE0E6;"></div>
+              <div style="position: absolute; left: 32%; top: -4px; width: 12px; height: 12px; border-radius: 50%; background: #F6FBFB; margin-left: -6px;"></div>
+            </div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #9FB7BC;">0:02 / 0:05</div>
+            <span class="material-symbols-rounded" style="font-size: 19px; color: #7E979D; cursor: pointer;">volume_up</span>
+            <span class="material-symbols-rounded" style="font-size: 19px; color: #7E979D; cursor: pointer;">repeat</span>
+          </div>
+
+          <div style="flex-shrink: 0; border-top: 1px solid #1D3238; padding: 12px 26px 16px; display: flex; flex-direction: column; gap: 9px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.18em; color: #7EE0E6;">PACK · 20 VARIANTS</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #6E888E;">4 selected · 1 flagged</div>
+            </div>
+            <div class="noscroll" style="display: flex; gap: 7px; overflow: auto;">
+              <sc-for list="{{ strip20 }}" as="s" hint-placeholder-count="20">
+                <div style="width: 34px; height: 50px; border-radius: 7px; background: #0B171B; border: 2px solid {{ s.border }}; opacity: {{ s.op }}; position: relative; overflow: hidden; flex-shrink: 0; cursor: pointer;">
+                  <div style="position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgba(126,224,230,0.12) 0 4px, transparent 4px 8px);"></div>
+                  <div style="position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-family: 'Space Grotesk', monospace; font-size: 8px; color: #A9DEE2;">{{ s.v }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="width: 372px; flex-shrink: 0; background: #FFFFFF; display: flex; flex-direction: column; border-left: 1px solid #E1EDEE;">
+          <div style="flex-shrink: 0; padding: 18px 20px 14px; border-bottom: 1px solid #EFF5F6;">
+            <div style="font-family: Sora, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">v01 <span style="color: #A2B6BA; font-weight: 600;">of 20</span></div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #8AA0A5;">delivered today · 52% originality</div>
+          </div>
+
+          <div class="noscroll" style="flex: 1; overflow: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; min-height: 0;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">ORIGINALITY</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #8AA0A5;">pack avg 52%</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="font-family: Sora, sans-serif; font-size: 34px; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E; line-height: 1;">52%</div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="height: 8px; border-radius: 999px; background: #E1EDEE; position: relative; overflow: hidden;">
+                    <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 52%; border-radius: 999px; background: #7EE0E6;"></div>
+                    <div style="position: absolute; left: 65%; top: 0; bottom: 0; width: 2px; background: #0F1A1E;"></div>
+                  </div>
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: #8AA0A5;">65% = VERIFIED-ORIGINAL BAND</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="height: 1px; background: #EFF5F6;"></div>
+
+            <div style="display: flex; flex-direction: column; gap: 9px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">CAPTION</div>
+                <div style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #0E7C86; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 16px;">content_copy</span>Copy</div>
+              </div>
+              <div style="font-size: 15px; line-height: 1.5; color: #0F1A1E; text-wrap: pretty;">Copy 1 of 20 — unique take</div>
+              <div style="font-size: 14px; color: #0E7C86;">#fyp #viral</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; color: #A2B6BA; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">file · intro_AQPzws_e7eba2wdx0Sg…1Ul1ByWp.mp4</div>
+            </div>
+
+            <div style="height: 1px; background: #EFF5F6;"></div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">RESULT</div>
+              <div style="display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: #F1F7F8;">
+                <div style="flex: 1; height: 38px; border-radius: 9px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(15,26,30,0.12); display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: #0F1A1E; cursor: pointer;"><div style="width: 7px; height: 7px; border-radius: 50%; background: #12B76A;"></div>Pass</div>
+                <div style="flex: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 600; color: #6E868C; cursor: pointer;">Duplicate</div>
+                <div style="flex: 1; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 600; color: #6E868C; cursor: pointer;">Flag</div>
+              </div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; line-height: 1.5; letter-spacing: 0.06em; color: #A2B6BA;">DEFAULTS TO PASS · MARK DUPLICATE ONLY IF THE PLATFORM TOOK IT DOWN</div>
+            </div>
+
+            <div style="height: 1px; background: #EFF5F6;"></div>
+
+            <div style="display: flex; flex-direction: column; gap: 9px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">LIVE POST LINK</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #A2B6BA;">OPTIONAL</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <div style="flex: 1; height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; padding: 0 13px; font-size: 13.5px; color: #A2B6BA; overflow: hidden;">instagram.com/reel/…</div>
+                <div style="width: 66px; height: 44px; border-radius: 11px; background: #0F1A1E; color: #F6FBFB; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; cursor: pointer;">Save</div>
+              </div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; line-height: 1.5; letter-spacing: 0.06em; color: #A2B6BA;">PASTE IT AFTER YOU POST — STUDIO NEVER POSTS FOR YOU</div>
+            </div>
+          </div>
+
+          <div style="flex-shrink: 0; border-top: 1px solid #EFF5F6; padding: 14px 22px 18px; display: flex; gap: 9px;">
+            <div style="flex: 1; height: 50px; border-radius: 13px; background: #7EE0E6; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: Sora, sans-serif; font-size: 14.5px; font-weight: 700; color: #0B2226; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 19px;">cloud_upload</span>Send to Drive</div>
+            <div style="width: 50px; height: 50px; border-radius: 13px; border: 1px solid #CFE3E5; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 20px; color: #23393E;">download</span></div>
+            <div style="width: 50px; height: 50px; border-radius: 13px; border: 1px solid #CFE3E5; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 20px; color: #23393E;">refresh</span></div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">VARIANT DETAIL · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">Detail opens in the pane, not over the page</div>
+      <sc-for list="{{ noteDetail }}" as="b" hint-placeholder-count="4">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span><span style="color: #7EE0E6;">o</span><span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navDrops }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5F7A80;">LEDGER</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #E0A32E;">No sheet yet</div>
+          <div style="font-size: 12px; font-weight: 600; color: #7EE0E6; cursor: pointer;">Create it →</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 16px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">DROPS</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">All sent</div>
+          <div style="flex: 1;"></div>
+          <div style="height: 34px; width: 240px; border-radius: 10px; background: #F1F7F8; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+            <span class="material-symbols-rounded" style="font-size: 17px; color: #8AA0A5;">search</span>
+            <span style="font-size: 13px; color: #A2B6BA;">Search by pack or ledger id</span>
+          </div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px; color: #566E73;">download</span>Export CSV</div>
+        </div>
+
+        <div class="noscroll" style="flex: 1; overflow: auto; padding: 26px 30px; display: flex; flex-direction: column; gap: 22px;">
+          <div style="display: flex; flex-direction: column; gap: 7px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">DELIVERY RECORD</div>
+            <div style="font-family: Sora, sans-serif; font-size: 38px; line-height: 1.02; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">Drops</div>
+          </div>
+
+          <div style="display: flex; gap: 14px;">
+            <div style="flex: 1; border-radius: 16px; background: #0F1A1E; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #7E979D;">SENT · ALL TIME</div>
+              <div style="font-family: Sora, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.04em; color: #F6FBFB;">307</div>
+            </div>
+            <div style="flex: 1; border-radius: 16px; background: #FFFFFF; border: 1px solid #DCEAEC; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #8AA0A5;">THIS WEEK</div>
+              <div style="font-family: Sora, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">86</div>
+            </div>
+            <div style="flex: 1; border-radius: 16px; background: #FFFFFF; border: 1px solid #DCEAEC; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #8AA0A5;">EXCEPTIONS</div>
+              <div style="font-family: Sora, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.04em; color: #B4560C;">2</div>
+            </div>
+            <div style="flex: 1; border-radius: 16px; background: #FFFFFF; border: 1px solid #DCEAEC; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #8AA0A5;">PASS RATE</div>
+              <div style="font-family: Sora, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">100%</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="height: 34px; padding: 0 14px; border-radius: 999px; background: #0F1A1E; color: #7EE0E6; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600;">ALL SENT</div>
+            <div style="height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; color: #355056; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px;">THIS WEEK</div>
+            <div style="height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #CFE3E5; background: #FFF; color: #355056; display: flex; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 11.5px;">EXCEPTIONS ONLY</div>
+            <div style="flex: 1;"></div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #8AA0A5;">unlabeled counts as pass</div>
+          </div>
+
+          <div style="border: 1px solid #DCEAEC; border-radius: 16px; background: #FFFFFF; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 34px 2fr 130px 90px 1.4fr 110px 44px; align-items: center; gap: 14px; padding: 11px 18px; background: #F1F7F8; border-bottom: 1px solid #E1EDEE;">
+              <div></div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; color: #7A9096;">PACK</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; color: #7A9096;">SENT</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; color: #7A9096;">FILES</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; color: #7A9096;">LEDGER ID</div>
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; color: #7A9096;">RESULT</div>
+              <div></div>
+            </div>
+            <sc-for list="{{ dropTable }}" as="r" hint-placeholder-count="9">
+              <div style="display: grid; grid-template-columns: 34px 2fr 130px 90px 1.4fr 110px 44px; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #EFF5F6;" style-hover="background: #FAFDFD;">
+                <div style="width: 9px; height: 9px; border-radius: 50%; background: {{ r.color }};"></div>
+                <div style="font-size: 14px; font-weight: 600; color: #0F1A1E;">{{ r.name }}</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 12.5px; color: #566E73;">{{ r.date }}</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 12.5px; color: #566E73;">{{ r.files }}</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: #A2B6BA;">{{ r.id }}</div>
+                <div style="justify-self: start; padding: 4px 10px; border-radius: 7px; background: {{ r.bg }}; color: {{ r.color }}; font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600;">{{ r.state }}</div>
+                <div style="justify-self: end;"><span class="material-symbols-rounded" style="font-size: 19px; color: #B4C6C9; cursor: pointer;">more_horiz</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">DROPS · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">A record wants columns</div>
+      <sc-for list="{{ noteDrops }}" as="b" hint-placeholder-count="3">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span><span style="color: #7EE0E6;">o</span><span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navFlows }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5F7A80;">CAPTION BANK</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #7E979D;">Generic — 20 left</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 16px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">FLOWS</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">3 workflows</div>
+          <div style="flex: 1;"></div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E;"><div style="width: 7px; height: 7px; border-radius: 50%; background: #12B76A;"></div>2 watching</div>
+        </div>
+
+        <div style="flex: 1; display: flex; min-height: 0;">
+          <div class="noscroll" style="flex: 1; overflow: auto; padding: 26px 26px 26px 30px; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">AUTOMATION</div>
+              <div style="font-family: Sora, sans-serif; font-size: 38px; line-height: 1.02; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">Flows</div>
+              <div style="font-size: 14.5px; line-height: 1.55; color: #566E73;">Watch a Drive folder; every clip that lands gets packed into its own subfolder.</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <sc-for list="{{ webFlows }}" as="f" hint-placeholder-count="3">
+                <div style="border: 1px solid #DCEAEC; border-radius: 16px; background: #FFFFFF; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="font-family: Sora, sans-serif; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: #0F1A1E;">{{ f.name }}</div>
+                    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: {{ f.chipBg }};">
+                      <div style="width: 7px; height: 7px; border-radius: 50%; background: {{ f.color }};"></div>
+                      <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; color: {{ f.chipText }};">{{ f.state }}</div>
+                    </div>
+                    <div style="flex: 1;"></div>
+                    <div style="height: 34px; padding: 0 14px; border-radius: 10px; background: #0F1A1E; color: #F6FBFB; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px;">play_arrow</span>Run now</div>
+                    <div style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; justify-content: center; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 18px; color: #566E73;">more_horiz</span></div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="flex: 1; display: flex; align-items: center; gap: 9px; padding: 11px 13px; border-radius: 11px; background: #F1F7F8;">
+                      <span class="material-symbols-rounded" style="font-size: 18px; color: #0E7C86;">folder</span>
+                      <div style="min-width: 0;">
+                        <div style="font-family: 'Space Grotesk', monospace; font-size: 9.5px; letter-spacing: 0.16em; color: #8AA0A5;">INBOX</div>
+                        <div style="font-size: 13px; font-weight: 600; color: #23393E;">{{ f.inbox }}</div>
+                      </div>
+                    </div>
+                    <span class="material-symbols-rounded" style="font-size: 20px; color: #0E7C86;">arrow_forward</span>
+                    <div style="flex: 1; display: flex; align-items: center; gap: 9px; padding: 11px 13px; border-radius: 11px; background: #F1F7F8;">
+                      <span class="material-symbols-rounded" style="font-size: 18px; color: #0E7C86;">folder_open</span>
+                      <div style="min-width: 0;">
+                        <div style="font-family: 'Space Grotesk', monospace; font-size: 9.5px; letter-spacing: 0.16em; color: #8AA0A5;">OUTPUT</div>
+                        <div style="font-size: 13px; font-weight: 600; color: #23393E;">{{ f.output }}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 18px;">
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 500; color: #6E868C;">{{ f.meta }}</div>
+                    <div style="width: 1px; height: 14px; background: #DCEAEC;"></div>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 11.5px; color: #A2B6BA;">{{ f.last }}</div>
+                    <div style="flex: 1;"></div>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 11.5px; color: #6E868C;">{{ f.captions }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="noscroll" style="width: 420px; flex-shrink: 0; border-left: 1px solid #E1EDEE; background: #FFFFFF; overflow: auto; padding: 26px 26px 26px 24px; display: flex; flex-direction: column; gap: 18px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="font-family: Sora, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">New flow</div>
+              <span class="material-symbols-rounded" style="font-size: 20px; color: #A2B6BA; cursor: pointer;">close</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">01 · NAME</div>
+              <div style="height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; padding: 0 13px; font-size: 14px; color: #A2B6BA;">e.g. Reels inbox</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">02 · FOLDERS</div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.12em; color: #7A9096;">IN</div>
+                <div style="flex: 1; height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; font-size: 13.5px; color: #23393E;">Reels raw <span class="material-symbols-rounded" style="font-size: 18px; color: #B4C6C9;">expand_more</span></div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.12em; color: #7A9096;">OUT</div>
+                <div style="flex: 1; height: 44px; border-radius: 11px; border: 1px solid #E0A32E; background: #FDF9EF; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; font-size: 13.5px; color: #A2B6BA;">Pick a folder <span class="material-symbols-rounded" style="font-size: 18px; color: #E0A32E;">expand_more</span></div>
+              </div>
+              <div style="display: flex; gap: 9px; padding: 11px 13px; border-radius: 11px; background: #F1F7F8;">
+                <span class="material-symbols-rounded" style="font-size: 17px; color: #0E7C86;">account_tree</span>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; line-height: 1.55; color: #0E5F66;">IN ≠ OUT. Each clip gets its own subfolder — 10 clips × 20 variants = 10 folders, not 200 loose files.</div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; color: #0E7C86;">03 · SETTINGS</div>
+              <div style="display: flex; gap: 9px;">
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+                  <div style="font-size: 11.5px; color: #7A9096;">Variants</div>
+                  <div style="height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; padding: 0 13px; font-size: 14px; font-weight: 600; color: #0F1A1E;">20</div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+                  <div style="font-size: 11.5px; color: #7A9096;">Quality</div>
+                  <div style="height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; font-size: 14px; color: #23393E;">Fast <span class="material-symbols-rounded" style="font-size: 18px; color: #B4C6C9;">expand_more</span></div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+                  <div style="font-size: 11.5px; color: #7A9096;">Poll (min)</div>
+                  <div style="height: 44px; border-radius: 11px; border: 1px solid #CFE3E5; display: flex; align-items: center; padding: 0 13px; font-size: 14px; font-weight: 600; color: #0F1A1E;">2</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column;">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-top: 1px solid #EBF3F4;">
+                <div style="font-size: 14px; font-weight: 600; color: #0F1A1E;">Auto-poll the inbox</div>
+                <div style="width: 44px; height: 26px; border-radius: 999px; padding: 3px; box-sizing: border-box; display: flex; justify-content: flex-end; background: #0E7C86;"><div style="width: 20px; height: 20px; border-radius: 50%; background: #FFF;"></div></div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid #EBF3F4;">
+                <div>
+                  <div style="font-size: 14px; font-weight: 600; color: #0F1A1E;">Caption bank naming</div>
+                  <div style="font-size: 12px; color: #7A9096;">Names each file from a caption folder</div>
+                </div>
+                <div style="width: 44px; height: 26px; border-radius: 999px; padding: 3px; box-sizing: border-box; display: flex; justify-content: flex-start; background: #CFE3E5;"><div style="width: 20px; height: 20px; border-radius: 50%; background: #FFF;"></div></div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; height: 52px; border-radius: 14px; background: #7EE0E6; padding: 0 8px 0 18px; box-shadow: 0 10px 24px -12px rgba(14,124,134,0.7); cursor: pointer;">
+              <div style="flex: 1;">
+                <div style="font-family: Sora, sans-serif; font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: #0B2226;">Create flow</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #10555C;">pick an output folder to finish</div>
+              </div>
+              <div style="width: 36px; height: 36px; border-radius: 10px; background: #0F1A1E; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-rounded" style="font-size: 18px; color: #7EE0E6;">arrow_forward</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">FLOWS · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">Running flows own the page</div>
+      <sc-for list="{{ noteFlows }}" as="b" hint-placeholder-count="3">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 40px;">
+    <div style="width: 1440px; flex-shrink: 0; height: 900px; border-radius: 18px; overflow: hidden; background: #F6FBFB; box-shadow: 0 40px 80px -34px rgba(15,26,30,0.45); display: flex; border: 1px solid #CFE3E5;">
+      <div style="width: 240px; flex-shrink: 0; background: #0F1A1E; display: flex; flex-direction: column; padding: 20px 14px;">
+        <div style="display: flex; align-items: baseline; padding: 4px 8px 22px; font-family: Sora, sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.04em;">
+          <span style="color: #F6FBFB;">varim</span><span style="color: #7EE0E6;">o</span><span style="color: #7EE0E6; opacity: 0.5; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.24; margin-left: -6px;">o</span><span style="color: #7EE0E6; opacity: 0.1; margin-left: -6px;">o</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navDrive }}" as="n" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 10px; border-radius: 10px; background: {{ n.bg }}; cursor: pointer;">
+              <span class="material-symbols-rounded" style="font-size: 21px; color: {{ n.color }};">{{ n.icon }}</span>
+              <span style="font-size: 14.5px; font-weight: {{ n.weight }}; color: {{ n.color }};">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height: 1px; background: #24393F; margin: 18px 10px;"></div>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.2em; color: #5F7A80; padding: 0 10px 8px;">WORKSPACE</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{ navAdmin }}" as="n" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #6E888E;">{{ n.icon }}</span>
+              <span style="font-size: 13.5px; color: #9FB3B7;">{{ n.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="border-radius: 12px; background: #16272C; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; letter-spacing: 0.16em; color: #5F7A80;">DESTINATIONS</div>
+          <div style="font-family: Sora, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; color: #F6FBFB;">22</div>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: #E0A32E;">1 untested</div>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="height: 58px; flex-shrink: 0; border-bottom: 1px solid #E1EDEE; background: #FFFFFF; display: flex; align-items: center; padding: 0 24px; gap: 16px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; color: #8AA0A5;">DRIVE</div>
+          <div style="color: #CFE3E5;">/</div>
+          <div style="font-size: 13.5px; font-weight: 600; color: #0F1A1E;">Delivery setup</div>
+          <div style="flex: 1;"></div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E;"><div style="width: 7px; height: 7px; border-radius: 50%; background: #12B76A;"></div>Google connected</div>
+          <div style="height: 34px; padding: 0 13px; border-radius: 10px; border: 1px solid #DCEAEC; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #23393E; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px; color: #566E73;">bolt</span>Test all access</div>
+        </div>
+
+        <div class="noscroll" style="flex: 1; overflow: auto; padding: 26px 30px; display: flex; gap: 26px; min-height: 0;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            <div style="display: flex; flex-direction: column; gap: 7px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">DELIVERY SETUP</div>
+              <div style="font-family: Sora, sans-serif; font-size: 38px; line-height: 1.02; font-weight: 700; letter-spacing: -0.04em; color: #0F1A1E;">Drive</div>
+            </div>
+
+            <div style="border-radius: 18px; background: #0F1A1E; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.2em; color: #7EE0E6;">STEP 1 · SHARE THIS EMAIL</div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="flex: 1; height: 46px; border-radius: 12px; background: #1D3238; display: flex; align-items: center; padding: 0 14px; font-family: 'Space Grotesk', monospace; font-size: 14px; color: #EAF6F7;">studio@varimo.io</div>
+                <div style="height: 46px; padding: 0 18px; border-radius: 12px; background: #7EE0E6; color: #0B2226; display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; cursor: pointer;"><span class="material-symbols-rounded" style="font-size: 17px;">content_copy</span>Copy</div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.55; color: #9FB7BC;">Add it as <span style="color: #EAF6F7; font-weight: 600;">Editor</span> on any folder you import from or deliver to — you never connect your own Google account. Only the site admin does.</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">STEP 2 · ADD A DESTINATION</div>
+              <div style="display: flex; gap: 10px;">
+                <div style="width: 190px; height: 46px; border-radius: 12px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; padding: 0 14px; font-size: 13.5px; color: #A2B6BA;">Name</div>
+                <div style="flex: 1; height: 46px; border-radius: 12px; border: 1px solid #CFE3E5; background: #FFF; display: flex; align-items: center; padding: 0 14px; font-size: 13.5px; color: #A2B6BA;">Paste Drive folder link</div>
+                <div style="width: 74px; height: 46px; border-radius: 12px; background: #0F1A1E; color: #F6FBFB; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 600; cursor: pointer;">Add</div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">DESTINATIONS · 22</div>
+                <div style="height: 34px; width: 220px; border-radius: 10px; background: #F1F7F8; display: flex; align-items: center; gap: 8px; padding: 0 12px;">
+                  <span class="material-symbols-rounded" style="font-size: 17px; color: #8AA0A5;">search</span>
+                  <span style="font-size: 12.5px; color: #A2B6BA;">Filter destinations</span>
+                </div>
+              </div>
+              <div style="border: 1px solid #DCEAEC; border-radius: 16px; background: #FFFFFF; overflow: hidden;">
+                <sc-for list="{{ webDests }}" as="d" hint-placeholder-count="8">
+                  <div style="display: grid; grid-template-columns: 1.4fr 1.2fr 120px 40px; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #EFF5F6;" style-hover="background: #FAFDFD;">
+                    <div style="font-size: 14px; font-weight: 600; color: #0F1A1E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ d.name }}</div>
+                    <div style="font-family: 'Space Grotesk', monospace; font-size: 11.5px; color: #A2B6BA;">{{ d.id }}</div>
+                    <div style="display: flex; align-items: center; gap: 7px;">
+                      <div style="width: 8px; height: 8px; border-radius: 50%; background: {{ d.color }};"></div>
+                      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; color: #566E73;">{{ d.state }}</div>
+                    </div>
+                    <div style="justify-self: end;"><span class="material-symbols-rounded" style="font-size: 19px; color: #B4C6C9; cursor: pointer;">more_horiz</span></div>
+                  </div>
+                </sc-for>
+                <div style="padding: 13px 18px; font-family: 'Space Grotesk', monospace; font-size: 11.5px; font-weight: 600; color: #0E7C86; cursor: pointer;">SHOW ALL 22 →</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+            <div style="border: 1px solid #DCEAEC; border-radius: 16px; background: #FFFFFF; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-family: Sora, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #0F1A1E;">Drop Ledger</div>
+                <div style="padding: 4px 10px; border-radius: 7px; background: #FBF3DF; color: #A9741B; font-family: 'Space Grotesk', monospace; font-size: 10.5px; font-weight: 600;">NO SHEET</div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.55; color: #7A9096; text-wrap: pretty;">A Sheet of Passed / Duplicate / Flagged per clip so labels survive a wipe. Optional — Gallery marks work without it, and it doesn't change uniqueness.</div>
+              <div style="display: flex; gap: 9px;">
+                <div style="flex: 1; height: 40px; border-radius: 11px; background: #0F1A1E; color: #F6FBFB; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; cursor: pointer;">Create sheet</div>
+                <div style="flex: 1; height: 40px; border-radius: 11px; border: 1px solid #CFE3E5; color: #23393E; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; cursor: pointer;">Sync</div>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #DCEAEC; border-radius: 16px; background: #FFFFFF; padding: 18px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-family: Sora, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #0F1A1E; padding-bottom: 8px;">Account</div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid #EFF5F6;">
+                <div style="font-size: 13.5px; font-weight: 600; color: #23393E;">Google account</div>
+                <div style="font-family: 'Space Grotesk', monospace; font-size: 11.5px; color: #8AA0A5;">studio@varimo.io</div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid #EFF5F6; cursor: pointer;">
+                <div style="font-size: 13.5px; font-weight: 600; color: #23393E;">Studio password</div>
+                <div style="font-size: 13px; color: #0E7C86; font-weight: 600;">Change</div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid #EFF5F6; cursor: pointer;">
+                <div style="font-size: 13.5px; font-weight: 600; color: #23393E;">Disconnect Drive</div>
+                <span class="material-symbols-rounded" style="font-size: 18px; color: #E5533D;">logout</span>
+              </div>
+            </div>
+
+            <div style="border-radius: 16px; background: #EEF8F9; border: 1px solid #C9E4E7; padding: 16px; display: flex; gap: 10px;">
+              <span class="material-symbols-rounded" style="font-size: 18px; color: #0E7C86;">info</span>
+              <div style="font-size: 12.5px; line-height: 1.55; color: #0E5F66;">Drive Connect is per workspace and separate from Studio login. Captions are written at Generate time, not here.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 10px;">
+      <div style="font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: #0E7C86;">DRIVE · WEB</div>
+      <div style="font-family: Sora, sans-serif; font-size: 21px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F1A1E;">Two numbered steps, then a table</div>
+      <sc-for list="{{ noteDrive }}" as="b" hint-placeholder-count="3">
+        <div style="display: flex; gap: 9px;">
+          <div style="width: 5px; height: 5px; border-radius: 50%; background: #7EE0E6; margin-top: 8px; flex-shrink: 0;"></div>
+          <div style="font-size: 13px; line-height: 1.55; color: #5A7176; text-wrap: pretty;">{{ b }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#7EE0E6&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#7EE0E6&quot;,&quot;#5FDCB2&quot;,&quot;#0E7C86&quot;]}}">
+class Component extends DCLogic {
+  state = { count: 20, captions: true };
+
+  renderVals() {
+    const items = [
+      { name: "Studio", icon: "movie_edit" },
+      { name: "Gallery", icon: "photo_library" },
+      { name: "Drops", icon: "inventory_2" },
+      { name: "Flows", icon: "schema" },
+      { name: "Drive", icon: "cloud" }
+    ];
+    const mkNav = (active) => items.map((t, i) => ({
+      name: t.name,
+      icon: t.icon,
+      bg: i === active ? "#1D3238" : "transparent",
+      color: i === active ? "#7EE0E6" : "#9FB3B7",
+      weight: i === active ? 600 : 400
+    }));
+    const pctColor = (n) => (n >= 65 ? "#5FDCB2" : n >= 50 ? "#7EE0E6" : "#E0A32E");
+    const caps = ["sunset rooftop, no text", "hard cut open, 0.4s", "slow zoom, warm grade", "flip + speed ramp", "crop 4:5, top caption", "mirror, cool grade", "punch-in at 1.2s", "grain pass, 12%", "reverse tail", "shake, low amp", "letterbox 2.35", "cool grade, -8 hue", "hard cut, 0.2s", "zoom out from face", "speed ramp 1.4×"];
+    const galleryTiles = caps.map((cap, i) => {
+      const n = [52, 66, 48, 53, 71, 47, 55, 52, 38, 63, 58, 44, 67, 51, 49][i];
+      const sel = [0, 1, 4, 9].indexOf(i) > -1;
+      return {
+        v: "v" + String(i + 1).padStart(2, "0"),
+        cap, pct: n + "%", pctColor: pctColor(n),
+        ring: sel ? "#7EE0E6" : "transparent",
+        check: sel ? "#7EE0E6" : "#5E777D",
+        checkFill: sel ? "#7EE0E6" : "transparent"
+      };
+    });
+    const dropRow = (name, date, files, id, state) => {
+      const map = {
+        Pass: { color: "#12B76A", bg: "#E8F8F0" },
+        Dupe: { color: "#B4560C", bg: "#FCF0E4" },
+        Flag: { color: "#A9741B", bg: "#FBF3DF" }
+      };
+      return { name, date, files, id, state, color: map[state].color, bg: map[state].bg };
+    };
+    return {
+      count: this.state.count,
+      totalLabel: "2 clips × " + this.state.count + " = " + (2 * this.state.count) + " variants",
+      switchBg: this.state.captions ? "#0E7C86" : "#CFE3E5",
+      switchJustify: this.state.captions ? "flex-end" : "flex-start",
+      toggleCaptions: () => this.setState(s => ({ captions: !s.captions })),
+      inc: () => this.setState(s => ({ count: Math.min(60, s.count + 1) })),
+      dec: () => this.setState(s => ({ count: Math.max(1, s.count - 1) })),
+      set3: () => this.setState({ count: 3 }),
+      set10: () => this.setState({ count: 10 }),
+      set20: () => this.setState({ count: 20 }),
+      navStudio: mkNav(0), navGallery: mkNav(1), navDrops: mkNav(2), navFlows: mkNav(3), navDrive: mkNav(4),
+      strip20: Array.from({ length: 20 }, (_, k) => {
+        const i = k + 1;
+        return {
+          v: "v" + String(i).padStart(2, "0"),
+          border: i === 1 ? "#7EE0E6" : "transparent",
+          op: i === 1 ? 1 : 0.5
+        };
+      }),
+      noteDetail: [
+        "Clicking a tile takes over only the grid pane. Rail nav and the pack list stay on screen, so the detail view is a state of Gallery rather than a page you have to escape — Back to grid sits in the context bar with a v01 breadcrumb.",
+        "The player was a pale bordered box with an unlabelled round swap button. Dark stage, a wipe divider you drag, and SOURCE / VARIANT called out — comparison is the whole point of this screen.",
+        "Header showed the same 100-character filename twice. It now reads v01 of 20 with the pack name underneath, and prev/next carry ← → key hints.",
+        "Originality gains the 65% verified-original marker and the pack average, so 52% becomes a decision rather than a stat. Caption shows the actual caption, not the filename.",
+        "Pass / Duplicate / Flag as one segmented control makes 'unlabeled = pass' visible instead of a footnote under a lone warning button, and a 20-thumb filmstrip replaces arrow-paging."
+      ],
+      navAdmin: [
+        { name: "Team", icon: "group" },
+        { name: "Admin", icon: "shield" },
+        { name: "Diagnostics", icon: "monitor_heart" }
+      ],
+      studioClips: [
+        { name: "intro_AQPzxw…mp4", meta: "0:14 · 812 MB · 4K" },
+        { name: "colorwalk_blue.mp4", meta: "0:09 · 604 MB · 1080p" }
+      ],
+      queue: [
+        { name: "intro_AQPzxw…mp4", done: "7/20", pct: "35%" },
+        { name: "colorwalk_blue.mp4", done: "2/20", pct: "10%" }
+      ],
+      finished: [52, 66, 48, 71, 55, 63].map((n, i) => ({ v: "v" + String(i + 1).padStart(2, "0"), pct: n + "%", color: pctColor(n) })),
+      packs: [
+        { name: "intro_AQPzxw…mp4", meta: "20 variants · today", pct: "52%", pctColor: "#0E7C86", bg: "#EEF8F9", border: "#7EE0E6" },
+        { name: "intro_AQNTxBD…mp4", meta: "20 variants · today", pct: "66%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
+        { name: "Color walk, make it blue", meta: "3 variants · Aug 26", pct: "58%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
+        { name: "Does this count as a win", meta: "3 variants · Aug 26", pct: "38%", pctColor: "#A9741B", bg: "#FFFFFF", border: "#DCEAEC" },
+        { name: "Everyone was safe", meta: "3 variants · Aug 25", pct: "87%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
+        { name: "Front yard party", meta: "3 variants · Aug 25", pct: "58%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" }
+      ],
+      galleryTiles,
+      dropTable: [
+        dropRow("Mckenzie repurpose 2", "Aug 27, 09:14", "20", "b4dbbcb2f371:1", "Pass"),
+        dropRow("Mckenzie repurpose 1", "Aug 27, 09:02", "20", "796913374ca9:1", "Pass"),
+        dropRow("Cohort-1-port022", "Aug 27, 08:40", "3", "b3212f12ef7f:1", "Dupe"),
+        dropRow("Cohort-1-port022", "Aug 27, 08:31", "3", "2edfa0b311e4:1", "Pass"),
+        dropRow("JEFF REPURPOSE 2", "Aug 26, 19:22", "20", "474dc2e12d42:1", "Pass"),
+        dropRow("JEFF REPURPOSE 1", "Aug 26, 19:04", "20", "9ca06180dad4:1", "Pass"),
+        dropRow("JAYDEN REPURPOSE 1", "Aug 26, 16:48", "20", "24cb1152e090:1", "Flag"),
+        dropRow("GENI 2", "Aug 26, 15:10", "20", "0f3097ed18bc:1", "Pass"),
+        dropRow("GENI 1", "Aug 26, 14:55", "20", "d283d1f75f96:1", "Pass")
+      ],
+      webFlows: [
+        { name: "Starta", inbox: "Strata input", output: "Strata Output", state: "WATCHING", color: "#12B76A", chipBg: "#E8F8F0", chipText: "#0B6B44", meta: "8 variants · fast · poll 4 min", last: "last sweep 6 skipped", captions: "Generic — 20 left" },
+        { name: "Strata → Jeff", inbox: "Strata input", output: "Jeff", state: "WATCHING", color: "#12B76A", chipBg: "#E8F8F0", chipText: "#0B6B44", meta: "8 variants · fast · poll 2 min", last: "last sweep 6 skipped", captions: "Generic — 20 left" },
+        { name: "Jaden test flow", inbox: "Jaden input", output: "jaden output", state: "PAUSED", color: "#8AA0A5", chipBg: "#F1F7F8", chipText: "#566E73", meta: "8 variants · fast · poll 4 min", last: "last sweep 5 skipped", captions: "captions off" }
+      ],
+      webDests: [
+        { name: "Jeff", id: "1TwzCNpn…nDtyjwp4", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "cam test", id: "1jDNmyyJ…nzriYDLm", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "Cohort-1-port022", id: "1w1rjONl…swY8esxT", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "Mckenzie repurpose 1", id: "1BpBTOWx…xKpx8kuA", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "Mckenzie repurpose 2", id: "1GMYzYGu…QYh8JSbB", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "READY TO POST GG", id: "1v4o4RJN…oow59v9n", ok: true, state: "Access ok", color: "#12B76A" },
+        { name: "Strata input", id: "1gssDDPj…JRinlDrY", ok: false, state: "Not tested", color: "#E0A32E" },
+        { name: "Strata Output", id: "1UaDcLr7…E9ymtmiR", ok: true, state: "Access ok", color: "#12B76A" }
+      ],
+      noteStudio: [
+        "The phone stacks setup over an empty dark panel. On desktop the queue is a permanent right column — you set up and watch in one view, and the panel is useful the moment a run starts.",
+        "Clips become cards with size and duration, so the 1 GB limit is answered by the data instead of a warning paragraph.",
+        "Generate math (2 clips × 20 = 40) sits on the button, and the three explainer paragraphs are gone."
+      ],
+      noteGallery: [
+        "Six packs × 20 tiles in one endless scroll becomes a pack list on the left and one grid on the right — you land on a pack instead of scrolling past five.",
+        "Originality is the number that decides what ships, so it moves onto every tile and into the pack list; mint marks the verified-original band per the brand.",
+        "Select all / Save to Photos / Send to Drive / ZIP / Open folder / ✕ repeated per pack header. One selection bar handles all of it for whatever is picked."
+      ],
+      noteDrops: [
+        "Rows are a real table with sortable columns: pack, timestamp, file count, ledger id, result. The two-line hash dump per card is gone.",
+        "Four stats up top answer 'is anything wrong this week' before you read a single row.",
+        "Pass is a quiet dot; Dupe and Flag carry the color, so exceptions are what your eye catches in a 307-row ledger."
+      ],
+      noteFlows: [
+        "Live flows lead; the new-flow form moves into a right panel you can dismiss. The old page opened with a blank form while existing flows said 'Loading…'.",
+        "Each flow reads as inbox → output with cadence and last sweep, so the 'one subfolder per clip' rule is visible instead of explained.",
+        "Watch / Auto-caption / Run now / Delete become one primary Run now plus an overflow — four equal-weight links per flow was four ways to break it."
+      ],
+      noteDrive: [
+        "The page is a setup flow, so it reads as two numbered steps — share the email, add a destination — then the list of what you've added.",
+        "22 destinations × 3 buttons is 66 targets. The table shows access state per row and hides Test / Edit / Delete behind an overflow, with Test all access in the context bar.",
+        "Ledger and account move to a right column: real settings, but not the first thing you meet."
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
+
