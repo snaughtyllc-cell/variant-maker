@@ -44,6 +44,7 @@ export function TopNav() {
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
   const primaryTabs = visiblePrimaryTabs(me);
   const section = SECTION_DESTINATIONS.find((d) => linkActive(pathname, d.href));
+  const isStudio = pathname === "/";
 
   async function handleLogout() {
     await logout();
@@ -57,11 +58,32 @@ export function TopNav() {
 
   return (
     <>
-      {/* Desktop header (58px) — nav itself now lives in the SideNav rail. */}
+      {/* Desktop header (58px) — nav itself now lives in the SideNav rail.
+          Studio ("/") gets the mock breadcrumb + search + GPU chip; every other
+          route keeps the section label + StatusStrip it had before. */}
       <header className="vf-header">
-        <span className="vf-header-section">{section ? section.label.toUpperCase() : ""}</span>
-        <div className="vf-header-spacer" />
-        <StatusStrip />
+        {isStudio ? (
+          <>
+            <span className="vf-header-section">STUDIO</span>
+            <span className="vf-header-crumb-sep">/</span>
+            <span className="vf-header-crumb">New pack</span>
+            <div className="vf-header-spacer" />
+            <div className="vf-header-search" aria-hidden="true">
+              <span className="material-symbols-rounded">search</span>
+              <span>Search packs, drops, folders</span>
+            </div>
+            <div className="vf-header-gpu">
+              <span className="vf-header-gpu__dot" />
+              <span className="vf-header-gpu__label">GPU FREE</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="vf-header-section">{section ? section.label.toUpperCase() : ""}</span>
+            <div className="vf-header-spacer" />
+            <StatusStrip />
+          </>
+        )}
       </header>
 
       {/* Phone top bar — unchanged below the desktop breakpoint. */}

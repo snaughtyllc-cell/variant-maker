@@ -23,29 +23,19 @@ export function AdvancedPanel({
   return (
     <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
       <div
-        className="studio-option-row"
-        style={{ userSelect: "none" }}
+        className="studio-option-row studio-option-row--static studio-option-row--last"
+        style={{ userSelect: "none", cursor: "pointer" }}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="studio-option-row__label" style={{ alignItems: "center", display: "flex", gap: 8 }}>
-          <span className="material-symbols-rounded" style={{ color: "var(--color-muted2)", fontSize: 18 }}>
-            {open ? "expand_more" : "chevron_right"}
-          </span>
-          Advanced
-        </span>
-        <span
-          style={{
-            color: "var(--color-text)",
-            background: "var(--color-panel2)",
-            border: "1px solid var(--color-line)",
-            padding: "4px 10px",
-            borderRadius: 999,
-            fontSize: 11.5,
-            fontFamily: "var(--font-space-grotesk), monospace",
-            flexShrink: 0,
-          }}
-        >
+        <span className="studio-option-row__label">Advanced</span>
+        <span className="studio-option-row__value">
           Output: Matches source
+          <span
+            className="material-symbols-rounded studio-option-row__chevron"
+            data-open={open || undefined}
+          >
+            chevron_right
+          </span>
         </span>
       </div>
       {open && (
