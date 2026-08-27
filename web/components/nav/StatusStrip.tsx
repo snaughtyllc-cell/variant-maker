@@ -23,7 +23,7 @@ export function StatusStrip() {
         className="status-engine inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
       >
         <span
-          className="w-[7px] h-[7px] rounded-full flex-none"
+          className="status-engine__dot rounded-full flex-none"
           style={
             ready && online
               ? { background: "#22c55e", boxShadow: "0 0 8px #22c55e88" }
