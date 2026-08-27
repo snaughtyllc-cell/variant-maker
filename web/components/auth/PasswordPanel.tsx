@@ -46,8 +46,8 @@ export function PasswordPanel() {
       </div>
       <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4, lineHeight: 1.45 }}>
         {hasPassword
-          ? "Replace the password for email sign-in. Google still works."
-          : "Add a password so you can sign in with email instead of Google. Drive Connect stays separate."}
+          ? "Replace the password for email sign-in."
+          : "Add a password so you can sign in with email. Drive Connect stays separate."}
       </div>
       <form
         onSubmit={onSubmit}

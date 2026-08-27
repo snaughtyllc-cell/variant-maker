@@ -87,7 +87,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Login",
     audience: "everyone",
     tab: "none",
-    summary: "Invite-only email + password or Google. No app tabs on this page.",
+    summary: "Invite-only email + password. No app tabs on this page.",
   },
 ] as const;
 

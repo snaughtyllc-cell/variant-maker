@@ -25,16 +25,14 @@ describe("LoginForm", () => {
     });
   });
 
-  it("offers email/password and Google", () => {
+  it("offers email/password and does not offer Google", () => {
     render(<LoginForm />);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Continue with Google" })).toHaveAttribute(
-      "href",
-      "/api/auth/google/start",
-    );
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
     expect(screen.getByText(/invite-only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/continue with google/i)).not.toBeInTheDocument();
   });
 
   it("posts email and password then goes home", async () => {
@@ -53,7 +51,7 @@ describe("LoginForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a Google oauth error from the URL", () => {
+  it("shows an invite error from the URL", () => {
     render(<LoginForm oauthError="not_invited" />);
     expect(screen.getByRole("alert")).toHaveTextContent(/isn't invited/i);
   });

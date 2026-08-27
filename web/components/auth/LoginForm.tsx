@@ -1,6 +1,5 @@
 "use client";
 import { FormEvent, useState, type CSSProperties } from "react";
-import Link from "next/link";
 import { passwordLogin } from "@/lib/api";
 
 const fieldStyle: CSSProperties = {
@@ -24,8 +23,8 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
   const oauthMessage =
     oauthError === "not_invited"
       ? "This email isn't invited. Ask the operator to add you."
-      : oauthError === "oauth"
-        ? "Google sign-in didn't complete. Try again."
+      : oauthError
+        ? "Use the invited email and your studio password."
         : null;
   const message = error || oauthMessage;
 
@@ -46,8 +45,8 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
   return (
     <>
       <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 22px" }}>
-        Studio is invite-only. Use the invited email and a password, or continue with
-        Google. First password sign-in sets that password.
+        Studio is invite-only. Use the invited email and a password.
+        First sign-in sets that password.
       </p>
       {message && (
         <div
@@ -110,40 +109,6 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          margin: "18px 0",
-          color: "#87989d",
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
-        or
-        <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
-      </div>
-      <Link
-        href="/api/auth/google/start"
-        style={{
-          display: "block",
-          textAlign: "center",
-          textDecoration: "none",
-          fontSize: 14,
-          fontWeight: 700,
-          color: "var(--color-text)",
-          background: "#f3f8f9",
-          border: "1px solid #c9dde0",
-          padding: "12px 16px",
-          borderRadius: 10,
-        }}
-      >
-        Continue with Google
-      </Link>
     </>
   );
 }
