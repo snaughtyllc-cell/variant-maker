@@ -6,8 +6,12 @@ type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
 
 interface GalleryToolbarProps {
+  /** Kept for the page's call signature (and the toolbar test); the count now
+   *  lives in the grid header's "REVIEW LIBRARY" title, matching the mock. */
   count: number;
   variantCount: number;
+  /** Breadcrumb tail — the active pack's source filename (mock: GALLERY / <file>). */
+  crumb?: string;
   filterMode: FilterMode;
   onFilter: (mode: FilterMode) => void;
   sort: SortMode;
@@ -27,8 +31,7 @@ interface GalleryToolbarProps {
 }
 
 export function GalleryToolbar({
-  count,
-  variantCount,
+  crumb,
   filterMode,
   onFilter,
   sort,
@@ -50,8 +53,14 @@ export function GalleryToolbar({
   const saveDisabled = saveDisabledReason != null || !!saveBusy;
   return (
     <section className="gallery-toolbar" aria-label="Gallery controls">
-      <div className="gallery-toolbar__count">
-        <b>{count}</b> packs <span>·</span> <b>{variantCount}</b> finished variants
+      <div className="gallery-toolbar__crumb">
+        <span className="gallery-toolbar__crumb-section">GALLERY</span>
+        {crumb && (
+          <>
+            <span className="gallery-toolbar__crumb-sep" aria-hidden="true">/</span>
+            <span className="gallery-toolbar__crumb-name" title={crumb}>{crumb}</span>
+          </>
+        )}
       </div>
       <div className="gallery-toolbar__actions">
         <div className="gallery-segments" aria-label="Pack filter">
