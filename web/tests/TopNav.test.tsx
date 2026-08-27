@@ -22,7 +22,6 @@ vi.mock("@/components/nav/StatusStrip", () => ({
 }));
 
 import { TopNav } from "@/components/nav/TopNav";
-import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 
 const BASE: AuthMe = {
   auth_required: true,
@@ -42,63 +41,12 @@ beforeEach(() => {
   me.data = BASE;
 });
 
+// TopNav now only owns the mobile top bar / "More" flyout / bottom tab bar
+// (desktop breakpoint gets the SideNav rail instead — see SideNav.test.tsx,
+// which carries the role-gating assertions that used to live here against
+// the old `.vf-desktop-nav` row).
 describe("TopNav", () => {
-  it("shows Team for workspace owners", () => {
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
-    expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
-  });
-
-  it("hides Team for members", () => {
-    me.data = { ...BASE, role: "member" };
-    render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
-  });
-
-  it("shows Team and Admin for the site admin", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Team" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Admin" })[0]).toHaveAttribute("href", "/admin");
-  });
-
-  it("hides Diagnostics for operators", () => {
-    render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Diagnostics" })).not.toBeInTheDocument();
-  });
-
-  it("shows Diagnostics for the site admin", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Diagnostics" })[0]).toHaveAttribute(
-      "href",
-      "/diagnostics",
-    );
-  });
-
-  it("keeps Diagnostics when login is off", () => {
-    me.data = {
-      ...BASE,
-      auth_required: false,
-      email: null,
-      role: null,
-      is_admin: false,
-    };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Diagnostics" }).length).toBeGreaterThan(0);
-  });
-
-  it("exposes primary destinations including Drops", () => {
-    render(<TopNav />);
-    for (const tab of PRIMARY_TABS) {
-      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
-        "href",
-        tab.href,
-      );
-    }
-  });
-
-  it("hides Drops and Workflows for solo members", () => {
+  it("hides Drops and Workflows for solo members on the phone tab bar", () => {
     me.data = { ...BASE, experience: "solo", role: "member", is_admin: false };
     render(<TopNav />);
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
@@ -110,16 +58,5 @@ describe("TopNav", () => {
       "href",
       "/settings/drive",
     );
-  });
-
-  it("renders role extras from the same catalog as the IA doc", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
-    render(<TopNav />);
-    for (const tab of EXTRA_TABS) {
-      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
-        "href",
-        tab.href,
-      );
-    }
   });
 });

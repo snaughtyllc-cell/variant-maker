@@ -29,3 +29,23 @@ export function visiblePrimaryTabs(me: {
   if (isAgencyExperience(me)) return PRIMARY_TABS;
   return PRIMARY_TABS.filter((tab) => SOLO_PRIMARY_HREFS.has(tab.href));
 }
+
+/**
+ * Role gate for the three "extra" destinations (Team / Admin / Diagnostics).
+ * Shared by SideNav (desktop rail) and TopNav (mobile "More" flyout) so both
+ * surfaces agree on exactly who sees what.
+ */
+export function extraTabVisible(
+  href: string,
+  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
+): boolean {
+  if (href === "/diagnostics") return showDiagnosticsNav(me);
+  if (href === "/team") return showTeamNav(me);
+  if (href === "/admin") return Boolean(me?.is_admin);
+  return false;
+}
+
+/** Exact match for Studio ("/"), prefix match for every other destination. */
+export function linkActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+}

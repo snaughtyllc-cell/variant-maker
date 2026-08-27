@@ -25,6 +25,10 @@ vi.mock("@/components/nav/TopNav", () => ({
   TopNav: () => <div>TopNav</div>,
 }));
 
+vi.mock("@/components/nav/SideNav", () => ({
+  SideNav: () => <div>SideNav</div>,
+}));
+
 vi.mock("@/components/nav/LabBanner", () => ({
   LabBanner: () => null,
 }));
