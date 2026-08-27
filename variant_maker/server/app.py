@@ -155,6 +155,7 @@ from .tenants import (
     ADMIN_EMAIL_ENV,
     TenantStore,
     can_manage_drive_oauth,
+    google_login_enabled,
     is_admin_email,
     normalize_email,
     provision_login,
@@ -943,19 +944,15 @@ def create_app(
                 raise HTTPException(status_code=401, detail="Email or password is wrong.")
             user = existing
         else:
-            if existing is not None and not existing.password_hash:
-                raise HTTPException(
-                    status_code=400,
-                    detail="This account signs in with Google. Use Continue with Google, "
-                           "then add a password under Drive.",
+            user = existing
+            if user is None:
+                user = provision_login(
+                    tenants,
+                    email=email,
+                    name=email.split("@")[0] or email,
+                    admin_email=admin_email,
+                    data_dir=data_dir,
                 )
-            user = provision_login(
-                tenants,
-                email=email,
-                name=email.split("@")[0] or email,
-                admin_email=admin_email,
-                data_dir=data_dir,
-            )
             if user is None:
                 raise HTTPException(
                     status_code=401,
@@ -993,6 +990,8 @@ def create_app(
     def auth_google_start(request: Request):
         if not auth_on or login_pending is None:
             raise HTTPException(status_code=404, detail="auth is off")
+        if not google_login_enabled(auth_env):
+            raise HTTPException(status_code=404, detail="Google sign-in is off")
         client_id, _client_secret = _oauth_client_pair()
         if not client_id:
             raise HTTPException(

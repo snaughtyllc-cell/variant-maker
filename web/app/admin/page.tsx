@@ -438,7 +438,7 @@ export default function AdminPage() {
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
           Join adds them to the workspace you pick. New workspace creates an empty studio
           with Solo or Agency already set — you do not wait for them to sign in first.
-          They sign in with that email plus a password they choose, or with Google.
+          They sign in with that email plus a password they choose.
         </div>
 
         <div

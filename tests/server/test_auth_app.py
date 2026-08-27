@@ -24,13 +24,16 @@ ADMIN = "jeff@x.com"
 SECRET = "test-auth-secret"
 
 
-def _env() -> dict[str, str]:
-    return {
+def _env(*, google_login: bool = True) -> dict[str, str]:
+    env = {
         ADMIN_EMAIL_ENV: ADMIN,
         "VARIANT_AUTH_SECRET": SECRET,
         ENV_OAUTH_CLIENT_ID: "test-client-id",
         ENV_OAUTH_CLIENT_SECRET: "test-client-secret",
     }
+    if google_login:
+        env["VARIANT_GOOGLE_LOGIN"] = "1"
+    return env
 
 
 def _exchange(*, code: str, **_kwargs):
@@ -43,10 +46,10 @@ def _exchange(*, code: str, **_kwargs):
     return mapping[code]
 
 
-def _auth_app(tmp_path, *, hydrate=True):
+def _auth_app(tmp_path, *, hydrate=True, google_login: bool = True):
     ws = Workspace(str(tmp_path))
     store = JobStore(ws, FakeRunner({}))
-    env = _env()
+    env = _env(google_login=google_login)
     app = create_app(
         store,
         hydrate=hydrate,
@@ -495,26 +498,30 @@ def test_password_login_invite_only_and_short_password(tmp_path):
     assert va.get("/api/gallery").status_code == 200
 
 
-def test_google_only_account_cannot_set_password_from_login(tmp_path):
+def test_google_only_account_can_set_password_from_login(tmp_path):
     app, _ = _auth_app(tmp_path)
     jeff = TestClient(app)
     _login(jeff, "jeff")
     me = jeff.get("/api/auth/me").json()
     assert me["has_password"] is False
+    jeff.post("/api/auth/logout")
 
     anon = TestClient(app)
-    blocked = _password_login(anon, ADMIN, "secret12")
-    assert blocked.status_code == 400
-    assert "google" in blocked.json()["detail"].lower()
-    assert anon.get("/api/gallery").status_code == 401
-
-    set_pw = jeff.post("/api/auth/password/set", json={"password": "secret12"})
-    assert set_pw.status_code == 204
-    assert jeff.get("/api/auth/me").json()["has_password"] is True
-    jeff.post("/api/auth/logout")
-    again = _password_login(jeff, ADMIN, "secret12")
+    first = _password_login(anon, ADMIN, "secret12")
+    assert first.status_code == 200
+    assert first.json()["has_password"] is True
+    assert anon.get("/api/gallery").status_code == 200
+    anon.post("/api/auth/logout")
+    again = _password_login(anon, ADMIN, "secret12")
     assert again.status_code == 200
-    assert again.json()["has_password"] is True
+
+
+def test_google_login_start_off_unless_enabled(tmp_path):
+    app, _ = _auth_app(tmp_path, google_login=False)
+    client = TestClient(app)
+    resp = client.get("/api/auth/google/start", follow_redirects=False)
+    assert resp.status_code == 404
+    assert "google" in resp.json()["detail"].lower()
 
 
 def test_workspace_experience_assignment(tmp_path):

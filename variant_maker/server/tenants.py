@@ -22,6 +22,7 @@ InviteKind = Literal["join", "new_workspace"]
 MemberRole = Literal["owner", "member"]
 
 ADMIN_EMAIL_ENV = "VARIANT_AUTH_ADMIN_EMAIL"
+GOOGLE_LOGIN_ENV = "VARIANT_GOOGLE_LOGIN"
 LEGACY_DIR_NAMES = ("jobs", "drive", "uploads", "workflow-work")
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -54,6 +55,16 @@ def can_manage_drive_oauth(
 def auth_required(environ: dict | None = None) -> bool:
     env = environ if environ is not None else os.environ
     return bool((env.get(ADMIN_EMAIL_ENV) or "").strip())
+
+
+def google_login_enabled(environ: dict | None = None) -> bool:
+    """Login-with-Google is off until the Google app is verified.
+
+    Drive Connect is a different OAuth path and is not gated here.
+    """
+    env = environ if environ is not None else os.environ
+    raw = (env.get(GOOGLE_LOGIN_ENV) or "").strip().lower()
+    return raw in {"1", "true", "yes"}
 
 
 @dataclass

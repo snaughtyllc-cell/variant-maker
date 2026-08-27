@@ -124,12 +124,13 @@ open Studio). To give each operator their own gallery + Drive:
    - `VARIANT_AUTH_SECRET` — a long random string (or omit and Studio writes
      one to `{DATA_DIR}/auth/secret` on first boot)
 3. Redeploy, open Studio, sign in with **email + password** (first visit sets
-   the password) or **Continue with Google**. First admin login moves
-   existing packs into your workspace.
+   the password). Google login is off until the Google app is verified
+   (`VARIANT_GOOGLE_LOGIN=1` to turn it back on). Drive Connect is separate.
+   First admin login moves existing packs into your workspace.
 4. **Admin** in the top nav (site admin only):
    - **Join my workspace** — VAs land in your gallery (shared on purpose).
-     Tell them: Studio URL → invited email + a password they choose (or
-     Google). First password sign-in sets it.
+     Tell them: Studio URL → invited email + a password they choose.
+     First password sign-in sets it.
    - **New workspace** — outside operators get an empty studio + their own
      Drive Connect.
    - **Open** on a row — you see their Studio (gallery, queue, Generate,
