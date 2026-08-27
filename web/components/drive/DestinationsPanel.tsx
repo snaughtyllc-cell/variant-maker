@@ -300,6 +300,10 @@ export function DestinationsPanel() {
         <div className="drive-destinations">
           <div className="drive-destinations__head">
             <div className="drive-eyebrow">Destinations · {destinations.length}</div>
+            <div className="drive-destinations__filter" aria-hidden="true">
+              <span className="material-symbols-rounded">search</span>
+              <span>Filter destinations</span>
+            </div>
           </div>
           <div className="drive-table">
             {!isLoading && destinations.length > 0 && (
