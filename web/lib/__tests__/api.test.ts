@@ -512,6 +512,43 @@ describe("auth API", () => {
     });
   });
 
+  it("createInvite POSTs workspace and experience for a new studio", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "inv_2", email: "maya@example.com", kind: "new_workspace",
+        workspace_id: null, experience: "solo", workspace_name: "Maya",
+        created_utc: "2026-08-20T00:00:00Z",
+      }), { status: 201 }),
+    );
+    await api.createInvite("maya@example.com", "new_workspace", {
+      experience: "solo",
+      workspaceName: "Maya",
+    });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      email: "maya@example.com",
+      kind: "new_workspace",
+      experience: "solo",
+      workspace_name: "Maya",
+    });
+  });
+
+  it("createInvite POSTs a target workspace for join", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "inv_3", email: "va@example.com", kind: "join",
+        workspace_id: "ws_va", created_utc: "2026-08-20T00:00:00Z",
+      }), { status: 201 }),
+    );
+    await api.createInvite("va@example.com", "join", { workspaceId: "ws_va" });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      email: "va@example.com",
+      kind: "join",
+      workspace_id: "ws_va",
+    });
+  });
+
   it("deleteInvite DELETEs /api/auth/invites/:id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     await api.deleteInvite("inv_1");

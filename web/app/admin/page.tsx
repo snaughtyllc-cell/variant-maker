@@ -12,7 +12,18 @@ import {
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
+import { normalizeExperience } from "@/lib/experience";
 import { ShieldCheck } from "lucide-react";
+
+function inviteSummary(inv: Invite, spaces: AdminWorkspace[]): string {
+  if (inv.kind === "join") {
+    const ws = spaces.find((item) => item.id === inv.workspace_id);
+    return ws ? `Join ${ws.name}` : "Join a workspace";
+  }
+  const label = normalizeExperience(inv.experience) === "solo" ? "Solo" : "Agency";
+  const name = (inv.workspace_name || "").trim();
+  return name ? `New workspace · ${label} · ${name}` : `New workspace · ${label}`;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -22,6 +33,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [kind, setKind] = useState<InviteKind>("join");
+  const [joinWorkspaceId, setJoinWorkspaceId] = useState("");
+  const [inviteExperience, setInviteExperience] = useState<"solo" | "agency">("solo");
+  const [studioName, setStudioName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -46,6 +60,12 @@ export default function AdminPage() {
         if (!cancelled) {
           setWorkspaces(ws);
           setInvites(inv);
+          setJoinWorkspaceId((current) => {
+            if (current) return current;
+            const home = me?.home_workspace_id;
+            if (home && ws.some((item) => item.id === home)) return home;
+            return ws[0]?.id ?? "";
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -90,9 +110,19 @@ export default function AdminPage() {
     setFormError(null);
     setSubmitting(true);
     try {
-      const created = await createInvite(email.trim(), kind);
+      const created = await createInvite(
+        email.trim(),
+        kind,
+        kind === "join"
+          ? { workspaceId: joinWorkspaceId || me?.home_workspace_id || null }
+          : {
+              experience: inviteExperience,
+              workspaceName: studioName.trim() || undefined,
+            },
+      );
       setInvites((prev) => [created, ...prev]);
       setEmail("");
+      setStudioName("");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create invite");
     } finally {
@@ -334,9 +364,68 @@ export default function AdminPage() {
               color: "var(--color-text)",
             }}
           >
-            <option value="join">Join my workspace</option>
+            <option value="join">Join a workspace</option>
             <option value="new_workspace">New workspace</option>
           </select>
+          {kind === "join" ? (
+            <select
+              value={joinWorkspaceId}
+              onChange={(e) => setJoinWorkspaceId(e.target.value)}
+              aria-label="Join workspace"
+              required
+              style={{
+                background: "var(--color-panel2)",
+                border: "1px solid var(--color-line)",
+                borderRadius: 9,
+                padding: "8px 12px",
+                fontSize: 13,
+                color: "var(--color-text)",
+                minWidth: 180,
+              }}
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                  {ws.id === me?.home_workspace_id ? " · yours" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <select
+                value={inviteExperience}
+                onChange={(e) => setInviteExperience(e.target.value as "solo" | "agency")}
+                aria-label="Workspace experience"
+                style={{
+                  background: "var(--color-panel2)",
+                  border: "1px solid var(--color-line)",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  color: "var(--color-text)",
+                }}
+              >
+                <option value="solo">Solo</option>
+                <option value="agency">Agency</option>
+              </select>
+              <input
+                type="text"
+                value={studioName}
+                onChange={(e) => setStudioName(e.target.value)}
+                placeholder="Studio name (optional)"
+                aria-label="Studio name"
+                style={{
+                  background: "var(--color-panel2)",
+                  border: "1px solid var(--color-line)",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  color: "var(--color-text)",
+                  minWidth: 160,
+                }}
+              />
+            </>
+          )}
           <button
             type="submit"
             disabled={submitting}
@@ -347,7 +436,8 @@ export default function AdminPage() {
           </button>
         </form>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
-          Join adds them to your home workspace. New workspace gives them an empty studio of their own.
+          Join adds them to the workspace you pick. New workspace creates an empty studio
+          with Solo or Agency already set — you do not wait for them to sign in first.
           They sign in with that email plus a password they choose, or with Google.
         </div>
 
@@ -377,7 +467,7 @@ export default function AdminPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>{inv.email}</div>
                   <div style={{ color: "var(--color-muted)", marginTop: 2 }}>
-                    {inv.kind === "join" ? "Join my workspace" : "New workspace"}
+                    {inviteSummary(inv, workspaces)}
                     {inv.created_utc ? ` · ${inv.created_utc.replace("T", " ").replace("Z", "")}` : ""}
                   </div>
                 </div>

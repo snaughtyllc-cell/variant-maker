@@ -250,6 +250,8 @@ export interface Invite {
   kind: InviteKind;
   workspace_id: string | null;
   created_utc: string;
+  experience?: "solo" | "agency" | null;
+  workspace_name?: string | null;
 }
 
 export interface AdminMember {

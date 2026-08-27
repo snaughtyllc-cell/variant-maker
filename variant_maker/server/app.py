@@ -699,6 +699,14 @@ def create_app(
             raise HTTPException(status_code=403, detail="owner only")
         return user
 
+    def _invite_out(inv) -> InviteOut:
+        return InviteOut(
+            id=inv.id, email=inv.email, kind=inv.kind,
+            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
+            experience=getattr(inv, "experience", None),
+            workspace_name=getattr(inv, "workspace_name", None),
+        )
+
     def _team_out(home_id: str) -> TeamOut:
         assert tenants is not None
         ws = tenants.get_workspace(home_id)
@@ -712,13 +720,7 @@ def create_app(
                 AdminMemberOut(email=u.email, name=u.name, role=u.role)
                 for u in members
             ],
-            invites=[
-                InviteOut(
-                    id=i.id, email=i.email, kind=i.kind,
-                    workspace_id=i.workspace_id, created_utc=i.created_utc,
-                )
-                for i in invites
-            ],
+            invites=[_invite_out(i) for i in invites],
         )
 
     def _admin_workspace_out(ws) -> AdminWorkspaceOut:
@@ -1054,27 +1056,32 @@ def create_app(
     def list_invites(request: Request) -> list[InviteOut]:
         _require_admin(request)
         assert tenants is not None
-        return [
-            InviteOut(
-                id=i.id, email=i.email, kind=i.kind,
-                workspace_id=i.workspace_id, created_utc=i.created_utc,
-            )
-            for i in tenants.list_invites()
-        ]
+        return [_invite_out(i) for i in tenants.list_invites()]
 
     @app.post("/api/auth/invites", status_code=201, response_model=InviteOut)
     def create_invite(request: Request, body: InviteCreateIn) -> InviteOut:
         admin = _require_admin(request)
         assert tenants is not None
-        ws_id = admin.workspace_id if body.kind == "join" else None
+        if body.kind == "join":
+            ws_id = (body.workspace_id or "").strip() or admin.workspace_id
+            if not ws_id or tenants.get_workspace(ws_id) is None:
+                raise HTTPException(status_code=404, detail="workspace not found")
+            try:
+                inv = tenants.add_invite(
+                    email=body.email, kind="join", workspace_id=ws_id,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return _invite_out(inv)
         try:
-            inv = tenants.add_invite(email=body.email, kind=body.kind, workspace_id=ws_id)
+            inv = tenants.add_invite(
+                email=body.email, kind="new_workspace", workspace_id=None,
+                experience=body.experience,
+                workspace_name=body.workspace_name,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return InviteOut(
-            id=inv.id, email=inv.email, kind=inv.kind,
-            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
-        )
+        return _invite_out(inv)
 
     @app.delete("/api/auth/invites/{invite_id}", status_code=204)
     def delete_invite(request: Request, invite_id: str) -> None:
@@ -1125,10 +1132,7 @@ def create_app(
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return InviteOut(
-            id=inv.id, email=inv.email, kind=inv.kind,
-            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
-        )
+        return _invite_out(inv)
 
     @app.delete("/api/workspace/invites/{invite_id}", status_code=204)
     def workspace_delete_invite(request: Request, invite_id: str) -> None:

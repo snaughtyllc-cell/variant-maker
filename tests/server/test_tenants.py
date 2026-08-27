@@ -190,6 +190,41 @@ def test_provision_new_workspace_invite(tmp_path):
     )
     assert jeff is not None
     assert ops.workspace_id != jeff.workspace_id
+    ws = store.get_workspace(ops.workspace_id)
+    assert ws is not None and ws.experience == "agency"
+
+
+def test_new_workspace_invite_stores_experience_before_signup(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    inv = store.add_invite(
+        email="maya@x.com", kind="new_workspace", workspace_id=None,
+        experience="solo", workspace_name="Maya",
+    )
+    assert inv.experience == "solo"
+    assert inv.workspace_name == "Maya"
+    listed = store.list_invites()
+    assert listed[0].experience == "solo"
+    assert listed[0].workspace_name == "Maya"
+    got = store.consume_invite("maya@x.com")
+    assert got is not None
+    assert got.experience == "solo"
+    assert got.workspace_name == "Maya"
+
+
+def test_provision_new_workspace_invite_applies_solo(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    store.add_invite(
+        email="maya@x.com", kind="new_workspace", workspace_id=None,
+        experience="solo", workspace_name="Maya studio",
+    )
+    maya = provision_login(
+        store, email="maya@x.com", name="Maya", admin_email="jeff@x.com",
+    )
+    assert maya is not None
+    ws = store.get_workspace(maya.workspace_id)
+    assert ws is not None
+    assert ws.experience == "solo"
+    assert ws.name == "Maya studio"
 
 
 def test_set_workspace_experience_defaults_agency(tmp_path):
