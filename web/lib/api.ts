@@ -130,8 +130,10 @@ export async function createJob(
   allowCreativeEscalate: boolean = true,
   qualityMode: "fast" | "hq" = "fast",
   generateCaptions: boolean = false,
+  captionSeed: string = "",
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
+  const seed = captionSeed.trim();
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
     const fd = new FormData();
@@ -139,6 +141,7 @@ export async function createJob(
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
     fd.append("quality_mode", qualityMode);
     fd.append("generate_captions", captions);
+    if (seed) fd.append("caption_seed", seed);
     for (const f of files) fd.append("files", f, f.name);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
@@ -153,6 +156,7 @@ export async function createJob(
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
   fd.append("quality_mode", qualityMode);
   fd.append("generate_captions", captions);
+  if (seed) fd.append("caption_seed", seed);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -317,7 +321,9 @@ export function createJobFromDrive(opts: {
   qualityMode?: "fast" | "hq";
   allowCreativeEscalate?: boolean;
   generateCaptions?: boolean;
+  captionSeed?: string;
 }): Promise<CreateJobResponse> {
+  const seed = (opts.captionSeed || "").trim();
   return fetch("/api/jobs/from-drive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -328,6 +334,7 @@ export function createJobFromDrive(opts: {
       quality_mode: opts.qualityMode ?? "fast",
       allow_creative_escalate: opts.allowCreativeEscalate ?? true,
       generate_captions: opts.generateCaptions ?? false,
+      ...(seed ? { caption_seed: seed } : {}),
     }),
   }).then(json<CreateJobResponse>);
 }

@@ -39,10 +39,6 @@ export const viewport: Viewport = {
   themeColor: "#e8f6f8",
 };
 
-// Prevent static HTML shells from being cached by RunPod's CDN with stale JS refs.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export default function RootLayout({
   children,
 }: Readonly<{

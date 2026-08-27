@@ -37,6 +37,17 @@ describe("VideoThumb", () => {
     expect((container.firstElementChild as HTMLElement).style.aspectRatio).toBe("9 / 16");
   });
 
+  it("fetches the mp4 even when a look still exists", () => {
+    const { container } = render(
+      <VideoThumb src="/v.mp4" poster="/api/look/s1/look_v01.jpg" />,
+    );
+    const video = container.querySelector("video") as HTMLVideoElement;
+    expect(video).toBeTruthy();
+    expect(video.getAttribute("src")).toMatch(/\/v\.mp4/);
+    expect(video.getAttribute("poster")).toMatch(/\/api\/look\/s1\/look_v01\.jpg$/);
+    expect(video.getAttribute("preload")).toBe("metadata");
+  });
+
   it("plays on hover and pauses on leave", () => {
     const play = vi.fn().mockResolvedValue(undefined);
     const pause = vi.fn();

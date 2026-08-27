@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import { canManageDriveOAuth, showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
 import { PRIMARY_TABS } from "@/lib/studioDestinations";
 
 describe("showDiagnosticsNav", () => {
@@ -24,6 +24,18 @@ describe("showTeamNav", () => {
 
   it("hides for members", () => {
     expect(showTeamNav({ role: "member", is_admin: false })).toBe(false);
+  });
+});
+
+describe("canManageDriveOAuth", () => {
+  it("is site admin only when login is on", () => {
+    expect(canManageDriveOAuth({ auth_required: true, is_admin: true })).toBe(true);
+    expect(canManageDriveOAuth({ auth_required: true, is_admin: false })).toBe(false);
+    expect(canManageDriveOAuth(undefined)).toBe(false);
+  });
+
+  it("stays open when login is off", () => {
+    expect(canManageDriveOAuth({ auth_required: false, is_admin: false })).toBe(true);
   });
 });
 
@@ -53,13 +65,13 @@ describe("visiblePrimaryTabs", () => {
     ).toEqual(labels);
   });
 
-  it("hides Drops and Workflows for solo members", () => {
+  it("hides Drops for solo members but keeps Workflows", () => {
     expect(
       visiblePrimaryTabs({
         experience: "solo",
         is_admin: false,
         auth_required: true,
       }).map((d) => d.href),
-    ).toEqual(["/", "/gallery", "/settings/drive"]);
+    ).toEqual(["/", "/gallery", "/workflows", "/settings/drive"]);
   });
 });

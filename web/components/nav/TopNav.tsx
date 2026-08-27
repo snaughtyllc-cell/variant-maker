@@ -79,7 +79,7 @@ export function TopNav() {
             const Icon = ICONS[href as keyof typeof ICONS];
             const active = linkActive(pathname, href);
             return (
-              <Link key={href} href={href} className="vf-nav-link" data-active={active}>
+              <Link key={href} href={href} prefetch className="vf-nav-link" data-active={active}>
                 <Icon size={15} strokeWidth={1.8} /> {label}
               </Link>
             );
@@ -96,31 +96,36 @@ export function TopNav() {
           })}
         </nav>
 
-        <div className="vf-topbar-actions">
-          <StatusStrip />
-          {(me?.email || allowedExtras.length > 0) && (
-            <>
-              {me?.email && (
-                <span className="vf-account-email" title={me.email}>
-                  {me.email}
-                  <span className="vf-experience-label">
-                    {" "}
-                    {experienceLabel(normalizeExperience(me.experience))}
+        <div className="vf-topbar-end">
+          <div className="vf-topbar-status">
+            <StatusStrip />
+          </div>
+          <div className="vf-topbar-actions">
+            {(me?.email || allowedExtras.length > 0) && (
+              <>
+                {me?.email && (
+                  <span className="vf-account-email" title={me.email}>
+                    {me.email}
+                    <span className="vf-experience-label">
+                      {" "}
+                      {experienceLabel(normalizeExperience(me.experience))}
+                    </span>
                   </span>
-                </span>
-              )}
-              {me?.email && <button type="button" className="vf-logout" onClick={handleLogout}><LogOut size={14} /> Log out</button>}
-              <button
-                type="button"
-                className="vf-more-trigger"
-                aria-expanded={moreOpen}
-                aria-controls="vf-mobile-more"
-                onClick={() => setMoreOpen((open) => !open)}
-              >
-                <MoreHorizontal size={17} /> More
-              </button>
-            </>
-          )}
+                )}
+                {me?.email && <button type="button" className="vf-logout" onClick={handleLogout}><LogOut size={14} /> Log out</button>}
+                <button
+                  type="button"
+                  className="vf-more-trigger"
+                  aria-label="More"
+                  aria-expanded={moreOpen}
+                  aria-controls="vf-mobile-more"
+                  onClick={() => setMoreOpen((open) => !open)}
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -151,7 +156,7 @@ export function TopNav() {
           const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
           return (
-            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} data-active={active}>
+            <Link key={item.href} href={item.href} prefetch aria-current={active ? "page" : undefined} data-active={active}>
               <Icon size={17} strokeWidth={1.8} />
               <span>{item.short ?? item.label}</span>
             </Link>

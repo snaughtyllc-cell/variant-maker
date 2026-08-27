@@ -9,7 +9,7 @@ export function useQueue() {
   const { data, mutate, isLoading } = useSWR<QueueSnapshot>(
     "/api/queue",
     getQueue,
-    { refreshInterval: 4000, revalidateOnFocus: true },
+    { refreshInterval: 4000, revalidateOnFocus: false },
   );
   return { data: data ?? EMPTY_QUEUE, mutate, isLoading };
 }

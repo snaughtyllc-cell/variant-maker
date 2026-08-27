@@ -115,7 +115,7 @@ export function DropLedgerPanel() {
               lineHeight: 1.45,
             }}
           >
-            Connect Google above first. Then tap Ensure sheet to create VaryForge Drop Ledger.
+            Share folders with the studio Drive email above first. Only the site admin connects Google. Then tap Ensure sheet.
           </div>
         )}
 

@@ -20,14 +20,15 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Everyone signed in | **Studio · Gallery · Drops · Workflows · Drive** |
+| Agency (and site admin / auth off) | **Studio · Gallery · Drops · Workflows · Drive** |
+| Solo creator | **Studio · Gallery · Workflows · Drive** (Drops stays agency-only) |
 | Workspace owner (or site admin) | + **Team** |
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
-Phone (`< 640px`) only has room for the five everyone-tabs. Team /
-Admin / Diagnostics sit under **More**. Desktop shows extras in the
-top row when the session is allowed to see them.
+Phone (`< 640px`) uses the visible primary tabs (5 for agency, 4 for
+solo). Team / Admin / Diagnostics sit under **More**. Desktop shows
+extras in the top row when the session is allowed to see them.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -62,7 +63,8 @@ old four-row list.
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
-- Do not hide Drops, Workflows, Drive, Team, or Admin — they are live.
+- Do not hide Workflows, Drive, Team, or Admin — they are live. Drops
+  is agency-only; Solo still gets Workflows (Flows).
 - Do not put Admin / Diagnostics in the phone bottom bar. They stay
   under More.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,

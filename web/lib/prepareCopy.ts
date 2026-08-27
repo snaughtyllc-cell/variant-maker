@@ -21,7 +21,15 @@ export function captionToggleLabel(): string {
 }
 
 export function captionToggleHint(): string {
-  return "AI writes a post caption per variant. Preview them in Gallery under each clip.";
+  return "Paste the original caption. Each copy gets a unique riff — preview them in Gallery under each clip.";
+}
+
+export function captionSeedLabel(): string {
+  return "Original caption";
+}
+
+export function captionSeedPlaceholder(): string {
+  return "The caption you would post on the original clip";
 }
 
 export function captionPreviewLabel(): string {

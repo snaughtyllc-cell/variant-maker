@@ -839,3 +839,21 @@ def test_create_job_generate_captions_attaches_copy(tmp_path):
     assert captions
     assert "Copy 1 of 2" in captions[0]
     assert captions[0] != captions[1]
+
+
+def test_create_job_caption_seed_attaches_original(tmp_path):
+    client, store = _client(tmp_path)
+    seed = "POV boil #reels"
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("boil.mp4", b"x", "video/mp4"))],
+        data={"count": "2", "generate_captions": "true", "caption_seed": seed},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    store.wait(job_id, timeout=5)
+    variants = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"]
+    captions = [v.get("caption") or "" for v in variants if v["status"] == "ok"]
+    assert captions[0] == seed
+    assert "POV boil" in captions[1]
+    assert captions[0] != captions[1]

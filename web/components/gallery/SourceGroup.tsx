@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Destination, DriveStatus, ExportVariantRef, SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
-import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
+import { copyMissingCopy, deliveryComplete, filesReadyCount, galleryStillUrl, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
 import {
   okVariantKeys,
@@ -261,8 +261,9 @@ export function SourceGroup({
     }
   }
 
-  const thumbReady = isFileReady(source.variants[0] ?? {});
-  const thumbUrl = thumbReady ? source.variants[0]?.file_url : undefined;
+  const firstReady = source.variants.find((v) => isFileReady(v));
+  const packStill = galleryStillUrl(firstReady);
+  const thumbUrl = firstReady?.file_url;
   const thumbSrc = thumbUrl ?? sourceUrl(source.source_id);
   const okCount = okVariantKeys([source]).length;
   const sourceAllSelected = selectionHasAllOk(selected, [source]);
@@ -326,7 +327,15 @@ export function SourceGroup({
             border: "1px solid var(--color-line)",
           }}
         >
-          {thumbUrl ? (
+          {packStill ? (
+            <img
+              src={packStill}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          ) : thumbUrl ? (
             <video
               src={thumbSrc}
               muted

@@ -4,13 +4,15 @@ import { cssAspectRatio, DEFAULT_CSS_ASPECT, paintVideoFrame, videoFrameSrc } fr
 
 interface VideoThumbProps {
   src: string;
+  poster?: string;
   badge?: ReactNode;
   className?: string;
 }
 
-export function VideoThumb({ src, badge, className }: VideoThumbProps) {
+export function VideoThumb({ src, poster, badge, className }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const still = (poster || "").trim();
   const [inView, setInView] = useState(false);
   const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
 
@@ -77,6 +79,7 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
         <video
           ref={videoRef}
           src={videoFrameSrc(src)}
+          poster={still || undefined}
           preload="metadata"
           muted
           playsInline

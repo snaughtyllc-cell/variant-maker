@@ -73,6 +73,17 @@ describe("createJob posts multipart with files + count", () => {
     await api.createJob([f], 3, true, "fast", true);
     const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
     expect(body.get("generate_captions")).toBe("true");
+    expect(body.get("caption_seed")).toBeNull();
+  });
+
+  it("sends caption_seed when captions are on", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", true, "POV boil #reels");
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("generate_captions")).toBe("true");
+    expect(body.get("caption_seed")).toBe("POV boil #reels");
   });
 
   it("sends quality_mode hq when requested", async () => {
@@ -314,6 +325,28 @@ describe("createJobFromDrive", () => {
       quality_mode: "fast",
       allow_creative_escalate: true,
       generate_captions: true,
+    });
+  });
+
+  it("sends caption_seed when captions are on", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1"],
+      count: 3,
+      generateCaptions: true,
+      captionSeed: "POV boil #reels",
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1"],
+      count: 3,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: true,
+      caption_seed: "POV boil #reels",
     });
   });
 });
