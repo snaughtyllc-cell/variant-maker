@@ -45,6 +45,15 @@ export type FileCacheProgress = {
 };
 
 export const FILE_FETCH_CONCURRENCY = 6;
+export const FILE_FETCH_CONCURRENCY_APPLE = 2;
+
+export type SaveTapAction = "share" | "prepare" | "prepare_then_save";
+
+/** iPhone: never share after an async fetch — Safari drops the gesture and weaker phones OOM. */
+export function saveTapAction(ready: boolean, appleMobile: boolean): SaveTapAction {
+  if (ready) return "share";
+  return appleMobile ? "prepare" : "prepare_then_save";
+}
 
 export const sharedVariantFileCache = new Map<string, File>();
 
@@ -96,6 +105,7 @@ export function canShareVideoFiles(
 export function cloneShareFiles(files: File[]): File[] {
   return files.map((file) => {
     const name = file.name.toLowerCase().endsWith(".mp4") ? file.name : `${file.name}.mp4`;
+    if (file.type === "video/mp4" && name === file.name) return file;
     return new File([file], name, { type: "video/mp4", lastModified: Date.now() });
   });
 }
@@ -285,6 +295,7 @@ export async function fillFileCache(
   variants: VariantFileRef[],
   fetchFn?: typeof fetch,
   onProgress?: (progress: FileCacheProgress) => void,
+  concurrency = FILE_FETCH_CONCURRENCY,
 ): Promise<File[]> {
   const fetchImpl = fetchFn ?? globalThis.fetch.bind(globalThis);
   for (const variant of variants) {
@@ -314,6 +325,7 @@ export async function fillFileCache(
         }
         emit();
       },
+      concurrency,
     );
     emit();
   }

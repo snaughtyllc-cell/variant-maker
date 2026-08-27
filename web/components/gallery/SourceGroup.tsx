@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Destination, DriveStatus, ExportVariantRef, SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
 import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
@@ -13,12 +13,17 @@ import {
   sendDisabledReason,
 } from "@/lib/drive";
 import {
+  FILE_FETCH_CONCURRENCY,
+  FILE_FETCH_CONCURRENCY_APPLE,
   fillFileCache,
   filesReadyNow,
+  isAppleMobile,
   phoneShareHintCopy,
   readyShareableVariants,
   saveOrShareVideoFiles,
+  saveTapAction,
   selectedShareableVariants,
+  shareRetryCopy,
   shareEmptyCopy,
   shareOutcomeMessage,
   sharePrepareProgressCopy,
@@ -62,7 +67,8 @@ export function SourceGroup({
   const [zipMsg, setZipMsg] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [offerPhotos, setOfferPhotos] = useState(false);
-  const [showZip, setShowZip] = useState(true);
+  const [showZip, setShowZip] = useState(false);
+  const shareLock = useRef(false);
   const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
   const [prepareProgress, setPrepareProgress] = useState<FileCacheProgress | null>(null);
 
@@ -114,21 +120,13 @@ export function SourceGroup({
   function handleSaveShare(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (stillRunning || shareBusy || actionShareable.length === 0) return;
+    if (stillRunning || shareBusy || shareLock.current || actionShareable.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const apple = isAppleMobile(nav?.userAgent, nav?.maxTouchPoints);
     const ready = filesReadyNow(sharedVariantFileCache, actionShareable, pendingShareFiles);
-    setShareBusy(true);
-    setZipMsg(null);
-    const run = async (files: File[]) => {
-      if (files.length === 0) {
-        setZipMsg(shareEmptyCopy());
-        return;
-      }
-      const outcome = await saveOrShareVideoFiles(files, {
-        share: nav,
-        userAgent: nav?.userAgent,
-        maxTouchPoints: nav?.maxTouchPoints,
-      });
+    const plan = saveTapAction(Boolean(ready), apple);
+
+    const applyOutcome = (outcome: Awaited<ReturnType<typeof saveOrShareVideoFiles>>) => {
       if (outcome.result === "needs_gesture") {
         setPendingShareFiles(outcome.remaining);
         setZipMsg(shareOutcomeMessage(outcome));
@@ -137,10 +135,54 @@ export function SourceGroup({
       setPendingShareFiles(null);
       if (outcome.result === "unsupported") setZipMsg(shareEmptyCopy());
     };
-    const task = ready
-      ? run(ready)
-      : fillFileCache(sharedVariantFileCache, actionShareable, undefined, setPrepareProgress).then(run);
-    void task.catch(() => setZipMsg(shareEmptyCopy())).finally(() => setShareBusy(false));
+
+    const shareNow = (files: File[]) => {
+      shareLock.current = true;
+      void saveOrShareVideoFiles(files, {
+        share: nav,
+        userAgent: nav?.userAgent,
+        maxTouchPoints: nav?.maxTouchPoints,
+      })
+        .then(applyOutcome)
+        .catch(() => setZipMsg(shareEmptyCopy()))
+        .finally(() => {
+          shareLock.current = false;
+        });
+    };
+
+    if (plan === "share" && ready) {
+      // Must call WebKit share in this tap — setState first drops the gesture.
+      shareNow(ready);
+      return;
+    }
+
+    setShareBusy(true);
+    setZipMsg(null);
+    void fillFileCache(
+      sharedVariantFileCache,
+      actionShareable,
+      undefined,
+      setPrepareProgress,
+      apple ? FILE_FETCH_CONCURRENCY_APPLE : FILE_FETCH_CONCURRENCY,
+    )
+      .then((files) => {
+        if (files.length === 0) {
+          setZipMsg(shareEmptyCopy());
+          return;
+        }
+        if (plan === "prepare") {
+          setPendingShareFiles(files);
+          setZipMsg(shareRetryCopy());
+          return;
+        }
+        return saveOrShareVideoFiles(files, {
+          share: nav,
+          userAgent: nav?.userAgent,
+          maxTouchPoints: nav?.maxTouchPoints,
+        }).then(applyOutcome);
+      })
+      .catch(() => setZipMsg(shareEmptyCopy()))
+      .finally(() => setShareBusy(false));
   }
 
   function handleSendToDrive(e: React.MouseEvent) {
@@ -236,7 +278,7 @@ export function SourceGroup({
         overflow: "hidden",
       }}
     >
-      {/* Group header */}
+      {/* Group header — actions stay outside the collapse click so iOS Save cannot remount the pack */}
       <div
           style={{
             display: "flex",
@@ -244,12 +286,21 @@ export function SourceGroup({
             gap: 13,
             padding: "14px 16px",
             borderBottom: "1px solid var(--color-line)",
-            cursor: "pointer",
             userSelect: "none",
             flexWrap: "wrap",
           }}
-        onClick={() => setOpen(o => !o)}
       >
+        <div
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 13,
+            cursor: "pointer",
+            minWidth: 0,
+            flex: "1 1 180px",
+          }}
+        >
         {/* Chevron */}
         <span
           style={{
@@ -299,9 +350,14 @@ export function SourceGroup({
             </div>
           ) : null}
         </div>
+        </div>
 
-        {/* Right side: delivery pill + folder link */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        {/* Pack actions: Select / Save / Send — not inside the collapse hit target */}
+        <div
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <span
             style={{
               display: "inline-flex",

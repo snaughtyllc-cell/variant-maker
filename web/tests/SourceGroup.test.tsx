@@ -56,6 +56,9 @@ function source(over: Partial<SourceOut> = {}): SourceOut {
   };
 }
 
+const originalUserAgent = navigator.userAgent;
+const originalTouchPoints = navigator.maxTouchPoints;
+
 const noop = () => {};
 const props = {
   onOpenVariant: noop,
@@ -77,13 +80,15 @@ afterEach(() => {
   document.body.innerHTML = "";
   Reflect.deleteProperty(navigator, "canShare");
   Reflect.deleteProperty(navigator, "share");
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value: originalUserAgent });
+  Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, value: originalTouchPoints });
 });
 
 describe("SourceGroup phone save/share", () => {
-  it("shows Save to phone as the pack action and ZIP as a quieter secondary on desktop", () => {
+  it("shows Save to phone as the pack action and ZIP as a quieter secondary on desktop", async () => {
     render(<SourceGroup source={source()} {...props} />);
     expect(screen.getByRole("button", { name: /save to phone/i })).toBeInTheDocument();
-    const zip = screen.getByRole("link", { name: /download zip/i });
+    const zip = await screen.findByRole("link", { name: /download zip/i });
     expect(zip).toHaveAttribute("href", "/api/sources/s1/zip");
     expect(zip.getAttribute("title")).toBe(zipSecondaryCopy());
     expect(zip).toHaveClass("gallery-zip-link");
@@ -237,6 +242,39 @@ describe("SourceGroup phone save/share", () => {
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
+  });
+
+  it("on iPhone prepares clips on the first Save tap and only shares on the second", async () => {
+    const SAFARI_IPHONE =
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+    const share = vi.fn(async () => {});
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: SAFARI_IPHONE });
+    Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, value: 5 });
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(fetch).mockImplementation(async () => {
+      await gate;
+      return new Response("vid", { status: 200, headers: { "Content-Type": "video/mp4" } });
+    });
+
+    render(<SourceGroup source={source()} {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /save to photos/i }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(share).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => {
+      expect(screen.getByText(/Tap Save to Photos again/i)).toBeInTheDocument();
+    });
+    expect(share).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /save to photos/i }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    const payload = share.mock.calls[0][0] as { files: File[] };
+    expect(payload.files.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
   });
 
   it("shares File objects when canShare accepts them", async () => {

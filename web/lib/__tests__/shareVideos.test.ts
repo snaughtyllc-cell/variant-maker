@@ -17,6 +17,7 @@ import {
   readyShareableVariants,
   saveNoneSelectedCopy,
   saveOrShareVideoFiles,
+  saveTapAction,
   selectedShareableVariants,
   shareClipsReadyCopy,
   shareEmptyCopy,
@@ -217,12 +218,30 @@ describe("downloadVideoFiles", () => {
 });
 
 describe("cloneShareFiles", () => {
-  it("stamps a fresh video/mp4 File so Safari can share the same clips again", () => {
+  it("stamps a fresh video/mp4 File only when the name or type is wrong", () => {
     const original = new File(["a"], "v01", { type: "application/octet-stream" });
     const [clone] = cloneShareFiles([original]);
     expect(clone).not.toBe(original);
     expect(clone.name).toBe("v01.mp4");
     expect(clone.type).toBe("video/mp4");
+  });
+
+  it("reuses already-correct mp4s so a 20-pack does not double RAM", () => {
+    const original = new File(["a"], "v01.mp4", { type: "video/mp4" });
+    const [same] = cloneShareFiles([original]);
+    expect(same).toBe(original);
+  });
+});
+
+describe("saveTapAction", () => {
+  it("shares on this tap only when clips are already in memory", () => {
+    expect(saveTapAction(true, true)).toBe("share");
+    expect(saveTapAction(true, false)).toBe("share");
+  });
+
+  it("prepares only on iPhone when clips still need to download", () => {
+    expect(saveTapAction(false, true)).toBe("prepare");
+    expect(saveTapAction(false, false)).toBe("prepare_then_save");
   });
 });
 
