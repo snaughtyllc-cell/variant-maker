@@ -1,4 +1,9 @@
-from variant_maker.server.caption_ai import caption_prompt, captions_for_source, local_caption, source_stem
+from variant_maker.server.caption_ai import (
+    caption_prompt,
+    captions_for_source,
+    local_caption,
+    source_stem,
+)
 
 
 def test_local_caption_is_unique_per_index():
