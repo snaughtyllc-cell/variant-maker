@@ -524,12 +524,60 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .gallery-zip-link { display: none; }
 }
 
-/* Drops — delivery audit log: 4 stat cards + a filterable data table
-   (pack / sent / files / ledger id / result). Redesign spec: recon 03,
-   "Screen 4 — Drops". Status tones (pass/dupe/flag) reuse the shared
-   --color-green/--color-orange/--color-amber tokens, which already carry
-   the exact hexes the mock's dropRow() color map uses. */
-.drops-stats { display: flex; gap: 14px; margin: 0 0 20px; }
+/* Drops — delivery audit log: own 58px context bar (breadcrumb + search +
+   CSV export) over a full-height panel, 4 stat cards, filter pills, and a
+   bordered data table (pack / sent / files / ledger id / result). Redesign
+   spec: recon 03, "Screen 4 — Drops". Status tones (pass/dupe/flag) reuse
+   the shared --color-green/--color-orange/--color-amber tokens, which
+   already carry the exact hexes the mock's dropRow() color map uses.
+   Mobile (<640px) keeps the original aqua, naturally-scrolling page; the
+   desktop shell (>=640px, matching .vf-header/.vf-sidenav) switches to a
+   flat panel with the topbar + an internally-scrolling body, mirroring
+   `.studio-shell` / `.studio-cockpit__scroll`. */
+.drops-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
+
+.drops-topbar {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #e1edee;
+  display: none;
+  flex: none;
+  gap: 16px;
+  height: var(--nav-h);
+  padding: 0 24px;
+}
+.drops-topbar__section { color: #8aa0a5; font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; white-space: nowrap; }
+.drops-topbar__sep { color: #cfe3e5; }
+.drops-topbar__crumb { color: var(--ink); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.drops-topbar__spacer { flex: 1; }
+.drops-topbar__search { align-items: center; background: #f1f7f8; border-radius: 10px; display: flex; flex: none; gap: 8px; height: 34px; padding: 0 12px; width: 240px; }
+.drops-topbar__search .material-symbols-rounded { color: #8aa0a5; flex: none; font-size: 17px; }
+.drops-topbar__search input { background: transparent; border: 0; color: var(--color-text); flex: 1; font-size: 13px; min-width: 0; outline: none; }
+.drops-topbar__search input::placeholder { color: #a2b6ba; }
+.drops-topbar__export {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #dceaec;
+  border-radius: 10px;
+  color: #23393e;
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 13px;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+}
+.drops-topbar__export:hover:not(:disabled) { border-color: #a2c8ce; }
+.drops-topbar__export:disabled { cursor: not-allowed; opacity: 0.55; }
+.drops-topbar__export .material-symbols-rounded { color: #566e73; font-size: 17px; }
+
+.drops-intro { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+.drops-intro p { color: var(--color-violet); font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; margin: 0; text-transform: uppercase; }
+.drops-intro h1 { color: var(--ink); font-family: var(--font-sora), sans-serif; font-size: clamp(27px, 3vw, 38px); font-weight: 700; letter-spacing: -0.04em; line-height: 1.02; margin: 0; }
+
+.drops-board { display: flex; flex-direction: column; gap: 22px; }
+.drops-stats { display: flex; gap: 14px; margin: 0; }
 .drops-stat {
   background: #ffffff;
   border: 1px solid var(--color-line);
@@ -561,7 +609,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drops-stat--dark .drops-stat__value { color: var(--color-panel); }
 .drops-stat__value--exception { color: var(--color-orange); }
 
-.drops-filters-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+.drops-filters-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
 .drops-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .drops-filters a {
   background: #ffffff;
@@ -571,12 +619,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   font-family: var(--font-space-grotesk), monospace;
   font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.04em;
   padding: 8px 14px;
   text-decoration: none;
+  text-transform: uppercase;
 }
 .drops-filters a[data-active="true"] { background: var(--ink); border-color: var(--ink); color: var(--color-cyan); }
 .drops-hint { color: var(--color-muted2); font-family: var(--font-space-grotesk), monospace; font-size: 11px; margin: 0 0 0 auto; }
-.drops-error { align-items: center; background: #fff3f1; border: 1px solid #efc5c0; border-radius: 10px; color: #a33f3d; display: flex; font-size: 12px; gap: 7px; margin: 0 0 14px; padding: 10px 12px; }
+.drops-error { align-items: center; background: #fff3f1; border: 1px solid #efc5c0; border-radius: 10px; color: #a33f3d; display: flex; font-size: 12px; gap: 7px; margin: 0; padding: 10px 12px; }
 .drops-loading { color: var(--color-muted); font-size: 13px; padding: 42px 0; text-align: center; }
 
 .drops-table { background: #ffffff; border: 1px solid var(--color-line); border-radius: 16px; overflow: hidden; }
@@ -584,7 +634,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   align-items: center;
   column-gap: 14px;
   display: grid;
-  grid-template-columns: 22px 2fr 110px 84px 1.3fr 128px 28px;
+  grid-template-columns: 34px 2fr 130px 90px 1.4fr 110px 44px;
   padding: 13px 18px;
 }
 .drops-table__row--head {
@@ -594,7 +644,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   font-family: var(--font-space-grotesk), monospace;
   font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
+  padding: 11px 18px;
   text-transform: uppercase;
 }
 .drop-row {
@@ -626,6 +677,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drop-row__result[data-tone="dupe"] { background: #fcf0e4; color: var(--color-orange); }
 .drop-row__result[data-tone="flag"] { background: #fbf3df; color: var(--color-amber); }
 .drop-row__more { align-items: center; color: #b4c6c9; display: flex; justify-content: flex-end; }
+
+/* Desktop shell (matches the .vf-header/.vf-sidenav switch): the topbar
+   replaces the shared header for this route and the board fills the
+   remaining height, scrolling internally like `.studio-cockpit__scroll`. */
+@media (min-width: 640px) {
+  .drops-page {
+    background: var(--color-panel);
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - var(--nav-h) - var(--tab-h));
+    padding: 0;
+  }
+  .drops-topbar { display: flex; }
+  .drops-board { flex: 1; margin: 0 auto; min-height: 0; overflow-y: auto; padding: 26px 30px; width: 100%; }
+}
 
 .variant-sheet {
   display: flex !important;
@@ -779,8 +845,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 }
 
 /* Route-specific content containers, including legacy inline components. */
-.drops-page, .drive-page, .team-page, .admin-page, .diagnostics-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
-.drops-page > div, .drive-page > div, .team-page > div, .admin-page > div, .diagnostics-page > div { margin-left: auto; margin-right: auto; max-width: 1120px; }
+.drive-page, .team-page, .admin-page, .diagnostics-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
+.drive-page > div, .team-page > div, .admin-page > div, .diagnostics-page > div { margin-left: auto; margin-right: auto; max-width: 1120px; }
 .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { background: rgba(251, 253, 253, 0.9); border: 1px solid #d2e4e7; border-radius: 16px; box-shadow: var(--card-shadow); padding: 18px !important; }
 .team-page > div:last-child, .admin-page > div:last-child { max-width: 1120px; overflow-x: auto; }
 .team-page [style*="#0d0d13"], .admin-page [style*="#0d0d13"] { background: #f7fbfb !important; }
@@ -1045,7 +1111,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .vf-mobile-tabs a { align-items: center; color: var(--color-muted); display: flex; flex-direction: column; font-size: 9.5px; font-weight: 650; gap: 3px; justify-content: center; min-height: 48px; text-decoration: none; }
   .vf-mobile-tabs a[data-active="true"] { color: #087989; }
   .app-main { padding-bottom: var(--tab-h); }
-  .workspace-page, .drops-page, .drive-page, .team-page, .admin-page, .diagnostics-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
+  .workspace-page, .drive-page, .team-page, .admin-page, .diagnostics-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
+  .drops-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
   .workspace-heading { margin-bottom: 16px; }
   .workspace-heading h1 { font-size: 28px; }
   .workspace-heading__copy { font-size: 12.5px; }
