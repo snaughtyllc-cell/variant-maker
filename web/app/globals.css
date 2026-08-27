@@ -311,6 +311,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 /* StatusStrip remains compact, but is now part of the light shell. */
 .status-engine, .status-cpu { background: #f2f8f8 !important; border-color: #d4e3e6 !important; }
+.status-engine__dot { height: 7px; width: 7px; }
 .status-cpu strong { color: var(--ink); }
 .status-queue { background: #fff8e9 !important; border-color: #ecd9b3 !important; color: #876019 !important; }
 
@@ -358,10 +359,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .vf-desktop-nav, .vf-logout { display: none; }
   .status-cpu, .status-queue, .status-ready-text { display: none; }
   .status-engine {
+    align-items: center;
     background: transparent !important;
     border-color: transparent !important;
+    justify-content: center;
+    min-height: 36px;
+    min-width: 36px;
     padding: 0 !important;
   }
+  .status-engine__dot { height: 14px; width: 14px; }
   .vf-more-trigger {
     display: inline-flex;
     justify-content: center;

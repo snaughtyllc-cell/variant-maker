@@ -25,6 +25,7 @@ describe("StatusStrip", () => {
     const { container } = render(<StatusStrip />);
     expect(container.querySelector(".status-ready-text")).toHaveTextContent("Ready");
     expect(container.querySelector(".status-engine")).toBeTruthy();
+    expect(container.querySelector(".status-engine__dot")).toBeTruthy();
     expect(container.querySelector(".status-queue")).toBeNull();
   });
 
