@@ -300,6 +300,17 @@ export function VariantSheet({
                 >
                   v{padded} <span style={{ color: "var(--color-muted2)", fontWeight: 600 }}>of {variants.length}</span>
                 </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-space-grotesk), monospace",
+                    fontSize: 11,
+                    color: "var(--color-muted2)",
+                    marginTop: 4,
+                  }}
+                >
+                  delivered
+                  {variant.uniqueness != null ? ` · ${Math.round(variant.uniqueness * 100)}% originality` : ""}
+                </div>
               </div>
               <div className="variant-sheet__panel-body">
                 <QualityPanel

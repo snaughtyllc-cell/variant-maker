@@ -257,6 +257,7 @@ export function GalleryContent() {
       <GalleryToolbar
         count={sorted.length}
         variantCount={totalVariants}
+        crumb={activePack?.filename}
         filterMode={filterMode}
         onFilter={setFilterMode}
         sort={sort}
