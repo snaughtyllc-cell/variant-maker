@@ -1,6 +1,5 @@
 "use client";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { FolderOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
@@ -39,6 +38,8 @@ import {
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
+import { GalleryFloatingToolbar } from "@/components/gallery/GalleryFloatingToolbar";
+import { PackList } from "@/components/gallery/PackList";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
 import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
@@ -53,6 +54,8 @@ export function GalleryContent() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sort, setSort] = useState<SortMode>("newest");
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [packSearch, setPackSearch] = useState("");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
@@ -116,6 +119,7 @@ export function GalleryContent() {
 
   function handleOpenVariant(sourceId: string, index: number) {
     setSheetQuery({ sourceId, index });
+    setSelectedPackId(sourceId);
     pushGallerySearch(gallerySearchPath(sourceId, index));
   }
 
@@ -145,6 +149,11 @@ export function GalleryContent() {
 
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
+
+  // A deep-linked/open variant sheet (via ?v=) takes priority so the PACKS
+  // list stays focused on it; otherwise the last pack clicked, else the top one.
+  const activePackId = activeQuery?.sourceId ?? selectedPackId ?? undefined;
+  const activePack = sorted.find((s) => s.source_id === activePackId) ?? sorted[0];
 
   const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
@@ -244,19 +253,9 @@ export function GalleryContent() {
   }
 
   return (
-    <main className="workspace-page gallery-page">
-      <section className="workspace-page-shell">
-        <header className="workspace-heading">
-          <span className="workspace-heading__icon"><FolderOpen size={19} /></span>
-          <div>
-            <p className="workspace-heading__eyebrow">Review library</p>
-            <h1>Gallery</h1>
-            <p className="workspace-heading__copy">Finished packs by source. Select clips, then Save to Photos on a phone — or send copies to Drive.</p>
-          </div>
-        </header>
-      </section>
+    <main className="gallery-page">
       <GalleryToolbar
-        count={allSources.length}
+        count={sorted.length}
         variantCount={totalVariants}
         filterMode={filterMode}
         onFilter={setFilterMode}
@@ -282,60 +281,64 @@ export function GalleryContent() {
         saveMsg={saveMsg}
       />
 
-      {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div className="gallery-content" style={{ padding: "8px 16px 22px" }}>
-        {isLoading && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "60px 0",
-              color: "var(--color-muted)",
-              fontSize: 13,
-            }}
-          >
-            Loading gallery…
-          </div>
-        )}
+      <div className="gallery-body">
+        <PackList
+          packs={sorted}
+          totalCount={sorted.length}
+          activeId={activePack?.source_id}
+          onSelect={setSelectedPackId}
+          search={packSearch}
+          onSearchChange={setPackSearch}
+          loading={isLoading}
+        />
 
-        {!isLoading && sorted.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "80px 0",
-              color: "var(--color-muted)",
-              textAlign: "center",
-              gap: 12,
-            }}
-          >
-            <div style={{ fontSize: 36, opacity: 0.4 }}>⬡</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--color-text)", opacity: 0.6 }}>
-              {filterMode === "shortfall" ? "No sources with shortfall" : "No completed runs yet"}
-            </div>
-            <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
-              {filterMode === "shortfall"
-                ? "All sources have delivered their full requested count."
-                : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
-            </div>
-          </div>
-        )}
+        {/* Grid pane — always mounted; dimmed by the sheet overlay when open */}
+        <section className="gallery-grid-pane">
+          {isLoading && <div className="gallery-loading">Loading gallery…</div>}
 
-        {sorted.map((source) => (
-          <SourceGroup
-            key={source.source_id}
-            source={source}
-            onOpenVariant={handleOpenVariant}
-            onRegenerate={() => mutate()}
-            selected={selected}
-            onToggleVariant={handleToggleVariant}
-            onToggleSelectSource={handleToggleSelectSource}
-            onRemove={() => handleRemoveSource(source)}
-          />
-        ))}
+          {!isLoading && sorted.length === 0 && (
+            <div className="gallery-empty">
+              <div className="gallery-empty__icon">⬡</div>
+              <strong>{filterMode === "shortfall" ? "No packs need attention" : "No completed runs yet"}</strong>
+              <p>
+                {filterMode === "shortfall"
+                  ? "All packs have delivered their full requested count."
+                  : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
+              </p>
+            </div>
+          )}
+
+          {!isLoading && activePack && (
+            <SourceGroup
+              key={activePack.source_id}
+              source={activePack}
+              onOpenVariant={handleOpenVariant}
+              onRegenerate={() => mutate()}
+              selected={selected}
+              onToggleVariant={handleToggleVariant}
+              onToggleSelectSource={handleToggleSelectSource}
+              onRemove={() => handleRemoveSource(activePack)}
+            />
+          )}
+
+          {selected.size > 0 && (
+            <GalleryFloatingToolbar
+              count={selected.size}
+              onSend={() => setSendModalOpen(true)}
+              sendDisabled={disabledReason != null}
+              sendTitle={disabledReason}
+              onSave={handleSaveSelected}
+              saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
+              saveDisabled={
+                saveBusy ||
+                okRefs.length === 0 ||
+                (offerPhotos && !clipsPrepared && !pendingShareFiles)
+              }
+              saveTitle={phoneShareHintCopy()}
+              onClose={() => setSelected(new Set())}
+            />
+          )}
+        </section>
       </div>
 
       {/* Variant side-panel — mounts over the still-visible grid */}

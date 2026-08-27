@@ -70,3 +70,48 @@ export function pushGallerySearch(path: string): void {
   if (`${window.location.pathname}${window.location.search}` === path) return;
   window.history.pushState(null, "", path);
 }
+
+/** Pack-average originality, 0–100. Null when no variant has scored yet. */
+export function avgOriginalityPct(source: SourceOut): number | null {
+  const values = source.variants
+    .map((v) => v.uniqueness)
+    .filter((u): u is number => typeof u === "number");
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100);
+}
+
+/**
+ * Originality badge color for tiles drawn on a dark thumbnail (mint ≥65%,
+ * aqua 50–64%, amber <50%) — matches the redesign's tile-badge banding.
+ */
+export function tileOriginalityColor(pct: number | null): string {
+  if (pct == null) return "var(--color-muted2)";
+  if (pct >= 65) return "var(--color-mint)";
+  if (pct >= 50) return "var(--color-cyan)";
+  return "var(--color-amber2)";
+}
+
+/** Originality label color for a pack row on a white surface (teal / amber-dark). */
+export function packOriginalityColor(pct: number | null): string {
+  if (pct == null) return "var(--color-muted2)";
+  return pct < 50 ? "var(--color-amber)" : "var(--color-violet)";
+}
+
+/** "20 variants · today" / "3 variants · Aug 26" — pack-list row meta line. */
+export function packMetaLabel(source: SourceOut, now: Date = new Date()): string {
+  const n = source.variants.length;
+  const countLabel = `${n} variant${n === 1 ? "" : "s"}`;
+  const when = relativeDayLabel(source.created_utc, now);
+  return when ? `${countLabel} · ${when}` : countLabel;
+}
+
+function relativeDayLabel(iso: string | null | undefined, now: Date): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

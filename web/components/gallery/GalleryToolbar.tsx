@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpDown, CheckSquare, Download, Send } from "lucide-react";
 
 type FilterMode = "all" | "shortfall";
 type SortMode = "newest";
@@ -51,16 +50,32 @@ export function GalleryToolbar({
   const saveDisabled = saveDisabledReason != null || !!saveBusy;
   return (
     <section className="gallery-toolbar" aria-label="Gallery controls">
-      <div className="gallery-toolbar__count"><b>{count}</b> sources <span>·</span> <b>{variantCount}</b> finished variants</div>
+      <div className="gallery-toolbar__count">
+        <b>{count}</b> packs <span>·</span> <b>{variantCount}</b> finished variants
+      </div>
       <div className="gallery-toolbar__actions">
-        <div className="gallery-segments" aria-label="Source filter">
-          <button type="button" data-active={filterMode === "all"} onClick={() => onFilter("all")}>All sources</button>
-          <button type="button" data-active={filterMode === "shortfall"} onClick={() => onFilter("shortfall")}>Needs attention</button>
+        <div className="gallery-segments" aria-label="Pack filter">
+          <button type="button" data-active={filterMode === "all"} onClick={() => onFilter("all")}>
+            All
+          </button>
+          <button type="button" data-active={filterMode === "shortfall"} onClick={() => onFilter("shortfall")}>
+            Needs attention
+          </button>
         </div>
-        <Link className="gallery-quiet-link" href="/drops" aria-label="Sent to Drive">Sent</Link>
-        <Link className="gallery-quiet-link" href="/drops?filter=flagged_week" aria-label="Flagged this week">Flagged</Link>
-        <button type="button" className="gallery-quiet-link" onClick={() => onSort("newest")}><ArrowUpDown size={14} /> {sort === "newest" ? "Newest" : "Newest"}</button>
-        <button type="button" className="gallery-select-all" onClick={onSelectAll} disabled={selectAllDisabled}><CheckSquare size={14} /> {selectAllLabel}</button>
+        <Link className="gallery-quiet-link" href="/drops" aria-label="Sent to Drive">
+          Sent
+        </Link>
+        <Link className="gallery-quiet-link" href="/drops?filter=flagged_week" aria-label="Flagged this week">
+          Flagged
+        </Link>
+        <button type="button" className="gallery-quiet-link" onClick={() => onSort("newest")}>
+          <span className="material-symbols-rounded" aria-hidden="true">swap_vert</span>
+          {sort === "newest" ? "Newest" : "Newest"}
+        </button>
+        <button type="button" className="gallery-select-all" onClick={onSelectAll} disabled={selectAllDisabled}>
+          <span className="material-symbols-rounded" aria-hidden="true">check_box</span>
+          {selectAllLabel}
+        </button>
         <span className="gallery-send-wrap">
           <button
             type="button"
@@ -69,12 +84,22 @@ export function GalleryToolbar({
             disabled={saveDisabled}
             title={saveHint ?? saveDisabledReason ?? undefined}
           >
-            <Download size={14} /> {saveBusy ? "Saving…" : saveLabel}
+            <span className="material-symbols-rounded" aria-hidden="true">download</span>
+            {saveBusy ? "Saving…" : saveLabel}
           </button>
           {saveDisabledReason && !saveBusy && <small>{saveDisabledReason}</small>}
         </span>
         <span className="gallery-send-wrap">
-          <button type="button" className="vf-primary-button" onClick={onSend} disabled={sendDisabled} title={sendDisabledReason ?? undefined}><Send size={14} /> Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}</button>
+          <button
+            type="button"
+            className="vf-primary-button gallery-send-btn"
+            onClick={onSend}
+            disabled={sendDisabled}
+            title={sendDisabledReason ?? undefined}
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+            Send to Drive{selectedCount > 0 ? ` (${selectedCount})` : ""}
+          </button>
           {sendDisabled && <small>{sendDisabledReason}</small>}
         </span>
       </div>
