@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
@@ -14,30 +14,12 @@ import {
 } from "@/lib/gallery";
 import {
   okVariantKeys,
-  okVariantRefs,
   selectAllLabel,
   selectionHasAllOk,
-  sendDisabledReason,
   withOkSelection,
 } from "@/lib/drive";
-import {
-  fillFileCache,
-  filesReadyNow,
-  phoneShareHintCopy,
-  preparingClipsCopy,
-  saveNoneSelectedCopy,
-  saveOrShareVideoFiles,
-  selectedShareableVariants,
-  shareEmptyCopy,
-  shareLoadingCopy,
-  shareOutcomeMessage,
-  shareRetryCopy,
-  shareVideosBusyLabel,
-  shareVideosLabel,
-  shouldOfferPhotosSave,
-} from "@/lib/shareVideos";
 import { getDriveStatus, listDestinations } from "@/lib/api";
-import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
+import type { Destination, DriveStatus, ExportVariantRef, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { VariantSheet } from "@/components/variant/VariantSheet";
@@ -57,16 +39,11 @@ export function GalleryContent() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [sendRefs, setSendRefs] = useState<ExportVariantRef[]>([]);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [sheetQuery, setSheetQuery] = useState<{ sourceId: string; index: number } | null | undefined>(
     undefined,
   );
-  const [offerPhotos, setOfferPhotos] = useState(false);
-  const [saveBusy, setSaveBusy] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
-  const [clipsPrepared, setClipsPrepared] = useState(false);
-  const fileCacheRef = useRef(new Map<string, File>());
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
   useEffect(() => {
@@ -76,11 +53,6 @@ export function GalleryContent() {
         setDestinations(dests);
       })
       .catch((e) => console.error("Failed to load Drive status", e));
-  }, []);
-
-  useEffect(() => {
-    const nav = typeof navigator === "undefined" ? undefined : navigator;
-    setOfferPhotos(shouldOfferPhotosSave(nav, nav?.userAgent, nav?.maxTouchPoints));
   }, []);
 
   function handleToggleVariant(key: string) {
@@ -147,39 +119,16 @@ export function GalleryContent() {
   const sorted = sortSources(filtered, sort);
 
   const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
-
-  const okRefs = okVariantRefs(allSources, selected);
-  const selectedJobIds = [
+  const visibleOkCount = okVariantKeys(sorted).length;
+  const allVisibleSelected = selectionHasAllOk(selected, sorted);
+  const sendJobIds = [
     ...new Set(
-      okRefs
+      sendRefs
         .map((r) => allSources.find((s) => s.source_id === r.source_id)?.job_id)
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  const splitJobId = selectedJobIds.length === 1 ? selectedJobIds[0] : undefined;
-  const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
-  const visibleOkCount = okVariantKeys(sorted).length;
-  const allVisibleSelected = selectionHasAllOk(selected, sorted);
-  const selectedKey = [...selected].sort().join(",");
-  const selectedVariants = selectedShareableVariants(allSources, selected);
-
-  useEffect(() => {
-    if (selectedVariants.length === 0) {
-      setClipsPrepared(false);
-      setPendingShareFiles(null);
-      setSaveMsg(null);
-      return;
-    }
-    let cancelled = false;
-    setClipsPrepared(false);
-    void fillFileCache(fileCacheRef.current, selectedVariants).then((files) => {
-      if (cancelled) return;
-      setClipsPrepared(files.length === selectedVariants.length);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedKey, sources]);
+  const splitJobId = sendJobIds.length === 1 ? sendJobIds[0] : undefined;
 
   function handleSelectAllVisible() {
     setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
@@ -189,41 +138,9 @@ export function GalleryContent() {
     setSelected((prev) => withOkSelection(prev, [source], select));
   }
 
-  function handleSaveSelected() {
-    if (saveBusy || okRefs.length === 0) return;
-    const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(fileCacheRef.current, selectedVariants, pendingShareFiles);
-    if (!ready) {
-      setSaveBusy(true);
-      setSaveMsg(shareLoadingCopy());
-      void fillFileCache(fileCacheRef.current, selectedVariants)
-        .then((files) => {
-          setClipsPrepared(files.length === selectedVariants.length);
-          setPendingShareFiles(files.length ? files : null);
-          setSaveMsg(files.length ? shareRetryCopy() : shareEmptyCopy());
-        })
-        .catch(() => setSaveMsg(shareEmptyCopy()))
-        .finally(() => setSaveBusy(false));
-      return;
-    }
-    setSaveBusy(true);
-    setSaveMsg(null);
-    void saveOrShareVideoFiles(ready, {
-      share: nav,
-      userAgent: nav?.userAgent,
-      maxTouchPoints: nav?.maxTouchPoints,
-    })
-      .then((outcome) => {
-        if (outcome.result === "needs_gesture") {
-          setPendingShareFiles(outcome.remaining);
-          setSaveMsg(shareOutcomeMessage(outcome));
-          return;
-        }
-        setPendingShareFiles(null);
-        if (outcome.result === "unsupported") setSaveMsg(shareEmptyCopy());
-      })
-      .catch(() => setSaveMsg(shareEmptyCopy()))
-      .finally(() => setSaveBusy(false));
+  function handleSendToDrive(refs: ExportVariantRef[]) {
+    setSendRefs(refs);
+    setSendModalOpen(true);
   }
 
   function handleRemoveSource(source: SourceOut) {
@@ -240,6 +157,7 @@ export function GalleryContent() {
 
   function handleSendModalClose() {
     setSendModalOpen(false);
+    setSendRefs([]);
     setSelected(new Set());
   }
 
@@ -251,7 +169,7 @@ export function GalleryContent() {
           <div>
             <p className="workspace-heading__eyebrow">Review library</p>
             <h1>Gallery</h1>
-            <p className="workspace-heading__copy">Finished packs by source. Select clips, then Save to Photos on a phone — or send copies to Drive.</p>
+            <p className="workspace-heading__copy">Finished packs by source. Select all just selects. Save to Photos opens the share sheet. Send to Drive copies from Studio — no phone download.</p>
           </div>
         </header>
       </section>
@@ -262,24 +180,9 @@ export function GalleryContent() {
         onFilter={setFilterMode}
         sort={sort}
         onSort={setSort}
-        selectedCount={okRefs.length}
-        sendDisabledReason={disabledReason}
-        onSend={() => setSendModalOpen(true)}
         selectAllLabel={selectAllLabel(allVisibleSelected)}
         selectAllDisabled={visibleOkCount === 0}
         onSelectAll={handleSelectAllVisible}
-        saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
-        saveBusy={saveBusy}
-        saveDisabledReason={
-          okRefs.length === 0
-            ? saveNoneSelectedCopy()
-            : offerPhotos && !clipsPrepared && !pendingShareFiles
-              ? preparingClipsCopy()
-              : null
-        }
-        saveHint={phoneShareHintCopy()}
-        onSave={() => { handleSaveSelected(); }}
-        saveMsg={saveMsg}
       />
 
       {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
@@ -334,6 +237,9 @@ export function GalleryContent() {
             onToggleVariant={handleToggleVariant}
             onToggleSelectSource={handleToggleSelectSource}
             onRemove={() => handleRemoveSource(source)}
+            driveStatus={driveStatus}
+            destinations={destinations}
+            onSendToDrive={handleSendToDrive}
           />
         ))}
       </div>
@@ -351,10 +257,9 @@ export function GalleryContent() {
         />
       )}
 
-      {/* Send to Drive modal — only opened when the toolbar button is enabled */}
-      {sendModalOpen && (
+      {sendModalOpen && sendRefs.length > 0 && (
         <SendToDriveModal
-          refs={okRefs}
+          refs={sendRefs}
           destinations={destinations}
           jobId={splitJobId}
           onClose={handleSendModalClose}

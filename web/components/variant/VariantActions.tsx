@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
 import {
@@ -10,6 +10,7 @@ import {
   saveOrShareVideoFiles,
   shareVideosBusyLabel,
   shareVideosLabel,
+  sharedVariantFileCache,
   shouldOfferPhotosSave,
 } from "@/lib/shareVideos";
 import { PostLinkField } from "./PostLinkField";
@@ -25,7 +26,6 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [offerPhotos, setOfferPhotos] = useState(false);
-  const fileCacheRef = useRef(new Map<string, File>());
 
   const saveRef = isShareableVideo(variant)
     ? [{ file_url: variant.file_url, filename: variant.filename }]
@@ -40,7 +40,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
     e.preventDefault();
     if (saveBusy || saveRef.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(fileCacheRef.current, saveRef);
+    const ready = filesReadyNow(sharedVariantFileCache, saveRef);
     setSaveBusy(true);
     const run = async (files: File[]) => {
       if (files.length === 0) return;
@@ -50,7 +50,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
         maxTouchPoints: nav?.maxTouchPoints,
       });
     };
-    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, saveRef).then(run);
+    const task = ready ? run(ready) : fillFileCache(sharedVariantFileCache, saveRef).then(run);
     void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
   }
 

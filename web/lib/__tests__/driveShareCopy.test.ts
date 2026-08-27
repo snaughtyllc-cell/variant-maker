@@ -7,10 +7,12 @@ import {
 } from "@/lib/driveShareCopy";
 
 describe("driveShareCopy", () => {
-  it("defaults to the branded mailbox, not a personal inbox", () => {
-    expect(DEFAULT_DRIVE_SHARE_EMAIL).toBe("drive@varyforge.app");
-    expect(driveShareEmail(null)).toBe("drive@varyforge.app");
-    expect(driveShareEmail("  ")).toBe("drive@varyforge.app");
+  it("keeps the live Drive mailbox on Jeff's Gmail until the branded switch is ready", () => {
+    expect(DEFAULT_DRIVE_SHARE_EMAIL).toBe("snaughtyllc@gmail.com");
+    expect(driveShareEmail(null)).toBe("snaughtyllc@gmail.com");
+    expect(driveShareEmail("  ")).toBe("snaughtyllc@gmail.com");
+    expect(driveShareEmail(null, "snaughtyllc@gmail.com")).toBe("snaughtyllc@gmail.com");
+    expect(driveShareEmail("drive@varyforge.app")).toBe("drive@varyforge.app");
     expect(driveShareEmail("ops@varyforge.app")).toBe("ops@varyforge.app");
     expect(DRIVE_SHARE_HEADING).toMatch(/share this email/i);
     expect(DRIVE_SHARE_BODY).toMatch(/Editor/i);

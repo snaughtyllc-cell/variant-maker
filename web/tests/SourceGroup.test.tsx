@@ -11,7 +11,11 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
-import { phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
+import { clearSharedVariantFileCache, phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
+import type { Destination, DriveStatus } from "@/lib/types";
+
+const driveReady: DriveStatus = { status: "ready", sa_email: "bot@x", message: "Drive ready" };
+const dests: Destination[] = [{ id: "dst_1", name: "Cam", folder_id: "f", auth_mode: "oauth" }];
 
 const quality = {
   vmaf: 95,
@@ -67,6 +71,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearSharedVariantFileCache();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
@@ -86,7 +91,82 @@ describe("SourceGroup phone save/share", () => {
       phoneShareHintCopy(),
     );
     expect(screen.getByRole("button", { name: /select all/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send to drive/i })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Diagnostics/i);
+  });
+
+  it("does not download clips on mount or when Select all is pressed", () => {
+    const onToggleSelectSource = vi.fn();
+    render(<SourceGroup source={source()} {...props} onToggleSelectSource={onToggleSelectSource} />);
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /select all/i }));
+    expect(onToggleSelectSource).toHaveBeenCalledWith(expect.anything(), true);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Getting clip/i)).not.toBeInTheDocument();
+  });
+
+  it("sends the whole pack to Drive without downloading clips", () => {
+    const onSendToDrive = vi.fn();
+    render(
+      <SourceGroup
+        source={source()}
+        {...props}
+        driveStatus={driveReady}
+        destinations={dests}
+        onSendToDrive={onSendToDrive}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /send to drive/i }));
+    expect(onSendToDrive).toHaveBeenCalledWith([
+      { source_id: "s1", index: 1 },
+      { source_id: "s1", index: 2 },
+    ]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends and saves only the clips selected in this pack", async () => {
+    const onSendToDrive = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(url, {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" },
+      });
+    });
+    const downloads: string[] = [];
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:dl");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const protoClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      if (this.download) downloads.push(this.download);
+    };
+
+    try {
+      render(
+        <SourceGroup
+          source={source()}
+          {...props}
+          selected={new Set(["s1:2"])}
+          driveStatus={driveReady}
+          destinations={dests}
+          onSendToDrive={onSendToDrive}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /send to drive \(1\)/i }));
+      expect(onSendToDrive).toHaveBeenCalledWith([{ source_id: "s1", index: 2 }]);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
+      await waitFor(() => {
+        expect(downloads).toEqual(["v02.mp4"]);
+      });
+      expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+        "/api/variants/s1/v02.mp4",
+      ]);
+    } finally {
+      HTMLAnchorElement.prototype.click = protoClick;
+    }
   });
 
   it("labels Save to Photos when the browser can share files", () => {
@@ -149,8 +229,11 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
       });
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v01.mp4");
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v02.mp4");
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls).toEqual(expect.arrayContaining([
+        "/api/variants/s1/v01.mp4",
+        "/api/variants/s1/v02.mp4",
+      ]));
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }

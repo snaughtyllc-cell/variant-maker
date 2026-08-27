@@ -2,9 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   cacheHasAll,
   canShareVideoFiles,
+  clearSharedVariantFileCache,
   cloneShareFiles,
   downloadVideoFiles,
   fetchVariantFiles,
+  FILE_FETCH_CONCURRENCY,
   filesReadyNow,
   fillFileCache,
   isAppleMobile,
@@ -16,10 +18,14 @@ import {
   saveNoneSelectedCopy,
   saveOrShareVideoFiles,
   selectedShareableVariants,
+  shareClipsReadyCopy,
   shareEmptyCopy,
   shareLoadingCopy,
+  sharePrepareItemLabel,
+  sharePrepareProgressCopy,
   shareRetryCopy,
   shouldOfferPhotosSave,
+  sharedVariantFileCache,
   shareVideoFiles,
   shareVideosBusyLabel,
   shareVideosLabel,
@@ -33,6 +39,7 @@ const CHROME_IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.6099.119 Mobile/15E148 Safari/604.1";
 
 afterEach(() => {
+  clearSharedVariantFileCache();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
@@ -165,6 +172,32 @@ describe("fetchVariantFiles", () => {
     );
     expect(files).toEqual([]);
   });
+
+  it("starts every missing clip download before the first one finishes", async () => {
+    let started = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchFn = vi.fn(async (url: string) => {
+      started += 1;
+      await gate;
+      return new Response(String(url), { status: 200, headers: { "Content-Type": "video/mp4" } });
+    });
+    const pending = fetchVariantFiles(
+      [
+        { file_url: "/a", filename: "v01.mp4" },
+        { file_url: "/b", filename: "v02.mp4" },
+        { file_url: "/c", filename: "v03.mp4" },
+      ],
+      fetchFn as unknown as typeof fetch,
+    );
+    await vi.waitFor(() => expect(started).toBe(3));
+    release();
+    const files = await pending;
+    expect(files.map((file) => file.name)).toEqual(["v01.mp4", "v02.mp4", "v03.mp4"]);
+    expect(FILE_FETCH_CONCURRENCY).toBeGreaterThanOrEqual(3);
+  });
 });
 
 describe("downloadVideoFiles", () => {
@@ -296,6 +329,59 @@ describe("variant file cache", () => {
     await fillFileCache(cache, variants, fetchFn as unknown as typeof fetch);
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it("reuses the shared clip cache so Select all does not download twice", async () => {
+    const file = new File(["a"], "v01.mp4", { type: "video/mp4" });
+    sharedVariantFileCache.set("/a", file);
+    const cache = new Map<string, File>();
+    const fetchFn = vi.fn();
+    const files = await fillFileCache(
+      cache,
+      [{ file_url: "/a", filename: "v01.mp4" }],
+      fetchFn as unknown as typeof fetch,
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(files[0]).toBe(file);
+  });
+
+  it("reports each clip as queued, loading, then ready", async () => {
+    const cache = new Map<string, File>();
+    const variants = [
+      { file_url: "/a", filename: "v01.mp4" },
+      { file_url: "/b", filename: "v02.mp4" },
+    ];
+    const events: Array<{ ready: number; loading: number; states: string[] }> = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const fetchFn = vi.fn(async (url: string) => {
+      if (url === "/a") await firstGate;
+      return new Response(url, { status: 200, headers: { "Content-Type": "video/mp4" } });
+    });
+    const pending = fillFileCache(
+      cache,
+      variants,
+      fetchFn as unknown as typeof fetch,
+      (progress) => {
+        events.push({
+          ready: progress.ready,
+          loading: progress.loading,
+          states: progress.items.map((item) => `${item.filename}:${item.state}`),
+        });
+      },
+    );
+    await vi.waitFor(() => expect(events.some((event) => event.states.includes("v01.mp4:loading"))).toBe(true));
+    expect(events[0]?.states).toEqual(["v01.mp4:queued", "v02.mp4:queued"]);
+    releaseFirst();
+    await pending;
+    expect(events.some((event) => event.loading > 0)).toBe(true);
+    expect(events.at(-1)).toEqual({
+      ready: 2,
+      loading: 0,
+      states: ["v01.mp4:ready", "v02.mp4:ready"],
+    });
+  });
 });
 
 describe("selectedShareableVariants", () => {
@@ -331,6 +417,17 @@ describe("copy", () => {
     expect(shareVideosBusyLabel()).toBe("Saving…");
     expect(saveNoneSelectedCopy()).toBe("Select clips first");
     expect(preparingClipsCopy()).toBe("Preparing clips…");
+    expect(sharePrepareProgressCopy({ total: 20, ready: 3, failed: 0, loading: 1, items: [] })).toBe(
+      "Getting clip 4 of 20…",
+    );
+    expect(sharePrepareProgressCopy({ total: 20, ready: 20, failed: 0, loading: 0, items: [] })).toBe(
+      shareClipsReadyCopy(20),
+    );
+    expect(shareClipsReadyCopy(20)).toMatch(/20 clips ready/i);
+    expect(sharePrepareItemLabel("ready")).toBe("Ready");
+    expect(sharePrepareItemLabel("loading")).toBe("Getting…");
+    expect(sharePrepareItemLabel("queued")).toBe("Waiting");
+    expect(sharePrepareItemLabel("failed")).toBe("Missed");
     expect(shareLoadingCopy()).toMatch(/Preparing clips/i);
     expect(shareRetryCopy()).toMatch(/Tap Save to Photos again/i);
     expect(phoneShareHintCopy()).toMatch(/Save Videos/i);

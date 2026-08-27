@@ -161,7 +161,7 @@ export function DestinationsPanel() {
   const connectedEmail = status?.connected_email || status?.sa_email || null;
   const oauthAvailable = Boolean(status?.oauth_available);
   const isOauth = status?.auth_mode === "oauth";
-  const shareEmail = driveShareEmail(status?.share_email);
+  const shareEmail = driveShareEmail(status?.share_email, connectedEmail);
   const shareMismatch =
     connectedEmail != null &&
     connectedEmail.toLowerCase() !== shareEmail.toLowerCase();

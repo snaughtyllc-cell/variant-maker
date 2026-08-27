@@ -11,7 +11,9 @@ ENV_OAUTH_CLIENT_ID = "VARIANT_DRIVE_OAUTH_CLIENT_ID"
 ENV_OAUTH_CLIENT_SECRET = "VARIANT_DRIVE_OAUTH_CLIENT_SECRET"
 ENV_OAUTH_REDIRECT_URI = "VARIANT_DRIVE_OAUTH_REDIRECT_URI"
 ENV_SHARE_EMAIL = "VARIANT_DRIVE_SHARE_EMAIL"
-DEFAULT_SHARE_EMAIL = "drive@varyforge.app"
+# Branded mailbox is opt-in via VARIANT_DRIVE_SHARE_EMAIL. Until Jeff is ready,
+# Studio shares whatever account is actually connected (snaughtyllc@gmail.com).
+DEFAULT_SHARE_EMAIL = ""
 
 DriveStatus = Literal["ready", "not_configured", "auth_failed"]
 AuthMode = Literal["oauth", "service_account"]
@@ -28,10 +30,18 @@ class DriveConfigInfo:
 
 
 def read_share_email(environ: Mapping[str, str] | None = None) -> str:
-    """Human mailbox operators share folders with. Never Jeff's Gmail, never the SA robot."""
+    """Optional branded mailbox override. Empty means use the connected Drive account."""
     env = environ if environ is not None else os.environ
     raw = (env.get(ENV_SHARE_EMAIL) or "").strip()
     return raw or DEFAULT_SHARE_EMAIL
+
+
+def effective_share_email(
+    info: DriveConfigInfo,
+    environ: Mapping[str, str] | None = None,
+) -> str | None:
+    """Address operators should share folders with right now."""
+    return read_share_email(environ) or info.connected_email or info.sa_email
 
 
 def read_sa_email(sa_json_path: str) -> str | None:

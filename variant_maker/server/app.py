@@ -29,6 +29,7 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
+    effective_share_email,
     read_share_email,
     resolve_drive_status,
 )
@@ -386,7 +387,7 @@ def _drive_status_out(info) -> DriveStatusOut:
         auth_mode=info.auth_mode,
         connected_email=info.connected_email,
         oauth_available=info.oauth_available,
-        share_email=read_share_email(),
+        share_email=effective_share_email(info),
     )
 
 

@@ -1,10 +1,15 @@
-/** Operator Drive setup: share a branded mailbox, then paste the folder link. */
+/** Operator Drive setup: share the live connected mailbox, then paste the folder link. */
 
-export const DEFAULT_DRIVE_SHARE_EMAIL = "drive@varyforge.app";
+export const DEFAULT_DRIVE_SHARE_EMAIL = "snaughtyllc@gmail.com";
 
-export function driveShareEmail(statusEmail?: string | null): string {
+export function driveShareEmail(
+  statusEmail?: string | null,
+  connectedEmail?: string | null,
+): string {
   const raw = (statusEmail || "").trim();
-  return raw || DEFAULT_DRIVE_SHARE_EMAIL;
+  if (raw) return raw;
+  const connected = (connectedEmail || "").trim();
+  return connected || DEFAULT_DRIVE_SHARE_EMAIL;
 }
 
 export const DRIVE_SHARE_HEADING = "Share this email";

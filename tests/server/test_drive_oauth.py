@@ -232,7 +232,7 @@ def test_oauth_callback_saves_token_and_redirects(tmp_path):
     assert status["auth_mode"] == "oauth"
     assert status["connected_email"] == "ops@company.com"
     assert status["oauth_available"] is True
-    assert status["share_email"] == "drive@varyforge.app"
+    assert status["share_email"] == "ops@company.com"
 
 
 def test_oauth_disconnect_clears_token(tmp_path):

@@ -56,6 +56,13 @@ export function selectAllLabel(allSelected: boolean, _okCount?: number): string 
   return allSelected ? "Deselect all" : "Select all";
 }
 
+/** Pack Save / Send: selected ok clips in this pack, or the whole pack if none are. */
+export function packActionSelected(source: SourceOut, selected: Set<string>): Set<string> {
+  const keys = okVariantKeys([source]);
+  const picked = keys.filter((key) => selected.has(key));
+  return new Set(picked.length > 0 ? picked : keys);
+}
+
 export function oauthErrorMessage(reason: string | null | undefined): string {
   switch (reason) {
     case "exchange_failed":

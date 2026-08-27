@@ -34,8 +34,21 @@ def test_auth_failed_invalid_json(tmp_path):
 
 def test_share_email_defaults(monkeypatch):
     monkeypatch.delenv(dc.ENV_SHARE_EMAIL, raising=False)
-    assert dc.read_share_email({}) == "drive@varyforge.app"
+    assert dc.read_share_email({}) == ""
 
 
 def test_share_email_from_env():
     assert dc.read_share_email({dc.ENV_SHARE_EMAIL: " ops@varyforge.app "}) == "ops@varyforge.app"
+
+
+def test_effective_share_email_stays_on_connected_gmail_until_override():
+    info = dc.DriveConfigInfo(
+        "ready", None, "Drive ready (Google OAuth)",
+        auth_mode="oauth",
+        connected_email="snaughtyllc@gmail.com",
+        oauth_available=True,
+    )
+    assert dc.effective_share_email(info, {}) == "snaughtyllc@gmail.com"
+    assert dc.effective_share_email(
+        info, {dc.ENV_SHARE_EMAIL: "drive@varyforge.app"},
+    ) == "drive@varyforge.app"
