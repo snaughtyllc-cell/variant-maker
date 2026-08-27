@@ -17,6 +17,14 @@ HASHTAG_RE = re.compile(r"#\w+")
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+# claude-3-5-haiku-latest 404s on current Anthropic accounts (2026-08).
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
+ANTHROPIC_MODEL_FALLBACKS = (
+    "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001",
+)
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+CAPTION_TIMEOUT_S = 45
 
 
 def source_stem(filename: str) -> str:
@@ -26,6 +34,33 @@ def source_stem(filename: str) -> str:
 
 def _clean_seed(seed: str | None) -> str:
     return (seed or "").strip()
+
+
+def caption_max_tokens(count: int) -> int:
+    """Haiku needs headroom for a Fast 20; 2000 truncated packs into Alt takes."""
+    return min(8192, max(1024, int(count) * 180))
+
+
+def _openai_model(env: Mapping[str, str]) -> str:
+    raw = (env.get("VARIANT_OPENAI_MODEL") or env.get("VARIANT_CAPTION_MODEL") or "").strip()
+    if raw.lower().startswith("gpt") or raw.lower().startswith("o"):
+        return raw
+    return DEFAULT_OPENAI_MODEL
+
+
+def _anthropic_models(env: Mapping[str, str]) -> list[str]:
+    raw = (env.get("VARIANT_ANTHROPIC_MODEL") or env.get("VARIANT_CAPTION_MODEL") or "").strip()
+    out: list[str] = []
+    if raw.lower().startswith("claude"):
+        out.append(raw)
+    for model in ANTHROPIC_MODEL_FALLBACKS:
+        if model not in out:
+            out.append(model)
+    return out
+
+
+def _log(msg: str) -> None:
+    print(f"caption_ai: {msg}", flush=True)
 
 
 def local_caption(filename: str, index: int, total: int, seed: str | None = None) -> str:
@@ -61,14 +96,16 @@ def captions_for_source(
     if openai_key:
         try:
             return _openai_captions(filename, n, openai_key, env, seed=seed)
-        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
-            pass
+        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+            _log(f"openai failed ({type(exc).__name__}); trying anthropic")
     anthropic_key = (env.get("ANTHROPIC_API_KEY") or env.get("VARIANT_ANTHROPIC_API_KEY") or "").strip()
     if anthropic_key:
         try:
             return _anthropic_captions(filename, n, anthropic_key, env, seed=seed)
-        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
-            pass
+        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+            _log(f"anthropic failed ({type(exc).__name__}); using local fallback")
+    elif not openai_key:
+        _log("no caption API key; using local fallback")
     return [local_caption(filename, i + 1, n, seed=seed) for i in range(n)]
 
 
@@ -108,7 +145,7 @@ def _split_ai(raw: str, count: int, filename: str, seed: str | None = None) -> l
 def _openai_captions(
     filename: str, count: int, key: str, env: Mapping[str, str], seed: str | None = None,
 ) -> list[str]:
-    model = (env.get("VARIANT_CAPTION_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    model = _openai_model(env)
     payload = json.dumps({
         "model": model,
         "messages": [
@@ -123,19 +160,19 @@ def _openai_captions(
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_S) as resp:
         body = json.loads(resp.read().decode())
     text = body["choices"][0]["message"]["content"]
     return _split_ai(text, count, filename, seed=seed)
 
 
-def _anthropic_captions(
-    filename: str, count: int, key: str, env: Mapping[str, str], seed: str | None = None,
+def _anthropic_once(
+    filename: str, count: int, key: str, model: str, seed: str | None = None,
 ) -> list[str]:
-    model = (env.get("VARIANT_CAPTION_MODEL") or "claude-3-5-haiku-latest").strip()
     payload = json.dumps({
         "model": model,
-        "max_tokens": 2000,
+        "max_tokens": caption_max_tokens(count),
+        "system": "You write short social captions that stay on the same post.",
         "messages": [{"role": "user", "content": caption_prompt(filename, count, seed)}],
     }).encode()
     req = urllib.request.Request(
@@ -148,7 +185,25 @@ def _anthropic_captions(
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_S) as resp:
         body = json.loads(resp.read().decode())
     text = body["content"][0]["text"]
     return _split_ai(text, count, filename, seed=seed)
+
+
+def _anthropic_captions(
+    filename: str, count: int, key: str, env: Mapping[str, str], seed: str | None = None,
+) -> list[str]:
+    last_err: Exception | None = None
+    for model in _anthropic_models(env):
+        try:
+            return _anthropic_once(filename, count, key, model, seed=seed)
+        except urllib.error.HTTPError as exc:
+            last_err = exc
+            _log(f"anthropic http {exc.code} model={model}")
+            if exc.code in (400, 404):
+                continue
+            raise
+    if last_err is not None:
+        raise last_err
+    raise ValueError("no anthropic model configured")
