@@ -1238,3 +1238,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   -webkit-text-fill-color: transparent;
   animation: vf-live-shimmer 1.5s linear infinite;
 }
+
+/* Phase C: /gallery, /drops, /workflows and /settings/drive suppress the shared
+   58px desktop header (TopNav) and render their own context bar, so on desktop
+   their shell fills the full .app-main height — there is no header height to
+   subtract. Mobile (<640px) keeps its own `- nav-h` height (the phone top bar is
+   still present there). Placed last so it wins over each screen's base rule. */
+@media (min-width: 640px) {
+  .gallery-page,
+  .drops-page,
+  .workflow-page,
+  .drive-shell {
+    height: calc(100dvh - var(--tab-h));
+    min-height: 0;
+  }
+}

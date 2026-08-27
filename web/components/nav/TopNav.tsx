@@ -45,6 +45,13 @@ export function TopNav() {
   const primaryTabs = visiblePrimaryTabs(me);
   const section = SECTION_DESTINATIONS.find((d) => linkActive(pathname, d.href));
   const isStudio = pathname === "/";
+  // Phase C: Gallery, Drops, Flows and Drive each render their own 58px context
+  // bar as the first element of their page. Suppress the shared desktop header on
+  // those routes so there is a single bar, not two stacked ones.
+  const OWN_HEADER_ROUTES = ["/gallery", "/drops", "/workflows", "/settings/drive"];
+  const ownsOwnHeader = OWN_HEADER_ROUTES.some(
+    (r) => pathname === r || pathname.startsWith(`${r}/`),
+  );
 
   async function handleLogout() {
     await logout();
@@ -61,30 +68,32 @@ export function TopNav() {
       {/* Desktop header (58px) — nav itself now lives in the SideNav rail.
           Studio ("/") gets the mock breadcrumb + search + GPU chip; every other
           route keeps the section label + StatusStrip it had before. */}
-      <header className="vf-header">
-        {isStudio ? (
-          <>
-            <span className="vf-header-section">STUDIO</span>
-            <span className="vf-header-crumb-sep">/</span>
-            <span className="vf-header-crumb">New pack</span>
-            <div className="vf-header-spacer" />
-            <div className="vf-header-search" aria-hidden="true">
-              <span className="material-symbols-rounded">search</span>
-              <span>Search packs, drops, folders</span>
-            </div>
-            <div className="vf-header-gpu">
-              <span className="vf-header-gpu__dot" />
-              <span className="vf-header-gpu__label">GPU FREE</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <span className="vf-header-section">{section ? section.label.toUpperCase() : ""}</span>
-            <div className="vf-header-spacer" />
-            <StatusStrip />
-          </>
-        )}
-      </header>
+      {!ownsOwnHeader && (
+        <header className="vf-header">
+          {isStudio ? (
+            <>
+              <span className="vf-header-section">STUDIO</span>
+              <span className="vf-header-crumb-sep">/</span>
+              <span className="vf-header-crumb">New pack</span>
+              <div className="vf-header-spacer" />
+              <div className="vf-header-search" aria-hidden="true">
+                <span className="material-symbols-rounded">search</span>
+                <span>Search packs, drops, folders</span>
+              </div>
+              <div className="vf-header-gpu">
+                <span className="vf-header-gpu__dot" />
+                <span className="vf-header-gpu__label">GPU FREE</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="vf-header-section">{section ? section.label.toUpperCase() : ""}</span>
+              <div className="vf-header-spacer" />
+              <StatusStrip />
+            </>
+          )}
+        </header>
+      )}
 
       {/* Phone top bar — unchanged below the desktop breakpoint. */}
       <header className="vf-topbar">
