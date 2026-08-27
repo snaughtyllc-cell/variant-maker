@@ -1,7 +1,7 @@
 import { isAgencyExperience } from "./experience";
 import { PRIMARY_TABS, type StudioDestination } from "./studioDestinations";
 
-const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/settings/drive"]);
+const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/workflows", "/settings/drive"]);
 
 /** Failed-encode leftovers. Operators never use Diagnostics — site admin only. */
 export function showDiagnosticsNav(me: {
@@ -30,7 +30,7 @@ export function canManageDriveOAuth(me: {
   return Boolean(me.is_admin);
 }
 
-/** Phone + desktop primary row. Solo creators only see Studio, Gallery, Drive. */
+/** Phone + desktop primary row. Solo creators see Studio, Gallery, Flows, Drive. Drops stay agency-only. */
 export function visiblePrimaryTabs(me: {
   experience?: string | null;
   is_admin?: boolean;

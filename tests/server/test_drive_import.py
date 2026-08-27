@@ -73,6 +73,30 @@ def test_from_drive_creates_job(tmp_path):
     assert store._runner.last_quality_mode == "fast"
 
 
+def test_from_drive_generate_captions_uses_seed(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive=drive)
+    dest, folder = _dest(client, drive)
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"video-bytes")
+    fid = drive.put_file("clip.mp4", str(clip), parent=folder)
+    seed = "POV boil #reels"
+
+    resp = client.post("/api/jobs/from-drive", json={
+        "destination_id": dest["id"],
+        "file_ids": [fid],
+        "count": 2,
+        "generate_captions": True,
+        "caption_seed": seed,
+    })
+    assert resp.status_code == 201
+    store.wait(resp.json()["job_id"], timeout=5)
+    job = store.get(resp.json()["job_id"])
+    caps = [v.caption for v in job.sources[0].variants]
+    assert caps[0] == seed
+    assert "POV boil" in caps[1]
+
+
 def test_from_drive_rejects_file_outside_folder(tmp_path):
     drive = FakeDrive()
     client, _, _ = _app(tmp_path, drive=drive)

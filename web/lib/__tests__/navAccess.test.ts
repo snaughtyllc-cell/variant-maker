@@ -65,13 +65,13 @@ describe("visiblePrimaryTabs", () => {
     ).toEqual(labels);
   });
 
-  it("hides Drops and Workflows for solo members", () => {
+  it("hides Drops for solo members but keeps Workflows", () => {
     expect(
       visiblePrimaryTabs({
         experience: "solo",
         is_admin: false,
         auth_required: true,
       }).map((d) => d.href),
-    ).toEqual(["/", "/gallery", "/settings/drive"]);
+    ).toEqual(["/", "/gallery", "/workflows", "/settings/drive"]);
   });
 });

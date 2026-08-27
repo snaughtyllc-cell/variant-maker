@@ -98,12 +98,18 @@ describe("TopNav", () => {
     }
   });
 
-  it("hides Drops and Workflows for solo members", () => {
+  it("hides Drops for solo members but keeps Workflows", () => {
     me.data = { ...BASE, experience: "solo", role: "member", is_admin: false };
     render(<TopNav />);
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Workflows" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Flows" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Workflows" })[0]).toHaveAttribute(
+      "href",
+      "/workflows",
+    );
+    expect(screen.getAllByRole("link", { name: "Flows" })[0]).toHaveAttribute(
+      "href",
+      "/workflows",
+    );
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(

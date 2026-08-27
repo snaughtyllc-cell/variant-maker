@@ -12,7 +12,12 @@ import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
-import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
+import {
+  captionSeedLabel,
+  captionSeedPlaceholder,
+  captionToggleHint,
+  captionToggleLabel,
+} from "@/lib/prepareCopy";
 import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
@@ -31,6 +36,7 @@ export default function StudioPage() {
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [generateCaptions, setGenerateCaptions] = useState(true);
+  const [captionSeed, setCaptionSeed] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,8 +108,9 @@ export default function StudioPage() {
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions,
+              captionSeed,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions);
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, captionSeed);
       start(resp, "fast");
     } catch (e) {
       clear();
@@ -164,12 +171,26 @@ export default function StudioPage() {
             type="checkbox"
             checked={generateCaptions}
             onChange={(e) => setGenerateCaptions(e.target.checked)}
+            aria-label={captionToggleLabel()}
           />
           <span>
             {captionToggleLabel()}
             <small>{captionToggleHint()}</small>
           </span>
         </label>
+        {generateCaptions && (
+          <div className="studio-caption-seed">
+            <label htmlFor="caption-seed">{captionSeedLabel()}</label>
+            <textarea
+              id="caption-seed"
+              name="caption_seed"
+              value={captionSeed}
+              onChange={(e) => setCaptionSeed(e.target.value)}
+              placeholder={captionSeedPlaceholder()}
+              rows={4}
+            />
+          </div>
+        )}
 
         {error && (
           <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>

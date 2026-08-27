@@ -1,7 +1,7 @@
 """Per-variant captions for Studio Generate.
 
-Tries OpenAI, then Anthropic, then a local filename-based fallback so Studio
-works before an API key is configured.
+Tries OpenAI, then Anthropic, then a local filename- or seed-based fallback so
+Studio works before an API key is configured.
 """
 from __future__ import annotations
 
@@ -24,8 +24,17 @@ def source_stem(filename: str) -> str:
     return STEM_RE.sub("", name).strip() or "clip"
 
 
-def local_caption(filename: str, index: int, total: int) -> str:
+def _clean_seed(seed: str | None) -> str:
+    return (seed or "").strip()
+
+
+def local_caption(filename: str, index: int, total: int, seed: str | None = None) -> str:
     """Deterministic caption when no AI key is set. Safe for Drive filenames."""
+    original = _clean_seed(seed)
+    if original:
+        if index <= 1:
+            return original
+        return f"{original}\n\nAlt take {index} of {total}"
     stem = source_stem(filename)
     tags = HASHTAG_RE.findall(stem)
     hook = HASHTAG_RE.sub("", stem)
@@ -37,7 +46,13 @@ def local_caption(filename: str, index: int, total: int) -> str:
     return f"{hook}\n\nCopy {index} of {total} — unique take\n{extras}"
 
 
-def captions_for_source(filename: str, count: int, *, environ: Mapping[str, str] | None = None) -> list[str]:
+def captions_for_source(
+    filename: str,
+    count: int,
+    *,
+    seed: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> list[str]:
     n = max(0, int(count))
     if n == 0:
         return []
@@ -45,19 +60,32 @@ def captions_for_source(filename: str, count: int, *, environ: Mapping[str, str]
     openai_key = (env.get("OPENAI_API_KEY") or env.get("VARIANT_OPENAI_API_KEY") or "").strip()
     if openai_key:
         try:
-            return _openai_captions(filename, n, openai_key, env)
+            return _openai_captions(filename, n, openai_key, env, seed=seed)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
     anthropic_key = (env.get("ANTHROPIC_API_KEY") or env.get("VARIANT_ANTHROPIC_API_KEY") or "").strip()
     if anthropic_key:
         try:
-            return _anthropic_captions(filename, n, anthropic_key, env)
+            return _anthropic_captions(filename, n, anthropic_key, env, seed=seed)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
-    return [local_caption(filename, i + 1, n) for i in range(n)]
+    return [local_caption(filename, i + 1, n, seed=seed) for i in range(n)]
 
 
-def _prompt(filename: str, count: int) -> str:
+def caption_prompt(filename: str, count: int, seed: str | None = None) -> str:
+    original = _clean_seed(seed)
+    if original:
+        return (
+            "Write Instagram Reels / TikTok captions that are variations of ONE original post.\n"
+            "Original caption:\n"
+            f"{original}\n"
+            f"Write exactly {count} captions, one per variant.\n"
+            "Each caption must be the same post — same meaning, same energy, same topic — "
+            "but different wording. Keep hashtags in the same world. Do not invent a new niche.\n"
+            "The first caption may stay very close to the original. The rest should still be recognizable as that post.\n"
+            "Output ONLY the captions. No intro. Separate them with a line that is exactly ---\n"
+            "Each caption: 1-2 short hook lines, then 3-8 hashtags. No / or \\ characters."
+        )
     return (
         "Write Instagram Reels / TikTok captions for short UGC clips.\n"
         f"Source filename: {source_stem(filename)}\n"
@@ -67,23 +95,25 @@ def _prompt(filename: str, count: int) -> str:
     )
 
 
-def _split_ai(raw: str, count: int, filename: str) -> list[str]:
+def _split_ai(raw: str, count: int, filename: str, seed: str | None = None) -> list[str]:
     from variant_maker.server.captions import split_caption_bank
 
     parts = split_caption_bank(raw or "")
     out = [p for p in parts if p][:count]
     while len(out) < count:
-        out.append(local_caption(filename, len(out) + 1, count))
+        out.append(local_caption(filename, len(out) + 1, count, seed=seed))
     return out[:count]
 
 
-def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
+def _openai_captions(
+    filename: str, count: int, key: str, env: Mapping[str, str], seed: str | None = None,
+) -> list[str]:
     model = (env.get("VARIANT_CAPTION_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
     payload = json.dumps({
         "model": model,
         "messages": [
-            {"role": "system", "content": "You write short social captions."},
-            {"role": "user", "content": _prompt(filename, count)},
+            {"role": "system", "content": "You write short social captions that stay on the same post."},
+            {"role": "user", "content": caption_prompt(filename, count, seed)},
         ],
         "temperature": 0.7,
     }).encode()
@@ -96,15 +126,17 @@ def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]
     with urllib.request.urlopen(req, timeout=20) as resp:
         body = json.loads(resp.read().decode())
     text = body["choices"][0]["message"]["content"]
-    return _split_ai(text, count, filename)
+    return _split_ai(text, count, filename, seed=seed)
 
 
-def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
+def _anthropic_captions(
+    filename: str, count: int, key: str, env: Mapping[str, str], seed: str | None = None,
+) -> list[str]:
     model = (env.get("VARIANT_CAPTION_MODEL") or "claude-3-5-haiku-latest").strip()
     payload = json.dumps({
         "model": model,
         "max_tokens": 2000,
-        "messages": [{"role": "user", "content": _prompt(filename, count)}],
+        "messages": [{"role": "user", "content": caption_prompt(filename, count, seed)}],
     }).encode()
     req = urllib.request.Request(
         ANTHROPIC_URL,
@@ -119,4 +151,4 @@ def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, s
     with urllib.request.urlopen(req, timeout=20) as resp:
         body = json.loads(resp.read().decode())
     text = body["content"][0]["text"]
-    return _split_ai(text, count, filename)
+    return _split_ai(text, count, filename, seed=seed)

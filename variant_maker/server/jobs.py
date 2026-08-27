@@ -391,7 +391,8 @@ class JobStore:
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
-                    generate_captions: bool = False) -> Job:
+                    generate_captions: bool = False,
+                    caption_seed: str | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -401,13 +402,14 @@ class JobStore:
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
-            generate_captions=generate_captions,
+            generate_captions=generate_captions, caption_seed=caption_seed,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
                                allow_creative_escalate: bool = True,
                                quality_mode: str = "fast",
-                               generate_captions: bool = False) -> Job:
+                               generate_captions: bool = False,
+                               caption_seed: str | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -420,15 +422,18 @@ class JobStore:
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
-            generate_captions=generate_captions,
+            generate_captions=generate_captions, caption_seed=caption_seed,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
-                    generate_captions: bool = False) -> Job:
+                    generate_captions: bool = False,
+                    caption_seed: str | None = None) -> Job:
         if generate_captions:
             for source in sources:
-                source.planned_captions = captions_for_source(source.filename, source.requested)
+                source.planned_captions = captions_for_source(
+                    source.filename, source.requested, seed=caption_seed,
+                )
         with self._lock:
             self._seq += 1
             created_seq = self._seq

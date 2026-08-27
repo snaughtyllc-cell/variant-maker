@@ -139,6 +139,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-caption-toggle { align-items: flex-start; color: var(--ink); cursor: pointer; display: flex; font-size: 13.5px; font-weight: 650; gap: 10px; line-height: 1.35; margin-top: 14px; }
 .studio-caption-toggle input { flex: none; margin-top: 2px; }
 .studio-caption-toggle small { color: var(--color-muted); display: block; font-size: 12px; font-weight: 500; margin-top: 3px; }
+.studio-caption-seed { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.studio-caption-seed label { color: var(--ink); font-size: 12.5px; font-weight: 650; }
+.studio-caption-seed textarea {
+  background: #fbfdfd;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.4;
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+.studio-caption-seed textarea:focus { border-color: #087989; outline: 2px solid rgba(8, 121, 137, 0.18); }
 .studio-intro { margin: 0 0 24px; }
 .studio-intro p, .studio-step-label { color: #087989 !important; font-size: 10.5px !important; font-weight: 760 !important; letter-spacing: 0.09em !important; margin: 0 0 7px !important; text-transform: uppercase; }
 .studio-intro h1 { color: var(--ink); font-size: clamp(28px, 3vw, 38px); font-weight: 720; letter-spacing: -0.05em; line-height: 1; margin: 0; }
@@ -382,6 +398,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .vf-mobile-logout { align-self: flex-start; }
   .vf-mobile-tabs { background: rgba(251, 253, 253, 0.97); border-top: 1px solid var(--color-line); bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); left: 0; padding: 5px 4px max(7px, env(safe-area-inset-bottom, 0px)); position: fixed; right: 0; z-index: 40; }
   .vf-mobile-tabs[data-count="3"] { grid-template-columns: repeat(3, 1fr); }
+  .vf-mobile-tabs[data-count="4"] { grid-template-columns: repeat(4, 1fr); }
   .vf-mobile-tabs a { align-items: center; color: var(--color-muted); display: flex; flex-direction: column; font-size: 9.5px; font-weight: 650; gap: 3px; justify-content: center; min-height: 48px; text-decoration: none; }
   .vf-mobile-tabs a[data-active="true"] { color: #087989; }
   .app-main { padding-bottom: var(--tab-h); }

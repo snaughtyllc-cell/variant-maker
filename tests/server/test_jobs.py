@@ -729,3 +729,17 @@ def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     assert caps[0] != caps[1]
     assert "Copy 1 of 2" in caps[0]
     assert "Copy 2 of 2" in caps[1]
+
+
+def test_create_job_generate_captions_uses_seed(tmp_path):
+    store = _store(tmp_path)
+    seed = "Night boil hit different\n#fyp"
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_seed=seed,
+    )
+    store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    caps = [v.caption for v in done.sources[0].variants]
+    assert caps[0] == seed
+    assert "Night boil hit different" in caps[1]
+    assert caps[0] != caps[1]
