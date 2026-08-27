@@ -1,13 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
 import {
+  FILE_FETCH_CONCURRENCY_APPLE,
   fillFileCache,
   filesReadyNow,
+  isAppleMobile,
   isShareableVideo,
   phoneShareHintCopy,
   saveOrShareVideoFiles,
+  saveTapAction,
   shareVideosBusyLabel,
   shareVideosLabel,
   sharedVariantFileCache,
@@ -26,6 +29,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [offerPhotos, setOfferPhotos] = useState(false);
+  const shareLock = useRef(false);
 
   const saveRef = isShareableVideo(variant)
     ? [{ file_url: variant.file_url, filename: variant.filename }]
@@ -38,20 +42,41 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
 
   function handleSaveVariant(e: React.MouseEvent) {
     e.preventDefault();
-    if (saveBusy || saveRef.length === 0) return;
+    if (saveBusy || shareLock.current || saveRef.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
+    const apple = isAppleMobile(nav?.userAgent, nav?.maxTouchPoints);
     const ready = filesReadyNow(sharedVariantFileCache, saveRef);
-    setSaveBusy(true);
-    const run = async (files: File[]) => {
-      if (files.length === 0) return;
-      await saveOrShareVideoFiles(files, {
+    const plan = saveTapAction(Boolean(ready), apple);
+    if (plan === "share" && ready) {
+      shareLock.current = true;
+      void saveOrShareVideoFiles(ready, {
         share: nav,
         userAgent: nav?.userAgent,
         maxTouchPoints: nav?.maxTouchPoints,
+      }).finally(() => {
+        shareLock.current = false;
       });
-    };
-    const task = ready ? run(ready) : fillFileCache(sharedVariantFileCache, saveRef).then(run);
-    void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
+      return;
+    }
+    setSaveBusy(true);
+    void fillFileCache(
+      sharedVariantFileCache,
+      saveRef,
+      undefined,
+      undefined,
+      apple ? FILE_FETCH_CONCURRENCY_APPLE : undefined,
+    )
+      .then((files) => {
+        if (files.length === 0) return;
+        if (plan === "prepare") return;
+        return saveOrShareVideoFiles(files, {
+          share: nav,
+          userAgent: nav?.userAgent,
+          maxTouchPoints: nav?.maxTouchPoints,
+        });
+      })
+      .catch((err) => console.error("Save variant failed", err))
+      .finally(() => setSaveBusy(false));
   }
 
   async function handleRegenerate() {
