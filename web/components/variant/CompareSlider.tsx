@@ -129,9 +129,10 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         aspectRatio: boxAspect,
         width: compareSliderWidth(boxAspect),
         maxHeight: "46dvh",
-        borderRadius: 12,
+        borderRadius: 14,
         overflow: "hidden",
-        border: "1px solid var(--color-line)",
+        background: "#0b171b",
+        border: "none",
         cursor: "ew-resize",
         userSelect: "none",
         touchAction: "pan-y",
@@ -178,38 +179,40 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       <span
         style={{
           position: "absolute",
-          top: 8,
-          left: 8,
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: "0.5px",
+          top: 10,
+          left: 10,
+          fontFamily: "var(--font-space-grotesk), monospace",
+          fontSize: 9.5,
+          fontWeight: 600,
+          letterSpacing: "0.16em",
           textTransform: "uppercase",
-          padding: "2px 7px",
-          borderRadius: 6,
-          color: "#fff",
-          background: "#00000080",
+          padding: "4px 8px",
+          borderRadius: 5,
+          color: "#c9dde0",
+          background: "rgba(11,34,38,0.8)",
           pointerEvents: "none",
         }}
       >
-        SOURCE
+        Source
       </span>
       <span
         style={{
           position: "absolute",
-          top: 8,
-          right: 8,
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: "0.5px",
+          top: 10,
+          right: 10,
+          fontFamily: "var(--font-space-grotesk), monospace",
+          fontSize: 9.5,
+          fontWeight: 700,
+          letterSpacing: "0.16em",
           textTransform: "uppercase",
-          padding: "2px 7px",
-          borderRadius: 6,
-          color: "#fff",
-          background: "#00000080",
+          padding: "4px 8px",
+          borderRadius: 5,
+          color: "#0b2226",
+          background: "var(--color-cyan)",
           pointerEvents: "none",
         }}
       >
-        VARIANT
+        Variant
       </span>
 
       {/* Vertical handle line + grip */}
@@ -220,7 +223,7 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
           bottom: 0,
           left: `${pct}%`,
           width: 2,
-          background: "#fff",
+          background: "var(--color-cyan)",
           transform: "translateX(-50%)",
           pointerEvents: "none",
         }}
@@ -231,18 +234,19 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             borderRadius: "50%",
-            background: "#fff",
-            color: "#111",
+            background: "var(--color-cyan)",
+            color: "#0b2226",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 13,
-            boxShadow: "0 2px 10px #000",
+            boxShadow: "0 8px 22px -8px rgba(0,0,0,0.7)",
             touchAction: "none",
             pointerEvents: "auto",
+            cursor: "grab",
           }}
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -260,7 +264,9 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
           onPointerCancel={endDrag}
           onLostPointerCapture={() => endDrag()}
         >
-          ⇄
+          <span className="material-symbols-rounded" style={{ fontSize: 21 }} aria-hidden="true">
+            drag_indicator
+          </span>
         </div>
       </div>
     </div>

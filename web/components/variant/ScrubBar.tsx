@@ -111,18 +111,15 @@ export function ScrubBar({ videos }: ScrubBarProps) {
         gap: 10,
       }}
     >
-      {/* Play / Pause button */}
+      {/* Play / Pause */}
       <button
         onClick={togglePlayPause}
         aria-label={playing ? "Pause" : "Play"}
         style={{
-          width: 34,
-          height: 34,
-          borderRadius: "50%",
-          backgroundImage: "var(--background-image-cta)",
+          background: "transparent",
           border: "none",
-          color: "#fff",
-          fontSize: 13,
+          color: "var(--color-cyan)",
+          padding: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -130,7 +127,9 @@ export function ScrubBar({ videos }: ScrubBarProps) {
           flexShrink: 0,
         }}
       >
-        {playing ? "⏸" : "▶"}
+        <span className="material-symbols-rounded" style={{ fontSize: 28 }} aria-hidden="true">
+          {playing ? "pause_circle" : "play_circle"}
+        </span>
       </button>
 
       {/* Progress track */}
@@ -138,9 +137,9 @@ export function ScrubBar({ videos }: ScrubBarProps) {
         ref={trackRef}
         style={{
           flex: 1,
-          height: 5,
+          height: 4,
           borderRadius: 99,
-          background: "#20202c",
+          background: "#24393f",
           position: "relative",
           cursor: "pointer",
           touchAction: "none",
@@ -159,7 +158,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
             bottom: 0,
             width: `${pct}%`,
             borderRadius: 99,
-            backgroundImage: "var(--background-image-progress)",
+            background: "var(--color-cyan)",
             pointerEvents: "none",
           }}
         />
@@ -173,8 +172,8 @@ export function ScrubBar({ videos }: ScrubBarProps) {
             width: 12,
             height: 12,
             borderRadius: "50%",
-            background: "#fff",
-            boxShadow: "0 1px 6px #000",
+            background: "#f6fbfb",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.6)",
             pointerEvents: "none",
           }}
         />
@@ -183,13 +182,35 @@ export function ScrubBar({ videos }: ScrubBarProps) {
       {/* Time label */}
       <span
         style={{
+          fontFamily: "var(--font-space-grotesk), monospace",
           fontSize: 11,
-          color: "var(--color-muted)",
+          color: "#9fb7bc",
           flexShrink: 0,
           fontVariantNumeric: "tabular-nums",
         }}
       >
         {formatDuration(currentTime)} / {formatDuration(duration)}
+      </span>
+
+      {/* Decorative state icons — both videos are always muted + looped so the
+          two clips stay in lockstep; these reflect that rather than toggle it. */}
+      <span
+        className="material-symbols-rounded"
+        role="img"
+        aria-label="Muted for comparison"
+        title="Muted for comparison"
+        style={{ fontSize: 19, color: "#7e979d" }}
+      >
+        volume_off
+      </span>
+      <span
+        className="material-symbols-rounded"
+        role="img"
+        aria-label="Loops automatically"
+        title="Loops automatically"
+        style={{ fontSize: 19, color: "#7e979d" }}
+      >
+        repeat
       </span>
     </div>
   );

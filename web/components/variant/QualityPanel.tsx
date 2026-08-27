@@ -8,32 +8,42 @@ interface QualityPanelProps {
   bestEffort?: boolean;
 }
 
-function Meter({ pct, green, amber, red }: { pct: number; green?: boolean; amber?: boolean; red?: boolean }) {
-  const bg = green
-    ? "linear-gradient(90deg, #22c55e, #7bf2a8)"
-    : red
-    ? "linear-gradient(90deg, #ef4444, #f0a8a4)"
-    : amber
-    ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-    : "#3a3a4a";
+/** 65% is the verified-original band the product treats as a safe-to-post signal. */
+const VERIFIED_ORIGINAL_PCT = 65;
+
+function Meter({ pct, color }: { pct: number; color: string }) {
   return (
     <div
       style={{
         flex: 1,
-        height: 6,
+        height: 8,
         borderRadius: 99,
-        background: "#20202c",
+        background: "#e1edee",
+        position: "relative",
         overflow: "hidden",
       }}
     >
       <div
         style={{
-          display: "block",
-          height: "100%",
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
           width: `${Math.min(100, Math.max(0, pct))}%`,
           borderRadius: 99,
-          backgroundImage: bg,
+          background: color,
         }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: `${VERIFIED_ORIGINAL_PCT}%`,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          background: "var(--color-text)",
+        }}
+        aria-hidden="true"
       />
     </div>
   );
@@ -47,20 +57,30 @@ export function QualityPanel({
   const uniquenessPct = uniqueness != null ? pct01(uniqueness) : null;
   const uniquenessOk = uniquenessStatus === "ok";
   const uniquenessFloorFail = uniquenessStatus === "below_floor";
+  const meterColor = uniquenessFloorFail ? "var(--color-red)" : uniquenessOk ? "var(--color-mint)" : "var(--color-amber2)";
 
   return (
     <div>
       <div
         style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.7px",
-          color: "var(--color-muted2)",
-          fontWeight: 700,
-          margin: "20px 0 10px",
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          margin: "0 0 10px",
         }}
       >
-        {uniquenessCustomerLabel()}
+        <div
+          style={{
+            fontFamily: "var(--font-space-grotesk), monospace",
+            fontSize: 10.5,
+            fontWeight: 600,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--color-violet)",
+          }}
+        >
+          {uniquenessCustomerLabel()}
+        </div>
       </div>
 
       {bestEffort && (
@@ -73,59 +93,71 @@ export function QualityPanel({
             marginBottom: 10,
             fontSize: 11.5,
             lineHeight: 1.5,
-            color: "#8e6119",
-            background: "#fff8eb",
-            border: "1px solid #efdfbd",
+            color: "var(--color-amber)",
+            background: "#fdf9ef",
+            border: "1px solid var(--color-amber2)",
             borderRadius: 8,
           }}
         >
-          <span>⚠</span>
+          <span className="material-symbols-rounded" style={{ fontSize: 15 }} aria-hidden="true">warning</span>
           <span>This copy needed extra processing.</span>
         </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "11px 12px",
-          background: "var(--color-panel2)",
-          border: "1px solid var(--color-line)",
-          borderRadius: 10,
-          marginBottom: 8,
-        }}
-      >
-        {uniquenessPct != null ? (
-          <>
-            <Meter pct={uniquenessPct} green={uniquenessOk} amber={!uniquenessOk && !uniquenessFloorFail} red={uniquenessFloorFail} />
-            <span
+      {uniquenessPct != null ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-brand)",
+              fontSize: 34,
+              fontWeight: 700,
+              letterSpacing: "-0.04em",
+              color: "var(--color-text)",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            {uniquenessPct}%
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <Meter pct={uniquenessPct} color={meterColor} />
+            <div
               style={{
-                fontSize: 12.5,
-                fontWeight: 800,
-                flexShrink: 0,
-                color: uniquenessOk ? "#247955" : uniquenessFloorFail ? "#a33f3d" : "#a56b17",
+                fontFamily: "var(--font-space-grotesk), monospace",
+                fontSize: 9.5,
+                letterSpacing: "0.08em",
+                color: "var(--color-muted2)",
               }}
             >
-              {uniquenessPct}%
-            </span>
-          </>
-        ) : (
-          <>
-            <Meter pct={0} />
-            <span
-              style={{
-                fontSize: 12.5,
-                fontWeight: 800,
-                flexShrink: 0,
-                color: "var(--color-muted)",
-              }}
-            >
-              — / n/a
-            </span>
-          </>
-        )}
-      </div>
+              {VERIFIED_ORIGINAL_PCT}% = verified-original band
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "11px 12px",
+            background: "var(--color-panel2)",
+            border: "1px solid var(--color-line)",
+            borderRadius: 10,
+          }}
+        >
+          <Meter pct={0} color="var(--color-line2)" />
+          <span
+            style={{
+              fontSize: 12.5,
+              fontWeight: 800,
+              flexShrink: 0,
+              color: "var(--color-muted)",
+            }}
+          >
+            — / n/a
+          </span>
+        </div>
+      )}
     </div>
   );
 }
