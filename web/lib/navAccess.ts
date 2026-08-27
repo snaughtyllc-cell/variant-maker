@@ -20,6 +20,16 @@ export function showTeamNav(me: {
   return me?.role === "owner" || Boolean(me?.is_admin);
 }
 
+/** Connect / Disconnect Google is Jeff-once. Operators only share folders with studio@. */
+export function canManageDriveOAuth(me: {
+  auth_required?: boolean;
+  is_admin?: boolean;
+} | undefined): boolean {
+  if (!me) return false;
+  if (me.auth_required === false) return true;
+  return Boolean(me.is_admin);
+}
+
 /** Phone + desktop primary row. Solo creators only see Studio, Gallery, Drive. */
 export function visiblePrimaryTabs(me: {
   experience?: string | null;

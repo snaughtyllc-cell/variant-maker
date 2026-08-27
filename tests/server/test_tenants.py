@@ -8,6 +8,7 @@ from variant_maker.server.tenants import (
     TenantStore,
     UserInfo,
     auth_required,
+    can_manage_drive_oauth,
     migrate_legacy_data,
     normalize_email,
     provision_login,
@@ -21,6 +22,13 @@ def test_normalize_and_auth_flag(monkeypatch):
     assert auth_required() is False
     monkeypatch.setenv("VARIANT_AUTH_ADMIN_EMAIL", "jeff@x.com")
     assert auth_required() is True
+
+
+def test_can_manage_drive_oauth_is_admin_only_when_login_is_on():
+    assert can_manage_drive_oauth(email="jeff@x.com", admin_email="jeff@x.com", auth_on=True) is True
+    assert can_manage_drive_oauth(email="va@x.com", admin_email="jeff@x.com", auth_on=True) is False
+    assert can_manage_drive_oauth(email="jeff@x.com", admin_email="jeff@x.com", auth_on=False) is True
+    assert can_manage_drive_oauth(email=None, admin_email="jeff@x.com", auth_on=True) is False
 
 
 def test_invite_join_and_consume(tmp_path):

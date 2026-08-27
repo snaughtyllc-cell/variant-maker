@@ -30,6 +30,7 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
     effective_share_email,
+    pick_oauth_token_path,
     read_share_email,
     resolve_drive_status,
 )
@@ -153,6 +154,7 @@ from .tenant_runtime import TenantHub
 from .tenants import (
     ADMIN_EMAIL_ENV,
     TenantStore,
+    can_manage_drive_oauth,
     is_admin_email,
     normalize_email,
     provision_login,
@@ -534,11 +536,21 @@ def create_app(
             return bundle.oauth_pending
         return pending_store
 
-    def _token_path() -> str:
+    def _workspace_token_path() -> str:
         return _oauth_tokens().path
 
+    def _token_path() -> str:
+        """Drive I/O uses the studio mailbox token when another workspace has it."""
+        current = _workspace_token_path()
+        return pick_oauth_token_path(data_dir, current, oauth_env) or current
+
     def _compute_drive_info():
-        path = _token_path()
+        current = _workspace_token_path()
+        picked = pick_oauth_token_path(data_dir, current, oauth_env)
+        if picked is None and read_share_email(oauth_env):
+            sa = None if sa_json_path in (None, "") else sa_json_path
+            return resolve_drive_status(sa, oauth_token_path=None, environ=oauth_env)
+        path = picked or current
         if sa_json_path == "":
             return resolve_drive_status(None, oauth_token_path=path, environ=oauth_env)
         return resolve_drive_status(
@@ -1488,8 +1500,21 @@ def create_app(
         _refresh_drive_info()
         return _drive_status_out(_drive_info())
 
+    def _require_drive_oauth_manager(request: Request):
+        if not auth_on:
+            return
+        user = _require_user(request)
+        if not can_manage_drive_oauth(
+            email=user.email, admin_email=admin_email, auth_on=True,
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the site admin can Connect Google. Share folders with the studio Drive email.",
+            )
+
     @app.get("/api/drive/oauth/start")
     def drive_oauth_start(request: Request):
+        _require_drive_oauth_manager(request)
         if not oauth_env.get(ENV_OAUTH_CLIENT_ID) or not oauth_env.get(ENV_OAUTH_CLIENT_SECRET):
             raise HTTPException(
                 status_code=503,
@@ -1535,7 +1560,7 @@ def create_app(
             # Persist client secrets alongside token so GoogleDrive can refresh headless
             token_data.setdefault("client_id", client_id)
             token_data.setdefault("client_secret", client_secret)
-            _oauth_tokens().save(token_data)
+            OAuthTokenStore(_workspace_token_path()).save(token_data)
         except Exception as exc:
             print(f"oauth exchange failed: {exc}", flush=True)
             traceback.print_exc()
@@ -1550,8 +1575,9 @@ def create_app(
         return RedirectResponse(url=_settings_url(request, "oauth=connected"), status_code=302)
 
     @app.post("/api/drive/oauth/disconnect")
-    def drive_oauth_disconnect() -> dict:
-        _oauth_tokens().clear()
+    def drive_oauth_disconnect(request: Request) -> dict:
+        _require_drive_oauth_manager(request)
+        OAuthTokenStore(_workspace_token_path()).clear()
         info = _drive_info()
         if info.auth_mode == "oauth":
             _set_drive(None)
