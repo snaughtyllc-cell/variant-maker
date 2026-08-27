@@ -68,8 +68,8 @@ export function StudioQueueCard({
                     onClick={() => onCancel(job.job_id)}
                     disabled={stopping}
                     style={{
-                      background: "#2a0e0e",
-                      border: "1px solid #5a1a1a",
+                      background: "#fff3f1",
+                      border: "1px solid #efc5c0",
                       color: "var(--color-red)",
                       borderRadius: 7,
                       padding: "4px 8px",

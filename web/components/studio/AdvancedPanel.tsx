@@ -21,36 +21,28 @@ export function AdvancedPanel({
   const hqHint = hqBatchHint(qualityMode, totalVariants);
 
   return (
-    <div
-      style={{
-        marginTop: 16,
-        fontSize: 12.5,
-        color: "var(--color-muted)",
-        borderTop: "1px solid var(--color-line)",
-        paddingTop: 14,
-      }}
-    >
+    <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          cursor: "pointer",
-          userSelect: "none",
-        }}
+        className="studio-option-row"
+        style={{ userSelect: "none" }}
         onClick={() => setOpen((o) => !o)}
       >
-        <span style={{ color: "var(--color-muted2)" }}>{open ? "▾" : "▸"}</span>
-        Advanced
+        <span className="studio-option-row__label" style={{ alignItems: "center", display: "flex", gap: 8 }}>
+          <span className="material-symbols-rounded" style={{ color: "var(--color-muted2)", fontSize: 18 }}>
+            {open ? "expand_more" : "chevron_right"}
+          </span>
+          Advanced
+        </span>
         <span
           style={{
-            marginLeft: "auto",
             color: "var(--color-text)",
-            background: "#edf6f7",
+            background: "var(--color-panel2)",
             border: "1px solid var(--color-line)",
             padding: "4px 10px",
             borderRadius: 999,
             fontSize: 11.5,
+            fontFamily: "var(--font-space-grotesk), monospace",
+            flexShrink: 0,
           }}
         >
           Output: Matches source
@@ -106,7 +98,7 @@ export function AdvancedPanel({
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
-                background: "#fbfdfd",
+                background: "var(--color-panel)",
                 color: "var(--color-text)",
                 border: "1px solid var(--color-line)",
                 borderRadius: 8,
@@ -166,7 +158,7 @@ export function AdvancedPanel({
               type="checkbox"
               checked={allowCreativeEscalate}
               onChange={(e) => onAllowCreativeEscalateChange(e.target.checked)}
-              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#0caab8" }}
+              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "var(--color-violet)" }}
             />
           </label>
         </div>

@@ -40,8 +40,13 @@ export function GenerateButton({
       className="studio-generate-button"
       data-complete={complete || undefined}
     >
-      {label}
-      <small>{support}</small>
+      <span className="studio-generate-button__copy">
+        <span className="studio-generate-button__title">{label}</span>
+        <small>{support}</small>
+      </span>
+      <span className="studio-generate-button__arrow" aria-hidden="true">
+        <span className="material-symbols-rounded" style={{ fontSize: 19 }}>arrow_forward</span>
+      </span>
     </button>
   );
 }

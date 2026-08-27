@@ -1,6 +1,5 @@
 "use client";
 import { useState, useCallback } from "react";
-import { FolderOpen } from "lucide-react";
 import { DropZone } from "@/components/studio/DropZone";
 import { FileList } from "@/components/studio/FileList";
 import { DrivePickList } from "@/components/studio/DrivePickList";
@@ -36,6 +35,7 @@ export default function StudioPage() {
 
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
+  const jobLocked = Boolean(jobId && !complete);
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -116,76 +116,114 @@ export default function StudioPage() {
   return (
     <main className={studioShellClass(!!jobId)}>
       <div className="studio-cockpit">
-        <header className="studio-intro">
-          <p>Studio</p>
-          <h1>Build a new pack</h1>
-          <span>Choose source clips, set the output count, then track the live queue without leaving this workspace.</span>
-        </header>
-        <p className="studio-step-label">1 · Source videos</p>
+        <div className="studio-cockpit__scroll">
+          <div className="studio-cockpit__inner">
+            <header className="studio-intro">
+              <p>Studio</p>
+              <h1>Build a pack</h1>
+              <span>Pick clips, set variants, watch the queue on the right.</span>
+            </header>
 
-        <StudioQueue qualityMode={qualityMode} jobId={jobId} />
+            <StudioQueue qualityMode={qualityMode} jobId={jobId} />
 
-        <DropZone onFiles={handleFiles} />
+            <section className="studio-section">
+              <div className="studio-section__head">
+                <p className="studio-eyebrow">01 · Source</p>
+                <span className="studio-section__meta">
+                  {sourceCount > 0 ? `${sourceCount} clip${sourceCount !== 1 ? "s" : ""}` : "No clips yet"}
+                </span>
+              </div>
 
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          disabled={Boolean(jobId && !complete)}
-          className="studio-drive-picker"
-        >
-          <FolderOpen size={16} /> Pick from Google Drive
-        </button>
+              <DropZone onFiles={handleFiles} />
 
-        <FileList files={files} durations={durations} onRemove={handleRemoveFile} />
-        <DrivePickList picks={drivePicks} onRemove={handleRemoveDrivePick} />
+              <div className="studio-source-actions">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  disabled={jobLocked}
+                  className="studio-drive-picker"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>cloud</span>
+                  From Drive
+                </button>
+                <span className="studio-source-hint">MP4 / MOV · up to 1 GB each</span>
+              </div>
 
-        <div className="studio-actions">
-          <VariantStepper
-            value={perVideo}
-            onChange={setPerVideo}
-            min={1}
-            max={MAX_PER_VIDEO}
-            fileCount={sourceCount}
-            qualityMode={qualityMode}
-          />
-          <GenerateButton
-            fileCount={sourceCount}
-            perVideo={perVideo}
-            onClick={handleGenerate}
-            disabled={Boolean(jobId && !complete)}
-            busy={busy}
-            jobId={jobId}
-            complete={complete}
-          />
+              <div className="studio-source-row">
+                <FileList files={files} durations={durations} onRemove={handleRemoveFile} />
+                <DrivePickList picks={drivePicks} onRemove={handleRemoveDrivePick} />
+              </div>
+            </section>
+
+            <hr className="studio-divider" />
+
+            <section className="studio-section">
+              <p className="studio-eyebrow">02 · Variants per clip</p>
+              <VariantStepper
+                value={perVideo}
+                onChange={setPerVideo}
+                min={1}
+                max={MAX_PER_VIDEO}
+                fileCount={sourceCount}
+                qualityMode={qualityMode}
+              />
+            </section>
+
+            <hr className="studio-divider" />
+
+            <section className="studio-section">
+              <p className="studio-eyebrow">03 · Options</p>
+              <div className="studio-options">
+                <label className="studio-option-row studio-caption-toggle">
+                  <div>
+                    <div className="studio-option-row__label">{captionToggleLabel()}</div>
+                    <div className="studio-option-row__hint">{captionToggleHint()}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={generateCaptions}
+                    onChange={(e) => setGenerateCaptions(e.target.checked)}
+                  />
+                  <span className="studio-switch" data-on={generateCaptions} aria-hidden="true">
+                    <span className="studio-switch__thumb" />
+                  </span>
+                </label>
+
+                {agency && (
+                  <AdvancedPanel
+                    allowCreativeEscalate={allowCreativeEscalate}
+                    onAllowCreativeEscalateChange={setAllowCreativeEscalate}
+                    qualityMode={qualityMode}
+                    onQualityModeChange={setQualityMode}
+                    totalVariants={totalVariants(sourceCount, perVideo)}
+                  />
+                )}
+              </div>
+            </section>
+
+            {error && (
+              <div className="vf-alert vf-alert--error" style={{ margin: 0 }}>
+                {error}
+              </div>
+            )}
+
+            <div className="studio-cockpit__spacer" />
+          </div>
         </div>
 
-        <label className="studio-caption-toggle">
-          <input
-            type="checkbox"
-            checked={generateCaptions}
-            onChange={(e) => setGenerateCaptions(e.target.checked)}
-          />
-          <span>
-            {captionToggleLabel()}
-            <small>{captionToggleHint()}</small>
-          </span>
-        </label>
-
-        {error && (
-          <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>
-            {error}
+        <div className="studio-generate-bar">
+          <div className="studio-generate-bar__inner">
+            <GenerateButton
+              fileCount={sourceCount}
+              perVideo={perVideo}
+              onClick={handleGenerate}
+              disabled={jobLocked}
+              busy={busy}
+              jobId={jobId}
+              complete={complete}
+            />
           </div>
-        )}
-
-        {agency && (
-          <AdvancedPanel
-            allowCreativeEscalate={allowCreativeEscalate}
-            onAllowCreativeEscalateChange={setAllowCreativeEscalate}
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-            totalVariants={totalVariants(sourceCount, perVideo)}
-          />
-        )}
+        </div>
       </div>
 
       <div className={studioProgressIdleClass(!!jobId)}>

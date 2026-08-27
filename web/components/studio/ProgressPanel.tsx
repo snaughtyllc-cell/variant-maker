@@ -45,8 +45,8 @@ export function ProgressPanel() {
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: "#223a3e",
-            border: "1px solid #355156",
+            background: "#16272c",
+            border: "1px solid #24393f",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -54,13 +54,13 @@ export function ProgressPanel() {
             marginBottom: 4,
           }}
         >
-          <span style={{ color: "#57dfe6" }}>●</span>
+          <span style={{ color: "var(--color-cyan)" }}>●</span>
         </div>
         <p
           style={{
             fontSize: 14,
             fontWeight: 700,
-            color: "#f1fafb",
+            color: "#eaf6f7",
             margin: 0,
           }}
         >
@@ -69,7 +69,7 @@ export function ProgressPanel() {
         <p
           style={{
             fontSize: 12,
-            color: "#b7c9cc",
+            color: "#7e979d",
             margin: 0,
             lineHeight: 1.5,
             maxWidth: 200,
@@ -124,10 +124,10 @@ export function ProgressPanel() {
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#f1fafb" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#eaf6f7" }}>
             {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "#b7c9cc", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11.5, color: "#7e979d", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
             {sub}
           </div>
         </div>
@@ -139,8 +139,8 @@ export function ProgressPanel() {
               onClick={handleCancel}
               disabled={cancelling}
               style={{
-                background: "#2a0e0e",
-                border: "1px solid #5a1a1a",
+                background: "rgba(229, 83, 61, 0.14)",
+                border: "1px solid rgba(229, 83, 61, 0.4)",
                 color: "var(--color-red)",
                 borderRadius: 8,
                 padding: "10px 12px",
@@ -187,8 +187,8 @@ export function ProgressPanel() {
                 borderRadius: "50%",
                 background: complete ? "var(--color-green)" : "var(--color-cyan)",
                 boxShadow: complete
-                  ? "0 0 8px #22c55e88"
-                  : "0 0 8px #22d3ee99",
+                  ? "0 0 8px rgba(18, 183, 106, 0.5)"
+                  : "0 0 8px rgba(126, 224, 230, 0.55)",
                 display: "inline-block",
                 flexShrink: 0,
               }}
