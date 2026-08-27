@@ -15,15 +15,24 @@ export default function DriveSettingsPage() {
           <div className="workspace-heading__copy">
             Share the varimo Drive email with your folder, paste the link, then add destinations and Drop Ledger.
             Captions are written from Studio Generate.
-            <DriveLoginNote />
           </div>
         </div>
       </div>
-      <div>
-        <PasswordPanel />
+
+      {/* Two numbered steps + a destinations table on the left; Drop Ledger,
+          account and a workspace-vs-login callout in a fixed right column at
+          desktop widths. Below 900px everything stacks in one column and the
+          phone chrome around it is untouched. */}
+      <div className="drive-body">
         <DestinationsPanel />
-        <div style={{ height: 28 }} />
         <DropLedgerPanel />
+        <div className="drive-slot-password">
+          <PasswordPanel />
+        </div>
+        <div className="drive-slot-callout drive-callout">
+          <span className="material-symbols-rounded" aria-hidden="true">info</span>
+          <DriveLoginNote />
+        </div>
       </div>
     </main>
   );

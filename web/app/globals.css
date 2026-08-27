@@ -722,14 +722,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 /* Route-specific content containers, including legacy inline components. */
 .drops-page, .drive-page, .team-page, .admin-page, .diagnostics-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
 .drops-page > div, .drive-page > div, .team-page > div, .admin-page > div, .diagnostics-page > div { margin-left: auto; margin-right: auto; max-width: 1120px; }
-.drive-page > div:last-child, .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { background: rgba(251, 253, 253, 0.9); border: 1px solid #d2e4e7; border-radius: 16px; box-shadow: var(--card-shadow); padding: 18px !important; }
-.drive-page > div:last-child { max-width: 900px; }
+.team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { background: rgba(251, 253, 253, 0.9); border: 1px solid #d2e4e7; border-radius: 16px; box-shadow: var(--card-shadow); padding: 18px !important; }
 .team-page > div:last-child, .admin-page > div:last-child { max-width: 1120px; overflow-x: auto; }
-.drive-page [style*="#0d0d13"], .team-page [style*="#0d0d13"], .admin-page [style*="#0d0d13"] { background: #f7fbfb !important; }
-.drive-page [style*="#1c1608"], .team-page [style*="#1c1608"], .admin-page [style*="#1c1608"],
+.team-page [style*="#0d0d13"], .admin-page [style*="#0d0d13"] { background: #f7fbfb !important; }
+.team-page [style*="#1c1608"], .admin-page [style*="#1c1608"],
 .team-page [style*="#1a1610"], .admin-page [style*="#1a1610"] { background: #fff8eb !important; border-color: #efdfbd !important; color: #8e6119 !important; }
-.drive-page button[style*="linear-gradient"], .team-page button[style*="linear-gradient"], .admin-page button[style*="linear-gradient"],
-.admin-page button[style*="#7c5cff"], .team-page button[style*="#7c5cff"], .drive-page button[style*="#7c5cff"] { background: var(--ink) !important; box-shadow: none !important; }
+.team-page button[style*="linear-gradient"], .admin-page button[style*="linear-gradient"],
+.admin-page button[style*="#7c5cff"], .team-page button[style*="#7c5cff"] { background: var(--ink) !important; box-shadow: none !important; }
 .drive-page input, .drive-page select, .drive-page textarea, .team-page input, .admin-page input { border-color: #c9dde0 !important; }
 .drive-page input:focus, .drive-page select:focus, .drive-page textarea:focus, .team-page input:focus, .admin-page input:focus { border-color: #16c8d3 !important; box-shadow: 0 0 0 3px #cef4f6; }
 .team-page table, .admin-page table { background: #fbfdfd; border: 1px solid #d6e5e7; border-radius: 10px; overflow: hidden; }
@@ -840,6 +839,101 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .workflow-columns { flex-direction: row; }
   .workflow-side { border-left: 1px solid #e1edee; border-top: 0; flex-shrink: 0; padding: 26px 26px 26px 24px; width: 420px; }
 }
+/* ============================================================================
+   Drive (/settings/drive) — Task 8.
+   Two numbered steps (share the studio email, then add a destination) plus a
+   destinations table on the left; Drop Ledger, Account and a workspace/login
+   callout stack in a fixed 340px right column at desktop widths. Below the
+   900px content breakpoint everything collapses back to one stacked column
+   in source order — the app's phone chrome (top bar / bottom tabs) is
+   untouched by any of this.
+   ============================================================================ */
+.drive-body { display: flex; flex-direction: column; gap: 22px; }
+.drive-panel-root { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.drive-slot-a, .drive-slot-account, .drive-slot-b { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.drive-slot-password > div { margin-bottom: 0 !important; }
+.drive-slot-callout > div { color: #0e5f66 !important; font-size: 12.5px !important; line-height: 1.55 !important; margin: 0 !important; }
+
+.drive-eyebrow { color: var(--color-violet); font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
+
+.drive-banner { background: #fbf3df; border: 1px solid #efdfbd; border-radius: 12px; color: #a9741b; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; line-height: 1.5; padding: 12px 16px; }
+.drive-banner strong { color: #8e6119; }
+.drive-banner small { color: var(--color-muted); font-size: 12px; }
+.drive-form-error { color: var(--color-red); font-size: 12px; }
+
+/* Step 1 — dark share-email card. Keeps data-testid="drive-share-card" /
+   "drive-share-email" and every string DestinationsPanel.test.tsx locks. */
+.drive-step1-card { background: #0f1a1e; border-radius: 18px; display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.drive-step1-card__row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.drive-step1-card__email { background: #1d3238; border-radius: 12px; color: #eaf6f7; flex: 1; font-family: var(--font-space-grotesk), monospace; font-size: 14px; font-weight: 700; min-width: 180px; padding: 12px 14px; }
+.drive-step1-card__body { color: #9fb7bc; font-size: 13px; line-height: 1.55; }
+.drive-step1-card__mismatch { color: #f0c775; font-size: 12px; line-height: 1.55; }
+
+.drive-btn { align-items: center; border-radius: 12px; border: 1px solid transparent; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 700; gap: 7px; height: 42px; justify-content: center; padding: 0 16px; white-space: nowrap; }
+.drive-btn .material-symbols-rounded { font-size: 17px; }
+.drive-btn--aqua { background: var(--color-cyan); border-color: var(--color-cyan); color: #0b2226; }
+.drive-btn--aqua:hover:not(:disabled) { background: #63d2d9; }
+.drive-btn--dark { background: var(--ink); border-color: var(--ink); color: #f6fbfb; }
+.drive-btn--dark:hover:not(:disabled) { background: #1d3238; }
+.drive-btn--outline { background: #fff; border-color: var(--color-line); color: #23393e; }
+.drive-btn--outline:hover:not(:disabled) { border-color: var(--color-violet); color: var(--color-violet); }
+.drive-btn--danger { color: var(--color-red); }
+.drive-btn--sm { border-radius: 9px; font-size: 12px; font-weight: 600; height: 34px; padding: 0 12px; }
+.drive-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.drive-card { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; padding: 18px; }
+.drive-card__title-row { align-items: center; display: flex; justify-content: space-between; }
+.drive-card__title { color: var(--ink); font-family: var(--font-brand); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.drive-card__copy { color: var(--color-muted2); font-size: 13px; line-height: 1.55; margin-top: 8px; }
+.drive-card__row { align-items: center; border-top: 1px solid #eff5f6; display: flex; gap: 10px; justify-content: space-between; margin-top: 12px; padding-top: 12px; width: 100%; }
+.drive-card__title + .drive-card__row { border-top: none; margin-top: 12px; padding-top: 0; }
+.drive-card__row--action { background: none; border-left: none; border-right: none; border-bottom: none; cursor: pointer; font: inherit; text-align: left; }
+.drive-card__row-label { color: #23393e; font-size: 13.5px; font-weight: 600; }
+.drive-card__row-value { color: #8aa0a5; font-family: var(--font-space-grotesk), monospace; font-size: 11.5px; }
+
+.drive-badge { background: #fbf3df; border-radius: 7px; color: #a9741b; font-family: var(--font-space-grotesk), monospace; font-size: 10.5px; font-weight: 600; padding: 4px 10px; }
+.drive-badge--ok { background: #e8f8f0; color: #12805a; }
+
+.drive-step2-form { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.drive-input { background: #fff; border: 1px solid var(--color-line); border-radius: 12px; color: var(--ink); font-size: 13.5px; height: 46px; padding: 0 14px; }
+.drive-input:disabled { cursor: not-allowed; opacity: 0.6; }
+.drive-input--name { width: 190px; }
+.drive-input--url { flex: 1; min-width: 220px; }
+
+.drive-destinations { display: flex; flex-direction: column; gap: 10px; }
+.drive-destinations__head { align-items: center; display: flex; justify-content: space-between; }
+.drive-table { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; overflow: hidden; }
+.drive-table__row { align-items: center; border-bottom: 1px solid #eff5f6; display: grid; gap: 14px; grid-template-columns: 1.4fr 1.2fr 130px auto; padding: 13px 18px; }
+.drive-table__row--head { background: var(--color-panel2); color: #7a9096; font-family: var(--font-space-grotesk), monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; padding: 10px 18px; text-transform: uppercase; }
+.drive-table__row:last-child { border-bottom: none; }
+.drive-table__row:not(.drive-table__row--head):hover { background: #fafdfd; }
+.drive-table__name { color: var(--ink); font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-table__id { color: var(--color-muted2); font-family: var(--font-space-grotesk), monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-table__state { align-items: center; display: flex; gap: 7px; }
+.drive-table__dot { border-radius: 50%; flex: none; height: 8px; width: 8px; }
+.drive-table__state-label { color: var(--color-muted); font-family: var(--font-space-grotesk), monospace; font-size: 11px; }
+.drive-table__actions { display: flex; gap: 6px; justify-self: end; }
+.drive-table__empty { color: var(--color-muted); font-size: 12.5px; padding: 26px 18px; text-align: center; }
+.drive-table__edit { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; }
+
+.drive-ledger-card__status { color: var(--color-muted); font-size: 12.5px; line-height: 1.45; margin-top: 10px; }
+.drive-ledger-card__sync { color: var(--color-text); font-size: 12.5px; line-height: 1.45; margin-top: 10px; }
+.drive-ledger-card__actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.drive-ledger-card__open-link { color: var(--color-violet); font-size: 12px; font-weight: 600; padding: 7px 4px; }
+
+.drive-callout { align-items: flex-start; background: #eef8f9; border: 1px solid #c9e4e7; border-radius: 16px; display: flex; gap: 10px; padding: 16px; }
+.drive-callout .material-symbols-rounded { color: var(--color-violet); flex: none; font-size: 18px; }
+
+@media (min-width: 900px) {
+  .drive-body { align-items: start; display: grid; gap: 22px 26px; grid-template-columns: minmax(0, 1fr) 340px; }
+  .drive-panel-root { display: contents; }
+  .drive-slot-a { grid-column: 1; grid-row: 1; }
+  .drive-slot-account { grid-column: 2; grid-row: 1; }
+  .drive-slot-b { grid-column: 1; grid-row: 2 / span 3; }
+  .drive-ledger-card { grid-column: 2; grid-row: 2; }
+  .drive-slot-password { grid-column: 2; grid-row: 3; }
+  .drive-slot-callout { grid-column: 2; grid-row: 4; }
+}
 
 /* StatusStrip remains compact, but is now part of the light shell. */
 .status-engine, .status-cpu { background: #f2f8f8 !important; border-color: #d4e3e6 !important; }
@@ -909,9 +1003,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .variant-sheet__header { padding: max(14px, env(safe-area-inset-top, 0px)) 16px 14px !important; }
   .variant-sheet__player { padding: 16px; }
   .variant-sheet__panel-body { padding: 16px 14px max(20px, env(safe-area-inset-bottom, 0px)) !important; }
-  .drive-page > div:last-child, .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { padding: 14px !important; }
+  .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { padding: 14px !important; }
   .workflow-page > .workspace-heading { padding: 16px 14px 0; }
   .workflow-main, .workflow-side { padding: 14px; }
+  .drive-body { gap: 16px; }
   .vf-viewing-banner { padding: 8px 14px; }
   .drops-stats { flex-wrap: wrap; }
   .drops-stat { flex-basis: calc(50% - 7px); }
