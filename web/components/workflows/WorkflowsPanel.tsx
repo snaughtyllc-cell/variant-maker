@@ -51,6 +51,35 @@ function formatSummary(summary: WorkflowSummary | null): string {
   return parts.length ? parts.join(" · ") : "Sweep complete — nothing new";
 }
 
+/** A pill-style toggle switch backed by a real checkbox (same semantics/props as before). */
+function Switch({
+  checked,
+  disabled,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  label?: string;
+}) {
+  return (
+    <label className="workflow-switch-field">
+      <span className="workflow-switch" data-on={checked}>
+        <input
+          type="checkbox"
+          className="workflow-switch__input"
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+        />
+        <span className="workflow-switch__thumb" aria-hidden="true" />
+      </span>
+      {label && <span className="workflow-switch-field__label">{label}</span>}
+    </label>
+  );
+}
+
 export function WorkflowsPanel() {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -73,6 +102,7 @@ export function WorkflowsPanel() {
   const [actionId, setActionId] = useState<string | null>(null);
 
   const driveNotReady = status != null && status.status !== "ready";
+  const fieldsDisabled = destinations.length === 0 || driveNotReady;
 
   async function refresh() {
     setLoading(true);
@@ -218,410 +248,339 @@ export function WorkflowsPanel() {
     }
   }
 
+  const submitHint = driveNotReady
+    ? "connect Drive to finish"
+    : destinations.length < 2
+      ? "add a second Drive folder to finish"
+      : !outputId
+        ? "pick an output folder to finish"
+        : "watches the inbox automatically";
+
   return (
-    <div>
-      {driveNotReady && status && (
-        <div
-          style={{
-            padding: "12px 16px",
-            marginBottom: 18,
-            background: "#fff8eb",
-            border: "1px solid #efdfbd",
-            borderRadius: 12,
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          <div>{status.message}</div>
-          <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            Settings → Drive
-          </Link>
-        </div>
-      )}
-
-      {!loading && destinations.length === 0 && (
-        <div
-          style={{
-            padding: "14px 16px",
-            marginBottom: 18,
-            border: "1px dashed var(--color-line2)",
-            borderRadius: 12,
-            color: "var(--color-muted)",
-            fontSize: 12.5,
-            background: "#0d0d13",
-          }}
-        >
-          Add Drive folders in{" "}
-          <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            Settings → Drive
-          </Link>{" "}
-          before creating a workflow.
-        </div>
-      )}
-
-      {!loading && destinations.length === 1 && (
-        <div
-          style={{
-            padding: "14px 16px",
-            marginBottom: 18,
-            border: "1px dashed var(--color-line2)",
-            borderRadius: 12,
-            color: "var(--color-muted)",
-            fontSize: 12.5,
-            background: "#0d0d13",
-          }}
-        >
-          {workflowNeedTwoFolders()}{" "}
-          <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
-            Settings → Drive
-          </Link>
-        </div>
-      )}
-
-      <form
-        onSubmit={handleCreate}
-        style={{
-          background: "var(--color-panel)",
-          border: "1px solid var(--color-line)",
-          borderRadius: 14,
-          padding: 16,
-          marginBottom: 18,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>New workflow</div>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Reels inbox"
-            required
-            disabled={destinations.length === 0 || driveNotReady}
-            style={inputStyle(destinations.length === 0 || driveNotReady)}
-          />
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Inbox folder</span>
-          <select
-            value={inboxId}
-            onChange={(e) => {
-              const next = e.target.value;
-              setInboxId(next);
-              const inboxDest = destinations.find((d) => d.id === next);
-              const outDest = destinations.find((d) => d.id === outputId);
-              if (inboxDest && outDest && workflowFoldersClash(inboxDest, outDest)) {
-                const other = destinations.find((d) => !workflowFoldersClash(inboxDest, d));
-                setOutputId(other?.id ?? "");
-              }
-            }}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={inputStyle(destinations.length === 0 || driveNotReady)}
-          >
-            {destinations.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowInboxHint()}</span>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Output folder</span>
-          <select
-            value={outputId}
-            onChange={(e) => setOutputId(e.target.value)}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={inputStyle(destinations.length === 0 || driveNotReady)}
-          >
-            {destinations.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowOutputHint()}</span>
-        </label>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Variants per clip</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_PER_VIDEO}
-              value={count}
-              onChange={(e) => setCount(Math.min(MAX_PER_VIDEO, Math.max(1, Number(e.target.value) || 1)))}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Quality</span>
-            <select
-              value="fast"
-              onChange={() => setQualityMode("fast")}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            >
-              <option value="fast">Fast</option>
-              <option value="hq" disabled>
-                HQ — coming soon
-              </option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Poll every (minutes)</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_POLL_MINUTES}
-              value={pollMinutes}
-              onChange={(e) =>
-                setPollMinutes(Math.min(MAX_POLL_MINUTES, Math.max(1, Number(e.target.value) || 1)))
-              }
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            />
-          </label>
-        </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#0caab8" }}
-          />
-          Watch folder (auto-poll)
-        </label>
-
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
-          <input
-            type="checkbox"
-            checked={autoCaption}
-            onChange={(e) => setAutoCaption(e.target.checked)}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#0caab8", marginTop: 2 }}
-          />
-          <span>
-            Auto-caption from bank
-            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
-              {workflowAutoCaptionHint()}
-            </span>
-          </span>
-        </label>
-
-        {banks.length > 0 && (
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
-            <select
-              value={captionBankId}
-              onChange={(e) => setCaptionBankId(e.target.value)}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            >
-              {banks.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="workflow-columns">
+      <div className="workflow-main">
+        {driveNotReady && status && (
+          <div className="workflow-banner workflow-banner--warn">
+            <div>{status.message}</div>
+            <Link href="/settings/drive" className="workflow-banner__link">
+              Settings → Drive
+            </Link>
+          </div>
         )}
 
-        {formError && <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>}
+        {!loading && destinations.length === 0 && (
+          <div className="workflow-banner workflow-banner--empty">
+            Add Drive folders in{" "}
+            <Link href="/settings/drive" className="workflow-banner__link">
+              Settings → Drive
+            </Link>{" "}
+            before creating a workflow.
+          </div>
+        )}
 
-        <button
-          type="submit"
-          disabled={submitting || destinations.length < 2 || driveNotReady}
-          style={{
-            alignSelf: "flex-start",
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: "#fff",
-            background: "var(--ink)",
-            border: "none",
-            padding: "9px 16px",
-            borderRadius: 9,
-            cursor: submitting || destinations.length < 2 || driveNotReady ? "not-allowed" : "pointer",
-            opacity: submitting || destinations.length < 2 || driveNotReady ? 0.7 : 1,
-          }}
-        >
-          {submitting ? "Creating…" : "Create workflow"}
-        </button>
-      </form>
+        {!loading && destinations.length === 1 && (
+          <div className="workflow-banner workflow-banner--empty">
+            {workflowNeedTwoFolders()}{" "}
+            <Link href="/settings/drive" className="workflow-banner__link">
+              Settings → Drive
+            </Link>
+          </div>
+        )}
 
-      {loading && (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--color-muted)", fontSize: 13 }}>
-          Loading workflows…
-        </div>
-      )}
+        {loading && <div className="workflow-loading">Loading workflows…</div>}
 
-      {!loading && workflows.length === 0 && destinations.length > 0 && (
-        <div
-          style={{
-            padding: "14px 16px",
-            border: "1px dashed var(--color-line2)",
-            borderRadius: 12,
-            color: "var(--color-muted)",
-            fontSize: 12.5,
-            background: "#0d0d13",
-          }}
-        >
-          No workflows yet — connect an inbox folder above.
-        </div>
-      )}
+        {!loading && workflows.length === 0 && destinations.length > 0 && (
+          <div className="workflow-banner workflow-banner--empty">
+            No workflows yet — create one from the panel on the right.
+          </div>
+        )}
 
-      {workflows.map((wf) => {
-        const busy = actionId === wf.id;
-        return (
-          <div
-            key={wf.id}
-            style={{
-              background: "var(--color-panel)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 14,
-              padding: "14px 16px",
-              marginBottom: 10,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>{wf.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
-                  {destName(destinations, wf.inbox_destination_id)} →{" "}
-                  {destName(destinations, wf.output_destination_id)}
-                  {" · "}one subfolder per source clip
+        {workflows.length > 0 && (
+          <div className="workflow-list">
+            {workflows.map((wf) => {
+              const busy = actionId === wf.id;
+              return (
+                <div key={wf.id} className="flow-card">
+                  <div className="flow-card__header">
+                    <div className="flow-card__name">{wf.name}</div>
+                    <div className="flow-card__state" data-watching={wf.enabled}>
+                      <span className="flow-card__state-dot" aria-hidden="true" />
+                      <span className="flow-card__state-label">{wf.enabled ? "Watching" : "Paused"}</span>
+                    </div>
+                    <span className="flow-card__spacer" />
+                    <button
+                      type="button"
+                      className="flow-card__run"
+                      onClick={() => handleRun(wf)}
+                      disabled={busy}
+                    >
+                      <span className="material-symbols-rounded" aria-hidden="true">
+                        play_arrow
+                      </span>
+                      {busy ? "…" : "Run now"}
+                    </button>
+                    {workflowCanCancel(wf.last_summary) && (
+                      <button
+                        type="button"
+                        className="flow-card__cancel"
+                        onClick={() => handleCancel(wf)}
+                        disabled={busy}
+                      >
+                        {busy ? "Stopping…" : "Cancel"}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flow-card__folders">
+                    <div className="flow-card__folder">
+                      <span className="material-symbols-rounded flow-card__folder-icon" aria-hidden="true">
+                        folder
+                      </span>
+                      <div className="flow-card__folder-copy">
+                        <span className="flow-card__folder-eyebrow">Inbox</span>
+                        <span className="flow-card__folder-name">
+                          {destName(destinations, wf.inbox_destination_id)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="material-symbols-rounded flow-card__arrow" aria-hidden="true">
+                      arrow_forward
+                    </span>
+                    <div className="flow-card__folder">
+                      <span className="material-symbols-rounded flow-card__folder-icon" aria-hidden="true">
+                        folder_open
+                      </span>
+                      <div className="flow-card__folder-copy">
+                        <span className="flow-card__folder-eyebrow">Output</span>
+                        <span className="flow-card__folder-name">
+                          {destName(destinations, wf.output_destination_id)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flow-card__controls">
+                    <Switch checked={wf.enabled} disabled={busy} onChange={() => handleToggleEnabled(wf)} label="Watch" />
+                    <Switch
+                      checked={!!wf.auto_caption}
+                      disabled={busy}
+                      onChange={() => handleToggleAutoCaption(wf)}
+                      label="Auto-caption"
+                    />
+                    {banks.length > 0 && (
+                      <select
+                        className="workflow-field workflow-field--compact"
+                        value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
+                        disabled={busy}
+                        onChange={(e) => handleCaptionBank(wf, e.target.value)}
+                      >
+                        {banks.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <span className="flow-card__spacer" />
+                    <button
+                      type="button"
+                      className="flow-card__delete"
+                      onClick={() => handleDelete(wf)}
+                      disabled={busy}
+                    >
+                      Delete
+                    </button>
+                  </div>
+
+                  <div className="flow-card__meta">
+                    <span className="flow-card__meta-item">
+                      {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
+                    </span>
+                    <span className="flow-card__divider" aria-hidden="true" />
+                    <span className="flow-card__meta-item flow-card__meta-item--muted">
+                      Last sweep: {formatSummary(wf.last_summary)}
+                    </span>
+                    {wf.auto_caption && (
+                      <>
+                        <span className="flow-card__spacer" />
+                        <span className="flow-card__meta-item">{bankLabel(banks, wf.caption_bank_id)}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
-                  {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
-                  {wf.auto_caption ? " · auto-caption on" : ""}
-                  {wf.auto_caption ? ` · ${bankLabel(banks, wf.caption_bank_id)}` : ""}
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--color-muted2)", marginTop: 6 }}>
-                  Last sweep: {formatSummary(wf.last_summary)}
-                </div>
-              </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: "var(--color-text)",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={wf.enabled}
-                    disabled={busy}
-                    onChange={() => handleToggleEnabled(wf)}
-                    style={{ accentColor: "#0caab8" }}
-                  />
-                  Watch
-                </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: "var(--color-text)",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!wf.auto_caption}
-                    disabled={busy}
-                    onChange={() => handleToggleAutoCaption(wf)}
-                    style={{ accentColor: "#0caab8" }}
-                  />
-                  Auto-caption
-                </label>
-                {banks.length > 0 && (
-                  <select
-                    value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
-                    disabled={busy}
-                    onChange={(e) => handleCaptionBank(wf, e.target.value)}
-                    style={{ ...inputStyle(busy), minWidth: 140 }}
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleRun(wf)}
-                  disabled={busy}
-                  style={secondaryBtn(busy)}
-                >
-                  {busy ? "…" : "Run now"}
-                </button>
-                {workflowCanCancel(wf.last_summary) && (
-                  <button
-                    type="button"
-                    onClick={() => handleCancel(wf)}
-                    disabled={busy}
-                    style={{ ...secondaryBtn(busy), color: "var(--color-red)" }}
-                  >
-                    {busy ? "Stopping…" : "Cancel"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(wf)}
-                  disabled={busy}
-                  style={{ ...secondaryBtn(busy), color: "var(--color-red)" }}
-                >
-                  Delete
-                </button>
-              </div>
+      <aside className="workflow-side" aria-label="Create a new flow">
+        <form onSubmit={handleCreate} className="workflow-form">
+          <div className="workflow-form__title">New flow</div>
+
+          <div className="workflow-step">
+            <span className="workflow-step__label">01 · Name</span>
+            <input
+              className="workflow-field"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Reels inbox"
+              required
+              disabled={fieldsDisabled}
+            />
+          </div>
+
+          <div className="workflow-step">
+            <span className="workflow-step__label">02 · Folders</span>
+
+            <label className="workflow-folder-field">
+              <span className="workflow-folder-field__tag">IN</span>
+              <select
+                className="workflow-field"
+                value={inboxId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setInboxId(next);
+                  const inboxDest = destinations.find((d) => d.id === next);
+                  const outDest = destinations.find((d) => d.id === outputId);
+                  if (inboxDest && outDest && workflowFoldersClash(inboxDest, outDest)) {
+                    const other = destinations.find((d) => !workflowFoldersClash(inboxDest, d));
+                    setOutputId(other?.id ?? "");
+                  }
+                }}
+                disabled={fieldsDisabled}
+              >
+                {destinations.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="workflow-hint">{workflowInboxHint()}</p>
+
+            <label className="workflow-folder-field">
+              <span className="workflow-folder-field__tag">OUT</span>
+              <select
+                className="workflow-field"
+                data-missing={!outputId}
+                value={outputId}
+                onChange={(e) => setOutputId(e.target.value)}
+                disabled={fieldsDisabled}
+              >
+                {destinations.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="workflow-hint">{workflowOutputHint()}</p>
+
+            <div className="workflow-callout">
+              <span className="material-symbols-rounded workflow-callout__icon" aria-hidden="true">
+                account_tree
+              </span>
+              <span className="workflow-callout__text">
+                IN ≠ OUT. Each clip gets its own subfolder — 10 clips × 20 variants makes 10 folders, not 200
+                loose files.
+              </span>
             </div>
           </div>
-        );
-      })}
+
+          <div className="workflow-step">
+            <span className="workflow-step__label">03 · Settings</span>
+            <div className="workflow-settings-row">
+              <label className="workflow-settings-field">
+                <span className="workflow-settings-field__label">Variants per clip</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_PER_VIDEO}
+                  className="workflow-field"
+                  value={count}
+                  onChange={(e) => setCount(Math.min(MAX_PER_VIDEO, Math.max(1, Number(e.target.value) || 1)))}
+                  disabled={fieldsDisabled}
+                />
+              </label>
+
+              <label className="workflow-settings-field">
+                <span className="workflow-settings-field__label">Quality</span>
+                <select
+                  className="workflow-field"
+                  value="fast"
+                  onChange={() => setQualityMode("fast")}
+                  disabled={fieldsDisabled}
+                >
+                  <option value="fast">Fast</option>
+                  <option value="hq" disabled>
+                    HQ — coming soon
+                  </option>
+                </select>
+              </label>
+
+              <label className="workflow-settings-field">
+                <span className="workflow-settings-field__label">Poll every (min)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_POLL_MINUTES}
+                  className="workflow-field"
+                  value={pollMinutes}
+                  onChange={(e) =>
+                    setPollMinutes(Math.min(MAX_POLL_MINUTES, Math.max(1, Number(e.target.value) || 1)))
+                  }
+                  disabled={fieldsDisabled}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="workflow-toggles">
+            <div className="workflow-toggle-row">
+              <div className="workflow-toggle-row__title">Watch folder (auto-poll)</div>
+              <Switch checked={enabled} disabled={fieldsDisabled} onChange={() => setEnabled((v) => !v)} />
+            </div>
+            <div className="workflow-toggle-row">
+              <div>
+                <div className="workflow-toggle-row__title">Auto-caption from bank</div>
+                <div className="workflow-toggle-row__hint">{workflowAutoCaptionHint()}</div>
+              </div>
+              <Switch checked={autoCaption} disabled={fieldsDisabled} onChange={() => setAutoCaption((v) => !v)} />
+            </div>
+          </div>
+
+          {banks.length > 0 && (
+            <div className="workflow-step">
+              <span className="workflow-step__label">Caption folder</span>
+              <select
+                className="workflow-field"
+                value={captionBankId}
+                onChange={(e) => setCaptionBankId(e.target.value)}
+                disabled={fieldsDisabled}
+              >
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {formError && <div className="workflow-error">{formError}</div>}
+
+          <button type="submit" className="workflow-submit" disabled={submitting || destinations.length < 2 || driveNotReady}>
+            <span className="workflow-submit__copy">
+              <span className="workflow-submit__title">{submitting ? "Creating…" : "Create flow"}</span>
+              <span className="workflow-submit__hint">{submitHint}</span>
+            </span>
+            <span className="workflow-submit__icon" aria-hidden="true">
+              <span className="material-symbols-rounded">arrow_forward</span>
+            </span>
+          </button>
+        </form>
+      </aside>
     </div>
   );
-}
-
-function inputStyle(disabled: boolean): React.CSSProperties {
-  return {
-    background: "var(--color-panel2)",
-    border: "1px solid var(--color-line)",
-    borderRadius: 9,
-    padding: "8px 12px",
-    fontSize: 12.5,
-    color: "var(--color-text)",
-    outline: "none",
-    opacity: disabled ? 0.6 : 1,
-    cursor: disabled ? "not-allowed" : undefined,
-  };
-}
-
-function secondaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--color-text)",
-    background: "var(--color-panel2)",
-    border: "1px solid var(--color-line)",
-    padding: "7px 12px",
-    borderRadius: 9,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.7 : 1,
-  };
 }

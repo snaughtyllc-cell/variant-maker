@@ -13,9 +13,7 @@ export default function WorkflowsPage() {
           <p className="workspace-heading__copy">{workflowPageBlurb()}</p>
         </div>
       </div>
-      <div>
-        <WorkflowsPanel />
-      </div>
+      <WorkflowsPanel />
     </main>
   );
 }
