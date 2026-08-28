@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
-import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
+import {
+  STUDIO_LIVE_PHONE_HEIGHT_PX,
+  STUDIO_LIVE_RAIL_PX,
+  studioProgressIdleClass,
+  studioShellClass,
+} from "@/lib/studioLayout";
 
 describe("drop zone copy", () => {
   it("tells phone users to tap, not only drop", () => {
@@ -20,5 +25,11 @@ describe("studio layout classes", () => {
   it("hides the empty progress pane on phones", () => {
     expect(studioProgressIdleClass(false)).toBe("studio-progress studio-progress--idle");
     expect(studioProgressIdleClass(true)).toBe("studio-progress");
+  });
+
+  it("pins the live/progress rail to a small fixed portion", () => {
+    expect(STUDIO_LIVE_RAIL_PX).toBe(400);
+    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeLessThanOrEqual(240);
+    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeGreaterThanOrEqual(180);
   });
 });

@@ -262,10 +262,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-generate-bar { background: var(--color-panel); flex: 0 0 auto; padding: 12px 16px 16px; position: static; }
 .studio-generate-bar__inner { margin-inline: auto; max-width: 900px; width: 100%; }
 
-/* Persistent dark LIVE QUEUE rail (StudioLiveQueue). Stacks under the setup
-   column on mobile. Size stays fixed when a run starts — rows/tiles scroll
-   inside the rail instead of growing the studio side. */
-.studio-live { background: #0f1a1e; color: #eaf6f7; display: flex; flex-direction: column; min-height: 340px; overflow: hidden; padding: 18px; }
+/* Persistent dark LIVE QUEUE / progress rail (StudioLiveQueue). Desktop is a
+   400px column. Phone is a 240px strip under setup. Rows/tiles scroll inside
+   — the rail does not grow when a pack starts. */
+.studio-live { background: #0f1a1e; color: #eaf6f7; display: flex; flex-direction: column; height: 280px; max-height: 280px; min-height: 0; overflow: hidden; padding: 18px; }
 .studio-live__head { align-items: center; display: flex; justify-content: space-between; padding-bottom: 16px; }
 .studio-live__title { color: var(--color-cyan); font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; }
 .studio-live__title--sub { padding-bottom: 12px; }
@@ -1257,10 +1257,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 @media (min-width: 900px) {
   .studio-shell { flex-direction: row; height: calc(100dvh - var(--nav-h) - var(--tab-h)); min-height: 0; }
-  .studio-cockpit { flex: 0 1 960px; max-width: 960px; }
+  .studio-cockpit { flex: 1 1 auto; max-width: none; min-width: 0; }
   .studio-cockpit__scroll { padding: 30px 30px 0; }
   .studio-generate-bar { padding: 14px 30px 20px; }
-  .studio-live { flex: 1 1 auto; min-height: 0; min-width: 360px; overflow: hidden; padding: 22px; }
+  .studio-live { flex: 0 0 400px; height: auto; max-height: none; min-height: 0; min-width: 360px; overflow: hidden; padding: 22px; width: 400px; }
   .variant-sheet { left: auto !important; width: min(1180px, 94vw) !important; }
 }
 
@@ -1300,8 +1300,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .studio-cockpit { flex: 0 0 auto; min-height: 0; }
-  .studio-cockpit__scroll { flex: none; overflow: visible; padding: 18px 16px 24px; }
+  .studio-cockpit { flex: 1 1 auto; min-height: 0; }
+  .studio-cockpit__scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 18px 16px 24px; }
   .studio-generate-bar { padding: 10px 16px 16px; }
   .studio-generate-bar--dock {
     background: transparent;
@@ -1317,9 +1317,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   }
   .studio-generate-bar--dock .studio-generate-bar__inner,
   .studio-generate-bar--dock .studio-generate-button { pointer-events: auto; }
-  .studio-live { flex: 0 0 auto; height: auto; max-height: none; min-height: 320px; overflow: visible; padding: 18px 18px 96px; }
-  .studio-live__rows { max-height: none; overflow: visible; }
-  .studio-live__finished { flex: none; overflow: visible; }
+  .studio-live { flex: 0 0 240px; height: 240px; margin-bottom: 84px; max-height: 240px; min-height: 180px; overflow: hidden; padding: 14px 16px 12px; }
+  .studio-live__rows { max-height: 56px; overflow-x: hidden; overflow-y: auto; }
+  .studio-live__finished { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+  .studio-live__grid { gap: 6px; grid-template-columns: repeat(4, 1fr); }
+  .studio-live__spacer { display: none; }
   .gallery-toolbar { align-items: center; flex-shrink: 0; gap: 8px; padding: 8px 12px; }
   .gallery-toolbar__crumb, .gallery-toolbar .gallery-quiet-link { display: none; }
   .gallery-toolbar__actions { margin-left: 0; width: 100%; }
