@@ -196,6 +196,32 @@ def test_admin_login_and_join_invite_share_gallery(tmp_path):
     assert home["member_count"] == 2
 
 
+def test_admin_week_usage_after_fast_and_hq_prep(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    fast = jeff.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "2"},
+    )
+    assert fast.status_code == 201
+    _tenant_wait(jeff, fast.json()["job_id"])
+    hq = jeff.post(
+        "/api/jobs",
+        files=[("files", ("b.mp4", b"y", "video/mp4"))],
+        data={"count": "3", "prep_mode": "hq"},
+    )
+    assert hq.status_code == 201
+    _tenant_wait(jeff, hq.json()["job_id"])
+    spaces = jeff.get("/api/admin/workspaces").json()
+    home = next(s for s in spaces if s["id"] == jeff.get("/api/auth/me").json()["workspace_id"])
+    assert home["fast"] == 0 and home["hq"] == 0  # live queue, not the week
+    assert home["week_fast"] == 5  # 2 + 3 Fast copies
+    assert home["week_hq"] == 1    # one reconstruct
+    assert home["week_packs"] == 2
+
+
 def test_new_workspace_invite_isolates_galleries(tmp_path):
     app, _ = _auth_app(tmp_path)
     jeff = TestClient(app)

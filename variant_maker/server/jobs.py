@@ -18,7 +18,19 @@ from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .caption_ai import captions_for_source
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
+from .telemetry import capture_event, capture_exception
+from .usage import record_job
 from .workspace import Workspace
+
+PREP_HQ_FILENAME = "prep_hq.mp4"
+PREP_MODES = ("none", "hq")
+
+
+def normalize_prep_mode(value: str | None, *, default: str = "none") -> str:
+    raw = str(value or default).strip().lower()
+    if raw in ("hq", "reconstruct", "reconstruct_first"):
+        return "hq"
+    return "none"
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
 GALLERY_KEEP_HOURS_ENV = "VARIANT_GALLERY_KEEP_HOURS"
@@ -99,6 +111,7 @@ class JobSource:
     variants: list[VariantInfo] = field(default_factory=list)
     runpod_job_id: str | None = None
     planned_captions: list[str] = field(default_factory=list)
+    prep_status: str | None = None
 
     @property
     def delivered(self) -> int:
@@ -130,6 +143,8 @@ class Job:
     error: str | None = None
     created_seq: int = 0
     generate_captions: bool = False
+    prep_mode: str = "none"
+    prep_status: str | None = None
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -297,6 +312,8 @@ def _job_to_dict(job: Job) -> dict:
         "quality_mode": job.quality_mode,
         "allow_creative_escalate": job.allow_creative_escalate,
         "generate_captions": job.generate_captions,
+        "prep_mode": job.prep_mode,
+        "prep_status": job.prep_status,
         "error": job.error,
         "sources": [
             {
@@ -305,6 +322,7 @@ def _job_to_dict(job: Job) -> dict:
                 "requested": s.requested,
                 "runpod_job_id": s.runpod_job_id,
                 "planned_captions": list(s.planned_captions or []),
+                "prep_status": s.prep_status,
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -325,6 +343,7 @@ def _job_from_dict(data: dict) -> Job:
             requested=int(raw.get("requested") or 0),
             runpod_job_id=raw.get("runpod_job_id"),
             planned_captions=[str(c) for c in (raw.get("planned_captions") or []) if str(c).strip()],
+            prep_status=raw.get("prep_status"),
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -350,6 +369,8 @@ def _job_from_dict(data: dict) -> Job:
         error=data.get("error"),
         created_seq=created_seq,
         generate_captions=bool(data.get("generate_captions") or False),
+        prep_mode=normalize_prep_mode(data.get("prep_mode")),
+        prep_status=data.get("prep_status"),
     )
 
 
@@ -391,7 +412,8 @@ class JobStore:
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
-                    generate_captions: bool = False) -> Job:
+                    generate_captions: bool = False,
+                    prep_mode: str = "none") -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -401,13 +423,14 @@ class JobStore:
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
-            generate_captions=generate_captions,
+            generate_captions=generate_captions, prep_mode=prep_mode,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
                                allow_creative_escalate: bool = True,
                                quality_mode: str = "fast",
-                               generate_captions: bool = False) -> Job:
+                               generate_captions: bool = False,
+                               prep_mode: str = "none") -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -420,23 +443,29 @@ class JobStore:
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
-            generate_captions=generate_captions,
+            generate_captions=generate_captions, prep_mode=prep_mode,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
-                    generate_captions: bool = False) -> Job:
+                    generate_captions: bool = False,
+                    prep_mode: str = "none") -> Job:
         if generate_captions:
             for source in sources:
                 source.planned_captions = captions_for_source(source.filename, source.requested)
         with self._lock:
             self._seq += 1
             created_seq = self._seq
+        prep = normalize_prep_mode(prep_mode)
+        quality = normalize_quality_mode(quality_mode)
+        if prep == "hq":
+            quality = "fast"
         job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
-                   quality_mode=normalize_quality_mode(quality_mode),
+                   quality_mode=quality,
                    created_seq=created_seq,
-                   generate_captions=bool(generate_captions))
+                   generate_captions=bool(generate_captions),
+                   prep_mode=prep)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -566,6 +595,94 @@ class JobStore:
                 return
             os.replace(tmp, path)
 
+    def _prep_hq_path(self, job_id: str, source_id: str, filename: str) -> str:
+        in_dir = os.path.dirname(self._ws.source_in_path(job_id, source_id, filename))
+        return os.path.join(in_dir, PREP_HQ_FILENAME)
+
+    def _fast_in_path(self, job: Job, source: JobSource, original: str) -> str:
+        if job.prep_mode != "hq":
+            return original
+        dest = os.path.join(os.path.dirname(original), PREP_HQ_FILENAME)
+        return dest if os.path.isfile(dest) else original
+
+    def _ensure_hq_prep(
+        self, job: Job, source: JobSource, in_path: str, token: CancelToken,
+    ) -> str | None:
+        dest = os.path.join(os.path.dirname(in_path), PREP_HQ_FILENAME)
+        if source.prep_status == "done" and os.path.isfile(dest):
+            return dest
+        if token.is_set():
+            raise JobCancelled()
+        job.prep_status = "running"
+        source.prep_status = "running"
+        self._persist(job)
+        prep_out = os.path.join(os.path.dirname(os.path.dirname(in_path)), "prep")
+        os.makedirs(prep_out, exist_ok=True)
+
+        def on_prep_event(e: VariantEvent) -> None:
+            if token.runpod_job_id:
+                source.runpod_job_id = token.runpod_job_id
+                self._persist(job)
+
+        try:
+            result = self._runner.run(
+                in_path, count=1, out_dir=prep_out,
+                source_id=source.source_id, on_event=on_prep_event,
+                allow_creative_escalate=job.allow_creative_escalate,
+                quality_mode="hq",
+                cancel_token=token,
+            )
+        except JobCancelled:
+            source.prep_status = "failed"
+            job.prep_status = "failed"
+            self._persist(job)
+            raise
+        hero = next(
+            (
+                v for v in result.variants
+                if v.status == "ok" and getattr(v, "path", None) and os.path.isfile(v.path)
+            ),
+            None,
+        )
+        if hero is None:
+            source.prep_status = "failed"
+            job.prep_status = "failed"
+            if not job.error:
+                job.error = "HQ reconstruct did not produce a usable file."
+            self._persist(job)
+            return None
+        shutil.copyfile(hero.path, dest)
+        source.prep_status = "done"
+        source.runpod_job_id = None
+        if all(s.prep_status == "done" for s in job.sources):
+            job.prep_status = "done"
+        self._persist(job)
+        return dest
+
+    def _record_usage(self, job: Job) -> None:
+        try:
+            if record_job(self._ws, job):
+                capture_event(
+                    "job_completed",
+                    {
+                        "job_id": job.job_id,
+                        "prep_mode": job.prep_mode,
+                        "quality_mode": job.quality_mode,
+                        "fast_copies": sum(s.delivered for s in job.sources)
+                        if job.quality_mode != "hq" else 0,
+                        "hq_preps": sum(
+                            1 for s in job.sources if s.prep_status == "done"
+                        ) if job.prep_mode == "hq" else (
+                            sum(s.delivered for s in job.sources)
+                            if job.quality_mode == "hq" else 0
+                        ),
+                        "count": job.count,
+                        "source_count": len(job.sources),
+                    },
+                )
+        except Exception as exc:
+            print(f"usage {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
+
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
         try:
             def on_event(e: VariantEvent) -> None:
@@ -620,6 +737,11 @@ class JobStore:
                     self._persist(job)
                 in_path = proxied
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
+                if job.prep_mode == "hq":
+                    hero = self._ensure_hq_prep(job, source, in_path, token)
+                    if hero is None:
+                        continue
+                    in_path = hero
                 resume = getattr(self._runner, "resume_run", None)
                 if skip_finished and callable(resume) and source.runpod_job_id:
                     try:
@@ -681,6 +803,7 @@ class JobStore:
             else:
                 job.error = _public_job_error(exc)
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
+                capture_exception(exc)
         finally:
             if job.job_id not in self._jobs:
                 return
@@ -689,6 +812,7 @@ class JobStore:
                 for source in job.sources:
                     self._pull_missing_outputs(source.source_id)
                 self._refresh_copy_error(job)
+                self._record_usage(job)
             self._persist(job)
             self.prune_finished_jobs()
             ev = self._done.get(job.job_id)
@@ -948,8 +1072,12 @@ class JobStore:
         job = self._jobs.get(job_id)
         allow_creative_escalate = job.allow_creative_escalate if job else True
         quality_mode = job.quality_mode if job else "fast"
+        original = self._ws.source_in_path(job_id, source_id, source.filename)
+        in_path = original
+        if job is not None:
+            in_path = self._fast_in_path(job, source, original)
         result = self._runner.run(
-            self._ws.source_in_path(job_id, source_id, source.filename),
+            in_path,
             count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
             allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode,

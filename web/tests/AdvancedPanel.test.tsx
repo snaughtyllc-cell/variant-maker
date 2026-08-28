@@ -35,11 +35,11 @@ describe("AdvancedPanel output copy", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveDisplayValue("Fast");
-    expect(screen.getByText("HQ — coming soon")).toBeInTheDocument();
-    expect((screen.getByText("HQ — coming soon") as HTMLOptionElement).disabled).toBe(true);
+    expect(screen.getByText("HQ — not a 20-pack")).toBeInTheDocument();
+    expect((screen.getByText("HQ — not a 20-pack") as HTMLOptionElement).disabled).toBe(true);
     expect(screen.queryByText(/Phase 8/)).not.toBeInTheDocument();
     expect(screen.queryByText(/AI upscale/)).not.toBeInTheDocument();
-    expect(screen.getByText(/HQ is coming soon/)).toBeInTheDocument();
+    expect(screen.getByText(/Reconstruct first/)).toBeInTheDocument();
   });
 
   it("explains the 38% pass line and 30% ship floor", () => {

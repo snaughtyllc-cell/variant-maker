@@ -31,6 +31,7 @@ export default function StudioPage() {
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [generateCaptions, setGenerateCaptions] = useState(true);
+  const [prepMode, setPrepMode] = useState<"none" | "hq">("none");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,9 +103,10 @@ export default function StudioPage() {
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions,
+              prepMode,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions);
-      start(resp, "fast");
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, prepMode);
+      start(resp, "fast", prepMode);
     } catch (e) {
       clear();
       setError(e instanceof Error ? e.message : "Job failed");
@@ -168,6 +170,21 @@ export default function StudioPage() {
           <span>
             {captionToggleLabel()}
             <small>{captionToggleHint()}</small>
+          </span>
+        </label>
+
+        <label className="studio-caption-toggle">
+          <input
+            type="checkbox"
+            checked={prepMode === "hq"}
+            onChange={(e) => setPrepMode(e.target.checked ? "hq" : "none")}
+          />
+          <span>
+            Reconstruct first (HQ)
+            <small>
+              One GPU pass rewrites the pixels, then Fast builds the pack.
+              Not a 20 HQ run — that is too slow.
+            </small>
           </span>
         </label>
 

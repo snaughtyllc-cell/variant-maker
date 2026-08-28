@@ -107,6 +107,9 @@ class JobDetail(BaseModel):
     state: str
     sources: list[SourceOut] = []
     error: str | None = None
+    quality_mode: str = "fast"
+    prep_mode: str = "none"
+    prep_status: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):
@@ -285,6 +288,7 @@ class JobFromDriveIn(BaseModel):
     quality_mode: str = "fast"
     allow_creative_escalate: bool = True
     generate_captions: bool = False
+    prep_mode: str = "none"
 
 
 class WorkflowSummaryOut(BaseModel):
@@ -439,6 +443,9 @@ class AdminWorkspaceOut(BaseModel):
     running: int = 0
     fast: int = 0
     hq: int = 0
+    week_fast: int = 0
+    week_hq: int = 0
+    week_packs: int = 0
     last_job_utc: str | None = None
     last_error: str | None = None
     experience: Literal["solo", "agency"] = "agency"
