@@ -33,6 +33,12 @@ from . import __version__
     "--auto-tune/--no-auto-tune", default=None,
     help="bisect strength to the uniqueness target (default: on for Fast, off for HQ)",
 )
+@click.option(
+    "--copyid", default=None,
+    type=click.Choice(["off", "record", "gate"]),
+    help="off=SSIM only (default); record=log visual/audio heads; gate=fuse min uniqueness. "
+         "Env VARIANT_MAKER_COPYID when omitted.",
+)
 @click.option("-v", "--verbose", is_flag=True)
 @click.version_option(version=__version__)
 def main(**config):

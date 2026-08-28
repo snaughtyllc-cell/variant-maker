@@ -13,6 +13,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from . import autotune, look, quality, uniqueness
+from .copyid import normalize_mode
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
@@ -85,6 +86,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
     # attempt on the strong preset.
     uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
+    # off (default Fast) | record (score heads, SSIM gates) | gate (fused min).
+    copyid_mode = normalize_mode(config.get("copyid"))
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
@@ -156,6 +159,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "shot": shot_info,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
+        "copyid": copyid_mode,
     }
 
     def _prep(i: int):
@@ -264,8 +268,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 return {}
 
         def _score_uniqueness_now() -> dict:
+            # Extra kwargs only when enabled so existing test fakes stay valid.
+            extra = {"copyid": copyid_mode} if copyid_mode != "off" else {}
             scored = uniqueness.score_uniqueness(
-                src.path, path, target=uniqueness_target,
+                src.path, path, target=uniqueness_target, **extra,
             )
             return _apply_peer_status(scored, _peer_bits(path))
 
@@ -524,6 +530,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_status": look_info.get("look_status"),
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
+            "heads": u.get("heads"),
         }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
