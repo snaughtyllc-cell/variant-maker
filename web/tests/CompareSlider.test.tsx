@@ -17,8 +17,10 @@ describe("CompareSlider aspect", () => {
       <CompareSlider beforeSrc="/src.mp4" afterSrc="/var.mp4" />,
     );
     const box = container.querySelector(".compare-slider") as HTMLElement;
-    expect(box.style.aspectRatio).toBe("9 / 16");
-    expect(box.style.maxHeight).toBe("46dvh");
+    // Aspect + the phone height-cap width are now handed to CSS as custom
+    // properties (the desktop rule fills the full-height stage instead).
+    expect(box.style.getPropertyValue("--cmp-aspect")).toBe("9 / 16");
+    expect(box.style.getPropertyValue("--cmp-w")).toContain("46dvh");
   });
 
   it("sizes the box from the variant video's frame", () => {
@@ -30,8 +32,7 @@ describe("CompareSlider aspect", () => {
     setVideoSize(after, 1920, 1080);
     fireEvent.loadedMetadata(after);
     const box = container.querySelector(".compare-slider") as HTMLElement;
-    expect(box.style.aspectRatio).toBe("1920 / 1080");
-    expect(box.style.maxHeight).toBe("46dvh");
+    expect(box.style.getPropertyValue("--cmp-aspect")).toBe("1920 / 1080");
   });
 
   it("does not take aspect from the source (before) layer", () => {
@@ -42,6 +43,6 @@ describe("CompareSlider aspect", () => {
     setVideoSize(videos[1] as HTMLVideoElement, 1920, 1080);
     fireEvent.loadedMetadata(videos[1]);
     const box = container.querySelector(".compare-slider") as HTMLElement;
-    expect(box.style.aspectRatio).toBe("9 / 16");
+    expect(box.style.getPropertyValue("--cmp-aspect")).toBe("9 / 16");
   });
 });
