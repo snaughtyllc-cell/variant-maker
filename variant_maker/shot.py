@@ -32,9 +32,10 @@ SHOT_MOTION = "motion"
 # (41%). Same + rebuild 0.73/0.67 → 24 bits (38%) — lanczos smooths the
 # chroma 576 was scoring. c1s=27 → 37 bits (58%) — that IS the snow Jeff
 # rejected. Scoring at native 720 / 1080 does not recover those bits.
-# Do not remap talking-head onto preset rebuild to "buy" %. Do not clone
-# Pixel AI scramble. Gate 24/24. Shrink does not collapse uniqueness grain
-# to shot.lo when look overspends. No extra rotate (captions).
+# Do not remap talking-head onto preset rebuild to "buy" %. Pixel rewrite
+# waits on Jeff stills. Gate 24/24. Shrink does not collapse uniqueness grain
+# to shot.lo when look overspends. Safe rotate stays in the talking-head
+# band (0.35–0.8°) so captions stay.
 # Instagram 720 talking-head: centered keep 0.92–0.96 scores 20–21 bits
 # (below the gate). Punch leftover from the top (crop_y → 1.0) and keep
 # 0.86–0.90 so crop-only clears 24 without eating burned-in words and

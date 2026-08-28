@@ -21,8 +21,12 @@ from . import __version__
 @click.option("-o", "--out", default="./output", show_default=True, type=click.Path())
 @click.option("--quality-floor", default=90.0, show_default=True, help="VMAF floor")
 @click.option("--max-regen", default=3, show_default=True)
-@click.option("--rotate", default="never", type=click.Choice(["never", "safe"]), show_default=True)
+@click.option("--rotate", default="safe", type=click.Choice(["never", "safe"]), show_default=True)
 @click.option("--flip", default="never", type=click.Choice(["never", "always"]), show_default=True)
+@click.option(
+    "--us-metadata", is_flag=True,
+    help="strip source tags, then write Apple / US location / creation_time",
+)
 @click.option("--jobs", default=1, show_default=True)
 @click.option("--dry-run", is_flag=True, help="print plan + commands, render nothing")
 @click.option(

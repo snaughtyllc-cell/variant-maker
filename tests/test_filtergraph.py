@@ -557,6 +557,25 @@ def test_negligible_rotation_is_omitted():
     assert "rotate=" not in filtergraph.build_video_filters(p, make_src(), REELS)
 
 
+def test_vignette_emitted_after_color():
+    p = make_params(video={"vignette": 0.08})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "vignette=" in vf
+    assert vf.index("eq=") < vf.index("vignette=")
+    assert vf.index("hue=") < vf.index("vignette=")
+    assert vf.index("vignette=") < vf.index("unsharp=")
+    assert "vignette=" not in filtergraph.build_video_filters(make_params(), make_src(), REELS)
+
+
+def test_out_fps_overrides_platform_fps():
+    p = make_params(video={"out_fps": 60})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "fps=60" in vf
+    assert "fps=30" not in vf
+    pinned = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert "fps=30" in pinned
+
+
 def test_pitch_only_with_rubberband_value():
     base = filtergraph.build_audio_filters(make_params(), make_src(), has_audio=True)
     assert "rubberband=" not in base

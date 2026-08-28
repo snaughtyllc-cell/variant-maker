@@ -44,6 +44,26 @@ def _progress_chunk(state: str, kw: dict) -> dict:
     }}
 
 
+def _flag(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def resolve_rotate(job_input: dict) -> str:
+    """Studio often omits rotate. Safe is the compete default; never still wins if sent."""
+    raw = job_input.get("rotate") or os.environ.get("VARIANT_MAKER_ROTATE") or "safe"
+    raw = str(raw).strip().lower()
+    return raw if raw in ("never", "safe") else "safe"
+
+
+def resolve_us_metadata(job_input: dict) -> bool:
+    """Off unless the job or VARIANT_MAKER_US_METADATA turns it on."""
+    if "us_metadata" in job_input:
+        return _flag(job_input["us_metadata"])
+    return _flag(os.environ.get("VARIANT_MAKER_US_METADATA", ""))
+
+
 def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | None) -> None:
     if not name:
         return
@@ -76,15 +96,17 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "platform": job_input.get("platform", DEFAULT_PLATFORM),
         "quality_mode": quality_mode,
         "max_regen": job_input.get("max_regen", MAX_REGEN),
-            "jobs": encode_jobs_for_worker(
-                quality_mode, count, requested=job_input.get("jobs"),
-            ),
+        "jobs": encode_jobs_for_worker(
+            quality_mode, count, requested=job_input.get("jobs"),
+        ),
         "uniqueness_target": job_input.get("uniqueness_target", UNIQUENESS_TARGET),
         "uniq_strengths": job_input.get("uniq_strengths", list(UNIQ_STRENGTHS)),
         "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),
         "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
         "auto_tune": auto_tune,
         "rubberband": job_input.get("rubberband"),
+        "rotate": resolve_rotate(job_input),
+        "us_metadata": resolve_us_metadata(job_input),
     }
 
     q: queue.Queue = queue.Queue()
