@@ -32,8 +32,9 @@ Live Studio: https://varyforge-studio-production.up.railway.app.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` *(crop-pan `:lab` digest TBD after CI; pin lab only)*
-- `VF_ENGINE_REV=f05d803` (19-bit / 30% uniqueness ship floor). `VF_LAB=1`. Next pin: crop-drift short SHA.
+- Crop-pan `:lab` digest (CI `7ef5853`): `ghcr.io/snaughtyllc-cell/variant-fast@sha256:38761fde54aa8d5417905f50a46d7b1a16ef5c15270b8cb74e5d66c1f484a2ad`
+- Pin target: lab template `876soa0cd2` / endpoint `xar25v77v3j27u` only. `VF_ENGINE_REV=7ef5853`, `VF_LAB=1`
+- Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803`
 - Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
 - Prior lab image `sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6` / `9a04e62` (look-first + escalate look-fail rolls back to medium).
 - Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.
