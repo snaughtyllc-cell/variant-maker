@@ -58,6 +58,7 @@ Platform flags after a drop stay in Phase 12
 | Hole | What we know | What we will not do |
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Pin live from `lookshadeoff`. |
+| Look-safe crop pan (start→end) | **Open → handheld v1.** First pack `lookcroppan` (`7ef5853`) barely moved and had small hard shifts. Lab Gallery **`lookhand10`** on `bc88da1` / `sha256:b7ab714f…`: 10 Live Studio sources × Fast 2, travel floor + smoothstep + two-sine wander. Watch for a smooth handheld drift (no hard pops). MAE can trip on motion/color clips; stills are the oracle. | Ken Burns zoom. Face-zoom 0.72. Gemini on variants. Pin live before stills are **Signed**. |
 
 ## Engine backstop
 

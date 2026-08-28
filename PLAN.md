@@ -179,6 +179,16 @@ Status legend: ✅ done & verified · 🔨 to build
   remaps uniqueness grain (576 sees grain, not mush); motion stays gentler.
   Not OpenCV. Not a detector.
 
+## Phase 18 — Keyframe crop drift (start→end pan)  🔨 lab
+- Spec: `docs/superpowers/specs/2026-08-28-keyframe-crop-drift.md`.
+- Crop window **travels** start→end (`crop_x_end_frac` / `crop_y_end_frac`) so
+  25/50/75 uniqueness frames see different patches. Keep stays put (no Ken Burns).
+- Caption-safe: 720 y start **and** end stay in the keep-bottom band. Talking-head
+  max |end−start| **0.12**, else **0.20**. Separate RNG so existing seeds do not move.
+- VMAF proxy still strips geometry. Look / quality floors unchanged.
+- Source-catalog LLM (`2026-08-28-source-catalog.md`) is a later envelope swap —
+  not this phase, not uniqueness.
+
 ## Studio UX — current-run only (note, not blocking 9–11)
 - Studio’s right rail tracks **one job**. Clicking Generate is disabled until **New run**
   (keeps the last pack on the rail). **Cancel** stops a live job (RunPod `/cancel` + skip
