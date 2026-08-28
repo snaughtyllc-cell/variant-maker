@@ -18,7 +18,7 @@ from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
 from .presets import get_preset
 from .probe import probe
-from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 from .shot import classify_shot
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
@@ -50,6 +50,27 @@ def use_face_protect(quality_mode: str | None) -> bool:
     return str(quality_mode or "fast").strip().lower() == "hq"
 
 
+def _apply_variant_policy(
+    params: dict,
+    vseed: int,
+    preset,
+    shot_kind: str | None,
+    rotate_off: bool,
+    config: dict,
+) -> None:
+    """Rotate safe by default; optional US metadata. Mutates params."""
+    if rotate_off:
+        params["video"]["rotate_deg"] = 0.0
+    else:
+        allow_zero = abs(preset.rotate_deg.hi - preset.rotate_deg.lo) < 1e-12
+        params["video"]["rotate_deg"] = apply_rotate_safe(
+            params["video"]["rotate_deg"], shot_kind, allow_zero=allow_zero,
+        )
+    if config.get("us_metadata"):
+        params["us_metadata"] = True
+        params["video"]["us_metadata_seed"] = int(vseed)
+
+
 def _ffmpeg_version() -> str:
     out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
     line = out.stdout.splitlines()[0] if out.stdout else ""
@@ -72,7 +93,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # backend-specific floor could restore sensitivity to subtler corruption later.)
     corruption_floor = config.get("corruption_floor", 20.0)
     max_regen = config.get("max_regen", 3)
-    rotate_off = config.get("rotate", "never") == "never"
+    rotate_mode = config.get("rotate", "safe")
+    rotate_off = rotate_mode == "never"
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
 
@@ -174,8 +196,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
-            if rotate_off:
-                params["video"]["rotate_deg"] = 0.0
+            _apply_variant_policy(params, vseed, preset, shot_kind, rotate_off, config)
             if hq:
                 params = disable_fast_pixel_ops(params)
             _, cmd = render_variant(src, params, platform, path, dry_run=True)
@@ -216,8 +237,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             if protect_frame is not None:
                 from .neural import protect
                 params = protect.apply_to_params(params, frame_path=protect_frame)
-            if rotate_off:
-                params["video"]["rotate_deg"] = 0.0
+            _apply_variant_policy(params, vseed, use_preset, shot_kind, rotate_off, config)
             if hq:
                 params = disable_fast_pixel_ops(params)
             if hq:

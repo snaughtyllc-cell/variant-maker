@@ -52,6 +52,39 @@ def test_cmd_has_color_metadata_and_codec_flags():
     assert _sublist(["-maxrate", SOCIAL_MAXRATE], cmd)
     assert _sublist(["-bufsize", SOCIAL_BUFSIZE], cmd)
     assert "-b:v" not in cmd
+    assert "make=Apple" not in " ".join(cmd)
+    assert "location=" not in " ".join(cmd)
+
+
+def test_us_metadata_args_are_deterministic_apple_us():
+    a = ffmpeg.us_metadata_args(11)
+    b = ffmpeg.us_metadata_args(11)
+    c = ffmpeg.us_metadata_args(12)
+    assert a == b and a != c
+    joined = " ".join(a)
+    assert "make=Apple" in joined
+    assert "model=" in joined
+    assert "location=" in joined
+    assert "creation_time=" in joined
+    # QuickTime location: +lat+lon/ or +lat-lon/
+    loc = a[a.index("-metadata") + 1] if False else next(
+        a[i + 1] for i, tok in enumerate(a) if tok == "-metadata" and a[i + 1].startswith("location=")
+    )
+    assert loc.startswith("location=") and loc.endswith("/")
+
+
+def test_cmd_writes_us_metadata_when_enabled():
+    off = ffmpeg.build_render_cmd(make_src(), make_params(), REELS, "out.mp4")
+    assert not any(isinstance(x, str) and x.startswith("location=") for x in off)
+    on = ffmpeg.build_render_cmd(
+        make_src(),
+        {**make_params(us_metadata_seed=9), "us_metadata": True},
+        REELS,
+        "out.mp4",
+    )
+    assert _sublist(["-map_metadata", "-1"], on)
+    assert "make=Apple" in " ".join(on)
+    assert any(isinstance(x, str) and x.startswith("location=") for x in on)
 
 
 def test_cmd_does_not_cap_bitrate_on_none_platform():

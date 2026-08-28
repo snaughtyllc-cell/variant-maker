@@ -103,7 +103,8 @@ variant-maker input.mp4 --count 10 --preset medium --platform reels --quality fa
 | `-o, --out` | ./output | |
 | `--quality-floor` | vmaf 90 | reject+regen below this |
 | `--max-regen` | 3 | bounded retries before accepting best-effort |
-| `--rotate` | never | never \| safe |
+| `--rotate` | safe | never \| safe. Motion 0.7–1.3°; talking-head 0.35–0.8°. `never` still zeros. |
+| `--us-metadata` | off | strip source tags, then write Apple / US location / creation_time |
 | `--flip` | never | hflip mirrors text/logos |
 | `--jobs` | 1 | parallel (Tier 1); serialize GPU stages |
 | `--dry-run` / `-v` | off | print cmds / verbose |
@@ -146,7 +147,8 @@ budget. This is what keeps `strong` from looking like a `strong` *degradation*.
 
 ```
 trim -> crop -> zscale/scale(platform, range-aware) -> [rotate w/ fill+crop] ->
-eq(color) -> hue -> unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p -> tag color
+eq(color) -> hue -> [vignette] -> unsharp -> grain -> fps(out_fps or platform) ->
+setpts(tempo) -> format=yuv420p -> tag color
 ```
 Audio mirrors time changes: `atrim` identical to video, one `speed` factor → `atempo`, optional
 `equalizer`, `loudnorm`, aac re-encode + strip meta. (Pitch only via `rubberband`; else drop it — a
@@ -170,7 +172,9 @@ Two checks, run on every variant; fail → reduce strength and regenerate (bound
 | Video param | subtle | medium | strong |
 |---|---|---|---|
 | crop punch-in (kept, rescaled) | 0.98–1.00 | 0.92–0.96 | 0.88–0.93 |
-| rotation deg (`safe` only) | 0 | ±0.3 | ±0.8 |
+| rotation deg (`safe` default; `never` zeros) | 0 | motion 0.7–1.3 / talking-head 0.35–0.8 | same bands, sampled ±2 then clamped |
+| vignette (edge darken) | 0–0.04 | 0.02–0.12 | 0.04–0.20 |
+| output fps | 30 / 48 / 60 per copy | same | same |
 | brightness (zero-mean) | ±0.01 | ±0.025 | ±0.04 |
 | contrast | 0.99–1.01 | 0.97–1.03 | 0.95–1.06 |
 | saturation (zero-mean) | 0.99–1.02 | 0.96–1.05 | 0.92–1.10 |
@@ -316,5 +320,6 @@ Tier 1.
 - **Reproducibility** — same seed → identical *params* (pure sampling), guaranteed. Identical *bytes*
   are **not** guaranteed (x264 nondeterminism; neural ops add more). Pin versions; treat the manifest
   `ffmpeg_cmd` + recorded params as the reproduction contract, not byte-equality.
-- **Metadata** — `-map_metadata -1` + `-fflags +bitexact`; watch phone-source rotation display-matrix
-  side data (can flip output).
+- **Metadata** — `-map_metadata -1` + `-fflags +bitexact` by default. `--us-metadata` still
+  strips source tags, then writes Apple / US location / creation_time. Watch phone-source
+  rotation display-matrix side data (can flip output).

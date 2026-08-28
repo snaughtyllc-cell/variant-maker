@@ -78,7 +78,8 @@ Status legend: ✅ done & verified · 🔨 to build
 - `pipeline.run(config) -> Manifest`: probe → per-variant (sample→render→quality-render→guard
   with regen loop→record) → manifest. Returns the Manifest (the clean callable the farm wraps).
 - Naming `<stem>_vNN_<seed8>.mp4` (seed-derived, reproducible); `--out`, `--dry-run`, `--jobs`
-  (ThreadPool); `--rotate never` zeroes rotation; ffmpeg version pinned in the manifest.
+  (ThreadPool); `--rotate` defaults to **safe** (TikFusion-class bands); `never` still zeroes;
+  `--us-metadata` is off unless asked; ffmpeg version pinned in the manifest.
 - **Acceptance MET:** `variant-maker real_src.mp4 -n 5 --preset medium --platform reels --seed 7`
   → 5 passing variants (vmaf 100) + valid `manifest.json`, `platform_result: null` each. ✅
 - **🚢 Tier 1 shipped.** 64 passed, ruff clean. Everything below is upside.

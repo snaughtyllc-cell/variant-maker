@@ -116,6 +116,38 @@ def test_fast_worker_honors_payload_jobs_when_container_reports_one_cpu(monkeypa
     assert captured["jobs"] == 8
 
 
+def test_worker_defaults_rotate_safe_and_us_metadata_off(monkeypatch, tmp_path):
+    """Studio omits rotate. Compete default is safe; US tags stay off."""
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "quality_mode": "fast",
+    })
+    assert captured["rotate"] == "safe"
+    assert captured["us_metadata"] is False
+
+
+def test_worker_honors_rotate_never_and_us_metadata_flag(monkeypatch, tmp_path):
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "quality_mode": "fast", "rotate": "never", "us_metadata": True,
+    })
+    assert captured["rotate"] == "never"
+    assert captured["us_metadata"] is True
+
+
+def test_resolve_rotate_and_us_metadata_helpers(monkeypatch):
+    monkeypatch.delenv("VARIANT_MAKER_ROTATE", raising=False)
+    monkeypatch.delenv("VARIANT_MAKER_US_METADATA", raising=False)
+    assert gpu_worker.resolve_rotate({}) == "safe"
+    assert gpu_worker.resolve_us_metadata({}) is False
+    assert gpu_worker.resolve_us_metadata({"us_metadata": "false"}) is False
+    assert gpu_worker.resolve_us_metadata({"us_metadata": "true"}) is True
+    monkeypatch.setenv("VARIANT_MAKER_ROTATE", "never")
+    assert gpu_worker.resolve_rotate({}) == "never"
+    monkeypatch.setenv("VARIANT_MAKER_US_METADATA", "1")
+    assert gpu_worker.resolve_us_metadata({}) is True
+
+
 def test_hq_worker_stays_serial_even_if_jobs_requested(monkeypatch, tmp_path):
     captured = _capture_jobs(monkeypatch, tmp_path, {
         "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 20,

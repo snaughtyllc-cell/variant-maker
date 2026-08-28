@@ -93,6 +93,22 @@ CROP_Y_KEEP_BOTTOM_HI = 1.00
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
 RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
 RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
+# Per-copy output cadence. Instagram takes these. Not a second speed factor.
+FPS_CHOICES = (30, 48, 60)
+_EXTRA_AXES_XOR = 0xF95
+_ROTATE_SAFE_MOTION = (0.7, 1.3)
+_ROTATE_SAFE_HEAD = (0.35, 0.8)
+
+
+def apply_rotate_safe(deg: float, shot: str | None, *, allow_zero: bool = False) -> float:
+    """Keep rotate on. Motion matches the 0.7–1.3 band; talking-head stays subtler."""
+    value = float(deg)
+    if allow_zero and abs(value) < 1e-12:
+        return 0.0
+    lo, hi = _ROTATE_SAFE_HEAD if shot == "talking_head" else _ROTATE_SAFE_MOTION
+    sign = -1.0 if value < 0 else 1.0
+    mag = min(hi, max(abs(value), lo))
+    return sign * mag
 
 
 def derive_seed(master_seed: int, index: int) -> int:
@@ -332,6 +348,9 @@ def sample(
     for name in _INT_AXES:
         video[name] = int(video[name])
     video["gop"] = gop
+    extra = random.Random(int(seed) ^ _EXTRA_AXES_XOR)
+    video["vignette"] = extra.uniform(preset.vignette.lo, preset.vignette.hi)
+    video["out_fps"] = extra.choice(FPS_CHOICES)
 
     # Audio mirrors the single speed factor; everything else drawn independently.
     eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)

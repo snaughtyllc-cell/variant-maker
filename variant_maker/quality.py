@@ -28,6 +28,8 @@ _QUALITY_NEUTRAL = {
     "resample_px": 0,
     "rebuild_scale": 1.0,
     "luma_shade": 0.0,
+    "vignette": 0.0,
+    "out_fps": None,
 }
 
 

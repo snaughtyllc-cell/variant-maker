@@ -7,8 +7,10 @@ from variant_maker.sampler import (
     CROP_OFFSET_LO,
     CROP_Y_KEEP_BOTTOM_HI,
     CROP_Y_KEEP_BOTTOM_LO,
+    FPS_CHOICES,
     RESAMPLE_FLAGS,
     RESAMPLE_PX_CHOICES,
+    apply_rotate_safe,
     _axis_distortion,
     clamp_strength,
     clamp_trims,
@@ -34,7 +36,7 @@ ZERO_MEAN_AXES = {
 
 VIDEO_RANGE_AXES = (
     "crop_keep", "rotate_deg", "brightness", "contrast", "saturation",
-    "gamma", "hue_deg", "grain", "unsharp", "warp_k1", "rebuild_scale",
+    "gamma", "hue_deg", "vignette", "grain", "unsharp", "warp_k1", "rebuild_scale",
     "speed", "trim_s",
 )
 
@@ -90,6 +92,7 @@ def test_video_axes_within_range_bounds(preset):
         assert preset.crf.lo <= v["crf"] <= preset.crf.hi
         assert v["crf"] == int(v["crf"])  # encoder setting is an integer
         assert v["gop"] in preset.gop_choices
+        assert v["out_fps"] in FPS_CHOICES
 
 
 @pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
@@ -631,3 +634,29 @@ def test_strong_720_talking_head_does_not_draw_luma_shade():
     assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
     moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
     assert "luma_shade" not in moved["video"]
+
+
+def test_vignette_and_out_fps_use_separate_rng():
+    """New axes must not consume the main stream (crop / resample / GOP stay put)."""
+    v = sample(MEDIUM, 7)["video"]
+    assert v["crop_x_frac"] == pytest.approx(0.3871405883448937)
+    assert v["crop_y_frac"] == pytest.approx(0.4169716893821044)
+    assert v["trim_end_s"] == pytest.approx(0.36960162784195627)
+    assert v["resample_px"] == -30
+    assert v["resample_flags"] == "bicubic"
+    assert v["gop"] == 90
+    assert MEDIUM.vignette.lo <= v["vignette"] <= MEDIUM.vignette.hi
+    assert v["out_fps"] in FPS_CHOICES
+    assert sample(MEDIUM, 7)["video"]["vignette"] == v["vignette"]
+    assert sample(MEDIUM, 7)["video"]["out_fps"] == v["out_fps"]
+
+
+def test_apply_rotate_safe_uses_their_band():
+    assert apply_rotate_safe(0.0, None) == pytest.approx(0.7)
+    assert apply_rotate_safe(0.1, "motion") == pytest.approx(0.7)
+    assert apply_rotate_safe(-0.2, "motion") == pytest.approx(-0.7)
+    assert apply_rotate_safe(2.0, "motion") == pytest.approx(1.3)
+    assert apply_rotate_safe(0.1, "talking_head") == pytest.approx(0.35)
+    assert apply_rotate_safe(-2.0, "talking_head") == pytest.approx(-0.8)
+    assert apply_rotate_safe(0.5, "talking_head") == pytest.approx(0.5)
+    assert apply_rotate_safe(0.0, "talking_head", allow_zero=True) == 0.0

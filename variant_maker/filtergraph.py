@@ -3,7 +3,8 @@
 Video filter ORDER is load-bearing:
   trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
   fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
-  unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
+  [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
+  -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   equalizer -> loudnorm.
 
@@ -308,6 +309,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
 
     if abs(v.get("hue_deg", 0.0)) > _EPS:
         parts.append(f"hue=h={v['hue_deg']:.4f}")
+    vig = float(v.get("vignette") or 0.0)
+    if vig > _EPS:
+        # Smaller angle → stronger edge darken. Amount is added onto ffmpeg's PI/5 default.
+        angle = max(0.22, math.pi / 5.0 - vig)
+        parts.append(f"vignette=angle={angle:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
@@ -317,8 +323,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(_noise_filter(v, ow, oh))
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
     if not v.get("defer_tempo"):
-        if platform.fps:
-            parts.append(f"fps={platform.fps:g}")
+        out_fps = v.get("out_fps")
+        if out_fps in (None, 0, ""):
+            out_fps = platform.fps
+        if out_fps:
+            parts.append(f"fps={float(out_fps):g}")
         speed = v.get("speed", 1.0)
         if abs(speed - 1.0) > _EPS:
             parts.append(f"setpts={1.0 / speed:.6f}*PTS")
