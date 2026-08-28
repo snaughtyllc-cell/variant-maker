@@ -16,6 +16,7 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(mobile).toMatch(/\.gallery-body\s*\{[^}]*overflow-y:\s*auto/s);
     expect(mobile).toMatch(/\.gallery-grid-pane\s*\{[^}]*overflow:\s*visible/s);
     expect(mobile).toMatch(/\.gallery-packs\s*\{[^}]*flex-shrink:\s*0/s);
+    expect(mobile).toMatch(/\.gallery-toolbar \.gallery-send-wrap\s*\{[^}]*display:\s*none/s);
   });
 
   it("stacks the selection sheet: count on top, Save and Send below", () => {
@@ -26,7 +27,7 @@ describe("mobile Studio + Gallery CSS contract", () => {
   });
 
   it("keeps the full varimo wordmark in the phone top bar", () => {
-    expect(mobile).toMatch(/\.vf-brand-wordmark\s*\{[^}]*display:\s*inline/s);
+    expect(mobile).toMatch(/\.vf-brand-wordmark\s*\{[^}]*display:\s*inline-block/s);
     expect(mobile).toMatch(/\.vf-brand-mark\s*\{[^}]*display:\s*none/s);
     expect(mobile).toMatch(/\.vf-more-trigger\s*\{[^}]*font-size:\s*0/s);
   });

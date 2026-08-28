@@ -35,7 +35,7 @@ export function StatusStrip() {
         {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
-      <span className="status-gpu" title="GPU ready">
+      <span className="status-gpu" title="GPU ready" aria-label="GPU ready">
         <span className="status-gpu__dot" aria-hidden="true" />
         GPU
       </span>
