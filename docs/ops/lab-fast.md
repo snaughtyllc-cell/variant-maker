@@ -20,8 +20,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`
-- `VF_ENGINE_REV=f05d803` (19-bit / 30% uniqueness ship floor). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`
+- `VF_ENGINE_REV=d0a7bc5` (compete: rotate safe, vignette, 30/48/60 fps, optional US metadata). `VF_LAB=1`
+- Prior lab image `sha256:b7ab714f9d883aae052f1fbf5e44c3284d9be691de2ba970c9ee06fd8f742d2d` / `bc88da1` (handheld crop wander).
+- Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803` (19-bit / 30% uniqueness ship floor). **Still live Fast.**
 - Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
 - Prior lab image `sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6` / `9a04e62` (look-first + escalate look-fail rolls back to medium).
 - Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.

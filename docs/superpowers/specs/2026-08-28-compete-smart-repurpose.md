@@ -1,7 +1,7 @@
 # Compete: run the axes that already work
 
 **Date:** 2026-08-28  
-**Status:** implement now (engine). Lab first. Do not pin live Fast.  
+**Status:** lab Fast pinned `d0a7bc5` / `sha256:a5b703fa…`. Do not pin live Fast.  
 **Product name:** VaryForge  
 **Depends on:** uniqueness loop, look-first, Fast presets  
 **Plan:** `docs/superpowers/plans/2026-08-28-compete-smart-repurpose.md`
