@@ -6,9 +6,11 @@ interface VideoThumbProps {
   src: string;
   badge?: ReactNode;
   className?: string;
+  /** Fill a sized parent (gallery preview) instead of sizing to the video. */
+  fill?: boolean;
 }
 
-export function VideoThumb({ src, badge, className }: VideoThumbProps) {
+export function VideoThumb({ src, badge, className, fill = false }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [inView, setInView] = useState(false);
@@ -60,10 +62,12 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
     <div
       ref={boxRef}
       className={className}
+      data-fill={fill || undefined}
       style={{
-        aspectRatio: aspect,
+        aspectRatio: fill ? undefined : aspect,
         width: "100%",
-        alignSelf: "start",
+        height: fill ? "100%" : undefined,
+        alignSelf: fill ? "stretch" : "start",
         borderRadius: 6,
         position: "relative",
         overflow: "hidden",
@@ -85,7 +89,7 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "contain",
+            objectFit: fill ? "cover" : "contain",
             display: "block",
           }}
         />

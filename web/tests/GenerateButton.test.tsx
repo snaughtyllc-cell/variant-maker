@@ -44,5 +44,7 @@ describe("GenerateButton", () => {
     expect(btn).toHaveTextContent("Generating…");
     expect(btn).toBeDisabled();
     expect(btn).not.toHaveAttribute("data-complete");
+    expect(screen.getByText("1 clip → 20 variants")).toBeInTheDocument();
+    expect(btn.textContent).not.toMatch(/Cancel on the live run/i);
   });
 });

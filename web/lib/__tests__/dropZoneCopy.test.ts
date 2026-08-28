@@ -12,9 +12,9 @@ describe("drop zone copy", () => {
 });
 
 describe("studio layout classes", () => {
-  it("marks a live run so mobile can pin progress first", () => {
+  it("marks a live run without a second layout class that resizes the studio side", () => {
     expect(studioShellClass(false)).toBe("studio-shell");
-    expect(studioShellClass(true)).toBe("studio-shell studio-shell--live");
+    expect(studioShellClass(true)).toBe("studio-shell");
   });
 
   it("hides the empty progress pane on phones", () => {
