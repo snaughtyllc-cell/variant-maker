@@ -263,9 +263,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-generate-bar__inner { margin-inline: auto; max-width: 900px; width: 100%; }
 
 /* Persistent dark LIVE QUEUE / progress rail (StudioLiveQueue). Desktop is a
-   400px column. Phone is a 240px strip under setup. Rows/tiles scroll inside
+   460px column. Phone is a 300px strip under setup. Rows/tiles scroll inside
    — the rail does not grow when a pack starts. */
-.studio-live { background: #0f1a1e; color: #eaf6f7; display: flex; flex-direction: column; height: 280px; max-height: 280px; min-height: 0; overflow: hidden; padding: 18px; }
+.studio-live { background: #0f1a1e; color: #eaf6f7; display: flex; flex-direction: column; height: 340px; max-height: 340px; min-height: 0; overflow: hidden; padding: 18px; }
 .studio-live__head { align-items: center; display: flex; justify-content: space-between; padding-bottom: 16px; }
 .studio-live__title { color: var(--color-cyan); font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; }
 .studio-live__title--sub { padding-bottom: 12px; }
@@ -1260,7 +1260,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .studio-cockpit { flex: 1 1 auto; max-width: none; min-width: 0; }
   .studio-cockpit__scroll { padding: 30px 30px 0; }
   .studio-generate-bar { padding: 14px 30px 20px; }
-  .studio-live { flex: 0 0 400px; height: auto; max-height: none; min-height: 0; min-width: 360px; overflow: hidden; padding: 22px; width: 400px; }
+  .studio-live { flex: 0 0 460px; height: auto; max-height: none; min-height: 0; min-width: 400px; overflow: hidden; padding: 22px; width: 460px; }
   .variant-sheet { left: auto !important; width: min(1180px, 94vw) !important; }
 }
 
@@ -1317,7 +1317,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   }
   .studio-generate-bar--dock .studio-generate-bar__inner,
   .studio-generate-bar--dock .studio-generate-button { pointer-events: auto; }
-  .studio-live { flex: 0 0 240px; height: 240px; margin-bottom: 84px; max-height: 240px; min-height: 180px; overflow: hidden; padding: 14px 16px 12px; }
+  .studio-live { flex: 0 0 300px; height: 300px; margin-bottom: 84px; max-height: 300px; min-height: 240px; overflow: hidden; padding: 14px 16px 12px; }
   .studio-live__rows { max-height: 56px; overflow-x: hidden; overflow-y: auto; }
   .studio-live__finished { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; }
   .studio-live__grid { gap: 6px; grid-template-columns: repeat(4, 1fr); }

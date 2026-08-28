@@ -28,8 +28,8 @@ describe("studio layout classes", () => {
   });
 
   it("pins the live/progress rail to a small fixed portion", () => {
-    expect(STUDIO_LIVE_RAIL_PX).toBe(400);
-    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeLessThanOrEqual(240);
-    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeGreaterThanOrEqual(180);
+    expect(STUDIO_LIVE_RAIL_PX).toBe(460);
+    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeGreaterThan(240);
+    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeLessThanOrEqual(320);
   });
 });
