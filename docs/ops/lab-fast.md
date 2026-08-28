@@ -10,18 +10,28 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
-`cursor/aqmtp-uniqueness-c975` and `cursor/ig-720-fast-20-c975` (plus the
-older look branches).
+`cursor/keyframe-crop-drift-cdb6` (crop pan), `cursor/aqmtp-uniqueness-c975`
+and `cursor/ig-720-fast-20-c975` (plus the older look branches).
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
+
+**Current lab experiment (2026-08-28): look-safe crop pan + phone Studio UI.**
+Engine on Lab Fast is `7ef5853` (PR #56). Studio UI is
+`cursor/mobile-studio-gallery-c975` (PR #54) — that stack was never merged,
+so a `railway up` from the crop-pan/`tier1` tree wipes the phone chrome.
+Generate only on [Lab Studio](https://varyforge-studio-lab.up.railway.app).
+Live Studio / live Fast stay on `f05d803`. Do **not** rebuild or re-pin Fast
+from the UI branch. Do not pin live until **Signed** in
+`docs/ops/look-learnings.md`.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`
-- `VF_ENGINE_REV=f05d803` (19-bit / 30% uniqueness ship floor). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:38761fde54aa8d5417905f50a46d7b1a16ef5c15270b8cb74e5d66c1f484a2ad`
+- `VF_ENGINE_REV=7ef5853` (look-safe crop pan). `VF_LAB=1`. Template `876soa0cd2` pinned 2026-08-28; lab workers recycled max 0→1. Live Fast unchanged.
+- Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803`
 - Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
 - Prior lab image `sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6` / `9a04e62` (look-first + escalate look-fail rolls back to medium).
 - Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.
@@ -70,6 +80,7 @@ Lab packs:
 | **`21ae9d3` look-first shade-off — lab only, not live** | AQMTp Fast 8 (`lookshadeoff` / `lab8_aqmtp21ae_761def3b`): 8/8 **below_target 17–21 bits**, VMAF 95–99. **Jeff: yea it looks good just scored low.** Do not pin. Do not redraw shade. | — |
 | **`472ab60` look stills overlap uniqueness — was live** | SaveInta Fast 8 (`overlap8b`): **8/8 medium 25–27 bits**, worker **188 s (3.1 min)** warm. `looking` then `uniqueness`. MAE after SSIM (MAE∥SSIM pack was 8.6 min — do not overlap MAE with 8-wide SSIM). | — |
 | **`f05d803` 19-bit / 30% ship floor — live** | SaveInta Fast 2 (`saveintafloor`): **26/26 bits**, both medium `ok`. AQMTp Fast 2 escalate (`aqmtpfloor`): **19/19 bits (~30%)**, both strong `below_target` **still `ok`**. AQMTp Fast 2 no-escalate (`aqmtpnoesc`): copy 1 **16 bits uniqueness_fail**; copy 2 **19 bits `ok` / `below_target`**. Promoted the same digest to live Fast **no `VF_LAB`**. | — |
+| **`7ef5853` look-safe crop pan — lab only** | **Open.** Lab Fast pinned 2026-08-28. Generate on Lab Studio. Check 25/50/75 stills for window creep; captions + face stay. Do not pin live until **Signed**. Do not `railway up` Studio from this digest's `tier1` tree — that wipes the unmerged phone UI. | — |
 
 Live pin: `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` (`f05d803`, 19-bit floor, **no `VF_LAB`**). Prior live `472ab60` digest: `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85`. Prior live `7dae269` digest: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`. Prior live `856e23d` digest: `sha256:59caa472151895de1f8d59d9cd9913e81ed961ee19a8cf206cd46f607efc3e72`. Prior live `13cd292` digest: `sha256:82daa69ccc5fad6c392c0c5a8754ece8616551188f8b7971611d47ee46c229b2`. Prior live `4f94edd` digest: `sha256:8ad6439c6d6ccb3c2a9793dc1d197d2c5565d12801f06005c429d9bd2752b1d3`. Prior live `06526b9` digest: `sha256:8e0e0bbe8662fef5d161d16eb84ff5ad5ae4df6a99c66114753567326a233712`.
 
