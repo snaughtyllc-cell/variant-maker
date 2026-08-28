@@ -10,18 +10,30 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
-`cursor/aqmtp-uniqueness-c975` and `cursor/ig-720-fast-20-c975` (plus the
-older look branches).
+`cursor/keyframe-crop-drift-cdb6` (crop pan), `cursor/aqmtp-uniqueness-c975`
+and `cursor/ig-720-fast-20-c975` (plus the older look branches).
 Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
 `cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
+
+**Current lab experiment (2026-08-28): look-safe crop pan.** Branch
+`cursor/keyframe-crop-drift-cdb6` (PR #56). Generate only on
+[Lab Studio](https://varyforge-studio-lab.up.railway.app) — amber
+“LAB — experiments only” banner. Live Studio / live Fast stay on
+`f05d803`. After `:lab` is digest-pinned, try SaveInta-class 720 and a
+talking-head: 25/50/75 stills should show a slow window creep, captions
+stay, face stays. Do not pin live until **Signed** in
+`docs/ops/look-learnings.md`.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
 
+Lab Studio: https://varyforge-studio-lab.up.railway.app (`VARIANT_LAB=1`).
+Live Studio: https://varyforge-studio-production.up.railway.app.
+
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`
-- `VF_ENGINE_REV=f05d803` (19-bit / 30% uniqueness ship floor). `VF_LAB=1`
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` *(crop-pan `:lab` digest TBD after CI; pin lab only)*
+- `VF_ENGINE_REV=f05d803` (19-bit / 30% uniqueness ship floor). `VF_LAB=1`. Next pin: crop-drift short SHA.
 - Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
 - Prior lab image `sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6` / `9a04e62` (look-first + escalate look-fail rolls back to medium).
 - Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.

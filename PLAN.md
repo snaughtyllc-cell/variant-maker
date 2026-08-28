@@ -179,7 +179,7 @@ Status legend: ✅ done & verified · 🔨 to build
   remaps uniqueness grain (576 sees grain, not mush); motion stays gentler.
   Not OpenCV. Not a detector.
 
-## Phase 18 — Keyframe crop drift (start→end pan)  🔨
+## Phase 18 — Keyframe crop drift (start→end pan)  🔨 lab
 - Spec: `docs/superpowers/specs/2026-08-28-keyframe-crop-drift.md`.
 - Crop window **travels** start→end (`crop_x_end_frac` / `crop_y_end_frac`) so
   25/50/75 uniqueness frames see different patches. Keep stays put (no Ken Burns).

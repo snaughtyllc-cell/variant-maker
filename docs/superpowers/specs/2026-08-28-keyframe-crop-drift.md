@@ -1,7 +1,7 @@
 # Look-safe keyframe crop drift (start→end pan)
 
 **Date:** 2026-08-28  
-**Status:** Design — implement next (Phase 18). Not Gemini.  
+**Status:** Implemented on `cursor/keyframe-crop-drift-cdb6` (PR #56). Labbing on Lab Fast / Lab Studio. Not Gemini. Do not pin live.  
 **Product name:** VaryForge  
 **Depends on:** `2026-08-24-caption-safe-crop.md`, `2026-08-25-ig-720-fast-20.md`,
 `2026-08-21-fast-shot-probe.md`, `2026-08-25-look-first.md`  
