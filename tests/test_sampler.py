@@ -3,6 +3,8 @@ import pytest
 from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
     _VIDEO_AXES,
+    CROP_DRIFT_MAX_DEFAULT,
+    CROP_DRIFT_MAX_TALKING_HEAD,
     CROP_OFFSET_HI,
     CROP_OFFSET_LO,
     CROP_Y_KEEP_BOTTOM_HI,
@@ -10,6 +12,7 @@ from variant_maker.sampler import (
     RESAMPLE_FLAGS,
     RESAMPLE_PX_CHOICES,
     _axis_distortion,
+    clamp_crop_drift,
     clamp_strength,
     clamp_trims,
     derive_seed,
@@ -216,19 +219,24 @@ def test_instagram_720_crop_punches_from_top_and_keeps_bottom():
         v = sample(MEDIUM, s, shot="talking_head", width=720, height=1280)["video"]
         assert 0.86 - 1e-9 <= v["crop_keep"] <= 0.90 + 1e-9
         assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
         assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+        assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_end_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
         assert v["crop_y_frac"] > 0.8
+        assert v["crop_y_end_frac"] > 0.8
     # 1080 talking-head keeps the signed caption-safe center band.
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head", width=1080, height=1920)["video"]
         assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
         assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
 
 
 def test_instagram_720_motion_keeps_bottom_captions_without_th_punch():
     v = sample(MEDIUM, SEEDS[0], shot="motion", width=720, height=1280)["video"]
     assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
     assert v["crop_y_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+    assert v["crop_y_end_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
 
 
 def test_crop_offset_axes_are_zero_mean():
@@ -631,3 +639,76 @@ def test_strong_720_talking_head_does_not_draw_luma_shade():
     assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
     moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
     assert "luma_shade" not in moved["video"]
+
+
+def test_crop_end_does_not_shift_existing_fingerprint_draws():
+    """Drift uses a separate RNG; start crop / trim_end / resample stay seed-stable."""
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert plain["video"]["crop_x_frac"] == head["video"]["crop_x_frac"]
+    assert plain["video"]["crop_y_frac"] == head["video"]["crop_y_frac"]
+    assert plain["video"]["trim_end_s"] == head["video"]["trim_end_s"]
+    assert plain["video"]["resample_px"] == head["video"]["resample_px"]
+    assert "crop_x_end_frac" in plain["video"]
+    assert "crop_y_end_frac" in plain["video"]
+    assert "crop_x_end_frac" in head["video"]
+    assert "crop_y_end_frac" in head["video"]
+
+
+def test_crop_end_fracs_in_same_legal_ranges_as_start():
+    for s in SEEDS[:200]:
+        v = sample(MEDIUM, s)["video"]
+        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
+
+
+def test_crop_drift_respects_max_delta_for_shot():
+    assert CROP_DRIFT_MAX_TALKING_HEAD == pytest.approx(0.12)
+    assert CROP_DRIFT_MAX_DEFAULT == pytest.approx(0.20)
+    for s in SEEDS[:200]:
+        th = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
+        assert abs(th["crop_y_end_frac"] - th["crop_y_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
+        moved = sample(MEDIUM, s, shot="motion")["video"]
+        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        assert abs(moved["crop_y_end_frac"] - moved["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        plain = sample(MEDIUM, s)["video"]
+        assert abs(plain["crop_x_end_frac"] - plain["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        assert abs(plain["crop_y_end_frac"] - plain["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+
+
+def test_crop_x_end_frac_is_unbudgeted():
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["crop_x_end_frac"] = 0.0
+    bumped["video"]["crop_y_end_frac"] = 1.0
+    assert total_distortion(MEDIUM, bumped) == base
+
+
+def test_clamp_crop_drift():
+    assert clamp_crop_drift(0.5, 0.55, 0.35, 0.65, 0.12) == pytest.approx(0.55)
+    assert clamp_crop_drift(0.5, 0.9, 0.35, 0.65, 0.12) == pytest.approx(0.62)
+    assert clamp_crop_drift(0.5, 0.0, 0.35, 0.65, 0.12) == pytest.approx(0.38)
+    assert clamp_crop_drift(0.35, 0.65, 0.35, 0.65, 0.12) == pytest.approx(0.47)
+    assert clamp_crop_drift(0.65, 0.35, 0.35, 0.65, 0.12) == pytest.approx(0.53)
+    assert clamp_crop_drift(0.95, 1.0, 0.90, 1.00, 0.12) == pytest.approx(1.0)
+    assert clamp_crop_drift(0.95, 0.80, 0.90, 1.00, 0.12) == pytest.approx(0.90)
+    assert clamp_crop_drift(0.5, 0.5, 0.35, 0.65, 0.12) == pytest.approx(0.5)
+    assert clamp_crop_drift(0.40, 0.40 + 0.20, 0.35, 0.65, 0.20) == pytest.approx(0.60)
+
+
+def test_crop_drift_pairs_differ_across_seeds():
+    pairs = {
+        (
+            round(v["crop_x_frac"], 6),
+            round(v["crop_x_end_frac"], 6),
+            round(v["crop_y_frac"], 6),
+            round(v["crop_y_end_frac"], 6),
+        )
+        for v in (sample(MEDIUM, s)["video"] for s in SEEDS[:80])
+    }
+    assert len(pairs) > 40

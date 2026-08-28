@@ -88,6 +88,9 @@ CROP_OFFSET_HI = 0.65
 # words when y drifted low. Unbudgeted; not zero-mean (that is the point).
 CROP_Y_KEEP_BOTTOM_LO = 0.90
 CROP_Y_KEEP_BOTTOM_HI = 1.00
+# Micro start→end crop-window travel (TikFusion-style). Unbudgeted; separate RNG.
+CROP_DRIFT_MAX_TALKING_HEAD = 0.12
+CROP_DRIFT_MAX_DEFAULT = 0.20
 
 # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
@@ -154,6 +157,15 @@ def total_distortion(preset: Preset, params: dict) -> float:
         r = getattr(preset, name)
         total += _axis_distortion(kind, ref, r.lo, r.hi, v[name])
     return total
+
+
+def clamp_crop_drift(start: float, end: float, lo: float, hi: float, max_delta: float) -> float:
+    """Clamp end into [lo,hi] and within max_delta of start."""
+    lower = max(lo, start - max_delta)
+    upper = min(hi, start + max_delta)
+    if lower > upper:
+        return min(max(start, lo), hi)
+    return min(max(end, lower), upper)
 
 
 def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[float, float]:
@@ -313,9 +325,29 @@ def sample(
     # vs-source bits can clear 24. trim_end_s reuses the preset's trim_s range.
     raw["crop_x_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
     if keeps_bottom_captions(width, height):
-        raw["crop_y_frac"] = rng.uniform(CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI)
+        y_lo, y_hi = CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI
     else:
-        raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
+        y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
+    raw["crop_y_frac"] = rng.uniform(y_lo, y_hi)
+    # Keyframed crop pan: separate RNG so trim_end_s / resample_px stay bit-identical.
+    max_delta = (
+        CROP_DRIFT_MAX_TALKING_HEAD if shot == "talking_head" else CROP_DRIFT_MAX_DEFAULT
+    )
+    drift_rng = random.Random(int(seed) ^ 0xC0DE5)
+    raw["crop_x_end_frac"] = clamp_crop_drift(
+        raw["crop_x_frac"],
+        drift_rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI),
+        CROP_OFFSET_LO,
+        CROP_OFFSET_HI,
+        max_delta,
+    )
+    raw["crop_y_end_frac"] = clamp_crop_drift(
+        raw["crop_y_frac"],
+        drift_rng.uniform(y_lo, y_hi),
+        y_lo,
+        y_hi,
+        max_delta,
+    )
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)
