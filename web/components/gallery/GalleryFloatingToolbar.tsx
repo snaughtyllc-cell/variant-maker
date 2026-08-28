@@ -29,26 +29,27 @@ export function GalleryFloatingToolbar({
       <div className="gallery-floating-toolbar__count">
         {count} variant{count === 1 ? "" : "s"} selected
       </div>
-      <div className="gallery-floating-toolbar__divider" />
-      <button
-        type="button"
-        className="gallery-floating-toolbar__primary"
-        onClick={onSend}
-        disabled={sendDisabled}
-        title={sendTitle ?? undefined}
-      >
-        <span className="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
-        Send to Drive
-      </button>
-      <button
-        type="button"
-        className="gallery-floating-toolbar__secondary"
-        onClick={onSave}
-        disabled={saveDisabled}
-        title={saveTitle ?? undefined}
-      >
-        {saveLabel}
-      </button>
+      <div className="gallery-floating-toolbar__actions">
+        <button
+          type="button"
+          className="gallery-floating-toolbar__secondary"
+          onClick={onSave}
+          disabled={saveDisabled}
+          title={saveTitle ?? undefined}
+        >
+          {saveLabel}
+        </button>
+        <button
+          type="button"
+          className="gallery-floating-toolbar__primary"
+          onClick={onSend}
+          disabled={sendDisabled}
+          title={sendTitle ?? undefined}
+        >
+          <span className="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+          Send to Drive
+        </button>
+      </div>
       <button
         type="button"
         className="gallery-floating-toolbar__close"

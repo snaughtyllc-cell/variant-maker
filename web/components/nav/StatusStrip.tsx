@@ -35,6 +35,11 @@ export function StatusStrip() {
         {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
+      <span className="status-gpu" title="GPU ready">
+        <span className="status-gpu__dot" aria-hidden="true" />
+        GPU
+      </span>
+
       {queueLabel && (
         <span
           className="status-queue inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"

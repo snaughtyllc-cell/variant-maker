@@ -5,6 +5,10 @@ import { cancelJob } from "@/lib/api";
 import { useQueue } from "@/lib/useQueue";
 import { useRun } from "@/lib/runStore";
 import { displayClipName } from "@/lib/queue";
+import { isPreparingJob } from "@/lib/prepareCopy";
+import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, packLiveTiles } from "@/lib/studioLiveTiles";
+import { VideoThumb } from "@/components/common/VideoThumb";
+import type { SourceProgress } from "@/lib/progress";
 
 interface QueueRow {
   key: string;
@@ -14,11 +18,41 @@ interface QueueRow {
   cancelId?: string;
 }
 
-interface FinishedTile {
-  key: string;
-  v: string;
-  pct: string;
-  color: string;
+function LivePackGrid({ source, preparing }: { source: SourceProgress; preparing: boolean }) {
+  const tiles = packLiveTiles(source);
+  return (
+    <div className="studio-live__grid" data-testid={`live-grid-${source.source_id}`}>
+      {tiles.map((tile) => {
+        const label = `v${String(tile.index).padStart(2, "0")}`;
+        const media = liveTileMediaSrc(tile, source);
+        const live = tile.kind === "live";
+        return (
+          <div
+            className={tile.kind === "done" ? "studio-live-tile" : "studio-live-tile studio-live-tile--slot"}
+            key={tile.index}
+            data-tile={tile.kind}
+            data-has-thumb={media ? "true" : undefined}
+            data-slot-state={tile.kind === "done" ? undefined : tile.flight?.state ?? "waiting"}
+          >
+            {media ? <VideoThumb src={media} className="studio-live-tile__thumb" fill eager /> : null}
+            {tile.kind !== "done" && media ? <span className="studio-live-tile__scrim" aria-hidden="true" /> : null}
+            <span className="studio-live-tile__v">{label}</span>
+            <span
+              className={
+                tile.kind === "done"
+                  ? "studio-live-tile__pct"
+                  : live
+                    ? "studio-live-tile__status vf-live-shimmer"
+                    : "studio-live-tile__status"
+              }
+            >
+              {liveTileLabel(tile, preparing)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -67,23 +101,11 @@ export function StudioLiveQueue() {
 
   const rows = [...runRows, ...queueRows];
 
-  const finished: FinishedTile[] = runSources
-    .flatMap((s) => s.variants)
-    .filter(
-      (v) => v.status === "ok" || v.status === "best_effort" || v.status === "uniqueness_fail",
-    )
-    .slice(-9)
-    .reverse()
-    .map((v) => {
-      const pctNum = v.uniqueness != null ? Math.round(v.uniqueness * 100) : null;
-      const miss = v.status === "uniqueness_fail";
-      return {
-        key: `${v.filename}-${v.index}`,
-        v: `v${String(v.index).padStart(2, "0")}`,
-        pct: pctNum != null ? `${pctNum}%` : "·",
-        color: miss ? "var(--color-red)" : "#7ee0e6",
-      };
-    });
+  const preparing = isPreparingJob(jobId);
+  const showLiveGrids = runSources.some((s) => s.requested > 0);
+  const previewSource =
+    runSources.find((s) => s.source_id && !s.source_id.startsWith("prep-")) ?? runSources[0];
+  const rowThumb = liveRowThumbSrc(previewSource);
 
   async function handleCancel(id: string) {
     if (cancellingId) return;
@@ -115,7 +137,11 @@ export function StudioLiveQueue() {
         {rows.length > 0 ? (
           rows.map((row) => (
             <div className="studio-live-row" key={row.key}>
-              <div className="studio-live-row__thumb" />
+              <div className="studio-live-row__thumb">
+                {rowThumb ? (
+                  <video src={rowThumb} muted playsInline preload="metadata" />
+                ) : null}
+              </div>
               <div className="studio-live-row__main">
                 <div className="studio-live-row__top">
                   <span className="studio-live-row__name">{row.name}</span>
@@ -150,19 +176,14 @@ export function StudioLiveQueue() {
 
       <div className="studio-live__divider" />
       <div className="studio-live__finished">
-        <div className="studio-live__title studio-live__title--sub">JUST FINISHED</div>
+        <div className="studio-live__title studio-live__title--sub">
+          {activeRun || showLiveGrids ? "LIVE COPIES" : "JUST FINISHED"}
+        </div>
 
-        {finished.length > 0 ? (
-          <div className="studio-live__grid">
-            {finished.map((tile) => (
-              <div className="studio-live-tile" key={tile.key}>
-                <span className="studio-live-tile__v">{tile.v}</span>
-                <span className="studio-live-tile__pct" style={{ color: tile.color }}>
-                  {tile.pct}
-                </span>
-              </div>
-            ))}
-          </div>
+        {showLiveGrids ? (
+          runSources.map((source) => (
+            <LivePackGrid key={source.source_id} source={source} preparing={preparing} />
+          ))
         ) : (
           <p className="studio-live__empty studio-live__empty--sub">
             Finished variants land here, then Open Gallery.
