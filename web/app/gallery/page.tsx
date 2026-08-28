@@ -6,6 +6,7 @@ import { useRun } from "@/lib/runStore";
 import {
   filterSources,
   sortSources,
+  avgOriginalityPct,
   filesReadyCount,
   parseGalleryVariantQuery,
   gallerySearchPath,
@@ -258,6 +259,18 @@ export function GalleryContent() {
         count={sorted.length}
         variantCount={totalVariants}
         crumb={activePack?.filename}
+        review={
+          sheetSource && pos >= 0
+            ? {
+                variantLabel: `v${String(sheetSource.variants[pos].index).padStart(2, "0")}`,
+                onBack: handleSheetClose,
+                onPrev: () => handleSheetNav(-1),
+                onNext: () => handleSheetNav(1),
+                canPrev: pos > 0,
+                canNext: pos < sheetSource.variants.length - 1,
+              }
+            : null
+        }
         filterMode={filterMode}
         onFilter={setFilterMode}
         sort={sort}
@@ -282,19 +295,21 @@ export function GalleryContent() {
         saveMsg={saveMsg}
       />
 
-      <div className="gallery-body">
+      <div className={sheetSource && pos >= 0 ? "gallery-body gallery-body--review" : "gallery-body"}>
         <PackList
           packs={sorted}
           totalCount={sorted.length}
           activeId={activePack?.source_id}
-          onSelect={setSelectedPackId}
+          onSelect={(id) => {
+            setSelectedPackId(id);
+            if (sheetSource) handleSheetClose();
+          }}
           search={packSearch}
           onSearchChange={setPackSearch}
           loading={isLoading}
         />
 
-        {/* Grid pane — always mounted; dimmed by the sheet overlay when open */}
-        <section className="gallery-grid-pane">
+        <section className={sheetSource && pos >= 0 ? "gallery-grid-pane gallery-grid-pane--review" : "gallery-grid-pane"}>
           {isLoading && <div className="gallery-loading">Loading gallery…</div>}
 
           {!isLoading && sorted.length === 0 && (
@@ -309,7 +324,7 @@ export function GalleryContent() {
             </div>
           )}
 
-          {!isLoading && activePack && (
+          {!isLoading && activePack && !(sheetSource && pos >= 0) && (
             <SourceGroup
               key={activePack.source_id}
               source={activePack}
@@ -322,7 +337,24 @@ export function GalleryContent() {
             />
           )}
 
-          {selected.size > 0 && (
+          {sheetSource && pos >= 0 && (
+            <VariantSheet
+              embedded
+              sourceId={sheetSource.source_id}
+              sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
+              variants={sheetSource.variants}
+              index={pos}
+              onClose={handleSheetClose}
+              onNav={handleSheetNav}
+              onRegenerate={() => mutate()}
+              selectedCount={okRefs.length}
+              flaggedCount={sheetSource.variants.filter((v) => v.platform_result === "flagged" || v.platform_result === "duplicate_reject").length}
+              packAvgPct={avgOriginalityPct(sheetSource)}
+              onSendToDrive={disabledReason == null ? () => setSendModalOpen(true) : undefined}
+            />
+          )}
+
+          {selected.size > 0 && !(sheetSource && pos >= 0) && (
             <GalleryFloatingToolbar
               count={selected.size}
               onSend={() => setSendModalOpen(true)}
@@ -341,19 +373,6 @@ export function GalleryContent() {
           )}
         </section>
       </div>
-
-      {/* Variant side-panel — mounts over the still-visible grid */}
-      {sheetSource && pos >= 0 && (
-        <VariantSheet
-          sourceId={sheetSource.source_id}
-          sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
-          variants={sheetSource.variants}
-          index={pos}
-          onClose={handleSheetClose}
-          onNav={handleSheetNav}
-          onRegenerate={() => mutate()}
-        />
-      )}
 
       {/* Send to Drive modal — only opened when the toolbar button is enabled */}
       {sendModalOpen && (

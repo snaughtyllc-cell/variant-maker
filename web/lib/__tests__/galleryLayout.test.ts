@@ -3,6 +3,7 @@ import {
   GALLERY_PREVIEW_TILE_PX,
   galleryPreviewFrameClass,
   galleryPreviewTileClass,
+  variantWipeHint,
 } from "@/lib/galleryLayout";
 
 describe("gallery preview tile size", () => {
@@ -14,5 +15,10 @@ describe("gallery preview tile size", () => {
   it("names the locked preview frame classes", () => {
     expect(galleryPreviewTileClass()).toBe("gallery-tile");
     expect(galleryPreviewFrameClass()).toBe("gallery-tile__frame");
+  });
+
+  it("keeps the wipe-hint copy used on the in-pane review", () => {
+    expect(variantWipeHint()).toMatch(/DRAG THE DIVIDER TO WIPE/i);
+    expect(variantWipeHint()).toMatch(/SPACE TO PLAY BOTH/i);
   });
 });

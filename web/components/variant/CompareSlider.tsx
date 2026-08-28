@@ -17,9 +17,11 @@ interface CompareSliderProps {
   afterSrc: string;
   /** Optional external refs — Task 9 uses these to wire into ScrubBar */
   videoRefs?: CompareSliderVideoRefs;
+  /** Gallery review stage: portrait player, not the 46dvh overlay box. */
+  stage?: boolean;
 }
 
-export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderProps) {
+export function CompareSlider({ beforeSrc, afterSrc, videoRefs, stage = false }: CompareSliderProps) {
   const [pct, setPct] = useState(54);
   const [boxAspect, setBoxAspect] = useState(DEFAULT_CSS_ASPECT);
   const dragging = useRef(false);
@@ -123,12 +125,13 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
   return (
     <div
       ref={containerRef}
-      className="compare-slider"
+      className={stage ? "compare-slider compare-slider--stage" : "compare-slider"}
       style={{
         position: "relative",
-        aspectRatio: boxAspect,
-        width: compareSliderWidth(boxAspect),
-        maxHeight: "46dvh",
+        aspectRatio: stage ? "9 / 16" : boxAspect,
+        width: stage ? "min(280px, 100%)" : compareSliderWidth(boxAspect),
+        height: stage ? "100%" : undefined,
+        maxHeight: stage ? "min(470px, 100%)" : "46dvh",
         borderRadius: 14,
         overflow: "hidden",
         background: "#0b171b",

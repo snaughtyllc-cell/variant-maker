@@ -6,6 +6,7 @@ interface QualityPanelProps {
   uniqueness?: number | null;
   uniquenessStatus?: string | null;
   bestEffort?: boolean;
+  packAvgPct?: number | null;
 }
 
 /** 65% is the verified-original band the product treats as a safe-to-post signal. */
@@ -53,6 +54,7 @@ export function QualityPanel({
   uniqueness,
   uniquenessStatus,
   bestEffort,
+  packAvgPct,
 }: QualityPanelProps) {
   const uniquenessPct = uniqueness != null ? pct01(uniqueness) : null;
   const uniquenessOk = uniquenessStatus === "ok";
@@ -81,6 +83,17 @@ export function QualityPanel({
         >
           {uniquenessCustomerLabel()}
         </div>
+        {packAvgPct != null && (
+          <div
+            style={{
+              fontFamily: "var(--font-space-grotesk), monospace",
+              fontSize: 10.5,
+              color: "var(--color-muted2)",
+            }}
+          >
+            pack avg {packAvgPct}%
+          </div>
+        )}
       </div>
 
       {bestEffort && (

@@ -8,6 +8,7 @@ import { ScrubBar } from "./ScrubBar";
 import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
+import { variantWipeHint } from "@/lib/galleryLayout";
 
 interface VariantSheetProps {
   sourceId: string;
@@ -17,6 +18,12 @@ interface VariantSheetProps {
   onClose: () => void;
   onNav: (delta: number) => void;
   onRegenerate: () => void;
+  /** In-pane Gallery review — packs stay visible; no dialog overlay. */
+  embedded?: boolean;
+  selectedCount?: number;
+  flaggedCount?: number;
+  packAvgPct?: number | null;
+  onSendToDrive?: () => void;
 }
 
 function captionOf(v: { caption?: string | null }): string | null | undefined {
@@ -46,6 +53,11 @@ export function VariantSheet({
   onClose,
   onNav,
   onRegenerate,
+  embedded = false,
+  selectedCount,
+  flaggedCount,
+  packAvgPct,
+  onSendToDrive,
 }: VariantSheetProps) {
   // Create the two video refs here, pass to both CompareSlider and ScrubBar
   const beforeRef = useRef<HTMLVideoElement | null>(null);
@@ -74,6 +86,107 @@ export function VariantSheet({
   }, [isFirst, isLast, onNav]);
 
   if (!variant) return null;
+
+  const body = (
+    <div
+      className="variant-sheet__body"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div className="variant-sheet__stage">
+        <div className="variant-sheet__player">
+          <CompareSlider
+            beforeSrc={sourceUrl(sourceId)}
+            afterSrc={variant.file_url}
+            videoRefs={{ beforeRef, afterRef }}
+            stage={embedded}
+          />
+          <div className="variant-sheet__player-hint">
+            <span className="variant-sheet__hint-pill">{variantWipeHint()}</span>
+          </div>
+        </div>
+
+        <div className="variant-sheet__scrub">
+          <ScrubBar videos={[beforeRef, afterRef]} />
+        </div>
+
+        <div className="variant-sheet__filmstrip">
+          <div className="variant-sheet__filmstrip-head">
+            <div className="variant-sheet__filmstrip-label">
+              Pack · {variants.length} variant{variants.length === 1 ? "" : "s"}
+            </div>
+            {(selectedCount != null || flaggedCount != null) && (
+              <div className="variant-sheet__filmstrip-meta">
+                {selectedCount ?? 0} selected · {flaggedCount ?? 0} flagged
+              </div>
+            )}
+          </div>
+          <div className="variant-sheet__filmstrip-row">
+            {variants.map((v, i) => (
+              <button
+                key={v.index}
+                type="button"
+                className="variant-sheet__filmstrip-tile"
+                data-current={i === index}
+                onClick={() => onNav(i - index)}
+                aria-label={`Go to variant ${String(v.index).padStart(2, "0")}`}
+                aria-current={i === index}
+              >
+                <span>{String(v.index).padStart(2, "0")}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="variant-sheet__panel">
+        <div className="variant-sheet__panel-head">
+          <div className="variant-sheet__panel-title">
+            v{padded} <span>of {variants.length}</span>
+          </div>
+          <div className="variant-sheet__panel-sub">
+            delivered
+            {variant.uniqueness != null ? ` · ${Math.round(variant.uniqueness * 100)}% originality` : ""}
+          </div>
+        </div>
+        <div className="variant-sheet__panel-body">
+          <QualityPanel
+            uniqueness={variant.uniqueness}
+            uniquenessStatus={variant.uniqueness_status}
+            bestEffort={variant.status === "best_effort"}
+            packAvgPct={packAvgPct}
+          />
+
+          <div className="variant-sheet__hr" />
+
+          <CaptionBlock caption={captionOf(variant)} />
+
+          <div className="variant-sheet__hr" />
+
+          <VariantActions
+            sourceId={sourceId}
+            variant={variant}
+            onRegenerate={onRegenerate}
+            onSendToDrive={onSendToDrive}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <section className="gallery-review" aria-label="Variant review">
+        {body}
+      </section>
+    );
+  }
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -213,127 +326,7 @@ export function VariantSheet({
             </Dialog.Close>
           </div>
 
-          {/* Body — dark stage (compare/scrub/filmstrip) + 372px metadata panel.
-              Radix locks document scroll while open; the panel scrolls itself. */}
-          <div
-            className="variant-sheet__body"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              overflowX: "hidden",
-              overscrollBehavior: "contain",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            <div className="variant-sheet__stage">
-              <div className="variant-sheet__player">
-                <CompareSlider
-                  beforeSrc={sourceUrl(sourceId)}
-                  afterSrc={variant.file_url}
-                  videoRefs={{ beforeRef, afterRef }}
-                />
-                <div className="variant-sheet__player-hint">
-                  <span
-                    style={{
-                      fontFamily: "var(--font-space-grotesk), monospace",
-                      fontSize: 10,
-                      letterSpacing: "0.08em",
-                      color: "#7e979d",
-                      background: "rgba(11,23,27,0.8)",
-                      borderRadius: 999,
-                      padding: "6px 12px",
-                    }}
-                  >
-                    Drag the divider to wipe · ← → to change variant
-                  </span>
-                </div>
-              </div>
-
-              <div className="variant-sheet__scrub">
-                <ScrubBar videos={[beforeRef, afterRef]} />
-              </div>
-
-              {variants.length > 1 && (
-                <div className="variant-sheet__filmstrip">
-                  <div
-                    style={{
-                      fontFamily: "var(--font-space-grotesk), monospace",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: "0.16em",
-                      textTransform: "uppercase",
-                      color: "var(--color-cyan)",
-                    }}
-                  >
-                    Pack · {variants.length} variants
-                  </div>
-                  <div className="variant-sheet__filmstrip-row">
-                    {variants.map((v, i) => (
-                      <button
-                        key={v.index}
-                        type="button"
-                        className="variant-sheet__filmstrip-tile"
-                        data-current={i === index}
-                        onClick={() => onNav(i - index)}
-                        aria-label={`Go to variant ${String(v.index).padStart(2, "0")}`}
-                        aria-current={i === index}
-                      >
-                        <span>{String(v.index).padStart(2, "0")}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="variant-sheet__panel">
-              <div className="variant-sheet__panel-head">
-                <div
-                  style={{
-                    fontFamily: "var(--font-brand)",
-                    fontSize: 22,
-                    fontWeight: 700,
-                    letterSpacing: "-0.03em",
-                    color: "var(--color-text)",
-                  }}
-                >
-                  v{padded} <span style={{ color: "var(--color-muted2)", fontWeight: 600 }}>of {variants.length}</span>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-space-grotesk), monospace",
-                    fontSize: 11,
-                    color: "var(--color-muted2)",
-                    marginTop: 4,
-                  }}
-                >
-                  delivered
-                  {variant.uniqueness != null ? ` · ${Math.round(variant.uniqueness * 100)}% originality` : ""}
-                </div>
-              </div>
-              <div className="variant-sheet__panel-body">
-                <QualityPanel
-                  uniqueness={variant.uniqueness}
-                  uniquenessStatus={variant.uniqueness_status}
-                  bestEffort={variant.status === "best_effort"}
-                />
-
-                <div className="variant-sheet__hr" />
-
-                <CaptionBlock caption={captionOf(variant)} />
-
-                <div className="variant-sheet__hr" />
-
-                {/* Actions — Pass/Duplicate/Flag, post link, download, regenerate */}
-                <VariantActions
-                  sourceId={sourceId}
-                  variant={variant}
-                  onRegenerate={onRegenerate}
-                />
-              </div>
-            </div>
-          </div>
+          {body}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

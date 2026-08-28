@@ -396,6 +396,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
    chips, Select all, Save and Send actions here rather than in the floating
    bar, so this reads as a dense control strip. */
 .gallery-toolbar { align-items: center; background: var(--color-panel); border-bottom: 1px solid var(--color-line); display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 10px 16px; min-height: 58px; padding: 10px 24px; }
+.gallery-toolbar__back { align-items: center; background: #fff; border: 1px solid #dceaec; border-radius: 10px; color: #23393e; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 600; gap: 7px; height: 34px; padding: 0 12px; }
+.gallery-toolbar__back .material-symbols-rounded { color: #566e73; font-size: 17px; }
+.gallery-toolbar__crumb-variant { color: var(--color-violet); font-size: 13.5px; font-weight: 700; }
+.gallery-toolbar__nav { display: flex; gap: 6px; margin-left: auto; }
+.gallery-toolbar__nav-btn { align-items: center; background: #fff; border: 1px solid #dceaec; border-radius: 9px; color: #23393e; cursor: pointer; display: flex; height: 32px; justify-content: center; width: 32px; }
+.gallery-toolbar__nav-btn:disabled { color: #b4c6c9; cursor: not-allowed; }
+.gallery-toolbar__nav-btn .material-symbols-rounded { font-size: 18px; }
 .gallery-toolbar__actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .gallery-toolbar__crumb { align-items: center; display: flex; gap: 10px; min-width: 0; }
 .gallery-toolbar__crumb-section { color: #8aa0a5; font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.16em; white-space: nowrap; }
@@ -456,6 +463,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .gallery-pack-row__pct { flex-shrink: 0; font-family: var(--font-space-grotesk), monospace; font-size: 11px; font-weight: 700; }
 
 .gallery-grid-pane { display: flex; flex: 1; flex-direction: column; min-width: 0; overflow: auto; padding: 22px 24px 110px; position: relative; }
+.gallery-grid-pane--review { overflow: hidden; padding: 0; }
+.gallery-review { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.gallery-review .variant-sheet__body { background: #14252a; flex: 1; min-height: 0; }
+.gallery-review .variant-sheet__stage { flex: 1; min-height: 0; }
+.variant-review__send { align-items: center; background: var(--color-cyan); border: 0; border-radius: 13px; color: #0b2226; cursor: pointer; display: flex; flex: 1; font-family: var(--font-sora), sans-serif; font-size: 14.5px; font-weight: 700; gap: 8px; height: 50px; justify-content: center; }
 .gallery-loading { color: var(--color-muted); font-size: 13px; padding: 60px 0; text-align: center; }
 .gallery-empty { align-items: center; color: var(--color-muted); display: flex; flex-direction: column; gap: 10px; justify-content: center; padding: 80px 0; text-align: center; }
 .gallery-empty__icon { font-size: 34px; opacity: 0.4; }
@@ -763,6 +775,50 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   justify-content: center;
   pointer-events: none;
 }
+.variant-sheet__hint-pill {
+  background: rgba(11, 23, 27, 0.8);
+  border-radius: 999px;
+  color: #7e979d;
+  font-family: var(--font-space-grotesk), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 6px 12px;
+}
+.variant-sheet__filmstrip-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+.variant-sheet__filmstrip-label {
+  color: var(--color-cyan);
+  font-family: var(--font-space-grotesk), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.variant-sheet__filmstrip-meta {
+  color: #6e888e;
+  font-family: var(--font-space-grotesk), monospace;
+  font-size: 10px;
+}
+.variant-sheet__panel-title {
+  color: var(--color-text);
+  font-family: var(--font-brand);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.variant-sheet__panel-title span {
+  color: var(--color-muted2);
+  font-weight: 600;
+}
+.variant-sheet__panel-sub {
+  color: var(--color-muted2);
+  font-family: var(--font-space-grotesk), monospace;
+  font-size: 11px;
+  margin-top: 4px;
+}
 .variant-sheet__scrub {
   flex-shrink: 0;
   padding: 0 22px;
@@ -844,6 +900,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 @media (min-width: 900px) {
   .variant-sheet__body { flex-direction: row; }
   .variant-sheet__panel { width: 372px; border-top: none; border-left: 1px solid #e1edee; }
+  .gallery-review .variant-sheet__body { overflow: hidden; }
+  .gallery-review .variant-sheet__panel { height: 100%; }
 }
 
 /* Route-specific content containers, including legacy inline components. */
