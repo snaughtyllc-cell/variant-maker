@@ -36,6 +36,15 @@ export function uniquenessCustomerLabel(): string {
   return "Originality";
 }
 
+/** UI % for the 24/64 vs-source pass (do not raise the gate). */
+export function uniquenessPassPct(): number {
+  return 38;
+}
+
+export function uniquenessPassHint(): string {
+  return "38% = pass vs the source";
+}
+
 export function captionSnippet(text: string | null | undefined, max = 80): string {
   const one = (text || "").replace(/\s+/g, " ").trim();
   if (!one) return "";

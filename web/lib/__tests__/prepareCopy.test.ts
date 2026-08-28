@@ -8,6 +8,8 @@ import {
   preparingHeadline,
   preparingSubcopy,
   uniquenessCustomerLabel,
+  uniquenessPassHint,
+  uniquenessPassPct,
 } from "@/lib/prepareCopy";
 
 describe("prepare copy", () => {
@@ -23,6 +25,13 @@ describe("prepare copy", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
     expect(captionToggleHint()).toMatch(/gallery/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
+  });
+
+  it("explains the real ~38% pass line, not a 65% verified band", () => {
+    expect(uniquenessPassPct()).toBe(38);
+    expect(uniquenessPassHint()).toBe("38% = pass vs the source");
+    expect(uniquenessPassHint()).not.toMatch(/verified/i);
+    expect(uniquenessPassHint()).not.toMatch(/65%/);
   });
 
   it("snips captions to a single-line preview", () => {
