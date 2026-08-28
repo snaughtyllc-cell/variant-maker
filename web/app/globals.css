@@ -340,7 +340,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 .studio-stepper { align-items: center; display: flex; flex-wrap: wrap; gap: 22px; }
 .studio-stepper__count { align-items: baseline; display: flex; gap: 9px; }
-.studio-stepper__value { color: var(--ink); font-family: var(--font-sora), sans-serif; font-size: 46px; font-weight: 700; letter-spacing: -0.05em; line-height: 0.9; }
+.studio-stepper__value { color: var(--ink); font-family: var(--font-sora), sans-serif; font-size: 46px; font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -0.05em; line-height: 0.9; min-width: 2ch; text-align: right; }
 .studio-stepper__unit { color: var(--color-muted2); font-family: var(--font-space-grotesk), monospace; font-size: 10.5px; }
 .studio-stepper__btns { display: flex; gap: 7px; }
 .studio-stepper__btn { align-items: center; background: var(--color-panel); border: 1px solid var(--color-line); border-radius: 11px; color: #23393e; cursor: pointer; display: flex; height: 40px; justify-content: center; width: 40px; }
