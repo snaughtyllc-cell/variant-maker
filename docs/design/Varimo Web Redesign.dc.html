@@ -500,9 +500,9 @@
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
                   <div style="height: 8px; border-radius: 999px; background: #E1EDEE; position: relative; overflow: hidden;">
                     <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 52%; border-radius: 999px; background: #7EE0E6;"></div>
-                    <div style="position: absolute; left: 65%; top: 0; bottom: 0; width: 2px; background: #0F1A1E;"></div>
+                    <div style="position: absolute; left: 38%; top: 0; bottom: 0; width: 2px; background: #0F1A1E;"></div>
                   </div>
-                  <div style="font-family: 'Space Grotesk', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: #8AA0A5;">65% = VERIFIED-ORIGINAL BAND</div>
+                  <div style="font-family: 'Space Grotesk', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: #8AA0A5;">38% = PASS VS THE SOURCE</div>
                 </div>
               </div>
             </div>
@@ -1020,7 +1020,7 @@ class Component extends DCLogic {
       color: i === active ? "#7EE0E6" : "#9FB3B7",
       weight: i === active ? 600 : 400
     }));
-    const pctColor = (n) => (n >= 65 ? "#5FDCB2" : n >= 50 ? "#7EE0E6" : "#E0A32E");
+    const pctColor = (n) => (n >= 38 ? "#5FDCB2" : "#E0A32E");
     const caps = ["sunset rooftop, no text", "hard cut open, 0.4s", "slow zoom, warm grade", "flip + speed ramp", "crop 4:5, top caption", "mirror, cool grade", "punch-in at 1.2s", "grain pass, 12%", "reverse tail", "shake, low amp", "letterbox 2.35", "cool grade, -8 hue", "hard cut, 0.2s", "zoom out from face", "speed ramp 1.4×"];
     const galleryTiles = caps.map((cap, i) => {
       const n = [52, 66, 48, 53, 71, 47, 55, 52, 38, 63, 58, 44, 67, 51, 49][i];
@@ -1065,7 +1065,7 @@ class Component extends DCLogic {
         "Clicking a tile takes over only the grid pane. Rail nav and the pack list stay on screen, so the detail view is a state of Gallery rather than a page you have to escape — Back to grid sits in the context bar with a v01 breadcrumb.",
         "The player was a pale bordered box with an unlabelled round swap button. Dark stage, a wipe divider you drag, and SOURCE / VARIANT called out — comparison is the whole point of this screen.",
         "Header showed the same 100-character filename twice. It now reads v01 of 20 with the pack name underneath, and prev/next carry ← → key hints.",
-        "Originality gains the 65% verified-original marker and the pack average, so 52% becomes a decision rather than a stat. Caption shows the actual caption, not the filename.",
+        "Originality gains the 38% pass marker and the pack average, so 52% reads as a comfortable pass rather than a miss. Caption shows the actual caption, not the filename.",
         "Pass / Duplicate / Flag as one segmented control makes 'unlabeled = pass' visible instead of a footnote under a lone warning button, and a 20-thumb filmstrip replaces arrow-paging."
       ],
       navAdmin: [
@@ -1086,7 +1086,7 @@ class Component extends DCLogic {
         { name: "intro_AQPzxw…mp4", meta: "20 variants · today", pct: "52%", pctColor: "#0E7C86", bg: "#EEF8F9", border: "#7EE0E6" },
         { name: "intro_AQNTxBD…mp4", meta: "20 variants · today", pct: "66%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
         { name: "Color walk, make it blue", meta: "3 variants · Aug 26", pct: "58%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
-        { name: "Does this count as a win", meta: "3 variants · Aug 26", pct: "38%", pctColor: "#A9741B", bg: "#FFFFFF", border: "#DCEAEC" },
+        { name: "Does this count as a win", meta: "3 variants · Aug 26", pct: "28%", pctColor: "#A9741B", bg: "#FFFFFF", border: "#DCEAEC" },
         { name: "Everyone was safe", meta: "3 variants · Aug 25", pct: "87%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" },
         { name: "Front yard party", meta: "3 variants · Aug 25", pct: "58%", pctColor: "#0E7C86", bg: "#FFFFFF", border: "#DCEAEC" }
       ],
@@ -1124,7 +1124,7 @@ class Component extends DCLogic {
       ],
       noteGallery: [
         "Six packs × 20 tiles in one endless scroll becomes a pack list on the left and one grid on the right — you land on a pack instead of scrolling past five.",
-        "Originality is the number that decides what ships, so it moves onto every tile and into the pack list; mint marks the verified-original band per the brand.",
+        "Originality is the number that decides what ships, so it moves onto every tile and into the pack list; mint marks the ~38% vs-source pass. 65% is typical medium, not a gate.",
         "Select all / Save to Photos / Send to Drive / ZIP / Open folder / ✕ repeated per pack header. One selection bar handles all of it for whatever is picked."
       ],
       noteDrops: [

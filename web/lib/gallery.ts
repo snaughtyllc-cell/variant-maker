@@ -1,3 +1,4 @@
+import { uniquenessPassPct } from "./prepareCopy";
 import { SourceOut } from "./types";
 
 export function filterSources(sources: SourceOut[], mode: "all" | "shortfall"): SourceOut[] {
@@ -81,20 +82,18 @@ export function avgOriginalityPct(source: SourceOut): number | null {
 }
 
 /**
- * Originality badge color for tiles drawn on a dark thumbnail (mint ≥65%,
- * aqua 50–64%, amber <50%) — matches the redesign's tile-badge banding.
+ * Originality badge color for tiles drawn on a dark thumbnail.
+ * Mint at the vs-source pass (~38%). 65% is typical medium, not a gate.
  */
 export function tileOriginalityColor(pct: number | null): string {
   if (pct == null) return "var(--color-muted2)";
-  if (pct >= 65) return "var(--color-mint)";
-  if (pct >= 50) return "var(--color-cyan)";
-  return "var(--color-amber2)";
+  return pct >= uniquenessPassPct() ? "var(--color-mint)" : "var(--color-amber2)";
 }
 
-/** Originality label color for a pack row on a white surface (teal / amber-dark). */
+/** Originality label color for a pack row on a white surface (violet / amber). */
 export function packOriginalityColor(pct: number | null): string {
   if (pct == null) return "var(--color-muted2)";
-  return pct < 50 ? "var(--color-amber)" : "var(--color-violet)";
+  return pct < uniquenessPassPct() ? "var(--color-amber)" : "var(--color-violet)";
 }
 
 /** "20 variants · today" / "3 variants · Aug 26" — pack-list row meta line. */
