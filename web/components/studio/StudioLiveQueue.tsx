@@ -111,9 +111,9 @@ export function StudioLiveQueue() {
         <p className="studio-live__failed">{progress.failed}</p>
       )}
 
-      {rows.length > 0 ? (
-        <div className="studio-live__rows">
-          {rows.map((row) => (
+      <div className="studio-live__rows">
+        {rows.length > 0 ? (
+          rows.map((row) => (
             <div className="studio-live-row" key={row.key}>
               <div className="studio-live-row__thumb" />
               <div className="studio-live-row__main">
@@ -140,33 +140,35 @@ export function StudioLiveQueue() {
                 </button>
               )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <p className="studio-live__empty">
-          Queue is clear. Generate a pack and it renders here live.
-        </p>
-      )}
+          ))
+        ) : (
+          <p className="studio-live__empty">
+            Queue is clear. Generate a pack and it renders here live.
+          </p>
+        )}
+      </div>
 
       <div className="studio-live__divider" />
-      <div className="studio-live__title studio-live__title--sub">JUST FINISHED</div>
+      <div className="studio-live__finished">
+        <div className="studio-live__title studio-live__title--sub">JUST FINISHED</div>
 
-      {finished.length > 0 ? (
-        <div className="studio-live__grid">
-          {finished.map((tile) => (
-            <div className="studio-live-tile" key={tile.key}>
-              <span className="studio-live-tile__v">{tile.v}</span>
-              <span className="studio-live-tile__pct" style={{ color: tile.color }}>
-                {tile.pct}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="studio-live__empty studio-live__empty--sub">
-          Finished variants land here, then Open Gallery.
-        </p>
-      )}
+        {finished.length > 0 ? (
+          <div className="studio-live__grid">
+            {finished.map((tile) => (
+              <div className="studio-live-tile" key={tile.key}>
+                <span className="studio-live-tile__v">{tile.v}</span>
+                <span className="studio-live-tile__pct" style={{ color: tile.color }}>
+                  {tile.pct}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="studio-live__empty studio-live__empty--sub">
+            Finished variants land here, then Open Gallery.
+          </p>
+        )}
+      </div>
 
       <div className="studio-live__spacer" />
 

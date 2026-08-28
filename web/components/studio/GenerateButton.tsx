@@ -27,11 +27,9 @@ export function GenerateButton({
     : complete
       ? "Generate another"
       : "Generate";
-  const support = inProgress
-    ? "in progress — Cancel on the live run if this was a mistake"
-    : complete
-      ? "Starts a new pack from the clips on this page"
-      : generatePackLabel(fileCount, perVideo);
+  const support = complete && !inProgress
+    ? "Starts a new pack from the clips on this page"
+    : generatePackLabel(fileCount, perVideo);
 
   return (
     <button

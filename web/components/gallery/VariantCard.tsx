@@ -4,6 +4,7 @@ import { VariantOut } from "@/lib/types";
 import { isFileReady, tileOriginalityColor } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
 import { CaptionSnippet } from "./CaptionSnippet";
+import { galleryPreviewFrameClass, galleryPreviewTileClass } from "@/lib/galleryLayout";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -55,11 +56,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
   );
 
   return (
-    <div className="gallery-tile">
+    <div className={galleryPreviewTileClass()}>
       <div
-        className="gallery-tile__frame"
+        className={galleryPreviewFrameClass()}
         data-ready={ready}
         data-selected={selected}
+        style={{ aspectRatio: "9 / 16" }}
         onClick={ready ? onOpen : undefined}
       >
         <input
@@ -76,19 +78,19 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           aria-label={`Select v${String(variant.index).padStart(2, "0")}`}
         />
 
-        <div style={{ position: "relative" }}>
-          <span className="gallery-tile__id">v{String(variant.index).padStart(2, "0")}</span>
+        <span className="gallery-tile__id">v{String(variant.index).padStart(2, "0")}</span>
+        <div className="gallery-tile__media">
           {ready ? (
-            <VideoThumb src={variant.file_url} className="gallery-tile__thumb" />
+            <VideoThumb src={variant.file_url} className="gallery-tile__thumb" fill />
           ) : (
             <div className="gallery-tile__placeholder" style={{ aspectRatio: "9 / 16" }}>
               Not on Studio
             </div>
           )}
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-            {topBadges}
-            {badge}
-          </div>
+        </div>
+        <div className="gallery-tile__overlay" style={{ pointerEvents: "none" }}>
+          {topBadges}
+          {badge}
         </div>
       </div>
       <CaptionSnippet caption={captionOf(variant)} />
