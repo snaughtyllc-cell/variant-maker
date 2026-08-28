@@ -58,7 +58,7 @@ Platform flags after a drop stay in Phase 12
 | Hole | What we know | What we will not do |
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Pin live from `lookshadeoff`. |
-| Look-safe crop pan (start→end) | **Labbing.** Locked punch-in made 25/50/75 the same patch. Lab Fast on `cursor/keyframe-crop-drift-cdb6` (PR #56) lerps the window; keep stays put. Generate on Lab Studio only. | Ken Burns zoom. Face-zoom 0.72. Gemini on variants. Pin live before stills are **Signed**. |
+| Look-safe crop pan (start→end) | **Open.** Lab Gallery `lookcroppan` (SaveInta-720 Fast 2 on `7ef5853`): 26/25 bits, medium. Copy 2 MAE fail — crop can trip the blotch gate. Jeff: stills vs source. | Ken Burns zoom. Face-zoom 0.72. Gemini on variants. Pin live before stills are **Signed**. |
 
 ## Engine backstop
 
