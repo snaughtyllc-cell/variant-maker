@@ -12,6 +12,8 @@ on:
       - cursor/caption-safe-crop-c975
       - cursor/ig-720-fast-20-c975
       - cursor/aqmtp-uniqueness-c975
+      - cursor/keyframe-crop-drift-cdb6
+      - cursor/compete-smart-repurpose-cdb6
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py
