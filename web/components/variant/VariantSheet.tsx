@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VariantOut } from "@/lib/types";
 import { sourceUrl } from "@/lib/api";
+import { isFileReady } from "@/lib/gallery";
+import { VideoThumb } from "../common/VideoThumb";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
 import { CaptionBlock } from "./CaptionBlock";
@@ -138,6 +140,9 @@ export function VariantSheet({
                 aria-label={`Go to variant ${String(v.index).padStart(2, "0")}`}
                 aria-current={i === index}
               >
+                {isFileReady(v) ? (
+                  <VideoThumb src={v.file_url} className="variant-sheet__filmstrip-thumb" fill />
+                ) : null}
                 <span>{String(v.index).padStart(2, "0")}</span>
               </button>
             ))}

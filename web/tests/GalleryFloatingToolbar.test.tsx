@@ -20,6 +20,7 @@ describe("GalleryFloatingToolbar", () => {
     );
 
     expect(screen.getByText("3 variants selected")).toBeInTheDocument();
+    expect(document.querySelector(".gallery-floating-toolbar__actions")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /send to drive/i }));
     expect(onSend).toHaveBeenCalledTimes(1);

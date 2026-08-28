@@ -129,9 +129,8 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs, stage = false }:
       style={{
         position: "relative",
         aspectRatio: stage ? "9 / 16" : boxAspect,
-        width: stage ? "min(280px, 100%)" : compareSliderWidth(boxAspect),
-        height: stage ? "100%" : undefined,
-        maxHeight: stage ? "min(470px, 100%)" : "46dvh",
+        width: stage ? undefined : compareSliderWidth(boxAspect),
+        maxHeight: stage ? undefined : "46dvh",
         borderRadius: 14,
         overflow: "hidden",
         background: "#0b171b",

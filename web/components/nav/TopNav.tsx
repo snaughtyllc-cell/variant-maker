@@ -95,24 +95,26 @@ export function TopNav() {
         </header>
       )}
 
-      {/* Phone top bar — unchanged below the desktop breakpoint. */}
+      {/* Phone top bar: Ready left, full varimo wordmark center, ⋯ right. */}
       <header className="vf-topbar">
+        <div className="vf-topbar-left">
+          <StatusStrip />
+        </div>
         <Link className="vf-brand" href="/" aria-label="varimo Studio home">
           <VarimoMark className="vf-brand-mark" size={22} />
           <VarimoWordmark className="vf-brand-wordmark" />
         </Link>
-
         <div className="vf-topbar-actions">
-          <StatusStrip />
           {(me?.email || allowedExtras.length > 0) && (
             <button
               type="button"
               className="vf-more-trigger"
+              aria-label="More"
               aria-expanded={moreOpen}
               aria-controls="vf-mobile-more"
               onClick={() => setMoreOpen((open) => !open)}
             >
-              <MoreHorizontal size={17} /> More
+              <MoreHorizontal size={18} />
             </button>
           )}
         </div>

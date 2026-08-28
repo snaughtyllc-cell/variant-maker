@@ -590,6 +590,56 @@ def test_crop_offset_omitted_when_no_crop():
     assert "crop=" not in vf
 
 
+def test_crop_omitted_when_keep_is_identity_even_with_end_keys():
+    p = make_params(video={
+        "crop_keep": 1.0, "crop_x_frac": 0.4, "crop_y_frac": 0.4,
+        "crop_x_end_frac": 0.6, "crop_y_end_frac": 0.6,
+        "trim_s": 0.0, "trim_end_s": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "crop=" not in vf
+
+
+def test_static_crop_when_end_equals_start():
+    """End keys present but equal to start → same static crop as the golden."""
+    p = make_params(video={
+        "crop_keep": 0.96, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
+        "crop_x_end_frac": 0.5, "crop_y_end_frac": 0.5,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
+    assert "t/" not in vf
+    assert r"\," not in vf
+
+
+def test_missing_end_keys_emit_static_crop():
+    """Backward compatible: no end keys → today's centered static crop string."""
+    vf = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
+    assert "t/" not in vf
+
+
+def test_drifting_crop_lerps_window_with_escaped_commas():
+    p = make_params(video={
+        "crop_keep": 0.96, "crop_x_frac": 0.40, "crop_y_frac": 0.50,
+        "crop_x_end_frac": 0.55, "crop_y_end_frac": 0.60,
+        "trim_s": 0.2, "trim_end_s": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
+    assert "t/" in vf
+    assert r"\," in vf
+    assert "0.4000" in vf
+    assert "0.5500" in vf
+    assert "0.5000" in vf
+    assert "0.6000" in vf
+    assert "t/9.8000" in vf
+    assert "min(max(t/9.8000\\,0)\\,1)" in vf
+    assert "(iw-iw*0.9600)*(0.4000+(0.5500-0.4000)*min(max(t/9.8000\\,0)\\,1))" in vf
+    assert "(ih-ih*0.9600)*(0.5000+(0.6000-0.5000)*min(max(t/9.8000\\,0)\\,1))" in vf
+    # Trim still resets PTS so t starts at 0 for the lerp.
+    assert vf.index("setpts=PTS-STARTPTS") < vf.index("crop=")
+
+
 def test_trim_end_only_uses_source_duration():
     p = make_params(video={"trim_s": 0.0, "trim_end_s": 0.5})
     vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)

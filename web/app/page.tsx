@@ -14,6 +14,7 @@ import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
+import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -243,10 +244,8 @@ export default function StudioPage() {
               <div className="studio-options">
                 <label className="studio-option-row studio-caption-toggle">
                   <div>
-                    <div className="studio-option-row__label">AI captions</div>
-                    <div className="studio-option-row__hint">
-                      One post caption per variant, previewed in Gallery
-                    </div>
+                    <div className="studio-option-row__label">{captionToggleLabel()}</div>
+                    <div className="studio-option-row__hint">{captionToggleHint()}</div>
                   </div>
                   <input
                     type="checkbox"
@@ -296,7 +295,7 @@ export default function StudioPage() {
           </div>
         </div>
 
-        <div className="studio-generate-bar">
+        <div className="studio-generate-bar studio-generate-bar--dock" data-testid="studio-generate-dock">
           <div className="studio-generate-bar__inner">
             <GenerateButton
               fileCount={sourceCount}

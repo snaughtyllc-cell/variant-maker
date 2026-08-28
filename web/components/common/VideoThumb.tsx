@@ -8,12 +8,16 @@ interface VideoThumbProps {
   className?: string;
   /** Fill a sized parent (gallery preview) instead of sizing to the video. */
   fill?: boolean;
+  /** Mount the video immediately — live-queue tiles sit in overflow parents. */
+  eager?: boolean;
 }
 
-export function VideoThumb({ src, badge, className, fill = false }: VideoThumbProps) {
+export function VideoThumb({ src, badge, className, fill = false, eager = false }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [inView, setInView] = useState(false);
+  const [inView, setInView] = useState(
+    () => eager || typeof IntersectionObserver === "undefined",
+  );
   const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
 
   useEffect(() => {
@@ -21,6 +25,10 @@ export function VideoThumb({ src, badge, className, fill = false }: VideoThumbPr
   }, [src]);
 
   useEffect(() => {
+    if (eager) {
+      setInView(true);
+      return;
+    }
     const el = boxRef.current;
     if (!el) return;
     if (typeof IntersectionObserver === "undefined") {
@@ -35,7 +43,7 @@ export function VideoThumb({ src, badge, className, fill = false }: VideoThumbPr
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [eager]);
 
   function applyVideoAspect(video: HTMLVideoElement | null) {
     if (!video) return;

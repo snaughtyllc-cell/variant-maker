@@ -59,4 +59,14 @@ describe("TopNav", () => {
       "/settings/drive",
     );
   });
+
+  it("centers the varimo wordmark and keeps More as an icon-only control", () => {
+    render(<TopNav />);
+    expect(screen.getByRole("link", { name: /varimo studio home/i })).toBeInTheDocument();
+    expect(document.querySelector(".vf-brand-wordmark")).toBeTruthy();
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveAttribute("aria-label", "More");
+    expect(more.textContent?.trim()).toBe("");
+    expect(document.querySelector(".vf-topbar-left")).toBeTruthy();
+  });
 });
