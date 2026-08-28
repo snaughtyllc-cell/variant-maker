@@ -125,10 +125,12 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       ref={containerRef}
       className="compare-slider"
       style={{
+        // Aspect + the mobile fallback width are handed to CSS as custom
+        // properties so globals.css can keep the stacked-phone sizing while
+        // the desktop rule lets the player fill the full-height stage.
+        "--cmp-aspect": boxAspect,
+        "--cmp-w": compareSliderWidth(boxAspect),
         position: "relative",
-        aspectRatio: boxAspect,
-        width: compareSliderWidth(boxAspect),
-        maxHeight: "46dvh",
         borderRadius: 14,
         overflow: "hidden",
         background: "#0b171b",
@@ -136,7 +138,7 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
         cursor: "ew-resize",
         userSelect: "none",
         touchAction: "pan-y",
-      }}
+      } as React.CSSProperties}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}

@@ -752,6 +752,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   justify-content: center;
   padding: 22px;
 }
+/* Compare/wipe box. Phone-first: fill the stacked stage width, cap height so
+   the metadata panel below stays reachable (JS supplies the aspect-aware width
+   via --cmp-w). Desktop overrides this to fill the full-height stage. */
+.compare-slider {
+  aspect-ratio: var(--cmp-aspect, 9 / 16);
+  width: var(--cmp-w, min(100%, calc(46dvh * 9 / 16)));
+  max-height: 46dvh;
+}
 .variant-sheet__player-hint {
   position: absolute;
   bottom: 14px;
@@ -841,7 +849,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 }
 @media (min-width: 900px) {
   .variant-sheet__body { flex-direction: row; }
+  .variant-sheet__stage { flex: 1; min-width: 0; }
   .variant-sheet__panel { width: 372px; border-top: none; border-left: 1px solid #e1edee; }
+  /* Desktop stage is full-height: let the player fill it and derive its width
+     from the clip's aspect ratio, so a 9:16 clip reads large instead of being
+     pinned to 46dvh and floating tiny in a big dark stage. */
+  .compare-slider {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
 }
 
 /* Route-specific content containers, including legacy inline components. */
