@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRun } from "@/lib/runStore";
 import { cancelJob } from "@/lib/api";
 import { runDeliveredNone, runHasStarted } from "@/lib/progress";
-import { liveRunSubcopy } from "@/lib/hqWaitCopy";
+import { liveRunSubcopy, reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import {
   isPreparingJob,
   preparingHeadline,
@@ -12,7 +12,7 @@ import {
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const { jobId, progress, complete, clear, qualityMode, prepMode } = useRun();
   const [cancelling, setCancelling] = useState(false);
 
   async function handleCancel() {
@@ -85,10 +85,13 @@ export function ProgressPanel() {
   const preparing = isPreparingJob(jobId);
   const started = runHasStarted(progress);
   const early = !complete && !progress.failed && (preparing || !started);
+  const reconstructing = Boolean(prepMode === "hq" && !started && !complete && !preparing && !progress.failed);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
   const cancelled = Boolean(failed && /cancelled/i.test(failed));
-  const headline = early
+  const headline = reconstructing
+    ? reconstructFirstHeadline()
+    : early
     ? preparingHeadline()
     : failed
       ? cancelled
@@ -99,7 +102,9 @@ export function ProgressPanel() {
           ? "No variants"
           : "Complete"
         : "Generating…";
-  const sub = early
+  const sub = reconstructing
+    ? reconstructFirstSubcopy()
+    : early
     ? preparingSubcopy()
     : failed
       ? failed

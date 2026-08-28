@@ -77,6 +77,17 @@ export function inFlightSummaryLine(
     .join(" · ");
 }
 
+export function reconstructFirstHeadline(): string {
+  return "Reconstructing first…";
+}
+
+export function reconstructFirstSubcopy(): string {
+  return (
+    "One HQ GPU pass rebuilds the pixels. Fast variants start after that — " +
+    "first minutes have no Fast thumbs. That is not a hang."
+  );
+}
+
 export function liveRunSubcopy(qualityMode: QualityMode = "fast"): string {
   if (qualityMode === "hq") {
     return `${HQ_RENDERING_HINT} Gallery stays empty until a variant finishes.`;

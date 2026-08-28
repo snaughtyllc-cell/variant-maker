@@ -64,7 +64,11 @@ export interface QueueSnapshot {
   hq: number;
   jobs: QueueItem[];
 }
-export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
+export interface JobDetail {
+  job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[];
+  error?: string | null; quality_mode?: "fast" | "hq" | string; prep_mode?: "none" | "hq";
+  prep_status?: string | null;
+}
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }
 export interface VariantEvent {
@@ -274,6 +278,9 @@ export interface AdminWorkspace {
   running: number;
   fast: number;
   hq: number;
+  week_fast?: number;
+  week_hq?: number;
+  week_packs?: number;
   last_job_utc: string | null;
   last_error: string | null;
   experience?: "solo" | "agency";

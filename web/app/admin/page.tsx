@@ -176,7 +176,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: "var(--color-muted)", textAlign: "left" }}>
-                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
+                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Week Fast", "Week HQ", "Last job", "Last error", ""].map((h) => (
                   <th key={h || "open"} style={{ padding: "10px 12px", fontWeight: 600 }}>
                     {h}
                   </th>
@@ -186,7 +186,7 @@ export default function AdminPage() {
             <tbody>
               {loading && workspaces.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
+                    <td colSpan={12} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
                     Loading…
                   </td>
                 </tr>
@@ -266,6 +266,8 @@ export default function AdminPage() {
                     <td style={{ padding: "10px 12px" }}>{ws.running}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.fast}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.hq}</td>
+                    <td style={{ padding: "10px 12px" }}>{ws.week_fast ?? 0}</td>
+                    <td style={{ padding: "10px 12px" }}>{ws.week_hq ?? 0}</td>
                     <td style={{ padding: "10px 12px", color: "var(--color-muted)", whiteSpace: "nowrap" }}>
                       {ws.last_job_utc ? ws.last_job_utc.replace("T", " ").replace("Z", "") : "—"}
                     </td>
