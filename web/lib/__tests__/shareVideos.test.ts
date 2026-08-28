@@ -4,12 +4,14 @@ import {
   canShareVideoFiles,
   clearSharedVariantFileCache,
   cloneShareFiles,
+  downloadVariantUrls,
   downloadVideoFiles,
   fetchVariantFiles,
   FILE_FETCH_CONCURRENCY,
   filesReadyNow,
   fillFileCache,
   isAppleMobile,
+  isRetryableFetchFailure,
   isShareableVideo,
   peekCachedFiles,
   phoneShareHintCopy,
@@ -22,6 +24,7 @@ import {
   shareClipsReadyCopy,
   shareEmptyCopy,
   shareLoadingCopy,
+  sharePrepareBackgroundCopy,
   sharePrepareItemLabel,
   sharePrepareProgressCopy,
   shareRetryCopy,
@@ -30,6 +33,8 @@ import {
   shareVideoFiles,
   shareVideosBusyLabel,
   shareVideosLabel,
+  variantDownloadUrl,
+  waitUntilDocumentVisible,
   zipSecondaryCopy,
   zipVisibleOnDevice,
 } from "@/lib/shareVideos";
@@ -241,7 +246,79 @@ describe("saveTapAction", () => {
 
   it("prepares only on iPhone when clips still need to download", () => {
     expect(saveTapAction(false, true)).toBe("prepare");
-    expect(saveTapAction(false, false)).toBe("prepare_then_save");
+  });
+
+  it("hands Android and desktop to the OS download manager so leaving the app does not kill the transfer", () => {
+    expect(saveTapAction(false, false)).toBe("os_download");
+  });
+});
+
+describe("background prepare", () => {
+  it("retries a killed fetch after the tab is visible again", async () => {
+    expect(isRetryableFetchFailure(new TypeError("Failed to fetch"), true)).toBe(true);
+    expect(isRetryableFetchFailure(new TypeError("Failed to fetch"), false)).toBe(false);
+    expect(isRetryableFetchFailure(new Error("404"), false)).toBe(false);
+
+    const listeners = new Set<() => void>();
+    const vis = {
+      hidden: true,
+      addEventListener(_type: string, listener: () => void) {
+        listeners.add(listener);
+      },
+      removeEventListener(_type: string, listener: () => void) {
+        listeners.delete(listener);
+      },
+    };
+    const waiting = waitUntilDocumentVisible(vis);
+    let resolved = false;
+    void waiting.then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    vis.hidden = false;
+    for (const listener of [...listeners]) listener();
+    await waiting;
+    expect(resolved).toBe(true);
+
+    let attempts = 0;
+    vis.hidden = true;
+    const fetchFn = vi.fn(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError("Failed to fetch");
+      return new Response("mp4", { status: 200, headers: { "Content-Type": "video/mp4" } });
+    });
+    const pending = fetchVariantFiles(
+      [{ file_url: "/a", filename: "v01.mp4" }],
+      fetchFn as unknown as typeof fetch,
+      undefined,
+      1,
+      vis,
+    );
+    await vi.waitFor(() => expect(attempts).toBe(1));
+    vis.hidden = false;
+    for (const listener of [...listeners]) listener();
+    const files = await pending;
+    expect(files).toHaveLength(1);
+    expect(attempts).toBe(2);
+  });
+
+  it("starts OS downloads from the real file URL so the browser keeps them in the background", () => {
+    expect(variantDownloadUrl("/api/variants/s1/v01.mp4")).toBe("/api/variants/s1/v01.mp4?dl=1");
+    expect(variantDownloadUrl("/api/variants/s1/v01.mp4?x=1")).toBe("/api/variants/s1/v01.mp4?x=1&dl=1");
+    const hrefs: string[] = [];
+    downloadVariantUrls(
+      [
+        { file_url: "/api/variants/s1/v01.mp4", filename: "v01.mp4" },
+        { file_url: "/api/variants/s1/v02.mp4", filename: "v02.mp4" },
+      ],
+      (a) => {
+        hrefs.push(`${a.download}@${a.href}`);
+      },
+    );
+    expect(hrefs[0]).toContain("v01.mp4");
+    expect(hrefs[0]).toContain("dl=1");
+    expect(hrefs[1]).toContain("v02.mp4");
   });
 });
 
@@ -459,6 +536,7 @@ describe("copy", () => {
     expect(zipSecondaryCopy()).toMatch(/Files/i);
     expect(phoneShareHintCopy()).toMatch(/Save Video/i);
     expect(phoneShareHintCopy()).toMatch(/Photos/i);
+    expect(sharePrepareBackgroundCopy()).toMatch(/leave|switch apps|come back/i);
     expect(zipVisibleOnDevice(() => ({ matches: true }))).toBe(false);
     expect(zipVisibleOnDevice(() => ({ matches: false }))).toBe(true);
     expect(zipVisibleOnDevice(undefined)).toBe(true);
