@@ -680,7 +680,7 @@ class JobStore:
                         "source_count": len(job.sources),
                     },
                 )
-        except Exception as exc:
+        except (OSError, TypeError, ValueError) as exc:
             print(f"usage {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
 
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:

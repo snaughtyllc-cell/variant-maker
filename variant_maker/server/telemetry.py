@@ -49,7 +49,7 @@ def init() -> None:
         return
     try:
         sentry_sdk.init(dsn=dsn, traces_sample_rate=0.0, send_default_pii=False)
-    except Exception:
+    except Exception:  # noqa: BLE001 — optional SDK must never fail Studio boot
         return
 
 
@@ -74,7 +74,7 @@ def capture_event(
                 "properties": props,
             },
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — telemetry must never fail a job
         return
 
 
@@ -86,7 +86,7 @@ def capture_exception(exc: BaseException) -> None:
     if sentry_sdk is not None:
         try:
             sentry_sdk.capture_exception(exc)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 — optional SDK
             pass
     if _posthog_key():
         capture_event(

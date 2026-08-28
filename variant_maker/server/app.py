@@ -80,8 +80,6 @@ from .jobs import (
     source_files_ready,
     variant_on_disk,
 )
-from .telemetry import init as init_telemetry
-from .usage import week_rollup
 from .models import (
     AdminMemberOut,
     AdminViewIn,
@@ -151,6 +149,7 @@ from .sessions import (
     sign_view,
 )
 from .sheets import GoogleSheets, SheetsClient
+from .telemetry import init as init_telemetry
 from .tenant_runtime import TenantHub
 from .tenants import (
     ADMIN_EMAIL_ENV,
@@ -162,6 +161,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
+from .usage import week_rollup
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
