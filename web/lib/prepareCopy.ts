@@ -24,6 +24,14 @@ export function captionToggleHint(): string {
   return "AI writes a post caption per variant. Preview them in Gallery under each clip.";
 }
 
+export function hqPrepToggleLabel(): string {
+  return "Reconstruct first (HQ)";
+}
+
+export function hqPrepToggleHint(): string {
+  return "One GPU pass, then Fast variants. Off by default — lab only.";
+}
+
 export function captionPreviewLabel(): string {
   return "Caption";
 }

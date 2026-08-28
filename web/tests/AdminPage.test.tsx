@@ -64,6 +64,8 @@ const workspaces: AdminWorkspace[] = [
     running: 1,
     fast: 1,
     hq: 0,
+    week_fast: 12,
+    week_hq: 1,
     last_job_utc: "2026-08-20T00:00:00Z",
     last_error: null,
     experience: "agency",
@@ -93,6 +95,9 @@ describe("Admin page", () => {
   it("lists workspaces and Open switches view then goes home", async () => {
     render(<AdminPage />);
     expect(await screen.findByText("Maya")).toBeInTheDocument();
+    expect(screen.getByText("Week Fast")).toBeInTheDocument();
+    expect(screen.getByText("Week HQ")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getAllByText("maya@example.com").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() => {

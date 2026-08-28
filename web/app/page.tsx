@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useRef, DragEvent } from "react";
+import { useState, useCallback, useEffect, useRef, DragEvent } from "react";
 import { FileList } from "@/components/studio/FileList";
 import { DrivePickList } from "@/components/studio/DrivePickList";
 import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePickerModal";
@@ -9,12 +9,17 @@ import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { StudioLiveQueue } from "@/components/studio/StudioLiveQueue";
 import { accepts, readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
-import { createJob, createJobFromDrive } from "@/lib/api";
+import { createJob, createJobFromDrive, getHealth } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
-import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
+import {
+  captionToggleHint,
+  captionToggleLabel,
+  hqPrepToggleHint,
+  hqPrepToggleLabel,
+} from "@/lib/prepareCopy";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -35,6 +40,8 @@ export default function StudioPage() {
   const [perVideo, setPerVideo] = useState(DEFAULT_PER_VIDEO);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
+  const [hqPrep, setHqPrep] = useState(false);
+  const [lab, setLab] = useState(false);
   const [generateCaptions, setGenerateCaptions] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +57,22 @@ export default function StudioPage() {
     sourceCount > 0
       ? `${sourceCount} clip${sourceCount !== 1 ? "s" : ""}${sizeLabel ? ` · ${sizeLabel}` : ""}`
       : "No clips yet";
+
+  useEffect(() => {
+    let alive = true;
+    getHealth()
+      .then((h) => {
+        if (alive) setLab(Boolean(h.lab));
+      })
+      .catch(() => {
+        if (alive) setLab(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const prepMode = lab && hqPrep ? "hq" : "none";
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -133,9 +156,10 @@ export default function StudioPage() {
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions,
+              prepMode,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions);
-      start(resp, "fast");
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, prepMode);
+      start(resp, "fast", prepMode);
     } catch (e) {
       clear();
       setError(e instanceof Error ? e.message : "Job failed");
@@ -256,6 +280,26 @@ export default function StudioPage() {
                     <span className="studio-switch__thumb" />
                   </span>
                 </label>
+
+                {lab && (
+                  <label
+                    className="studio-option-row studio-caption-toggle"
+                    data-testid="hq-prep-toggle"
+                  >
+                    <div>
+                      <div className="studio-option-row__label">{hqPrepToggleLabel()}</div>
+                      <div className="studio-option-row__hint">{hqPrepToggleHint()}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={hqPrep}
+                      onChange={(e) => setHqPrep(e.target.checked)}
+                    />
+                    <span className="studio-switch" data-on={hqPrep} aria-hidden="true">
+                      <span className="studio-switch__thumb" />
+                    </span>
+                  </label>
+                )}
 
                 <div className="studio-option-row studio-option-row--static">
                   <span className="studio-option-row__label">Output size</span>

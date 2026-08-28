@@ -75,6 +75,8 @@ from .jobs import (
     Job,
     JobSource,
     JobStore,
+    lab_enabled,
+    normalize_prep_mode,
     source_copy_status,
     source_files_ready,
     variant_on_disk,
@@ -148,6 +150,7 @@ from .sessions import (
     sign_view,
 )
 from .sheets import GoogleSheets, SheetsClient
+from .telemetry import init as init_telemetry
 from .tenant_runtime import TenantHub
 from .tenants import (
     ADMIN_EMAIL_ENV,
@@ -159,6 +162,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
+from .usage import week_rollup
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
@@ -437,6 +441,7 @@ def create_app(
     admin_email = (auth_env.get(ADMIN_EMAIL_ENV) or "").strip() or None
     data_dir = fallback_store._ws.root
 
+    init_telemetry()
     app = FastAPI(title="variant-maker control plane")
     tenants: TenantStore | None = None
     hub: TenantHub | None = None
@@ -716,6 +721,7 @@ def create_app(
             owner = users[0].email
         bundle = hub.bundle(ws.id)
         q = bundle.store.queue()
+        week = week_rollup(bundle.ws)
         ordered = sorted(bundle.store.list(), key=lambda j: j.created_utc or "", reverse=True)
         last_job_utc = ordered[0].created_utc if ordered else None
         last_error = next((j.error for j in ordered if j.error), None)
@@ -732,6 +738,9 @@ def create_app(
             running=int(q.get("running") or 0),
             fast=int(q.get("fast") or 0),
             hq=int(q.get("hq") or 0),
+            week_fast=week.fast_copies,
+            week_hq=week.hq_preps,
+            week_packs=week.packs,
             last_job_utc=last_job_utc,
             last_error=last_error,
             experience=getattr(ws, "experience", None) or "agency",
@@ -866,10 +875,18 @@ def create_app(
         finally:
             tenant_cv.reset(token)
 
+    def _prep_mode_for_request(raw: str) -> str:
+        mode = normalize_prep_mode(raw)
+        if mode == "hq" and not lab_enabled():
+            raise HTTPException(
+                status_code=400,
+                detail="HQ reconstruct is lab-only. Leave it off, or use lab Studio.",
+            )
+        return mode
+
     @app.get("/api/health")
     def health() -> dict:
-        raw = (os.environ.get("VARIANT_LAB") or "").strip().lower()
-        return {"status": "ok", "lab": raw in {"1", "true", "yes"}}
+        return {"status": "ok", "lab": lab_enabled()}
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
         assert tenants is not None
@@ -1157,11 +1174,13 @@ def create_app(
     async def create_job(files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
-                          generate_captions: bool = Form(False)) -> CreateJobResponse:
+                          generate_captions: bool = Form(False),
+                          prep_mode: str = Form("none")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
+            prep_mode=_prep_mode_for_request(prep_mode),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1207,6 +1226,7 @@ def create_app(
         allow_creative_escalate: bool = Form(True),
         quality_mode: str = Form("fast"),
         generate_captions: bool = Form(False),
+        prep_mode: str = Form("none"),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1222,6 +1242,7 @@ def create_app(
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
+            prep_mode=_prep_mode_for_request(prep_mode),
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1258,6 +1279,7 @@ def create_app(
                 allow_creative_escalate=body.allow_creative_escalate,
                 quality_mode=body.quality_mode,
                 generate_captions=body.generate_captions,
+                prep_mode=_prep_mode_for_request(body.prep_mode),
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1285,7 +1307,10 @@ def create_app(
                          state=job.state,
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
-                         error=job.error)
+                         error=job.error,
+                         quality_mode=job.quality_mode,
+                         prep_mode=job.prep_mode,
+                         prep_status=job.prep_status)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
     def cancel_job(job_id: str) -> JobDetail:
@@ -1296,7 +1321,10 @@ def create_app(
                          state=job.state,
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
-                         error=job.error)
+                         error=job.error,
+                         quality_mode=job.quality_mode,
+                         prep_mode=job.prep_mode,
+                         prep_status=job.prep_status)
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:

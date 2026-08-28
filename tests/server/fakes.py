@@ -16,6 +16,7 @@ class FakeRunner:
         # default (empty plan): every variant is "ok".
         # Pass a {variant_index: status} dict to override specific indices.
         self.plan = plan or {}
+        self.calls: list[tuple[str, int, str]] = []
 
     def _status(self, i: int) -> str:
         return self.plan.get(i, "ok")
@@ -27,6 +28,7 @@ class FakeRunner:
             cancel_token=None) -> SourceResult:
         self.last_quality_mode = quality_mode
         self.last_allow_creative_escalate = allow_creative_escalate
+        self.calls.append((quality_mode, count, source_path))
         os.makedirs(out_dir, exist_ok=True)
         variants = []
         for i in range(1, count + 1):

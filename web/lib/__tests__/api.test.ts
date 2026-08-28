@@ -63,7 +63,18 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("count")).toBe("3");
     expect(body.get("quality_mode")).toBe("fast");
     expect(body.get("generate_captions")).toBe("false");
+    expect(body.get("prep_mode")).toBe("none");
     expect(body.getAll("files").length).toBe(1);
+  });
+
+  it("sends prep_mode hq when reconstruct-first is on", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", false, "hq");
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("quality_mode")).toBe("fast");
+    expect(body.get("prep_mode")).toBe("hq");
   });
 
   it("sends generate_captions true when requested", async () => {
@@ -294,6 +305,28 @@ describe("createJobFromDrive", () => {
       quality_mode: "hq",
       allow_creative_escalate: false,
       generate_captions: false,
+      prep_mode: "none",
+    });
+  });
+
+  it("sends prep_mode hq when reconstruct-first is on", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1"],
+      count: 4,
+      prepMode: "hq",
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1"],
+      count: 4,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: false,
+      prep_mode: "hq",
     });
   });
 
@@ -314,6 +347,7 @@ describe("createJobFromDrive", () => {
       quality_mode: "fast",
       allow_creative_escalate: true,
       generate_captions: true,
+      prep_mode: "none",
     });
   });
 });

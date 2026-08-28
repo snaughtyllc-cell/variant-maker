@@ -12,7 +12,7 @@ import {
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const { jobId, progress, complete, clear, qualityMode, prepMode } = useRun();
   const [cancelling, setCancelling] = useState(false);
 
   async function handleCancel() {
@@ -107,7 +107,7 @@ export function ProgressPanel() {
         ? emptyFail
           ? "The job ended without any playable variants. Try a smaller 1080p file."
           : "All variants done — open Gallery, or New run for another pack"
-        : liveRunSubcopy("fast");
+        : liveRunSubcopy(qualityMode, prepMode ?? "none");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>

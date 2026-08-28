@@ -56,6 +56,59 @@ def test_create_job_quality_mode_hq(tmp_path):
     assert store._runner.last_quality_mode == "hq"
 
 
+def test_create_job_prep_mode_hq_rejected_when_not_lab(tmp_path, monkeypatch):
+    monkeypatch.delenv("VARIANT_LAB", raising=False)
+    client, store = _client(tmp_path)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "2", "quality_mode": "fast", "prep_mode": "hq"},
+    )
+    assert resp.status_code == 400
+    assert "lab" in resp.json()["detail"].lower()
+    assert store.list() == []
+
+
+def test_create_job_from_uploads_prep_mode_hq_rejected_when_not_lab(tmp_path, monkeypatch):
+    monkeypatch.delenv("VARIANT_LAB", raising=False)
+    client, store = _client(tmp_path)
+    payload = b"clip-bytes"
+    init = client.post(
+        "/api/uploads",
+        data={"filename": "clip.mp4", "size": str(len(payload))},
+    )
+    uid = init.json()["upload_id"]
+    client.put(f"/api/uploads/{uid}?offset=0", content=payload)
+    resp = client.post(
+        "/api/jobs/from-uploads",
+        data={"upload_ids": uid, "count": "1", "prep_mode": "hq"},
+    )
+    assert resp.status_code == 400
+    assert "lab" in resp.json()["detail"].lower()
+    assert store.list() == []
+
+
+def test_create_job_prep_mode_hq_then_fast(tmp_path, monkeypatch):
+    monkeypatch.setenv("VARIANT_LAB", "1")
+    client, store = _client(tmp_path)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "2", "quality_mode": "fast", "prep_mode": "hq"},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job.prep_mode == "hq"
+    assert job.quality_mode == "fast"
+    assert [(c[0], c[1]) for c in store._runner.calls] == [("hq", 1), ("fast", 2)]
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["prep_mode"] == "hq"
+    assert detail["quality_mode"] == "fast"
+    assert len(detail["sources"][0]["variants"]) == 2
+
+
 def test_get_job_detail_shows_ok_variants_and_counts(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",
@@ -179,7 +232,10 @@ def test_chunked_upload_then_create_job(tmp_path):
     assert r1.status_code == 200 and r2.status_code == 200
     job = client.post(
         "/api/jobs/from-uploads",
-        data={"upload_ids": upload_id, "count": "1", "allow_creative_escalate": "true"},
+        data={
+            "upload_ids": upload_id, "count": "1",
+            "allow_creative_escalate": "true", "prep_mode": "none",
+        },
     )
     assert job.status_code == 201
     body = job.json()

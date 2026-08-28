@@ -27,6 +27,14 @@ describe("hqWaitCopy", () => {
     expect(liveRunSubcopy("fast")).toMatch(/tile/i);
   });
 
+  it("reconstruct-first names one GPU pass then Fast, not a 20-pack HQ", () => {
+    const copy = liveRunSubcopy("fast", "hq");
+    expect(copy).toMatch(/reconstruct/i);
+    expect(copy).toMatch(/one/i);
+    expect(copy).toMatch(/Fast/i);
+    expect(copy).not.toMatch(/20 HQ/);
+  });
+
   it("slot labels stay short on the tile", () => {
     expect(inFlightSlotLabel("waiting")).toBe("queued");
     expect(inFlightSlotLabel("rendering")).toBe("render");

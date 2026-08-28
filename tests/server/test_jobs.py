@@ -3,8 +3,8 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Callable
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.events import VariantEvent
@@ -729,3 +729,72 @@ def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     assert caps[0] != caps[1]
     assert "Copy 1 of 2" in caps[0]
     assert "Copy 2 of 2" in caps[1]
+
+
+def test_hq_prep_runs_hq_once_then_fast_from_prep_file(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"orig")], count=3, prep_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    assert job.quality_mode == "fast"
+    assert job.prep_mode == "hq"
+    assert [(c[0], c[1]) for c in runner.calls] == [("hq", 1), ("fast", 3)]
+    hq_path, fast_path = runner.calls[0][2], runner.calls[1][2]
+    assert fast_path.endswith("prep_hq.mp4")
+    assert hq_path != fast_path
+    assert os.path.isfile(fast_path)
+    src = job.sources[0]
+    assert src.prep_status == "done"
+    assert len(src.variants) == 3
+    assert [v.filename for v in src.variants] == ["v01.mp4", "v02.mp4", "v03.mp4"]
+    assert all(v.status == "ok" for v in src.variants)
+
+
+def test_hq_prep_failure_does_not_fast_from_original(tmp_path):
+    runner = FakeRunner({1: "uniqueness_fail"})
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"orig")], count=3, prep_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    assert [c[0] for c in runner.calls] == ["hq"]
+    src = job.sources[0]
+    assert src.prep_status == "failed"
+    assert src.variants == []
+    assert job.error is not None
+    assert "reconstruct" in job.error.lower()
+
+
+def test_hq_prep_swallows_hq_variant_events(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=2, prep_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    assert len(job.sources[0].variants) == 2
+    dones = [e for e in job.events if e.state == "done"]
+    assert [e.index for e in dones] == [1, 2]
+
+
+def test_hq_prep_persists_and_hydrates(tmp_path):
+    first = JobStore(Workspace(str(tmp_path)), FakeRunner())
+    job = first.create_job([("a.mp4", b"x")], count=1, prep_mode="hq")
+    first.wait(job.job_id, timeout=5)
+    job_id = job.job_id
+    second = JobStore(Workspace(str(tmp_path)), FakeRunner())
+    assert second.hydrate_from_disk() == 1
+    loaded = second.get(job_id)
+    assert loaded is not None
+    assert loaded.prep_mode == "hq"
+    assert loaded.quality_mode == "fast"
+    assert loaded.sources[0].prep_status == "done"
+
+
+def test_regenerate_after_hq_prep_uses_prep_file(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=1, prep_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    src = job.sources[0]
+    runner.calls.clear()
+    store.regenerate(src.source_id, 1)
+    assert runner.calls[-1][0] == "fast"
+    assert runner.calls[-1][2].endswith("prep_hq.mp4")
+    assert len(src.variants) == 2

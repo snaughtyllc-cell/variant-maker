@@ -4,15 +4,20 @@ import { CreateJobResponse, SourceOut } from "./types";
 import { getJob } from "./api";
 import { useJobProgress } from "./useJobProgress";
 import { RunProgress } from "./progress";
-import { QualityMode } from "./hqWaitCopy";
+import { PrepMode, QualityMode } from "./hqWaitCopy";
 import { isPreparingJob, PREPARING_JOB_ID } from "./prepareCopy";
 
 type RunSource = { source_id: string; filename: string; requested: number };
 
 const QUALITY_KEY = "vm.quality";
+const PREP_KEY = "vm.prep";
 
 function readStoredQuality(): QualityMode {
   return "fast";
+}
+
+function readStoredPrep(): PrepMode {
+  return sessionStorage.getItem(PREP_KEY) === "hq" ? "hq" : "none";
 }
 
 interface RunCtx {
@@ -21,8 +26,9 @@ interface RunCtx {
   progress: RunProgress;
   complete: boolean;
   qualityMode: QualityMode;
+  prepMode: PrepMode;
   beginPrepare: (sources: RunSource[]) => void;
-  start: (resp: CreateJobResponse, qualityMode?: QualityMode) => void;
+  start: (resp: CreateJobResponse, qualityMode?: QualityMode, prepMode?: PrepMode) => void;
   clear: () => void;
 }
 
@@ -32,6 +38,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [sources, setSources] = useState<RunSource[]>([]);
   const [qualityMode, setQualityMode] = useState<QualityMode>("fast");
+  const [prepMode, setPrepMode] = useState<PrepMode>("none");
   const hydratedRef = useRef(false);
 
   // Hydrate jobId from sessionStorage on mount; if sources are empty, fetch job detail once
@@ -45,6 +52,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     setJobId(saved);
     setQualityMode(readStoredQuality());
+    setPrepMode(readStoredPrep());
     // sources will be empty after a hard reload — fetch once to seed them
     getJob(saved)
       .then((detail) => {
@@ -60,9 +68,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         // 404 or old/cleared job — full reset via clear()
         sessionStorage.removeItem("vm.job");
         sessionStorage.removeItem(QUALITY_KEY);
+        sessionStorage.removeItem(PREP_KEY);
         setJobId(null);
         setSources([]);
         setQualityMode("fast");
+        setPrepMode("none");
       });
   }, []);
 
@@ -74,7 +84,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setJobId(PREPARING_JOB_ID);
   }
 
-  function start(resp: CreateJobResponse, _qualityMode: QualityMode = "fast") {
+  function start(
+    resp: CreateJobResponse,
+    _qualityMode: QualityMode = "fast",
+    nextPrep: PrepMode = "none",
+  ) {
     const id = resp.job_id;
     const srcs: RunSource[] = resp.sources.map((s) => ({
       source_id: s.source_id,
@@ -83,21 +97,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }));
     sessionStorage.setItem("vm.job", id);
     sessionStorage.setItem(QUALITY_KEY, "fast");
+    sessionStorage.setItem(PREP_KEY, nextPrep);
     setSources(srcs);
     setJobId(id);
     setQualityMode("fast");
+    setPrepMode(nextPrep);
   }
 
   function clear() {
     sessionStorage.removeItem("vm.job");
     sessionStorage.removeItem(QUALITY_KEY);
+    sessionStorage.removeItem(PREP_KEY);
     setJobId(null);
     setSources([]);
     setQualityMode("fast");
+    setPrepMode("none");
   }
 
   return (
-    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, beginPrepare, start, clear }}>
+    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, prepMode, beginPrepare, start, clear }}>
       {children}
     </Ctx.Provider>
   );

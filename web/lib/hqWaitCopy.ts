@@ -1,6 +1,7 @@
 /** Studio copy while HQ (Phase 8) sits on v01 with no thumb. */
 
 export type QualityMode = "fast" | "hq";
+export type PrepMode = "none" | "hq";
 export type InFlightVerb =
   | "rendering"
   | "checking"
@@ -77,7 +78,17 @@ export function inFlightSummaryLine(
     .join(" · ");
 }
 
-export function liveRunSubcopy(qualityMode: QualityMode = "fast"): string {
+export function liveRunSubcopy(
+  qualityMode: QualityMode = "fast",
+  prepMode: PrepMode = "none",
+): string {
+  if (prepMode === "hq") {
+    return (
+      "Reconstruct first: one HQ GPU pass, then Fast variants. " +
+      "The first minutes have no tiles — that is not a hang. " +
+      "Gallery stays empty until a Fast variant finishes."
+    );
+  }
   if (qualityMode === "hq") {
     return `${HQ_RENDERING_HINT} Gallery stays empty until a variant finishes.`;
   }

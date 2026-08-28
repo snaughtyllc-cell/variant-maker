@@ -4,6 +4,8 @@ import {
   captionSnippet,
   captionToggleHint,
   captionToggleLabel,
+  hqPrepToggleHint,
+  hqPrepToggleLabel,
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
@@ -25,6 +27,14 @@ describe("prepare copy", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
     expect(captionToggleHint()).toMatch(/gallery/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
+  });
+
+  it("names reconstruct-first as one GPU pass, then Fast — not an HQ 20-pack", () => {
+    expect(hqPrepToggleLabel()).toMatch(/reconstruct first/i);
+    expect(hqPrepToggleLabel()).toMatch(/HQ/i);
+    expect(hqPrepToggleHint()).toMatch(/one GPU pass/i);
+    expect(hqPrepToggleHint()).toMatch(/Fast/i);
+    expect(hqPrepToggleHint()).not.toMatch(/20-pack/i);
   });
 
   it("explains the real ~38% pass line, not a 65% verified band", () => {

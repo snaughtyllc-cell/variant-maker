@@ -79,7 +79,8 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is coming soon.
+                Fast is the usual pack. HQ as a 20-pack is off.
+                Reconstruct first is the lab toggle in Options.
               </span>
             </span>
             <select
@@ -98,7 +99,7 @@ export function AdvancedPanel({
             >
               <option value="fast">Fast</option>
               <option value="hq" disabled>
-                HQ — coming soon
+                HQ — not a 20-pack
               </option>
             </select>
           </div>
