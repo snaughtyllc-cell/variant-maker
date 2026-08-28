@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
 import { ESCALATED_TITLE } from "@/lib/format";
+import { uniquenessGalleryBadgeTitle } from "@/lib/prepareCopy";
 
 function variant(over: Partial<VariantOut> & { caption?: string | null } = {}): VariantOut {
   return {
@@ -91,7 +92,9 @@ describe("VariantCard uniqueness", () => {
         onToggle={() => {}}
       />,
     );
-    expect(screen.getByText("50%")).toBeInTheDocument();
+    const badge = screen.getByText("50%");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute("title", uniquenessGalleryBadgeTitle(50));
     expect(screen.queryByText("esc")).not.toBeInTheDocument();
     expect(screen.queryByText("95")).not.toBeInTheDocument();
     expect(screen.queryByText(/spatial/i)).not.toBeInTheDocument();

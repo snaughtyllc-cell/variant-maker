@@ -1,7 +1,18 @@
+export interface QualityHead {
+  uniqueness?: number | null;
+  sim?: number | null;
+  status?: string | null;
+  available?: boolean;
+  bits?: number | null;
+  backend?: string | null;
+  n_frames?: number | null;
+  metric?: string | null;
+}
 export interface Quality {
   vmaf: number; histogram_ok: boolean; regen_count: number; passed: boolean;
   spatial_vmaf: number | null; spatial_ok: boolean | null;
   bits?: number | null;
+  heads?: Record<string, QualityHead> | null;
 }
 export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
