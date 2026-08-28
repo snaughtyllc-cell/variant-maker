@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  GALLERY_MOBILE_TILE_MIN_PX,
   GALLERY_PREVIEW_TILE_PX,
   REVIEW_FILMSTRIP_TILE_H,
   REVIEW_FILMSTRIP_TILE_W,
@@ -12,6 +13,12 @@ describe("gallery preview tile size", () => {
   it("caps preview tiles at a small–medium width, not native 1080", () => {
     expect(GALLERY_PREVIEW_TILE_PX).toBeGreaterThanOrEqual(140);
     expect(GALLERY_PREVIEW_TILE_PX).toBeLessThanOrEqual(180);
+  });
+
+  it("sizes phone tiles so three to four fit in a row", () => {
+    expect(GALLERY_MOBILE_TILE_MIN_PX).toBeGreaterThanOrEqual(72);
+    expect(GALLERY_MOBILE_TILE_MIN_PX).toBeLessThanOrEqual(96);
+    expect(GALLERY_MOBILE_TILE_MIN_PX).toBeLessThan(GALLERY_PREVIEW_TILE_PX);
   });
 
   it("names the locked preview frame classes", () => {
