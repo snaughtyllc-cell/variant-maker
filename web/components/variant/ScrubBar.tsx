@@ -66,6 +66,18 @@ export function ScrubBar({ videos }: ScrubBarProps) {
     }
   }, [playing, videos, startRaf, stopRaf]);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== " " && e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+      e.preventDefault();
+      togglePlayPause();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePlayPause]);
+
   // Seek all videos to a fraction of the primary video's duration
   const seekToFraction = useCallback((fraction: number) => {
     const pv = primaryVideo();

@@ -1,15 +1,15 @@
 "use client";
 import { pct01 } from "@/lib/format";
-import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import { uniquenessCustomerLabel, uniquenessPassHint, uniquenessPassPct } from "@/lib/prepareCopy";
 
 interface QualityPanelProps {
   uniqueness?: number | null;
   uniquenessStatus?: string | null;
   bestEffort?: boolean;
+  packAvgPct?: number | null;
 }
 
-/** 65% is the verified-original band the product treats as a safe-to-post signal. */
-const VERIFIED_ORIGINAL_PCT = 65;
+const PASS_PCT = uniquenessPassPct();
 
 function Meter({ pct, color }: { pct: number; color: string }) {
   return (
@@ -37,7 +37,7 @@ function Meter({ pct, color }: { pct: number; color: string }) {
       <div
         style={{
           position: "absolute",
-          left: `${VERIFIED_ORIGINAL_PCT}%`,
+          left: `${PASS_PCT}%`,
           top: 0,
           bottom: 0,
           width: 2,
@@ -53,6 +53,7 @@ export function QualityPanel({
   uniqueness,
   uniquenessStatus,
   bestEffort,
+  packAvgPct,
 }: QualityPanelProps) {
   const uniquenessPct = uniqueness != null ? pct01(uniqueness) : null;
   const uniquenessOk = uniquenessStatus === "ok";
@@ -81,6 +82,17 @@ export function QualityPanel({
         >
           {uniquenessCustomerLabel()}
         </div>
+        {packAvgPct != null && (
+          <div
+            style={{
+              fontFamily: "var(--font-space-grotesk), monospace",
+              fontSize: 10.5,
+              color: "var(--color-muted2)",
+            }}
+          >
+            pack avg {packAvgPct}%
+          </div>
+        )}
       </div>
 
       {bestEffort && (
@@ -130,7 +142,7 @@ export function QualityPanel({
                 color: "var(--color-muted2)",
               }}
             >
-              {VERIFIED_ORIGINAL_PCT}% = verified-original band
+              {uniquenessPassHint()}
             </div>
           </div>
         </div>

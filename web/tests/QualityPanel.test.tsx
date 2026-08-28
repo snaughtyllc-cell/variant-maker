@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { QualityPanel } from "@/components/variant/QualityPanel";
-import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import { uniquenessCustomerLabel, uniquenessPassHint } from "@/lib/prepareCopy";
 
 describe("QualityPanel", () => {
   it("shows an Originality meter and hides technical quality rows", () => {
@@ -24,6 +24,9 @@ describe("QualityPanel", () => {
     expect(screen.queryByText("Similarity")).not.toBeInTheDocument();
     expect(screen.queryByText("✗ fail")).not.toBeInTheDocument();
     expect(screen.queryByText(/stronger uniqueness pass/i)).not.toBeInTheDocument();
+    expect(screen.getByText(uniquenessPassHint())).toBeInTheDocument();
+    expect(screen.queryByText(/verified-original/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/65% =/)).not.toBeInTheDocument();
   });
 
   it("uses mild copy when a copy needed extra processing", () => {

@@ -76,14 +76,19 @@ describe("Gallery variant sheet open", () => {
     searchParams.delete("v");
   });
 
-  it("opens the sheet with history.pushState so Gallery does not remount", () => {
+  it("opens the review pane in the grid so packs stay on screen", () => {
     const pushState = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
     render(<GalleryContent />);
     fireEvent.click(screen.getByText("v03"));
     expect(pushState).toHaveBeenCalledWith(null, "", "/gallery?v=6bc8f627184a:3");
     expect(routerPush).not.toHaveBeenCalled();
     expect(routerReplace).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /variant review/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /back to grid/i })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: /packs/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/v03/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/DRAG THE DIVIDER TO WIPE/i)).toBeInTheDocument();
     pushState.mockRestore();
   });
 

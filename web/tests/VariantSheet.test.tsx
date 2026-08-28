@@ -35,6 +35,28 @@ function variant(over: Partial<VariantOut> = {}): VariantOut {
   };
 }
 
+describe("VariantSheet embedded review", () => {
+  it("renders in the pane without a dialog overlay", () => {
+    render(
+      <VariantSheet
+        embedded
+        sourceId="s1"
+        sourceName="boil"
+        variants={[variant()]}
+        index={0}
+        onClose={() => {}}
+        onNav={() => {}}
+        onRegenerate={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /variant review/i })).toBeInTheDocument();
+    expect(screen.getByText(/DRAG THE DIVIDER TO WIPE/i)).toBeInTheDocument();
+    expect(screen.getByText(/v03/)).toBeInTheDocument();
+    expect(screen.getByText(/of 1/)).toBeInTheDocument();
+  });
+});
+
 describe("VariantSheet layout", () => {
   it("keeps header as a row and the body as the scroll container", () => {
     render(

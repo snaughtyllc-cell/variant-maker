@@ -18,6 +18,7 @@ interface VariantActionsProps {
   sourceId: string;
   variant: VariantOut;
   onRegenerate: () => void;
+  onSendToDrive?: () => void;
 }
 
 const EYEBROW_STYLE: React.CSSProperties = {
@@ -29,7 +30,7 @@ const EYEBROW_STYLE: React.CSSProperties = {
   color: "var(--color-violet)",
 };
 
-export function VariantActions({ sourceId, variant, onRegenerate }: VariantActionsProps) {
+export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive }: VariantActionsProps) {
   const [busy, setBusy] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -214,6 +215,18 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
           gap: 9,
         }}
       >
+        {onSendToDrive && (
+          <button
+            type="button"
+            onClick={onSendToDrive}
+            className="variant-review__send"
+          >
+            <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">
+              cloud_upload
+            </span>
+            Send to Drive
+          </button>
+        )}
         {offerPhotos ? (
           <button
             type="button"
@@ -221,39 +234,44 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             onClick={handleSaveVariant}
             disabled={saveBusy}
             style={{
-              flex: 1,
+              flex: onSendToDrive ? undefined : 1,
+              width: onSendToDrive ? 50 : undefined,
               height: 50,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               borderRadius: 13,
-              background: "var(--ink)",
-              border: "none",
-              color: "#f6fbfb",
+              background: onSendToDrive ? "transparent" : "var(--ink)",
+              border: onSendToDrive ? "1px solid var(--color-line)" : "none",
+              color: onSendToDrive ? "#23393e" : "#f6fbfb",
               fontSize: 14,
               fontWeight: 700,
               cursor: saveBusy ? "wait" : "pointer",
               opacity: saveBusy ? 0.7 : 1,
             }}
+            aria-label={onSendToDrive ? "Download variant" : undefined}
           >
             <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">download</span>
-            {saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true)}
+            {!onSendToDrive && (saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true))}
           </button>
         ) : (
           <a
             href={variant.file_url}
             download={variant.filename}
+            aria-label="Download variant"
             style={{
-              flex: 1,
+              flex: onSendToDrive ? undefined : 1,
+              width: onSendToDrive ? 50 : undefined,
               height: 50,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               borderRadius: 13,
-              background: "var(--ink)",
-              color: "#f6fbfb",
+              background: onSendToDrive ? "transparent" : "var(--ink)",
+              border: onSendToDrive ? "1px solid var(--color-line)" : "none",
+              color: onSendToDrive ? "#23393e" : "#f6fbfb",
               fontSize: 14,
               fontWeight: 700,
               textDecoration: "none",
@@ -261,7 +279,7 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             }}
           >
             <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">download</span>
-            Download variant
+            {!onSendToDrive && "Download variant"}
           </a>
         )}
 

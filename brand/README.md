@@ -43,7 +43,7 @@ nav matches the surrounding chrome — the palette in `web/app/globals.css` is u
 | Ink | `#14131A` | Brand primary surface |
 | Violet | `#A473F5` | Brand accent, echoes |
 | Violet deep | `#7C4FCC` | Brand accent on light backgrounds |
-| Mint | `#5FDCB2` | Reserved: "verified original" |
+| Mint | `#5FDCB2` | Originality pass (~38% vs source). Not a 65% gate. |
 | Paper | `#FBFAFC` | Brand light surface |
 | **Studio aqua** | **`#16c8d3`** | **What the mark actually renders as in-app** |
 | **Studio ink** | **`#172124`** | **Icon tile in-app** |

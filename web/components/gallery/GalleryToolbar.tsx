@@ -28,6 +28,15 @@ interface GalleryToolbarProps {
   saveHint?: string | null;
   onSave: () => void;
   saveMsg?: string | null;
+  /** When set, the bar is the variant-review chrome (Back to grid + vNN). */
+  review?: {
+    variantLabel: string;
+    onBack: () => void;
+    onPrev: () => void;
+    onNext: () => void;
+    canPrev: boolean;
+    canNext: boolean;
+  } | null;
 }
 
 export function GalleryToolbar({
@@ -48,11 +57,18 @@ export function GalleryToolbar({
   saveHint,
   onSave,
   saveMsg,
+  review,
 }: GalleryToolbarProps) {
   const sendDisabled = sendDisabledReason != null;
   const saveDisabled = saveDisabledReason != null || !!saveBusy;
   return (
     <section className="gallery-toolbar" aria-label="Gallery controls">
+      {review && (
+        <button type="button" className="gallery-toolbar__back" onClick={review.onBack}>
+          <span className="material-symbols-rounded" aria-hidden="true">grid_view</span>
+          Back to grid
+        </button>
+      )}
       <div className="gallery-toolbar__crumb">
         <span className="gallery-toolbar__crumb-section">GALLERY</span>
         {crumb && (
@@ -61,7 +77,36 @@ export function GalleryToolbar({
             <span className="gallery-toolbar__crumb-name" title={crumb}>{crumb}</span>
           </>
         )}
+        {review && (
+          <>
+            <span className="gallery-toolbar__crumb-sep" aria-hidden="true">/</span>
+            <span className="gallery-toolbar__crumb-variant">{review.variantLabel}</span>
+          </>
+        )}
       </div>
+      {review && (
+        <div className="gallery-toolbar__nav">
+          <button
+            type="button"
+            className="gallery-toolbar__nav-btn"
+            onClick={review.onPrev}
+            disabled={!review.canPrev}
+            aria-label="Previous variant"
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">chevron_left</span>
+          </button>
+          <button
+            type="button"
+            className="gallery-toolbar__nav-btn"
+            onClick={review.onNext}
+            disabled={!review.canNext}
+            aria-label="Next variant"
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      )}
+      {!review && (
       <div className="gallery-toolbar__actions">
         <div className="gallery-segments" aria-label="Pack filter">
           <button type="button" data-active={filterMode === "all"} onClick={() => onFilter("all")}>
@@ -112,6 +157,7 @@ export function GalleryToolbar({
           {sendDisabled && <small>{sendDisabledReason}</small>}
         </span>
       </div>
+      )}
       {saveMsg && <p className="gallery-toolbar__save-msg">{saveMsg}</p>}
     </section>
   );

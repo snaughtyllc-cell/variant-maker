@@ -6,12 +6,15 @@ import {
   filterSources,
   gallerySearchPath,
   isFileReady,
+  packOriginalityColor,
   parseGalleryVariantQuery,
   pushGallerySearch,
   sortSources,
+  tileOriginalityColor,
   zipEmptyCopy,
   removePackCopy,
 } from "@/lib/gallery";
+import { uniquenessPassPct } from "@/lib/prepareCopy";
 const mk = (id: string, shortfall: number, created_utc = "") => ({
   source_id: id, filename: id, requested: 5, delivered: 5 - shortfall, shortfall,
   variants: [], created_utc,
@@ -80,6 +83,18 @@ describe("gallery helpers", () => {
   it("builds a Gallery path that can be pushed without a Next.js navigation", () => {
     expect(gallerySearchPath("abc", 3)).toBe("/gallery?v=abc:3");
     expect(gallerySearchPath()).toBe("/gallery");
+  });
+
+  it("colors originality from the 38% pass line, not a 65% verified band", () => {
+    expect(uniquenessPassPct()).toBe(38);
+    expect(tileOriginalityColor(null)).toBe("var(--color-muted2)");
+    expect(tileOriginalityColor(37)).toBe("var(--color-amber2)");
+    expect(tileOriginalityColor(38)).toBe("var(--color-mint)");
+    expect(tileOriginalityColor(52)).toBe("var(--color-mint)");
+    expect(tileOriginalityColor(64)).toBe("var(--color-mint)");
+    expect(packOriginalityColor(null)).toBe("var(--color-muted2)");
+    expect(packOriginalityColor(37)).toBe("var(--color-amber)");
+    expect(packOriginalityColor(38)).toBe("var(--color-violet)");
   });
 
   it("writes the Gallery query with history.pushState, not a page remount", () => {
