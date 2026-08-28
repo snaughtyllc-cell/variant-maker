@@ -11,9 +11,9 @@ Trim supports an independent START (`trim_s`) and END (`trim_end_s`, a fingerpri
 micro-trim off the tail); end trim needs the source duration (both builders take `src`)
 since ffmpeg's `trim=end=` is an absolute timestamp, not an offset from the tail. Both
 streams mirror the identical trim window, keeping video/audio in sync. Crop punch-in
-carries an x/y offset fraction (fingerprint; 0.5/0.5 == centered) and an optional
-start→end lerp (`crop_x_end_frac` / `crop_y_end_frac`) of the window over remaining
-time. The resize uses color.even_scale_filter (the safe even form); color.zscale_convert_filter
+carries an x/y offset fraction (fingerprint; 0.5/0.5 == centered), an optional
+start→end smoothstep (`crop_x_end_frac` / `crop_y_end_frac`) of the window over
+remaining time, and a two-sine handheld wander. The resize uses color.even_scale_filter (the safe even form); color.zscale_convert_filter
 only fires if the output target ever differs from the carried source tags. NEVER let a naive scale
 reinterpret color range. Fast uniqueness is a reconstructive rebuild (down to
 `rebuild_scale` then back to the platform canvas) — not a ±32 px peek.
@@ -30,7 +30,14 @@ from .color import (
 )
 from .platforms import Platform
 from .probe import SourceInfo
-from .sampler import clamp_trims
+from .sampler import (
+    CROP_OFFSET_HI,
+    CROP_OFFSET_LO,
+    CROP_Y_KEEP_BOTTOM_HI,
+    CROP_Y_KEEP_BOTTOM_LO,
+    clamp_trims,
+)
+from .shot import keeps_bottom_captions
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
@@ -175,8 +182,14 @@ def _remaining_duration_s(v: dict, duration_s: float) -> float:
     return max(0.0, duration_s - start_s - end_s)
 
 
-def _crop_filter(v: dict, duration_s: float) -> str:
-    """Crop punch-in; lerp the window start→end when they differ (escaped commas)."""
+def _crop_filter(v: dict, duration_s: float, width: int | None = None, height: int | None = None) -> str:
+    """Crop punch-in; smoothstep + handheld when the window moves (escaped commas).
+
+    Missing/equal ends and zero handheld → today's static crop string. A real
+    start→end delta or handheld amp eases with smoothstep (not a linear ramp —
+    linear + integer crop is the hard pixel shift) and two sines, then a 2×
+    scale around the crop so 1px stair-steps get filtered on the way back down.
+    """
     crop_keep = v.get("crop_keep", 1.0)
     if crop_keep >= 1.0 - _EPS:
         return ""
@@ -184,17 +197,37 @@ def _crop_filter(v: dict, duration_s: float) -> str:
     y0 = float(v.get("crop_y_frac", 0.5))
     x1 = float(v.get("crop_x_end_frac", x0))
     y1 = float(v.get("crop_y_end_frac", y0))
+    amp_x = float(v.get("crop_hand_amp_x", 0.0) or 0.0)
+    amp_y = float(v.get("crop_hand_amp_y", 0.0) or 0.0)
+    p1 = float(v.get("crop_hand_p1", 2.4) or 2.4)
+    p2 = float(v.get("crop_hand_p2", 3.8) or 3.8)
     remaining = _remaining_duration_s(v, duration_s)
     drifting = abs(x1 - x0) >= _CROP_DRIFT_MIN or abs(y1 - y0) >= _CROP_DRIFT_MIN
-    if drifting and remaining > _CROP_DRIFT_MIN_DURATION_S:
-        keep = f"{crop_keep:.4f}"
-        p = f"min(max(t/{remaining:.4f}\\,0)\\,1)"
-        x = f"(iw-iw*{keep})*({x0:.4f}+({x1:.4f}-{x0:.4f})*{p})"
-        y = f"(ih-ih*{keep})*({y0:.4f}+({y1:.4f}-{y0:.4f})*{p})"
-        return f"crop=iw*{keep}:ih*{keep}:{x}:{y}"
+    handheld = amp_x > _EPS or amp_y > _EPS
+    if (not drifting and not handheld) or remaining <= _CROP_DRIFT_MIN_DURATION_S:
+        return (
+            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
+            f"(iw-iw*{crop_keep:.4f})*{x0:.4f}:(ih-ih*{crop_keep:.4f})*{y0:.4f}"
+        )
+    x_lo, x_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
+    if keeps_bottom_captions(width, height):
+        y_lo, y_hi = CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI
+    else:
+        y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
+    keep = f"{crop_keep:.4f}"
+    p = f"min(max(t/{remaining:.4f}\\,0)\\,1)"
+    # smoothstep s = p^2 * (3-2p) — ease in/out instead of a linear ramp.
+    s = f"{p}*{p}*(3-2*{p})"
+    osc = f"(sin(2*PI*t/{p1:.4f})+0.4*sin(2*PI*t/{p2:.4f}))"
+    hand_x = f"+{amp_x:.4f}*{osc}" if amp_x > _EPS else ""
+    hand_y = f"+{amp_y:.4f}*{osc}" if amp_y > _EPS else ""
+    xf = f"min(max({x0:.4f}+({x1:.4f}-{x0:.4f})*{s}{hand_x}\\,{x_lo:.4f})\\,{x_hi:.4f})"
+    yf = f"min(max({y0:.4f}+({y1:.4f}-{y0:.4f})*{s}{hand_y}\\,{y_lo:.4f})\\,{y_hi:.4f})"
+    crop = f"crop=iw*{keep}:ih*{keep}:(iw-iw*{keep})*{xf}:(ih-ih*{keep})*{yf}"
+    # 2× before crop, even-down after: half-pixel x/y, then the later platform scale.
     return (
-        f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
-        f"(iw-iw*{crop_keep:.4f})*{x0:.4f}:(ih-ih*{crop_keep:.4f})*{y0:.4f}"
+        f"scale=trunc(iw/2)*4:trunc(ih/2)*4,{crop},"
+        f"scale=trunc(iw/2)*2:trunc(ih/2)*2"
     )
 
 
@@ -276,8 +309,8 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(f"{trim_expr},setpts=PTS-STARTPTS")
 
     # crop punch-in with an x/y offset (fingerprint). Missing end = static start;
-    # a real start→end delta lerps the window over remaining duration.
-    crop = _crop_filter(v, src.duration_s)
+    # a real start→end delta or handheld amp eases the window over remaining duration.
+    crop = _crop_filter(v, src.duration_s, src.width, src.height)
     if crop:
         parts.append(crop)
 

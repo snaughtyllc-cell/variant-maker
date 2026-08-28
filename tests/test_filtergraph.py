@@ -634,10 +634,28 @@ def test_drifting_crop_lerps_window_with_escaped_commas():
     assert "0.6000" in vf
     assert "t/9.8000" in vf
     assert "min(max(t/9.8000\\,0)\\,1)" in vf
-    assert "(iw-iw*0.9600)*(0.4000+(0.5500-0.4000)*min(max(t/9.8000\\,0)\\,1))" in vf
-    assert "(ih-ih*0.9600)*(0.5000+(0.6000-0.5000)*min(max(t/9.8000\\,0)\\,1))" in vf
-    # Trim still resets PTS so t starts at 0 for the lerp.
+    # Ease, not a linear ramp — linear + integer crop is the hard pixel shift.
+    assert "*(3-2*" in vf or "3\\,-2*" in vf
+    assert "0.4000" in vf and "0.5500" in vf
+    # Half-pixel crop so 1px stair-steps get filtered on the way back down.
+    assert vf.index("scale=trunc(iw/2)*4:trunc(ih/2)*4") < vf.index("crop=")
     assert vf.index("setpts=PTS-STARTPTS") < vf.index("crop=")
+
+
+def test_handheld_crop_adds_two_sines_and_clamps_to_caption_band():
+    p = make_params(video={
+        "crop_keep": 0.88, "crop_x_frac": 0.50, "crop_y_frac": 0.95,
+        "crop_x_end_frac": 0.60, "crop_y_end_frac": 0.98,
+        "crop_hand_amp_x": 0.04, "crop_hand_amp_y": 0.01,
+        "crop_hand_p1": 2.0, "crop_hand_p2": 5.0,
+        "trim_s": 0.0, "trim_end_s": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(duration=12.0, w=720, h=1280), REELS)
+    assert "sin(2*PI*t/2.0000" in vf
+    assert "sin(2*PI*t/5.0000" in vf
+    assert "0.9000" in vf  # 720 caption floor
+    assert "1.0000" in vf
+    assert r"\," in vf
 
 
 def test_trim_end_only_uses_source_duration():

@@ -17,6 +17,7 @@ from variant_maker.sampler import (
     clamp_trims,
     derive_seed,
     disable_fast_pixel_ops,
+    ensure_crop_travel,
     sample,
     total_distortion,
 )
@@ -654,6 +655,8 @@ def test_crop_end_does_not_shift_existing_fingerprint_draws():
     assert "crop_y_end_frac" in plain["video"]
     assert "crop_x_end_frac" in head["video"]
     assert "crop_y_end_frac" in head["video"]
+    assert "crop_hand_amp_x" in plain["video"]
+    assert "crop_hand_p1" in plain["video"]
 
 
 def test_crop_end_fracs_in_same_legal_ranges_as_start():
@@ -666,8 +669,8 @@ def test_crop_end_fracs_in_same_legal_ranges_as_start():
 
 
 def test_crop_drift_respects_max_delta_for_shot():
-    assert CROP_DRIFT_MAX_TALKING_HEAD == pytest.approx(0.12)
-    assert CROP_DRIFT_MAX_DEFAULT == pytest.approx(0.20)
+    assert CROP_DRIFT_MAX_TALKING_HEAD == pytest.approx(0.24)
+    assert CROP_DRIFT_MAX_DEFAULT == pytest.approx(0.28)
     for s in SEEDS[:200]:
         th = sample(MEDIUM, s, shot="talking_head")["video"]
         assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
@@ -687,6 +690,38 @@ def test_crop_x_end_frac_is_unbudgeted():
     bumped["video"]["crop_x_end_frac"] = 0.0
     bumped["video"]["crop_y_end_frac"] = 1.0
     assert total_distortion(MEDIUM, bumped) == base
+
+
+def test_crop_travel_has_a_floor_so_the_window_actually_moves():
+    """Jeff barely saw the first pan — end can land on start. Force a floor."""
+    for s in SEEDS[:200]:
+        th = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) >= 0.08 - 1e-9
+        moved = sample(MEDIUM, s, shot="motion")["video"]
+        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) >= 0.10 - 1e-9
+
+
+def test_handheld_amps_stay_in_band_and_do_not_shift_main_rng():
+    seed = derive_seed(11, 5)
+    a = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    b = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    va, vb = a["video"], b["video"]
+    assert va["trim_end_s"] == vb["trim_end_s"]
+    assert va["resample_px"] == vb["resample_px"]
+    assert va["crop_hand_amp_x"] == vb["crop_hand_amp_x"]
+    assert 0.02 <= va["crop_hand_amp_x"] <= 0.06
+    assert 0.005 <= va["crop_hand_amp_y"] <= 0.016
+    assert 1.5 <= va["crop_hand_p1"] <= 3.6
+    assert va["crop_hand_p2"] > va["crop_hand_p1"]
+    y0, y1, ay = va["crop_y_frac"], va["crop_y_end_frac"], va["crop_hand_amp_y"]
+    assert y0 - ay >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+    assert y1 + ay <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+
+
+def test_ensure_crop_travel():
+    assert ensure_crop_travel(0.50, 0.50, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.58)
+    assert ensure_crop_travel(0.62, 0.62, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.54)
+    assert ensure_crop_travel(0.95, 0.95, 0.90, 1.00, 0.06, 0.09) == pytest.approx(1.00)
 
 
 def test_clamp_crop_drift():

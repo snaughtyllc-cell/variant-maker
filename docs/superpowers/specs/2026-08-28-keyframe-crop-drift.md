@@ -1,7 +1,7 @@
 # Look-safe keyframe crop drift (start→end pan)
 
 **Date:** 2026-08-28  
-**Status:** Implemented on `cursor/keyframe-crop-drift-cdb6` (PR #56). Labbing on Lab Fast / Lab Studio. Not Gemini. Do not pin live.  
+**Status:** Handheld v1 on `cursor/keyframe-crop-drift-cdb6` (PR #56). Labbing on Lab Fast / Lab Studio. Not Gemini. Do not pin live.  
 **Product name:** VaryForge  
 **Depends on:** `2026-08-24-caption-safe-crop.md`, `2026-08-25-ig-720-fast-20.md`,
 `2026-08-21-fast-shot-probe.md`, `2026-08-25-look-first.md`  
@@ -48,33 +48,43 @@ The rest of the graph (eq, grain, rebuild, warp) is unchanged.
 | Keep | Unchanged. Still unbudgeted. 720 TH remaps via `crop_keep_range_for_shot`. |
 | 1080 x/y | **0.35–0.65** start *and* end (caption-safe center, zero-mean at 0.5). |
 | Instagram 720 y | **0.90–1.00** start *and* end — leftover from the **top**, burned-in words stay. x stays 0.35–0.65. |
-| Max delta | **talking_head 0.12**; else **0.20** (`motion` or `shot=None`). Per axis, then clamp into the band. |
-| Budget | End fracs unbudgeted. `total_distortion` unchanged. |
+| Max delta | **talking_head 0.24**; else **0.28** (`motion` or `shot=None`). Per axis, then clamp into the band. |
+| Min X travel | **talking_head 0.08**; else **0.10**. `ensure_crop_travel` pushes end so the window actually moves (v1 could land on start — Jeff barely saw it). Y has no floor (720 band is only 0.10). |
+| Handheld | Separate-RNG `crop_hand_amp_x` / `crop_hand_amp_y` / `crop_hand_p1` / `crop_hand_p2`. Talking-head amp **0.02–0.06** x, **0.005–0.016** y; else **0.028–0.070** / **0.010–0.028**. Periods **1.5–3.6s** and a slower second sine. |
+| Budget | End fracs + handheld unbudgeted. `total_distortion` unchanged. |
 
-Micro drift: 0.12 of leftover on a 4–8% 1080 punch (or 10–14% 720 TH keep) is
-a slow slide, not a documentary pan. Talking-head is tighter so the face does
-not walk out of frame.
+The first lab pack (linear lerp, no floor, max 0.12) read as almost-static
+with a few hard pixel steps. Destination is **handheld footage**: a slow
+composition drift plus a two-sine wander, never a stair-step.
 
 ### Filtergraph
 
 `crop` `w`/`h` stay constant (ffmpeg evaluates size once). `x`/`y` are
-expressions. Commas inside `lerp` **must be escaped** (`\,`) so they are not
-filter separators:
+expressions. Commas inside `min`/`max` **must be escaped** (`\,`) so they
+are not filter separators. Linear `t` + integer crop x/y is the hard shift
+— use **smoothstep** `s = p*p*(3-2*p)` and a **2× scale** around the crop
+so 1px steps become half-pixels and get filtered on the way back down:
 
 ```
-crop=iw*K:ih*K:(iw-iw*K)*lerp(X0\,X1\,t/D):(ih-ih*K)*lerp(Y0\,Y1\,t/D)
+p = min(max(t/D\,0)\,1)
+s = p*p*(3-2*p)
+xf = min(max(X0+(X1-X0)*s + AX*(sin(2*PI*t/P1)+0.4*sin(2*PI*t/P2))\,XLO)\,XHI)
+scale=trunc(iw/2)*4:trunc(ih/2)*4, crop=iw*K:ih*K:(iw-iw*K)*xf:(ih-ih*K)*yf, scale=trunc(iw/2)*2:trunc(ih/2)*2
 ```
 
 `D` = remaining duration after head/tail trim (`duration_s - trim_s -
-trim_end_s`, floored to a tiny epsilon). Missing `*_end` → today’s static
-crop (existing goldens). `crop_keep ≈ 1` still omits crop.
+trim_end_s`, floored to a tiny epsilon). Missing `*_end` and zero handheld
+→ today’s static crop (existing goldens). `crop_keep ≈ 1` still omits crop.
+720 y start/end ± amp stay in **0.90–1.00** (filtergraph also clamps the
+expression). No extra rotate on talking-head — captions stay upright.
 
 `sample` and `filtergraph.build_*` stay **pure**.
 
 ### Quality / look floors stay
 
-- `_QUALITY_NEUTRAL` sets start **and** end fracs to `0.5` (and keep `1.0`)
-  so the VMAF proxy stays geometry-aligned. Do not VMAF the pan.
+- `_QUALITY_NEUTRAL` sets start **and** end fracs to `0.5`, handheld amps
+  to `0`, and keep `1.0` so the VMAF proxy stays geometry-aligned. Do not
+  VMAF the pan.
 - Look-first (`look.py`, coarse 16×28 luma MAE, max of the same 25/50/75)
   scores the **actual** file. Crop already can trip MAE; Jeff’s eye on the
   stills is the oracle. Look fail still blocks escalate.

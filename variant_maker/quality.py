@@ -25,6 +25,7 @@ from .probe import SourceInfo
 _QUALITY_NEUTRAL = {
     "crop_keep": 1.0, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
     "crop_x_end_frac": 0.5, "crop_y_end_frac": 0.5,
+    "crop_hand_amp_x": 0.0, "crop_hand_amp_y": 0.0,
     "rotate_deg": 0.0, "trim_s": 0.0, "trim_end_s": 0.0, "speed": 1.0,
     "resample_px": 0,
     "rebuild_scale": 1.0,

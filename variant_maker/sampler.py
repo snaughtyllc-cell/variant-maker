@@ -88,9 +88,17 @@ CROP_OFFSET_HI = 0.65
 # words when y drifted low. Unbudgeted; not zero-mean (that is the point).
 CROP_Y_KEEP_BOTTOM_LO = 0.90
 CROP_Y_KEEP_BOTTOM_HI = 1.00
-# Micro start→end crop-window travel (TikFusion-style). Unbudgeted; separate RNG.
-CROP_DRIFT_MAX_TALKING_HEAD = 0.12
-CROP_DRIFT_MAX_DEFAULT = 0.20
+# Micro start→end crop-window travel + handheld wander. Unbudgeted; separate RNG.
+# v1 max was 0.12 / 0.20 — Jeff barely saw it. Floor so the window always moves.
+CROP_DRIFT_MAX_TALKING_HEAD = 0.24
+CROP_DRIFT_MAX_DEFAULT = 0.28
+CROP_TRAVEL_MIN_TALKING_HEAD = 0.08
+CROP_TRAVEL_MIN_DEFAULT = 0.10
+CROP_HAND_AMP_X_TALKING = (0.020, 0.060)
+CROP_HAND_AMP_Y_TALKING = (0.005, 0.016)
+CROP_HAND_AMP_X_DEFAULT = (0.028, 0.070)
+CROP_HAND_AMP_Y_DEFAULT = (0.010, 0.028)
+CROP_HAND_P1 = (1.5, 3.6)
 
 # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
 # Mix of smaller and larger intermediates so we do not systematically soften one way.
@@ -166,6 +174,51 @@ def clamp_crop_drift(start: float, end: float, lo: float, hi: float, max_delta: 
     if lower > upper:
         return min(max(start, lo), hi)
     return min(max(end, lower), upper)
+
+
+def ensure_crop_travel(
+    start: float,
+    end: float,
+    lo: float,
+    hi: float,
+    min_delta: float,
+    max_delta: float,
+) -> float:
+    """Push `end` at least `min_delta` from `start`, staying in band and max_delta.
+
+    Prefer the already-drawn direction (or up, when end landed on start). If
+    that side cannot fit the floor, try the other side; if neither can, travel
+    as far as the band/max allow (720 y is only 0.10 wide).
+    """
+    start = float(start)
+    end = clamp_crop_drift(start, float(end), lo, hi, max_delta)
+    if min_delta <= 0:
+        return end
+    if abs(end - start) + 1e-12 >= min_delta:
+        return end
+    up_room = min(hi - start, max_delta)
+    down_room = min(start - lo, max_delta)
+    hint = end - start
+
+    def _go_up() -> float | None:
+        if up_room + 1e-12 >= min_delta:
+            return start + min_delta
+        return None
+
+    def _go_down() -> float | None:
+        if down_room + 1e-12 >= min_delta:
+            return start - min_delta
+        return None
+
+    if abs(hint) < 1e-12 or hint > 0:
+        picked = _go_up() or _go_down()
+        if picked is not None:
+            return picked
+        return start + up_room if up_room >= down_room else start - down_room
+    picked = _go_down() or _go_up()
+    if picked is not None:
+        return picked
+    return start - down_room if down_room >= up_room else start + up_room
 
 
 def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[float, float]:
@@ -329,16 +382,18 @@ def sample(
     else:
         y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
     raw["crop_y_frac"] = rng.uniform(y_lo, y_hi)
-    # Keyframed crop pan: separate RNG so trim_end_s / resample_px stay bit-identical.
-    max_delta = (
-        CROP_DRIFT_MAX_TALKING_HEAD if shot == "talking_head" else CROP_DRIFT_MAX_DEFAULT
-    )
+    # Keyframed crop pan + handheld wander: separate RNG so trim_end_s /
+    # resample_px stay bit-identical. Floor X travel so the window actually moves.
+    talking = shot == "talking_head"
+    max_delta = CROP_DRIFT_MAX_TALKING_HEAD if talking else CROP_DRIFT_MAX_DEFAULT
+    min_dx = CROP_TRAVEL_MIN_TALKING_HEAD if talking else CROP_TRAVEL_MIN_DEFAULT
     drift_rng = random.Random(int(seed) ^ 0xC0DE5)
-    raw["crop_x_end_frac"] = clamp_crop_drift(
+    raw["crop_x_end_frac"] = ensure_crop_travel(
         raw["crop_x_frac"],
         drift_rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI),
         CROP_OFFSET_LO,
         CROP_OFFSET_HI,
+        min_dx,
         max_delta,
     )
     raw["crop_y_end_frac"] = clamp_crop_drift(
@@ -348,6 +403,26 @@ def sample(
         y_hi,
         max_delta,
     )
+    if talking:
+        amp_x_lo, amp_x_hi = CROP_HAND_AMP_X_TALKING
+        amp_y_lo, amp_y_hi = CROP_HAND_AMP_Y_TALKING
+    else:
+        amp_x_lo, amp_x_hi = CROP_HAND_AMP_X_DEFAULT
+        amp_y_lo, amp_y_hi = CROP_HAND_AMP_Y_DEFAULT
+    raw["crop_hand_amp_x"] = drift_rng.uniform(amp_x_lo, amp_x_hi)
+    raw["crop_hand_amp_y"] = drift_rng.uniform(amp_y_lo, amp_y_hi)
+    raw["crop_hand_p1"] = drift_rng.uniform(CROP_HAND_P1[0], CROP_HAND_P1[1])
+    raw["crop_hand_p2"] = drift_rng.uniform(
+        raw["crop_hand_p1"] + 0.8, raw["crop_hand_p1"] + 3.4,
+    )
+    # 720 caption band is 0.10 wide: keep start/end ± amp inside 0.90–1.00.
+    if keeps_bottom_captions(width, height):
+        ay = raw["crop_hand_amp_y"]
+        inner_lo = y_lo + ay
+        inner_hi = y_hi - ay
+        if inner_lo <= inner_hi:
+            raw["crop_y_frac"] = min(max(raw["crop_y_frac"], inner_lo), inner_hi)
+            raw["crop_y_end_frac"] = min(max(raw["crop_y_end_frac"], inner_lo), inner_hi)
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)
