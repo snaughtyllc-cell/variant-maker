@@ -44,6 +44,8 @@ def test_quality_render_strips_rebuild_keeps_warp(monkeypatch, tmp_path):
         "rebuild_scale": 0.72, "warp_k1": 0.008,
         "grain": 44.0, "noise_chroma": True, "luma_shade": 96.0,
         "vignette": 0.12, "out_fps": 60,
+        "crop_x_end_frac": 0.62, "crop_y_end_frac": 0.41,
+        "crop_hand_amp_x": 0.05, "crop_hand_amp_y": 0.04,
     })
     quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
     assert captured["platform"] == "none"
@@ -59,6 +61,11 @@ def test_quality_render_strips_rebuild_keeps_warp(monkeypatch, tmp_path):
     assert captured["video"]["vignette"] == 0.0
     assert captured["video"]["rotate_deg"] == 0.0
     assert captured["video"].get("out_fps") in (None, 0)
+    # Keyframed crop pan is geometry — VMAF must not see it.
+    assert captured["video"]["crop_x_end_frac"] == 0.5
+    assert captured["video"]["crop_y_end_frac"] == 0.5
+    assert captured["video"]["crop_hand_amp_x"] == 0.0
+    assert captured["video"]["crop_hand_amp_y"] == 0.0
 
 
 @pytest.mark.integration

@@ -45,7 +45,8 @@ Status legend: ✅ done & verified · 🔨 to build
   below 0.05° (no-op sliver guard); eq/atempo/loudnorm always, other axes omitted when no-op.
 - **Tests:** golden -vf/-af, load-bearing order, even/safe scale (no naive range reinterpret),
   atempo==video speed, no-audio→"", none-platform geometry, no-op omission, pitch-only-rubberband.
-  ✅ 45 passed, ruff clean.
+  Crop punch can keyframe start→end (`crop_*_end_frac`) plus two-sine handheld wander;
+  missing/equal ends stay the static crop golden. ✅ 45 passed, ruff clean.
 
 ## Phase 5 — Render one variant  🔨
 - Implement `ffmpeg.render_variant`: full cmd with `output_color_args`, `-map_metadata -1`,
