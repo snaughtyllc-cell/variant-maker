@@ -32,9 +32,33 @@ decide what “different enough audio” means — not this week, not on live.
 
 Lab Fast `xar25v77v3j27u` pinned 2026-08-29: digest `sha256:97544653…` /
 `c709df0` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Live
-`j0b1q4iuunzhnq` left on `c497505` / no copyid / no `VF_LAB`. Next lab
-Generate will write `quality.heads` (audio if `fpcalc`; visual unavailable
-on slim Fast).
+`j0b1q4iuunzhnq` left on `c497505` / no copyid / no `VF_LAB`.
+
+### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
+
+Lab tenant `ws_6152e4dffc` only. Fast 2, escalate on, `quality_mode=fast`.
+Worker **did** run `copyid=record` (`manifest.run.copyid`). Live untouched.
+
+| Clip | Copy | SSIM bits (gate) | Heads written | Audio |
+|---|---|---|---|---|
+| SaveInta | 1 / 2 | **30 / 35** `ok` medium | **null / null** | — |
+| AQMTp (parked) | 1 / 2 | **19** strong `below_target` / **21** medium `below_target` | **yes / null** | `available: false` |
+| bring-me-down | 2 so far | **45** `ok` medium | **null** | — |
+
+Two bugs, both on Fast daily path:
+
+1. **Auto-tune dropped heads.** Fast reconstructs `u` from `tune()` with
+   bits/status only. Medium copies (SaveInta, AQMTp 2, motion) wrote
+   `quality.heads=null`. AQMTp copy 1 escalated → `_look_then_uniqueness()`
+   kept the dict. Fix: pass `heads` / `copyid_mode` through that rebuild.
+2. **Audio head never scored.** The one heads blob we got (AQMTp 1) is
+   `chromaprint_v1` `available: false`. Image has `fpcalc` (`Dockerfile.fast`
+   runs `fpcalc -version`) but Debian libav cannot open our BtbN mp4s.
+   Fix: decode a 11.025 kHz wav with our ffmpeg, then `fpcalc` the wav.
+   Visual stays `available: false` on slim Fast (no torch/SSCD).
+
+Do **not** treat this pack as a copyid verdict. Re-run after the lab image
+rebuild. Stay on **`record`**. Do not `gate`. Do not PATCH live.
 
 ## Enable record (lab) or the fused gate (later)
 
