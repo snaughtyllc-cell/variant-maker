@@ -17,6 +17,14 @@ HASHTAG_RE = re.compile(r"#\w+")
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+# Haiku 3 (`claude-3-haiku-20240307`) retired 2026-04-20. Anthropic emailed
+# that the Varimo.io Captions key was still sending that id.
+ANTHROPIC_CAPTION_MODEL = "claude-haiku-4-5-20251001"
+_RETIRED_ANTHROPIC_MODELS = {
+    "claude-3-haiku-20240307": ANTHROPIC_CAPTION_MODEL,
+    "claude-3-haiku-latest": ANTHROPIC_CAPTION_MODEL,
+    "claude-3-haiku": ANTHROPIC_CAPTION_MODEL,
+}
 
 
 def source_stem(filename: str) -> str:
@@ -77,6 +85,17 @@ def _split_ai(raw: str, count: int, filename: str) -> list[str]:
     return out[:count]
 
 
+def anthropic_caption_model(env: Mapping[str, str]) -> str:
+    """Anthropic model for captions. Remaps retired Haiku 3; ignores OpenAI ids."""
+    raw = (
+        (env.get("VARIANT_CAPTION_ANTHROPIC_MODEL") or env.get("VARIANT_CAPTION_MODEL") or "")
+        .strip()
+    )
+    if not raw or raw.startswith(("gpt-", "o1", "o3", "o4")):
+        raw = ANTHROPIC_CAPTION_MODEL
+    return _RETIRED_ANTHROPIC_MODELS.get(raw, raw)
+
+
 def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
     model = (env.get("VARIANT_CAPTION_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
     payload = json.dumps({
@@ -100,7 +119,7 @@ def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]
 
 
 def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
-    model = (env.get("VARIANT_CAPTION_MODEL") or "claude-3-5-haiku-latest").strip()
+    model = anthropic_caption_model(env)
     payload = json.dumps({
         "model": model,
         "max_tokens": 2000,
