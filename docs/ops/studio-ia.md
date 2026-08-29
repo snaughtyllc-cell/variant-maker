@@ -59,9 +59,17 @@ old four-row list.
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
 
+## Later (do not build yet)
+
+| Idea | Why it waits |
+|---|---|
+| **Announcements** — in-app updates / bug-fix notes so operators see what shipped (Jeff 2026-08-29) | Not a sixth phone tab. Not a Fast/uniqueness change. Park until a wave above is idle. When built: everyone signed in, short dated notes, no marketing blog. |
+
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
+- Do not add an Updates / Announcements tab in a redesign pass. It is
+  parked under Later above — not missing IA.
 - Do not hide Drops, Workflows, Drive, Team, or Admin — they are live.
 - Do not put Admin / Diagnostics in the phone bottom bar. They stay
   under More.
