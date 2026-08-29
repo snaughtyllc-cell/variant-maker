@@ -25,9 +25,11 @@ Fresh Fast 2 through lab Studio (real product path, not injected
 | `469b6d9f97ed` | girlies | lab motion |
 | `99ed217e0af5` | win-chat | lab motion |
 | `709af898ac80` | SaveInta2-720 | short lab motion |
+| **`166cf4bae4be`** | **LOOK-SaveInta / LOOK-AQMTp / LOOK-bring-me-down** | uniquely named Sign pack, escalate **off** |
 
 Earlier same-day injected `lookcompete4` is still in Gallery (Jeff’s
 first compete look). Do not confuse it with the API jobs above.
+The Sign pack is the three **LOOK-** cards at the top of lab Gallery.
 
 ## Bits
 
@@ -45,6 +47,9 @@ first compete look). Do not confuse it with the API jobs above.
 | girlies | 27 | 30 | no | ok / ok | 48 + 60 fps |
 | win-chat | 30 | 28 | no | fail / fail | 48 + 60 fps |
 | SaveInta2 | 34 | 34 | no | ok / fail | |
+| **LOOK-SaveInta** | **33 ok** | **32 ok** | no | fail / fail MAE | Jeff signed stills |
+| **LOOK-AQMTp** | **20 ok** | **19 ok** | no | ok / ok | 19 ships |
+| **LOOK-bring-me-down** | **45 ok** | **46 ok** | no | ok / ok | |
 
 Every non-AQMTp copy cleared 24. AQMTp stayed uniqueness-hard.
 
@@ -99,21 +104,24 @@ source in Gallery. Jeff stills decide.
 ## Crop-drift
 
 Not run. Handheld / crop-pan stay on draft branches. Compete look
-is mixed (vignette-heavy copies exist). Sign the compete stills
-before anyone swaps lab Fast to a crop-drift digest.
+is signed on `LOOK-*`. Do not swap lab Fast to a crop-drift digest
+as part of this pin decision.
+
+## Look Sign (2026-08-29)
+
+Jeff on the uniquely named Sign pack (`166cf4bae4be`): **yea they look
+fine.** Cards: `LOOK-SaveInta.mp4`, `LOOK-AQMTp.mp4`,
+`LOOK-bring-me-down.mp4`. That is the look oracle. MAE look-fail on
+LOOK-SaveInta does not override.
 
 ## Do not pin live
 
 Live Fast stays `j0b1q4iuunzhnq` / `f05d803` / no `VF_LAB`.
 
-Reasons this pass is **not** a live Sign:
+Look is signed. The remaining hold is product, not look:
 
-1. AQMTp escalate-on went **under the floor** (17–18). Product
-   escalate must not make a 19-ship clip disappear.
-2. Vignette 0.10+ still reads as a tunnel on some copies
-   (`lookcompete4` SaveInta v01; several live look-fails).
-3. Jeff has not signed these stills yet.
-
-Open lab Gallery, play SaveInta `0c5e1614c991`, AQMTp `6e8d2e9adc8d`,
-and bring-me-down `246f78865ef8`. If those look like your files, say
-so. Until then production generation stays on the signed pin.
+1. AQMTp escalate-on went **under the floor** (17–18 on
+   `9ba1af34f29d`). Product escalate must not make a 19-ship clip
+   disappear. `f05d803` still ships that path at 19.
+2. Do not PATCH live Fast until that escalate path still ships 19
+   on compete, **or** Jeff explicitly says pin anyway.
