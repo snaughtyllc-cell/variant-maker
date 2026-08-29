@@ -20,9 +20,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`
-- `VF_ENGINE_REV=d0a7bc5` (compete: rotate safe, vignette, 30/48/60 fps, optional US metadata). `VF_LAB=1`
-- Live Fast is now `c497505` / `sha256:3d24473a…` (handheld crop + compete, **no `VF_LAB`**). Lab stays on this compete digest.
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef`
+- `VF_ENGINE_REV=c497505` (handheld crop wander + compete). `VF_LAB=1`
+- Live Fast is the same digest (`c497505` / `sha256:3d24473a…`, **no `VF_LAB`**). Lab verify `1fbe4f51de83` — live stays.
+- Prior lab image `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520` / `d0a7bc5` (compete: rotate safe, vignette, 30/48/60).
 - Prior lab image `sha256:b7ab714f9d883aae052f1fbf5e44c3284d9be691de2ba970c9ee06fd8f742d2d` / `bc88da1` (handheld crop wander, no compete).
 - Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803` (19-bit / 30% uniqueness ship floor).
 - Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
@@ -46,8 +47,11 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 Live Fast `j0b1q4iuunzhnq` is on `sha256:3d24473a…` / `c497505` (handheld
 crop + compete, **no `VF_LAB`**, max **4**, idle 600). Prior live `d0a7bc5`
 / `sha256:a5b703fa…`. Railway `RUNPOD_FAST_ENDPOINT_ID` stays the live id.
-Lab stays `VF_LAB=1` on compete `d0a7bc5`. Writeup:
-`docs/ops/live-pin-c497505-2026-08-29.md`.
+Lab Fast is the same digest with `VF_LAB=1`. Lab verify
+`1fbe4f51de83` vs compete LOOK `166cf4bae4be`: SaveInta **33/33**, motion
+**43/45**, AQMTp **18/17** parked — **live stays**. Writeups:
+`docs/ops/live-pin-c497505-2026-08-29.md`,
+`docs/ops/lab-verify-c497505-2026-08-29.md`.
 
 Lab packs:
 
@@ -72,6 +76,7 @@ Lab packs:
 | **`21ae9d3` look-first shade-off — lab only, not live** | AQMTp Fast 8 (`lookshadeoff` / `lab8_aqmtp21ae_761def3b`): 8/8 **below_target 17–21 bits**, VMAF 95–99. **Jeff: yea it looks good just scored low.** Do not pin. Do not redraw shade. | — |
 | **`472ab60` look stills overlap uniqueness — was live** | SaveInta Fast 8 (`overlap8b`): **8/8 medium 25–27 bits**, worker **188 s (3.1 min)** warm. `looking` then `uniqueness`. MAE after SSIM (MAE∥SSIM pack was 8.6 min — do not overlap MAE with 8-wide SSIM). | — |
 | **`f05d803` 19-bit / 30% ship floor — was live** | SaveInta Fast 2 (`saveintafloor`): **26/26 bits**, both medium `ok`. AQMTp Fast 2 escalate (`aqmtpfloor`): **19/19 bits (~30%)**, both strong `below_target` **still `ok`**. AQMTp Fast 2 no-escalate (`aqmtpnoesc`): copy 1 **16 bits uniqueness_fail**; copy 2 **19 bits `ok` / `below_target`**. Was live Fast **no `VF_LAB`**. | — |
+| **`c497505` crop-drift lab verify (`1fbe4f51de83`) — live stays** | vs compete LOOK `166cf4bae4be` (**33/32**, **20/19**, **45/46**). Drift: SaveInta **33/33** medium `ok`; AQMTp **18/17** `uniqueness_fail` (parked); bring-me-down **43/45** medium `ok`. Stills not lava/snow. | bring-me-down **43/45** bits, VMAF 100, look ok. |
 
 Live pin: `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef` (`c497505`, handheld crop + compete, **no `VF_LAB`**). Prior live `d0a7bc5` digest: `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`. Prior live `f05d803` digest: `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`. Prior live `472ab60` digest: `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85`. Prior live `7dae269` digest: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`.
 

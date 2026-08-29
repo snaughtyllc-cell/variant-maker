@@ -28,6 +28,7 @@ Platform flags after a drop stay in Phase 12
 | **2026-08-26** | SaveInta lab Fast 8 `472ab60` / live Fast 2 smoke | Stills overlap uniqueness; MAE after SSIM | **25–27 bits**, all medium. Lab 8 worker **3.1 min** (prior live uniqueness-only 8 was **4.2 min**) | Stills look like source. MAE can still trip on crop — stills are the oracle. **Shipped live** (`sha256:e7474975…`, no `VF_LAB`). |
 | 2026-08-25 | SaveInta lab `looksaveinta` / `4540720` | Medium, **shade-off** | 24–27 bits, VMAF 95–99 | Control pack. Do not put shade on medium. |
 | **2026-08-29** | Compete Fast `d0a7bc5` Gallery **LOOK-SaveInta** / **LOOK-AQMTp** / **LOOK-bring-me-down** (`166cf4bae4be`) | Rotate + vignette + per-copy 30/48/60. Medium. | **33/32**, **20/19**, **45/46** | **Jeff: yea they look fine.** AQMTp escalate-on under-19 parked (nose-close). **Was live** (`sha256:a5b703fa…`, **no `VF_LAB`**). |
+| **2026-08-29** | Crop-drift lab verify `c497505` Gallery **DRIFT-SaveInta** / **DRIFT-AQMTp** / **DRIFT-bring-me-down** (`1fbe4f51de83`) vs LOOK `166cf4bae4be` | Handheld wander + compete. Medium. Fast 2, escalate on. Lab only. | **33/33**, **18/17**, **43/45** | Agent stills: no lava/snow/hard pops; captions intact. SaveInta/motion in compete band. AQMTp parked. **Live stays `c497505`.** Jeff stills on the next real Generate remain the look oracle. |
 
 ## Usable (look OK, uniqueness under 24)
 
@@ -59,7 +60,7 @@ Platform flags after a drop stay in Phase 12
 | Hole | What we know | What we will not do |
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). Compete escalate-on `9ba1af34f29d` was 18/17 — Jeff 2026-08-29: not a pin blocker. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Build an escalate-rollback just for this clip. |
-| Handheld crop wander on live Fast `c497505` | Jeff 2026-08-29: **ok lets build that on live.** Stacked on compete. First real Generate stills are the look check. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. |
+| Handheld crop wander on live Fast `c497505` | Jeff 2026-08-29: **ok lets build that on live**, then lab-verify so we know if live must come off. Lab pack `1fbe4f51de83`: SaveInta **33/33**, motion **43/45**, AQMTp **18/17** parked. Stills not lava/snow. **Live stays.** Next real Generate stills are still the look check. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. Roll live back to `d0a7bc5` without a broken look. |
 
 ## Engine backstop
 

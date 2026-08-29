@@ -3,7 +3,8 @@
 **Date:** 2026-08-28  
 **Status:** Handheld wander on `cursor/crop-drift-live-cdb6`, stacked on compete
 axes (rotate / vignette / per-copy 30/48/60). Jeff 2026-08-29: **build it on
-live Fast.** Not Gemini.  
+live Fast.** Lab verify `1fbe4f51de83` vs LOOK `166cf4bae4be` — **live stays
+`c497505`.** Not Gemini.  
 **Product name:** VaryForge / varimo Studio  
 **Depends on:** `2026-08-24-caption-safe-crop.md`, `2026-08-25-ig-720-fast-20.md`,
 `2026-08-21-fast-shot-probe.md`, `2026-08-25-look-first.md`  
