@@ -14,6 +14,7 @@ on:
       - cursor/aqmtp-uniqueness-c975
       - cursor/keyframe-crop-drift-cdb6
       - cursor/compete-smart-repurpose-cdb6
+      - cursor/crop-drift-live-cdb6
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py
