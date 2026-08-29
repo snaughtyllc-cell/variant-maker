@@ -148,6 +148,30 @@ def test_resolve_rotate_and_us_metadata_helpers(monkeypatch):
     assert gpu_worker.resolve_us_metadata({}) is True
 
 
+def test_worker_defaults_copyid_off(monkeypatch, tmp_path):
+    monkeypatch.delenv("VARIANT_MAKER_COPYID", raising=False)
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "quality_mode": "fast",
+    })
+    assert captured["copyid"] == "off"
+
+
+def test_worker_honors_copyid_record_from_job_and_env(monkeypatch, tmp_path):
+    monkeypatch.delenv("VARIANT_MAKER_COPYID", raising=False)
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "quality_mode": "fast", "copyid": "record",
+    })
+    assert captured["copyid"] == "record"
+    monkeypatch.setenv("VARIANT_MAKER_COPYID", "record")
+    captured = _capture_jobs(monkeypatch, tmp_path, {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 2,
+        "quality_mode": "fast",
+    })
+    assert captured["copyid"] == "record"
+
+
 def test_hq_worker_stays_serial_even_if_jobs_requested(monkeypatch, tmp_path):
     captured = _capture_jobs(monkeypatch, tmp_path, {
         "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 20,

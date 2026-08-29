@@ -15,10 +15,12 @@ on:
       - cursor/keyframe-crop-drift-cdb6
       - cursor/compete-smart-repurpose-cdb6
       - cursor/crop-drift-live-cdb6
+      - cursor/copyid-lab-record-cdb6
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py
       - variant_maker/*.py
+      - variant_maker/copyid/**
       - variant_maker/server/**
       - pyproject.toml
       - .github/workflows/build-variant-fast-lab.yml

@@ -2,10 +2,23 @@
 
 Local uniqueness heads that approximate copy detection. Not a platform verdict.
 
-## Enable the fused gate
+## Lab first (2026-08-29)
+
+Jeff: **yes lab first.** Live Fast stays `copyid=off`. Do not PATCH live.
+
+1. **`record` on lab Fast only** — score visual/audio heads, SSIM still gates
+   (24/24 hunt, 19 floor). Identical audio must not fail a pack.
+2. **`gate` later** — only after a labeled lab pack. Same-song clips would
+   fail overnight if we fuse too early.
+3. Fast CPU image has **`fpcalc`** (Chromaprint). SSCD/torch is not in the
+   slim Fast image — visual head stays `available: false` there until a
+   weights-capable worker. Score SSCD on a lab box with `COPYID_LAB=1`.
+
+## Enable record (lab) or the fused gate (later)
 
 ```bash
-export VARIANT_MAKER_COPYID=gate
+export VARIANT_MAKER_COPYID=record   # lab first — SSIM still gates
+# export VARIANT_MAKER_COPYID=gate  # only after a labeled pack
 # optional:
 export VARIANT_MAKER_COPYID_VISUAL=auto   # sscd | dino | off | auto
 export VARIANT_MAKER_SSCD_PATH=models/sscd/sscd_disc_mixup.torchscript.pt
