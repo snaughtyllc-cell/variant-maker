@@ -14,6 +14,22 @@ Jeff: **yes lab first.** Live Fast stays `copyid=off`. Do not PATCH live.
    slim Fast image — visual head stays `available: false` there until a
    weights-capable worker. Score SSCD on a lab box with `COPYID_LAB=1`.
 
+### First lab score — DRIFT pack `1fbe4f51de83` (record, 2026-08-29)
+
+Same three clips as compete LOOK. `copyid=record` on this box (`fpcalc` 1.5.1).
+SSIM bits match the Generate card. Visual skipped (no torch/SSCD).
+
+| Clip | Copy | SSIM bits (gate) | Audio sim | Audio uniq (1−sim) |
+|---|---|---|---|---|
+| SaveInta | 1 / 2 | **33 / 33** `ok` | 0.74 / 0.77 | 0.26 / 0.23 (~17/15 bits) |
+| AQMTp | 1 / 2 | **18 / 17** `below_floor` | 0.81 / 0.87 | 0.19 / 0.13 (~12/8 bits) |
+| bring-me-down | 1 / 2 | **43 / 45** `ok` | 0.84 / 0.79 | 0.16 / 0.21 (~10/13 bits) |
+
+**If this had been `gate`, every copy fails.** Same soundtrack → Chromaprint
+still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
+floor. That is why lab is `record` only. Do not turn `gate` on until we
+decide what “different enough audio” means — not this week, not on live.
+
 ## Enable record (lab) or the fused gate (later)
 
 ```bash
