@@ -20,9 +20,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef`
-- `VF_ENGINE_REV=c497505` (handheld crop wander + compete). `VF_LAB=1`
-- Live Fast is the same digest (`c497505` / `sha256:3d24473a…`, **no `VF_LAB`**). Lab verify `1fbe4f51de83` — live stays.
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:9754465319b22cdec6daa7c090bddc4aee1a5a1e49684c586ec0224c29de0f7e`
+- `VF_ENGINE_REV=c709df0` (copyid + crop-drift). `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
+- Live Fast stays `c497505` / `sha256:3d24473a…`, **no `VF_LAB`**, copyid **off**.
+- Prior lab image `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef` / `c497505` (handheld crop + compete).
 - Prior lab image `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520` / `d0a7bc5` (compete: rotate safe, vignette, 30/48/60).
 - Prior lab image `sha256:b7ab714f9d883aae052f1fbf5e44c3284d9be691de2ba970c9ee06fd8f742d2d` / `bc88da1` (handheld crop wander, no compete).
 - Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803` (19-bit / 30% uniqueness ship floor).

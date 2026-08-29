@@ -30,6 +30,12 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
+Lab Fast `xar25v77v3j27u` pinned 2026-08-29: digest `sha256:97544653…` /
+`c709df0` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Live
+`j0b1q4iuunzhnq` left on `c497505` / no copyid / no `VF_LAB`. Next lab
+Generate will write `quality.heads` (audio if `fpcalc`; visual unavailable
+on slim Fast).
+
 ## Enable record (lab) or the fused gate (later)
 
 ```bash
