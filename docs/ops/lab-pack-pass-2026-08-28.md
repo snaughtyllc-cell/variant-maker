@@ -114,14 +114,12 @@ fine.** Cards: `LOOK-SaveInta.mp4`, `LOOK-AQMTp.mp4`,
 `LOOK-bring-me-down.mp4`. That is the look oracle. MAE look-fail on
 LOOK-SaveInta does not override.
 
-## Do not pin live
+## Live pin
 
-Live Fast stays `j0b1q4iuunzhnq` / `f05d803` / no `VF_LAB`.
+Look is signed. Jeff **parked** the AQMTp escalate-on under-19 as a
+blocker (2026-08-29): the clip is super-close face-to-camera, not the
+average upload. Do not build an escalate-rollback just for that SKU.
+Do not raise 24. Do not redraw shade.
 
-Look is signed. The remaining hold is product, not look:
-
-1. AQMTp escalate-on went **under the floor** (17–18 on
-   `9ba1af34f29d`). Product escalate must not make a 19-ship clip
-   disappear. `f05d803` still ships that path at 19.
-2. Do not PATCH live Fast until that escalate path still ships 19
-   on compete, **or** Jeff explicitly says pin anyway.
+Live Fast stays `j0b1q4iuunzhnq` / `f05d803` / no `VF_LAB` until Jeff
+says pin compete (`d0a7bc5`) onto live.
