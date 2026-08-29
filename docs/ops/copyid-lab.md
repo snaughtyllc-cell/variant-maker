@@ -43,7 +43,7 @@ Worker **did** run `copyid=record` (`manifest.run.copyid`). Live untouched.
 |---|---|---|---|---|
 | SaveInta | 1 / 2 | **30 / 35** `ok` medium | **null / null** | — |
 | AQMTp (parked) | 1 / 2 | **19** strong `below_target` / **21** medium `below_target` | **yes / null** | `available: false` |
-| bring-me-down | 2 so far | **45** `ok` medium | **null** | — |
+| bring-me-down | 1 / 2 | **46 / 45** `ok` medium | **null / null** | — |
 
 Two bugs, both on Fast daily path:
 
