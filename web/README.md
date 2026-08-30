@@ -132,7 +132,7 @@ route is missing from that catalog.
 | Tab | Route | Audience | Phone bar | What it does |
 |---|---|---|---|---|
 | **Studio** | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast vs HQ, Advanced, live queue. Reload mid-run re-attaches. |
-| **Gallery** | `/gallery` | everyone | yes | 24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| **Gallery** | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | **Drops** | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
