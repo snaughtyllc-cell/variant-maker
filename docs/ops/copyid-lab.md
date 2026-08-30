@@ -30,9 +30,11 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` pinned 2026-08-29: digest `sha256:97544653…` /
-`c709df0` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Live
-`j0b1q4iuunzhnq` left on `c497505` / no copyid / no `VF_LAB`.
+Lab Fast `xar25v77v3j27u` image 2026-08-30: digest `sha256:e5173d9a…` /
+`3caeb44` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Prior
+`c709df0` / `sha256:97544653…`. Live `j0b1q4iuunzhnq` left on `c497505` /
+no copyid / no `VF_LAB`. Recycle **lab** workers for the new digest; do
+not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
