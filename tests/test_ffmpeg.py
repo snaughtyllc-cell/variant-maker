@@ -69,6 +69,20 @@ def test_cmd_wires_audio_when_present():
     assert "-af" in cmd and "-an" not in cmd
 
 
+def test_cmd_copies_audio_when_filters_are_empty():
+    """No tempo/trim/EQ — keep the original soundtrack instead of re-encoding it."""
+    p = make_params(speed=1.0, trim_s=0.0)
+    p["audio"] = {
+        "speed": 1.0, "loudnorm_i": None, "eq_bands": 1, "eq_gains": [0.0],
+        "pitch_pct": 0.0, "aac_kbps": 160,
+    }
+    p["video"]["trim_end_s"] = 0.0
+    cmd = ffmpeg.build_render_cmd(make_src(has_audio=True), p, REELS, "out.mp4")
+    assert _sublist(["-c:a", "copy"], cmd)
+    assert "-af" not in cmd
+    assert "-an" not in cmd
+
+
 def test_cmd_drops_audio_when_absent():
     cmd = ffmpeg.build_render_cmd(make_src(has_audio=False), make_params(), REELS, "out.mp4")
     assert "-an" in cmd

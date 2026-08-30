@@ -207,6 +207,8 @@ class LocalRunner:
             ),
             "auto_tune": limits.get("auto_tune", True),
             "cancel_token": cancel_token,
+            "rubberband": False,
+            "audio_uniqueness": False,
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

@@ -78,6 +78,8 @@ def test_runner_sends_hq_defaults_in_payload(tmp_path):
     assert captured["auto_tune"] is False
     assert captured["uniqueness_target"] == DEFAULT_TARGET
     assert captured["jobs"] == 1
+    assert captured["rubberband"] is False
+    assert captured["audio_uniqueness"] is False
 
 
 def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
