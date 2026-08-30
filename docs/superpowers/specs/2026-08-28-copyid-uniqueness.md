@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-28  
 **Product:** variant-maker (Studio)  
-**Status:** implement now; **lab calibrates** SSCD/DINOv2/fpcalc on real packs  
+**Status:** Jeff 2026-08-29: **lab first.** Live Fast stays `off`. Lab Fast:
+`record` only (SSIM gates). `gate` waits on a labeled pack.  
 **Depends on:** uniqueness loop (`ssim_bits_v1`), look-first (`look.py`), Phase 11 autotune
 
 ## Goal
@@ -32,7 +33,8 @@ Fuse with **min uniqueness** (any head that still says “copy” keeps the dial
 | **`record`** | yes, write `heads` on the variant | SSIM still gates |
 | **`gate`** | yes | fused min uniqueness gates + autotune / escalate |
 
-Lab: `VARIANT_MAKER_COPYID=gate`. Fast daily packs stay `off` until a labeled pack says the fused dial is safe.
+Lab Fast: `VARIANT_MAKER_COPYID=record`. Live Fast stays `off` until a
+labeled pack says the fused dial is safe. Do not set `gate` on live.
 
 ## Architecture
 

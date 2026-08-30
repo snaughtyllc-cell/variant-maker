@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 
 import pytest
 
@@ -49,6 +50,54 @@ def test_score_audio_unavailable_without_fpcalc(monkeypatch):
     assert r["available"] is False
     assert r["uniqueness"] is None
     assert r["metric"] == AUDIO_METRIC
+    assert r["reason"] == "no_fpcalc"
+
+
+def test_score_audio_reason_missing_file(monkeypatch, tmp_path):
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+    r = score_audio(str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4"))
+    assert r["available"] is False
+    assert r["reason"] == "missing_file"
+
+
+def test_score_audio_falls_back_to_ffmpeg_wav(monkeypatch, tmp_path):
+    """Slim Fast fpcalc's libav often cannot decode our BtbN mp4s."""
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    a.write_bytes(b"x")
+    b.write_bytes(b"y")
+    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+
+    def boom(path, *, length=120):
+        raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="decode")
+
+    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
+        lambda path, *, length=120: fp,
+    )
+    r = score_audio(str(a), str(b))
+    assert r["available"] is True
+    assert r["sim"] == 1.0
+    assert r["via"] == "ffmpeg_wav"
+
+
+def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    a.write_bytes(b"x")
+    b.write_bytes(b"y")
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+
+    def boom(path, *, length=120):
+        raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="nope")
+
+    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
+    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", boom)
+    r = score_audio(str(a), str(b))
+    assert r["available"] is False
+    assert r["reason"] == "error"
 
 
 @pytest.mark.skipif(not shutil.which("fpcalc"), reason="fpcalc not on PATH")

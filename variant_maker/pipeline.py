@@ -462,6 +462,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 "uniqueness_target": tuned["uniqueness_target"],
                 "bits": tuned.get("bits"),
                 "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
+                # Fast auto_tune used to drop these — lab pack 3d4fae98ca77
+                # ran copyid=record and still wrote quality.heads=null.
+                "heads": tuned.get("heads"),
+                "copyid_mode": tuned.get("copyid_mode"),
+                "fused_from": tuned.get("fused_from"),
             }
             cleared = (
                 tuned.get("quality_passed")
