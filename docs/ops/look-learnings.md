@@ -27,7 +27,7 @@ Platform flags after a drop stay in Phase 12
 | 2026-08-25 | SaveInta Fast 8/20 `7dae269` | Same signed medium. Fail-forward uniqueness. | 25–27 bits, all medium | Wait-time shipped. Was live Fast. |
 | **2026-08-26** | SaveInta lab Fast 8 `472ab60` / live Fast 2 smoke | Stills overlap uniqueness; MAE after SSIM | **25–27 bits**, all medium. Lab 8 worker **3.1 min** (prior live uniqueness-only 8 was **4.2 min**) | Stills look like source. MAE can still trip on crop — stills are the oracle. **Shipped live** (`sha256:e7474975…`, no `VF_LAB`). |
 | 2026-08-25 | SaveInta lab `looksaveinta` / `4540720` | Medium, **shade-off** | 24–27 bits, VMAF 95–99 | Control pack. Do not put shade on medium. |
-| **2026-08-29** | Compete Fast `d0a7bc5` Gallery **LOOK-SaveInta** / **LOOK-AQMTp** / **LOOK-bring-me-down** (`166cf4bae4be`) | Lab Fast rotate + vignette + per-copy 30/48/60. Medium, escalate **off** on the Sign pack. | SaveInta **33/32**, AQMTp **20/19**, bring-me-down **45/46** | **Jeff: yea they look fine.** Average daily clips good. AQMTp escalate-on under-19 is the parked nose-close clip — **not a pin blocker.** Live Fast still `f05d803` until an explicit pin. |
+| **2026-08-29** | Compete Fast `d0a7bc5` Gallery **LOOK-SaveInta** / **LOOK-AQMTp** / **LOOK-bring-me-down** (`166cf4bae4be`) | Rotate + vignette + per-copy 30/48/60. Medium. | **33/32**, **20/19**, **45/46** | **Jeff: yea they look fine.** AQMTp escalate-on under-19 parked (nose-close). **Shipped live** (`sha256:a5b703fa…`, **no `VF_LAB`**). |
 
 ## Usable (look OK, uniqueness under 24)
 
@@ -58,13 +58,12 @@ Platform flags after a drop stay in Phase 12
 
 | Hole | What we know | What we will not do |
 |---|---|---|
-| AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Pin live from `lookshadeoff`. |
-| Compete Fast escalate-on vs 19-bit floor | Look **signed**. Escalate-on AQMTp `9ba1af34f29d` was **18/17** `uniqueness_fail`. **Jeff 2026-08-29:** that clip is super-close face-to-camera, unlikely on average uploads; do not block the tool on it. Average test clips have been good. | Raise 24. Redraw shade. Build an escalate-rollback just for this clip. |
+| AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). Compete escalate-on `9ba1af34f29d` was 18/17 — Jeff 2026-08-29: not a pin blocker. SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Build an escalate-rollback just for this clip. |
 
 ## Engine backstop
 
 `variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Stills land on the Generate card as soon as the first encode exists; two JPEGs overlap uniqueness SSIM so Generate wait stays uniqueness-bound. MAE is a blotch backstop **after** uniqueness (do not run it beside 8-wide SSIM — that contended Fast CPU). Crop on a signed talking-head can trip MAE even when the stills look fine; Jeff’s eye on the stills is the oracle, not the red/green. Look fail still blocks escalate. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
 
-**19 bits / ~30%** is the *post-hunt* ship floor, not a first-pass shortcut: hunt 24 (medium, then one escalate). After that, 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%. Lab Fast `f05d803` (`sha256:00564ea3…`): SaveInta Fast 2 shipped **26/26**. AQMTp escalate shipped **19/19** `below_target`. AQMTp medium-only: **16 uniqueness_fail** + **19 ok**. Live Fast is this digest, **no `VF_LAB`**. Writeup: `docs/ops/live-pin-f05d803-2026-08-26.md`.
+**19 bits / ~30%** is the *post-hunt* ship floor, not a first-pass shortcut: hunt 24 (medium, then one escalate). After that, 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%. Live Fast is `d0a7bc5` (`sha256:a5b703fa…`, **no `VF_LAB`**). Prior live `f05d803` (`sha256:00564ea3…`). Writeup: `docs/ops/live-pin-d0a7bc5-2026-08-29.md`.
 
 Leftover `luma_shade` params must not draw. Filtergraph ignores them.
