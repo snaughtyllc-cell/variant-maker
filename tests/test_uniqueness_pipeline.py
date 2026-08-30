@@ -873,3 +873,34 @@ def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
     ))
     assert seen
     assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)
+
+
+def test_pipeline_forwards_copyid_gate(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    seen = {}
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        seen["kw"] = kw
+        return _ok_score(0.5, bits=32, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="gate", uniq_strengths=[1.0]))
+    assert seen["kw"].get("copyid") == "gate"
+    assert manifest.run.get("copyid") == "gate"
+
+
+def test_pipeline_records_heads_on_quality(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    heads = {
+        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
+        "visual": {"uniqueness": 0.2, "sim": 0.6, "available": True},
+    }
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        return {**_ok_score(0.5, bits=32, status="ok"), "heads": heads}
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="record", uniq_strengths=[1.0]))
+    assert manifest.variants[0].quality.get("heads")["visual"]["sim"] == 0.6
+    assert manifest.run.get("copyid") == "record"
+

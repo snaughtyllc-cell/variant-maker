@@ -124,7 +124,16 @@ Status legend: ✅ done & verified · 🔨 to build
   `passed` is VMAF only). Over-budget `sample()` shrinks color/encode first; crop_keep
   is fingerprint and does not shrink toward identity. Color stays zero-mean. VMAF floor stays.
   Gallery uniqueness % (higher = more different) plus an `esc` badge when escalated.
-- Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
+-   Note: low similarity + high quality typically requires Tier 2 (neural) ops, not Tier 1 alone.
+
+## Phase 17 — Copy-detection uniqueness heads  🔨
+- Spec: `docs/superpowers/specs/2026-08-28-copyid-uniqueness.md`. Lab: `docs/ops/copyid-lab.md`.
+- Second uniqueness stack next to `ssim_bits_v1`: SSCD (or DINOv2) Chamfer over N frames,
+  Chromaprint audio, min-fuse. Lazy like Real-ESRGAN — no torch on `import variant_maker`.
+- CLI `--copyid off|record|gate` (default **off** so Fast 20 / identical audio do not
+  suddenly fail). Lab: `VARIANT_MAKER_COPYID=gate`.
+- Peer check stays SSIM bits. `below_floor` stays SSIM-bits-only.
+- Tests: pure math + fake visual always-on; `@pytest.mark.lab` for real weights.
 
 ## Phase 12 — Platform outcome tracking (learning loop)  ⏸ skipped for now
 - Spec still exists (`docs/superpowers/specs/2026-08-18-platform-outcome-learning.md`).

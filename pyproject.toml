@@ -39,6 +39,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "integration: requires ffmpeg + a real clip (slower)",
+    "lab: copy-detection heads (SSCD/fpcalc); skip unless COPYID_LAB=1",
 ]
 
 [tool.ruff]
