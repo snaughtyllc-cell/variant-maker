@@ -567,3 +567,20 @@ def test_password_set_requires_login(tmp_path):
     anon = TestClient(app)
     assert anon.post("/api/auth/password/set", json={"password": "secret12"}).status_code == 401
 
+
+def test_drive_oauth_start_is_site_admin_only(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    _login(va, "va")
+
+    start = jeff.get("/api/drive/oauth/start", follow_redirects=False)
+    assert start.status_code in (302, 307)
+    assert "accounts.google.com" in start.headers["location"]
+
+    denied = va.get("/api/drive/oauth/start", follow_redirects=False)
+    assert denied.status_code == 403
+    assert va.post("/api/drive/oauth/disconnect").status_code == 403
+

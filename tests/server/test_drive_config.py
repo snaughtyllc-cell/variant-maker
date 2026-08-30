@@ -41,6 +41,46 @@ def test_share_email_from_env():
     assert dc.read_share_email({dc.ENV_SHARE_EMAIL: " ops@varyforge.app "}) == "ops@varyforge.app"
 
 
+def test_pick_oauth_token_prefers_share_mailbox_on_another_workspace(tmp_path):
+    personal = tmp_path / "tenants" / "ws_partner" / "drive"
+    company = tmp_path / "tenants" / "ws_admin" / "drive"
+    personal.mkdir(parents=True)
+    company.mkdir(parents=True)
+    (personal / "oauth_token.json").write_text(json.dumps({
+        "refresh_token": "rt", "token": "at", "client_id": "cid", "client_secret": "sec",
+        "email": "partner@x.com",
+    }))
+    (company / "oauth_token.json").write_text(json.dumps({
+        "refresh_token": "rt", "token": "at", "client_id": "cid", "client_secret": "sec",
+        "email": "studio@varimo.io",
+    }))
+    env = {
+        dc.ENV_OAUTH_CLIENT_ID: "cid",
+        dc.ENV_OAUTH_CLIENT_SECRET: "sec",
+        dc.ENV_SHARE_EMAIL: "studio@varimo.io",
+    }
+    picked = dc.pick_oauth_token_path(
+        str(tmp_path), str(personal / "oauth_token.json"), env,
+    )
+    assert picked == str((company / "oauth_token.json").resolve())
+
+
+def test_pick_oauth_token_does_not_use_personal_mailbox_when_share_is_set(tmp_path):
+    personal = tmp_path / "drive"
+    personal.mkdir()
+    (personal / "oauth_token.json").write_text(json.dumps({
+        "refresh_token": "rt", "token": "at", "client_id": "cid", "client_secret": "sec",
+        "email": "partner@x.com",
+    }))
+    env = {
+        dc.ENV_OAUTH_CLIENT_ID: "cid",
+        dc.ENV_OAUTH_CLIENT_SECRET: "sec",
+        dc.ENV_SHARE_EMAIL: "studio@varimo.io",
+    }
+    current = str(personal / "oauth_token.json")
+    assert dc.pick_oauth_token_path(str(tmp_path), current, env) is None
+
+
 def test_effective_share_email_stays_on_connected_gmail_until_override():
     info = dc.DriveConfigInfo(
         "ready", None, "Drive ready (Google OAuth)",
