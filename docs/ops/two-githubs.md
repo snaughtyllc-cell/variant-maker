@@ -91,13 +91,15 @@ Live. Close or cherry-pick; do not use them to “sync” the two GitHubs.
 
 **Close after the lab-backlog PR lands on `tier1`** (already included there):
 #45, #46, #55, #57, #61, #62, #63, #65, #66, #67. #64 is the same crop-drift
-as #67. #56 is the older crop-drift PR.
+as #67. #56 is the older crop-drift PR. #71’s engine commit (natural
+talking audio) is included; testers still need that copy on `varimo-live`.
+#25’s Drive-export pin is already on Lab (`e81fb65`); cherry-pick onto Live.
 
 **Cherry-pick on `varimo-live`** (old Live branch `cursor/railway-runpod-split-c975`;
 do not merge these into Lab `tier1`):
 #72 captions before Generate, #71 preserve voice, #70 admin trial caps,
 #25 Drive export stuck, #9 second Fast CPU, #6 drops board spec,
-#4 operator onboarding.
+#4 operator onboarding. This Cloud Agent cannot push `varimo-live`.
 
 **Close as obsolete vs two GitHubs:** #16 (lab/live docs on the old Live
 branch), #23 (Lab Studio PR into the old Live branch).
