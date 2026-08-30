@@ -4,6 +4,7 @@ import {
   captionSnippet,
   captionToggleHint,
   captionToggleLabel,
+  captionToggleSectionLabel,
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
@@ -23,6 +24,7 @@ describe("prepare copy", () => {
   });
 
   it("asks for captions on Generate, not a separate bank UI", () => {
+    expect(captionToggleSectionLabel()).toMatch(/3 · captions/i);
     expect(captionToggleLabel()).toMatch(/write captions/i);
     expect(captionToggleHint()).toMatch(/gallery/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");

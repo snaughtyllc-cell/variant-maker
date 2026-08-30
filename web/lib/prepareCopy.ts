@@ -19,6 +19,10 @@ export function preparingSlotLabel(): string {
   return "starting";
 }
 
+export function captionToggleSectionLabel(): string {
+  return "3 · Captions";
+}
+
 export function captionToggleLabel(): string {
   return "Write captions for these copies";
 }
