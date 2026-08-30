@@ -36,8 +36,10 @@ GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
 GALLERY_KEEP_HOURS_ENV = "VARIANT_GALLERY_KEEP_HOURS"
 # Age is the default: a busy day of failed retries must not boot a good pack.
 # Count cap is optional (0 = off). 0 hours disables age prune.
+# 7 days so a posted clip is still on the Gallery row for Flagged / post URL.
+GALLERY_KEEP_DAYS = 7
 DEFAULT_GALLERY_KEEP_JOBS = 0
-DEFAULT_GALLERY_KEEP_HOURS = 24.0
+DEFAULT_GALLERY_KEEP_HOURS = float(GALLERY_KEEP_DAYS * 24)
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
 COPY_FAILED_MSG = (
@@ -173,7 +175,7 @@ def gallery_keep_jobs(environ: Mapping[str, str] | None = None) -> int:
 
 
 def gallery_keep_hours(environ: Mapping[str, str] | None = None) -> float:
-    """Hours to keep a finished Generate job. Default 24. 0 disables age prune."""
+    """Hours to keep a finished Generate job. Default 7 days. 0 disables age prune."""
     env = os.environ if environ is None else environ
     raw = env.get(GALLERY_KEEP_HOURS_ENV, str(DEFAULT_GALLERY_KEEP_HOURS))
     try:
@@ -552,7 +554,7 @@ class JobStore:
     def prune_finished_jobs(self) -> None:
         """Drop finished Generate jobs past the age window and/or over a count cap.
 
-        Default is 24 hours, no count cap — failed retries in a busy day must not
+        Default is 7 days, no count cap — failed retries in a busy day must not
         boot a good pack. Running jobs are never deleted. hours=0 and keep=0
         disables. An 8-pack is one job.
         """
@@ -823,7 +825,7 @@ class JobStore:
         return self._jobs.get(job_id)
 
     def list(self) -> list[Job]:
-        # Opening Gallery is the 24h sweep — packs expire even if nobody generates.
+        # Opening Gallery is the 7-day sweep — packs expire even if nobody generates.
         self.prune_finished_jobs()
         return list(self._jobs.values())
 

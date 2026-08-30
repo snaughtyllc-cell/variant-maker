@@ -12,7 +12,7 @@ Jeff signed the compete-axes look for **lab** (PR #58). Next product tracks:
 
 1. **HQ is not a 20-pack product.** One GPU reconstruct takes too long. The build is
    **one HQ pass, then Fast N** from that file — the step before the daily pack.
-2. **Weekly usage** must survive the 24h Gallery prune. Live queue Fast/HQ stays
+2. **Weekly usage** must survive the 7-day Gallery prune. Live queue Fast/HQ stays
    “who is generating now.” Week Fast / Week HQ is the ledger.
 3. **Sentry + PostHog**, env-gated, no-op without keys. Server HTTP capture so
    npm/`sentry-sdk` stay optional.

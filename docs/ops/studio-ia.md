@@ -37,7 +37,7 @@ row + progress card.
 | Tab | Route | Audience | Phone bar | What it is |
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue. |
-| Gallery | `/gallery` | everyone | yes | 24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. |

@@ -51,14 +51,14 @@ Set the **same** four vars on the RunPod serverless endpoint.
 
 ## 2b. Gallery keep (Railway volume)
 
-Studio keeps finished Generate jobs for **24 hours** per workspace (one 8-pack
+Studio keeps finished Generate jobs for **7 days** per workspace (one 8-pack
 = one job). Finished jobs older than that are deleted from the volume and from
 R2 `inputs/{source_id}/` and `outputs/{source_id}/`. Running jobs are never
 deleted. Opening Gallery and next Studio boot (`hydrate_from_disk`) also prune.
 
-Age window: `VARIANT_GALLERY_KEEP_HOURS` (default `24`; `0` disables age prune).
+Age window: `VARIANT_GALLERY_KEEP_HOURS` (default `168` = 7 days; `0` disables age prune).
 Optional count cap: `VARIANT_GALLERY_KEEP_JOBS` (default `0` = off). The volume
-is the expensive part — leave the 24-hour window on.
+holds the files — 7 days is what post tracking needs (Flagged / live post URL).
 
 ## 3. RunPod serverless (engine)
 

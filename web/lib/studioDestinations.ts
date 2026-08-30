@@ -34,7 +34,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
+      "7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
   },
   {
     href: "/drops",

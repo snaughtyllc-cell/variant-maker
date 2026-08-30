@@ -1,6 +1,6 @@
 """Server tests seed jobs with old created_utc stamps (Jan / Jul fixtures).
 
-Production default is 24h age prune. That would empty Gallery in those tests
+Production default is 7-day age prune. That would empty Gallery in those tests
 on list()/hydrate. Opt in with JobStore(..., gallery_keep_hours=24) or by
 deleting VARIANT_GALLERY_KEEP_HOURS.
 """

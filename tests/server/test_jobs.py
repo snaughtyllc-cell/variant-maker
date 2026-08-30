@@ -10,6 +10,7 @@ from tests.server.fakes import FakeRunner
 from variant_maker.server.events import VariantEvent
 from variant_maker.server.jobs import (
     COPY_FAILED_MSG,
+    DEFAULT_GALLERY_KEEP_HOURS,
     Job,
     JobSource,
     JobStore,
@@ -566,15 +567,22 @@ def test_gallery_keep_jobs_env_default_and_disable(monkeypatch):
 
 def test_gallery_keep_hours_env_default_and_disable(monkeypatch):
     monkeypatch.delenv("VARIANT_GALLERY_KEEP_HOURS", raising=False)
-    assert gallery_keep_hours() == 24.0
+    assert gallery_keep_hours() == 168.0
+    assert DEFAULT_GALLERY_KEEP_HOURS == 168.0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "0")
     assert gallery_keep_hours() == 0.0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "12")
     assert gallery_keep_hours() == 12.0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "nope")
-    assert gallery_keep_hours() == 24.0
+    assert gallery_keep_hours() == 168.0
     monkeypatch.setenv("VARIANT_GALLERY_KEEP_HOURS", "-3")
     assert gallery_keep_hours() == 0.0
+
+
+def test_jobstore_default_keep_hours_is_seven_days(monkeypatch, tmp_path):
+    monkeypatch.delenv("VARIANT_GALLERY_KEEP_HOURS", raising=False)
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store._keep_hours == 168.0
 
 
 def test_hydrate_prunes_to_gallery_keep(tmp_path):
@@ -631,6 +639,48 @@ def test_gallery_age_prunes_finished_job_after_24h(tmp_path, monkeypatch):
     assert os.path.isdir(job_dir)
 
     clock["now"] = t0 + timedelta(hours=25)
+    store.prune_finished_jobs()
+    assert store.get(job_id) is None
+    assert not os.path.isdir(job_dir)
+
+
+def test_gallery_age_keeps_finished_job_inside_7d(tmp_path, monkeypatch):
+    """Post tracking: a pack from yesterday must still be on the Gallery row."""
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=168,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(job.job_id, timeout=5)
+
+    clock["now"] = t0 + timedelta(hours=25)
+    store.prune_finished_jobs()
+    assert store.get(job.job_id) is not None
+    assert os.path.isdir(os.path.join(str(tmp_path), "jobs", job.job_id))
+
+
+def test_gallery_age_prunes_finished_job_after_7d(tmp_path, monkeypatch):
+    """Day 8 drops off the Gallery row."""
+    t0 = datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+    clock = {"now": t0}
+    monkeypatch.setattr("variant_maker.server.jobs._utc_now", lambda: clock["now"])
+    store = JobStore(
+        Workspace(str(tmp_path)), FakeRunner({}),
+        gallery_keep_jobs=0, gallery_keep_hours=168,
+    )
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    assert store.wait(job.job_id, timeout=5)
+    job_id = job.job_id
+    job_dir = os.path.join(str(tmp_path), "jobs", job_id)
+
+    clock["now"] = t0 + timedelta(days=7)
+    store.prune_finished_jobs()
+    assert store.get(job_id) is not None
+
+    clock["now"] = t0 + timedelta(days=8)
     store.prune_finished_jobs()
     assert store.get(job_id) is None
     assert not os.path.isdir(job_dir)
