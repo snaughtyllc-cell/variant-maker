@@ -165,8 +165,8 @@ def test_score_audio_on_aac_mp4(tmp_path):
         subprocess.run(
             [
                 "ffmpeg", "-y", "-v", "error",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
-                "-f", "lavfi", "-i", "color=c=black:s=64x64:r=15:d=2",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+                "-f", "lavfi", "-i", "color=c=black:s=64x64:r=15:d=6",
                 "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "96k", path,
             ],
@@ -180,3 +180,23 @@ def test_score_audio_on_aac_mp4(tmp_path):
     assert r["available"] is True, r
     assert r["sim"] is not None and r["sim"] > 0.9
     assert r["via"] == "ffmpeg_wav"
+
+
+def test_score_audio_short_file_is_empty_not_error(monkeypatch, tmp_path):
+    """fpcalc exits 2 with 'Empty fingerprint' on a 2s tone. That is a miss, not error."""
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    a.write_bytes(b"x")
+    b.write_bytes(b"y")
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
+        lambda path, *, length=120: [],
+    )
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_direct",
+        lambda path, *, length=120: [],
+    )
+    r = score_audio(str(a), str(b))
+    assert r["available"] is False
+    assert r["reason"] == "empty"

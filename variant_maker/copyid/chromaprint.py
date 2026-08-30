@@ -69,11 +69,22 @@ def match_fingerprints(
 def _fpcalc_direct(path: str, *, length: int = 120) -> list[int]:
     proc = subprocess.run(
         ["fpcalc", "-raw", "-length", str(int(length)), path],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
-    return parse_raw(proc.stdout or proc.stderr or "")
+    text = proc.stdout or ""
+    err = proc.stderr or ""
+    combined = f"{text}\n{err}".lower()
+    if proc.returncode != 0:
+        if "empty fingerprint" in combined:
+            return []
+        raise subprocess.CalledProcessError(
+            proc.returncode, proc.args, output=proc.stdout, stderr=proc.stderr,
+        )
+    if not text.strip():
+        return []
+    return parse_raw(text or err)
 
 
 def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
@@ -109,11 +120,12 @@ def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
     direct fpcalc ran first and errored; empty fingerprints were not a miss.
     Stay ``record`` — this only has to *score*.
     """
+    wav_fp: list[int] | None = None
     wav_err: BaseException | None = None
     try:
-        fp = _fpcalc_via_ffmpeg(path, length=length)
-        if fp:
-            return fp, "ffmpeg_wav"
+        wav_fp = _fpcalc_via_ffmpeg(path, length=length)
+        if wav_fp:
+            return wav_fp, "ffmpeg_wav"
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
         wav_err = exc
     try:
@@ -121,10 +133,14 @@ def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
         if fp:
             return fp, "direct"
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        if wav_fp is not None:
+            return wav_fp, "ffmpeg_wav"
         if wav_err is not None:
             raise wav_err from exc
         raise
-    raise ValueError("empty chromaprint")
+    if wav_fp is not None:
+        return wav_fp, "ffmpeg_wav"
+    return [], "direct"
 
 
 def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
