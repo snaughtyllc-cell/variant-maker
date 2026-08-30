@@ -27,6 +27,7 @@ vi.mock("@/lib/api", () => ({
   setAdminView: vi.fn(),
   removeAdminUser: vi.fn(),
   setWorkspaceExperience: vi.fn(),
+  patchAdminWorkspace: vi.fn(),
 }));
 
 import {
@@ -35,6 +36,8 @@ import {
   removeAdminUser,
   setAdminView,
   setWorkspaceExperience,
+  patchAdminWorkspace,
+  createInvite,
 } from "@/lib/api";
 import AdminPage from "@/app/admin/page";
 
@@ -67,6 +70,11 @@ const workspaces: AdminWorkspace[] = [
     last_job_utc: "2026-08-20T00:00:00Z",
     last_error: null,
     experience: "agency",
+    week_sources: 2,
+    week_copies: 16,
+    month_sources: 5,
+    month_copies: 40,
+    all_sources: 2,
   },
 ];
 
@@ -87,6 +95,19 @@ beforeEach(() => {
     ...workspaces[0],
     experience: "solo",
   });
+  vi.mocked(patchAdminWorkspace).mockImplementation(async (_id, body) => ({
+    ...workspaces[0],
+    ...body,
+  }));
+  vi.mocked(createInvite).mockImplementation(async (email, kind, caps) => ({
+    id: "inv_1",
+    email,
+    kind,
+    workspace_id: kind === "join" ? "ws_home" : null,
+    created_utc: "2026-08-30T00:00:00Z",
+    source_limit: caps?.source_limit ?? null,
+    variants_per_source_limit: caps?.variants_per_source_limit ?? null,
+  }));
 });
 
 describe("Admin page", () => {
@@ -137,6 +158,51 @@ describe("Admin page", () => {
     fireEvent.change(select, { target: { value: "solo" } });
     await waitFor(() => {
       expect(setWorkspaceExperience).toHaveBeenCalledWith("ws_va", "solo");
+    });
+  });
+
+  it("lets the admin set a trial source cap", async () => {
+    render(<AdminPage />);
+    const cap = await screen.findByLabelText("Source cap for Maya");
+    fireEvent.change(cap, { target: { value: "5" } });
+    await waitFor(() => {
+      expect(cap).toHaveValue(5);
+    });
+    fireEvent.blur(cap);
+    await waitFor(() => {
+      expect(patchAdminWorkspace).toHaveBeenCalledWith("ws_va", {
+        source_limit: 5,
+        variants_per_source_limit: null,
+      });
+    });
+  });
+
+  it("shows week usage on the workspace row", async () => {
+    render(<AdminPage />);
+    expect(await screen.findByText("2 src · 16")).toBeInTheDocument();
+    expect(screen.getByText("2 used")).toBeInTheDocument();
+  });
+
+  it("sends trial caps on a new-workspace invite", async () => {
+    render(<AdminPage />);
+    fireEvent.change(await screen.findByLabelText("Invite kind"), {
+      target: { value: "new_workspace" },
+    });
+    fireEvent.change(screen.getByLabelText("Invite email"), {
+      target: { value: "trial@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Trial source cap"), {
+      target: { value: "4" },
+    });
+    fireEvent.change(screen.getByLabelText("Trial copies per source"), {
+      target: { value: "10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    await waitFor(() => {
+      expect(createInvite).toHaveBeenCalledWith("trial@example.com", "new_workspace", {
+        source_limit: 4,
+        variants_per_source_limit: 10,
+      });
     });
   });
 });

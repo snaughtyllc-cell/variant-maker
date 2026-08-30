@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import {
   createInvite,
@@ -9,9 +9,11 @@ import {
   removeAdminUser,
   setAdminView,
   setWorkspaceExperience,
+  patchAdminWorkspace,
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
+import { usagePair } from "@/lib/trialCap";
 import { ShieldCheck } from "lucide-react";
 
 export default function AdminPage() {
@@ -22,6 +24,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [kind, setKind] = useState<InviteKind>("join");
+  const [inviteSourceLimit, setInviteSourceLimit] = useState("");
+  const [invitePerSource, setInvitePerSource] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -84,15 +88,43 @@ export default function AdminPage() {
     }
   }
 
+  async function handleLimits(
+    workspaceId: string,
+    sourceLimit: number | null,
+    perSource: number | null,
+  ) {
+    setFormError(null);
+    try {
+      const next = await patchAdminWorkspace(workspaceId, {
+        source_limit: sourceLimit,
+        variants_per_source_limit: perSource,
+      });
+      setWorkspaces((prev) => prev.map((ws) => (ws.id === workspaceId ? next : ws)));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to update limits");
+    }
+  }
+
   async function handleInvite(e: FormEvent) {
     e.preventDefault();
     if (submitting) return;
     setFormError(null);
     setSubmitting(true);
     try {
-      const created = await createInvite(email.trim(), kind);
+      const created = await createInvite(
+        email.trim(),
+        kind,
+        kind === "new_workspace"
+          ? {
+              source_limit: parseCap(inviteSourceLimit),
+              variants_per_source_limit: parseCap(invitePerSource),
+            }
+          : undefined,
+      );
       setInvites((prev) => [created, ...prev]);
       setEmail("");
+      setInviteSourceLimit("");
+      setInvitePerSource("");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create invite");
     } finally {
@@ -146,10 +178,11 @@ export default function AdminPage() {
           <p className="workspace-heading__eyebrow">Site administration</p>
           <h1>Admin</h1>
           <p className="workspace-heading__copy">
-          Open another studio with the same UI. Members are listed on each
-          workspace — Remove drops their login until you invite them again.
-          Outside operators add their own VAs on <strong>Team</strong>; this
-          page is the only place that can mint a new empty studio.
+          Open another studio. Week / 30 days is sources and copies that
+          actually finished (stays after Gallery prune). Empty cap is
+          unlimited — type a source count and copies/clip for a trial, on
+          the row or on a new-workspace invite. Weekly operator limits
+          come later.
           </p>
         </div>
       </div>
@@ -176,7 +209,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: "var(--color-muted)", textAlign: "left" }}>
-                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Last job", "Last error", ""].map((h) => (
+                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Week", "30d", "Cap", "Last job", "Last error", ""].map((h) => (
                   <th key={h || "open"} style={{ padding: "10px 12px", fontWeight: 600 }}>
                     {h}
                   </th>
@@ -186,7 +219,7 @@ export default function AdminPage() {
             <tbody>
               {loading && workspaces.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
+                  <td colSpan={13} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
                     Loading…
                   </td>
                 </tr>
@@ -266,6 +299,23 @@ export default function AdminPage() {
                     <td style={{ padding: "10px 12px" }}>{ws.running}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.fast}</td>
                     <td style={{ padding: "10px 12px" }}>{ws.hq}</td>
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                      {usagePair(ws.week_sources, ws.week_copies)}
+                    </td>
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                      {usagePair(ws.month_sources, ws.month_copies)}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <TrialCapFields
+                        name={ws.name}
+                        sourceLimit={ws.source_limit}
+                        perSource={ws.variants_per_source_limit}
+                        used={ws.all_sources}
+                        onSave={(sourceLimit, perSource) =>
+                          handleLimits(ws.id, sourceLimit, perSource)
+                        }
+                      />
+                    </td>
                     <td style={{ padding: "10px 12px", color: "var(--color-muted)", whiteSpace: "nowrap" }}>
                       {ws.last_job_utc ? ws.last_job_utc.replace("T", " ").replace("Z", "") : "—"}
                     </td>
@@ -345,9 +395,48 @@ export default function AdminPage() {
           >
             {submitting ? "Sending…" : "Invite"}
           </button>
+          {kind === "new_workspace" && (
+            <>
+              <input
+                type="number"
+                min={1}
+                placeholder="∞ sources"
+                aria-label="Trial source cap"
+                value={inviteSourceLimit}
+                onChange={(e) => setInviteSourceLimit(e.target.value)}
+                style={{
+                  width: 110,
+                  background: "var(--color-panel2)",
+                  border: "1px solid var(--color-line)",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  color: "var(--color-text)",
+                }}
+              />
+              <input
+                type="number"
+                min={1}
+                placeholder="∞ /clip"
+                aria-label="Trial copies per source"
+                value={invitePerSource}
+                onChange={(e) => setInvitePerSource(e.target.value)}
+                style={{
+                  width: 90,
+                  background: "var(--color-panel2)",
+                  border: "1px solid var(--color-line)",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  color: "var(--color-text)",
+                }}
+              />
+            </>
+          )}
         </form>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
           Join adds them to your home workspace. New workspace gives them an empty studio of their own.
+          Leave the two numbers empty for unlimited; type a source cap and copies/clip to limit a trial.
           They sign in with that email plus a password they choose, or with Google.
         </div>
 
@@ -378,6 +467,9 @@ export default function AdminPage() {
                   <div style={{ fontWeight: 700 }}>{inv.email}</div>
                   <div style={{ color: "var(--color-muted)", marginTop: 2 }}>
                     {inv.kind === "join" ? "Join my workspace" : "New workspace"}
+                    {inv.source_limit != null || inv.variants_per_source_limit != null
+                      ? ` · cap ${inv.source_limit ?? "∞"} src / ${inv.variants_per_source_limit ?? "∞"} per clip`
+                      : ""}
                     {inv.created_utc ? ` · ${inv.created_utc.replace("T", " ").replace("Z", "")}` : ""}
                   </div>
                 </div>
@@ -403,5 +495,81 @@ export default function AdminPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function parseCap(raw: string): number | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function TrialCapFields({
+  name,
+  sourceLimit,
+  perSource,
+  used,
+  onSave,
+}: {
+  name: string;
+  sourceLimit: number | null | undefined;
+  perSource: number | null | undefined;
+  used: number | null | undefined;
+  onSave: (sourceLimit: number | null, perSource: number | null) => void;
+}) {
+  const [sources, setSources] = useState(sourceLimit != null ? String(sourceLimit) : "");
+  const [copies, setCopies] = useState(perSource != null ? String(perSource) : "");
+
+  useEffect(() => {
+    setSources(sourceLimit != null ? String(sourceLimit) : "");
+  }, [sourceLimit]);
+  useEffect(() => {
+    setCopies(perSource != null ? String(perSource) : "");
+  }, [perSource]);
+
+  function commitFrom(nextS: number | null, nextP: number | null) {
+    if (nextS === (sourceLimit ?? null) && nextP === (perSource ?? null)) return;
+    onSave(nextS, nextP);
+  }
+
+  const field: CSSProperties = {
+    width: 56,
+    background: "var(--color-panel2)",
+    border: "1px solid var(--color-line)",
+    borderRadius: 8,
+    padding: "4px 6px",
+    fontSize: 12,
+    color: "var(--color-text)",
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      <input
+        type="number"
+        min={1}
+        placeholder="∞ src"
+        aria-label={`Source cap for ${name}`}
+        value={sources}
+        onChange={(e) => setSources(e.target.value)}
+        onBlur={(e) => commitFrom(parseCap(e.currentTarget.value), parseCap(copies))}
+        style={field}
+      />
+      <input
+        type="number"
+        min={1}
+        placeholder="∞ /clip"
+        aria-label={`Copies per source for ${name}`}
+        value={copies}
+        onChange={(e) => setCopies(e.target.value)}
+        onBlur={(e) => commitFrom(parseCap(sources), parseCap(e.currentTarget.value))}
+        style={field}
+      />
+      {(used ?? 0) > 0 || sourceLimit != null ? (
+        <span style={{ fontSize: 11, color: "var(--color-muted)", whiteSpace: "nowrap" }}>
+          {used ?? 0} used
+        </span>
+      ) : null}
+    </div>
   );
 }

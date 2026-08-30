@@ -228,6 +228,49 @@ def test_set_workspace_experience_defaults_agency(tmp_path):
     assert got is not None and got.experience == "solo"
 
 
+def test_patch_workspace_trial_caps(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Trial")
+    updated = store.patch_workspace(ws.id, {"source_limit": 5, "variants_per_source_limit": 8})
+    assert updated is not None
+    assert updated.source_limit == 5
+    assert updated.variants_per_source_limit == 8
+    cleared = store.patch_workspace(ws.id, {
+        "source_limit": None, "variants_per_source_limit": None,
+    })
+    assert cleared is not None
+    assert cleared.source_limit is None
+    assert cleared.variants_per_source_limit is None
+
+
+def test_new_workspace_invite_applies_trial_caps(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    store.add_invite(
+        email="t@x.com", kind="new_workspace", workspace_id=None,
+        source_limit=4, variants_per_source_limit=10,
+    )
+    user = provision_login(
+        store, email="t@x.com", name="T", admin_email="jeff@x.com",
+    )
+    assert user is not None
+    ws = store.get_workspace(user.workspace_id)
+    assert ws is not None
+    assert ws.experience == "solo"
+    assert ws.source_limit == 4
+    assert ws.variants_per_source_limit == 10
+
+
+def test_join_invite_does_not_store_trial_caps(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Jeff")
+    inv = store.add_invite(
+        email="va@x.com", kind="join", workspace_id=ws.id,
+        source_limit=3, variants_per_source_limit=8,
+    )
+    assert inv.source_limit is None
+    assert inv.variants_per_source_limit is None
+
+
 def test_missing_experience_key_is_agency(tmp_path):
     """Pre-experience tenants.json (Jeff Tingz live) must stay agency, not solo."""
     path = tmp_path / "t.json"

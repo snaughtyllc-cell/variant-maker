@@ -159,6 +159,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
+from .usage import backfill_jobs, usage_windows
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
@@ -712,13 +713,7 @@ def create_app(
                 AdminMemberOut(email=u.email, name=u.name, role=u.role)
                 for u in members
             ],
-            invites=[
-                InviteOut(
-                    id=i.id, email=i.email, kind=i.kind,
-                    workspace_id=i.workspace_id, created_utc=i.created_utc,
-                )
-                for i in invites
-            ],
+            invites=[_invite_out(i) for i in invites],
         )
 
     def _admin_workspace_out(ws) -> AdminWorkspaceOut:
@@ -733,6 +728,9 @@ def create_app(
         last_job_utc = ordered[0].created_utc if ordered else None
         last_error = next((j.error for j in ordered if j.error), None)
         members = sorted(users, key=lambda u: (0 if u.role == "owner" else 1, u.email))
+        done = [j for j in ordered if j.state == "done"]
+        backfill_jobs(bundle.store._ws, done)
+        usage = usage_windows(bundle.store._ws)
         return AdminWorkspaceOut(
             id=ws.id,
             name=ws.name,
@@ -748,6 +746,22 @@ def create_app(
             last_job_utc=last_job_utc,
             last_error=last_error,
             experience=getattr(ws, "experience", None) or "agency",
+            week_sources=usage["week"].sources,
+            week_copies=usage["week"].copies,
+            month_sources=usage["month"].sources,
+            month_copies=usage["month"].copies,
+            source_limit=getattr(ws, "source_limit", None),
+            variants_per_source_limit=getattr(ws, "variants_per_source_limit", None),
+            all_sources=usage["all"].sources,
+            all_copies=usage["all"].copies,
+        )
+
+    def _invite_out(i) -> InviteOut:
+        return InviteOut(
+            id=i.id, email=i.email, kind=i.kind,
+            workspace_id=i.workspace_id, created_utc=i.created_utc,
+            source_limit=getattr(i, "source_limit", None),
+            variants_per_source_limit=getattr(i, "variants_per_source_limit", None),
         )
 
     def _default_login_exchange(
@@ -889,6 +903,11 @@ def create_app(
         viewing_id = viewing_id or user.workspace_id
         ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
         fresh = tenants.get_user(user.email) or user
+        sources_used = 0
+        if hub is not None and viewing_id:
+            bundle = hub.bundle(viewing_id)
+            backfill_jobs(bundle.store._ws, [j for j in bundle.store.list() if j.state == "done"])
+            sources_used = usage_windows(bundle.store._ws)["all"].sources
         return AuthMeOut(
             auth_required=True,
             email=user.email,
@@ -904,6 +923,11 @@ def create_app(
                 workspace_experience=getattr(ws, "experience", None) if ws else None,
                 email=user.email,
             ),
+            source_limit=getattr(ws, "source_limit", None) if ws else None,
+            variants_per_source_limit=(
+                getattr(ws, "variants_per_source_limit", None) if ws else None
+            ),
+            sources_used=sources_used,
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:
@@ -1054,13 +1078,7 @@ def create_app(
     def list_invites(request: Request) -> list[InviteOut]:
         _require_admin(request)
         assert tenants is not None
-        return [
-            InviteOut(
-                id=i.id, email=i.email, kind=i.kind,
-                workspace_id=i.workspace_id, created_utc=i.created_utc,
-            )
-            for i in tenants.list_invites()
-        ]
+        return [_invite_out(i) for i in tenants.list_invites()]
 
     @app.post("/api/auth/invites", status_code=201, response_model=InviteOut)
     def create_invite(request: Request, body: InviteCreateIn) -> InviteOut:
@@ -1068,13 +1086,14 @@ def create_app(
         assert tenants is not None
         ws_id = admin.workspace_id if body.kind == "join" else None
         try:
-            inv = tenants.add_invite(email=body.email, kind=body.kind, workspace_id=ws_id)
+            inv = tenants.add_invite(
+                email=body.email, kind=body.kind, workspace_id=ws_id,
+                source_limit=body.source_limit,
+                variants_per_source_limit=body.variants_per_source_limit,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return InviteOut(
-            id=inv.id, email=inv.email, kind=inv.kind,
-            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
-        )
+        return _invite_out(inv)
 
     @app.delete("/api/auth/invites/{invite_id}", status_code=204)
     def delete_invite(request: Request, invite_id: str) -> None:
@@ -1089,13 +1108,47 @@ def create_app(
         assert tenants is not None
         return [_admin_workspace_out(ws) for ws in tenants.list_workspaces()]
 
+    def _enforce_generate_limits(request: Request, source_count: int, count: int) -> None:
+        if not auth_on or tenants is None or hub is None:
+            return
+        user = getattr(request.state, "user", None)
+        if user is not None and is_admin_email(user.email, admin_email):
+            return
+        viewing_id = getattr(request.state, "viewing_workspace_id", None)
+        ws_id = viewing_id or (user.workspace_id if user is not None else None)
+        if not ws_id:
+            return
+        info = tenants.get_workspace(ws_id)
+        if info is None:
+            return
+        per = info.variants_per_source_limit
+        if per is not None and int(count) > per:
+            raise HTTPException(
+                status_code=403,
+                detail=f"This studio is capped at {per} copies per source.",
+            )
+        cap = info.source_limit
+        if cap is None:
+            return
+        bundle = hub.bundle(ws_id)
+        backfill_jobs(bundle.store._ws, [j for j in bundle.store.list() if j.state == "done"])
+        used = usage_windows(bundle.store._ws)["all"].sources
+        if used + int(source_count) > cap:
+            raise HTTPException(
+                status_code=403,
+                detail=f"This studio can generate {cap} source clips. {used} already used.",
+            )
+
     @app.patch("/api/admin/workspaces/{workspace_id}", response_model=AdminWorkspaceOut)
     def admin_patch_workspace(
         request: Request, workspace_id: str, body: WorkspaceExperienceIn,
     ) -> AdminWorkspaceOut:
         _require_admin(request)
         assert tenants is not None
-        ws = tenants.set_workspace_experience(workspace_id, body.experience)
+        fields = body.model_dump(exclude_unset=True)
+        if not fields:
+            raise HTTPException(status_code=400, detail="nothing to update")
+        ws = tenants.patch_workspace(workspace_id, fields)
         if ws is None:
             raise HTTPException(status_code=404, detail="workspace not found")
         return _admin_workspace_out(ws)
@@ -1125,10 +1178,7 @@ def create_app(
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return InviteOut(
-            id=inv.id, email=inv.email, kind=inv.kind,
-            workspace_id=inv.workspace_id, created_utc=inv.created_utc,
-        )
+        return _invite_out(inv)
 
     @app.delete("/api/workspace/invites/{invite_id}", status_code=204)
     def workspace_delete_invite(request: Request, invite_id: str) -> None:
@@ -1167,10 +1217,11 @@ def create_app(
         return resp
 
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
-    async def create_job(files: list[UploadFile], count: int = Form(...),
+    async def create_job(request: Request, files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
                           generate_captions: bool = Form(False)) -> CreateJobResponse:
+        _enforce_generate_limits(request, len(files), count)
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
@@ -1215,6 +1266,7 @@ def create_app(
 
     @app.post("/api/jobs/from-uploads", status_code=201, response_model=CreateJobResponse)
     def create_job_from_uploads(
+        request: Request,
         upload_ids: str = Form(...),
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
@@ -1224,6 +1276,7 @@ def create_app(
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
             raise HTTPException(status_code=400, detail="upload_ids required")
+        _enforce_generate_limits(request, len(ids), count)
         paths: list[tuple[str, str]] = []
         for uid in ids:
             meta = _UPLOAD_META.get(uid)
@@ -1243,7 +1296,7 @@ def create_app(
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
-    def create_job_from_drive(body: JobFromDriveIn) -> CreateJobResponse:
+    def create_job_from_drive(request: Request, body: JobFromDriveIn) -> CreateJobResponse:
         _require_drive()
         dest = app.state.destinations.get(body.destination_id)
         if dest is None:
@@ -1251,6 +1304,7 @@ def create_app(
         file_ids = [fid.strip() for fid in body.file_ids if str(fid).strip()]
         if not file_ids:
             raise HTTPException(status_code=400, detail="file_ids required")
+        _enforce_generate_limits(request, len(file_ids), body.count)
         children = {
             f.id: f for f in _drive().list_files(dest.folder_id) if is_video_file(f)
         }

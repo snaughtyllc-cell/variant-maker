@@ -253,6 +253,9 @@ export interface AuthMe {
   is_admin: boolean;
   has_password: boolean;
   experience?: "solo" | "agency";
+  source_limit?: number | null;
+  variants_per_source_limit?: number | null;
+  sources_used?: number;
 }
 
 export interface Invite {
@@ -261,6 +264,8 @@ export interface Invite {
   kind: InviteKind;
   workspace_id: string | null;
   created_utc: string;
+  source_limit?: number | null;
+  variants_per_source_limit?: number | null;
 }
 
 export interface AdminMember {
@@ -288,6 +293,14 @@ export interface AdminWorkspace {
   last_job_utc: string | null;
   last_error: string | null;
   experience?: "solo" | "agency";
+  week_sources?: number;
+  week_copies?: number;
+  month_sources?: number;
+  month_copies?: number;
+  source_limit?: number | null;
+  variants_per_source_limit?: number | null;
+  all_sources?: number;
+  all_copies?: number;
 }
 
 export interface DropLedgerStatus {
