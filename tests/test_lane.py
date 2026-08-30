@@ -41,11 +41,14 @@ def test_claude_and_readme_tell_agents_this_is_lab():
 
 def test_lab_fast_ci_cannot_push_live_latest():
     lab = (ROOT / ".github/workflows/build-variant-fast-lab.yml").read_text()
-    live = (ROOT / ".github/workflows/build-variant-fast.yml").read_text()
     assert "-t ghcr.io/snaughtyllc-cell/variant-fast:lab" in lab
     assert "-t ghcr.io/snaughtyllc-cell/variant-fast:latest" not in lab
-    assert "snaughtyllc-cell/varimo-live" in live
-    assert "Do not push :latest from Lab after cutover" in live
+    live_wf = ROOT / ".github/workflows/build-variant-fast.yml"
+    assert not live_wf.exists(), "Live Fast :latest CI belongs on varimo-live, not Lab"
+    for path in (ROOT / ".github/workflows").glob("*.yml"):
+        text = path.read_text()
+        assert "-t ghcr.io/snaughtyllc-cell/variant-fast:latest" not in text, path.name
+        assert "docker push ghcr.io/snaughtyllc-cell/variant-fast:latest" not in text, path.name
 
 
 def test_live_lane_template_is_live_not_lab():

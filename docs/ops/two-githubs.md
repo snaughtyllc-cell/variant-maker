@@ -1,7 +1,8 @@
 # Two GitHubs — Lab vs Live
 
-**Status:** Lab repo is this one. Live GitHub (`snaughtyllc-cell/varimo-live`)
-is created empty, then seeded — not merged.
+**Status:** Lab is this GitHub. Live is `snaughtyllc-cell/varimo-live`
+(`main`, seeded from `9457585` + Live lane file). Production Studio tracks
+that repo. Do not merge the two.
 
 Same-repo branches (`tier1` vs `cursor/railway-runpod-split-c975`) are how
 Studio UI and engine work keep getting **dropped**. A merge is Git combining
@@ -33,19 +34,18 @@ Machine-readable: `varimo-lane.json` (this checkout). Live template:
 3. **Two Cursor Cloud environments.** “Fix testers / live Studio” agents must
    open **varimo-live**. Lab experiments stay here. One agent on this repo
    cannot ship testers by merging a branch.
-4. **Railway reconnect once.** Production today tracks
-   `variant-maker` / `cursor/railway-runpod-split-c975`. After seed, point
-   that service at **varimo-live** / `main`. Until you do, GitHub split
-   does not change what testers see.
-5. **Two CI pipelines.** Lab Fast builds `:lab` only. Live Fast `:latest`
-   belongs on varimo-live after cutover. Do not push `:latest` from Lab
-   after cutover.
+4. **Railway production tracks Live.** Production Studio GitHub source is
+   `snaughtyllc-cell/varimo-live` / `main`. Lab Railway stays on this repo.
+   Do not point production at `variant-maker` again.
+5. **Two CI pipelines.** Lab Fast builds `:lab` only. There is no
+   `variant-fast:latest` workflow in this repo. Live Fast `:latest` belongs
+   on varimo-live. Do not push `:latest` from Lab.
 6. **A bugfix needed in both places is copied twice** (or
    `scripts/promote-to-live.sh` then a Live commit). No automatic backport.
-7. **Open Live PRs on this repo** (anything targeting
-   `cursor/railway-runpod-split-c975`) stay until seed; then cherry-pick
-   onto varimo-live. Do not merge Lab `tier1` into that Live branch to
-   “sync.”
+7. **Open PRs on this repo that targeted the old Live branch**
+   (`cursor/railway-runpod-split-c975`) are not production. Cherry-pick onto
+   varimo-live if testers still need them. Do not merge Lab `tier1` into
+   Live to “sync.”
 8. **Secrets stay on Railway / RunPod**, not in git. GHCR images can stay
    `ghcr.io/snaughtyllc-cell/variant-fast`. Grant the new repo `packages:
    write` (or keep publishing from Live Actions).
@@ -56,26 +56,19 @@ Machine-readable: `varimo-lane.json` (this checkout). Live template:
     Fast vs Live Fast is still `docs/ops/lab-fast.md`. Do not PATCH live
     Fast to test Lab.
 
-## Create Live GitHub (one click)
+## Cutover (done)
 
-This agent cannot create GitHub repos (read-only `gh`).
+Live GitHub exists and production Railway tracks `varimo-live` / `main`.
+Do not create another Live repo. Do not re-seed over testers. Promote with
+`scripts/promote-to-live.sh` (copy files, never merge).
 
-1. https://github.com/new
-2. Owner **snaughtyllc-cell**, name **varimo-live**
-3. **Empty** — no README, no `.gitignore`, no license
-4. Install the **Cursor** GitHub App on `varimo-live` (same as this repo)
-5. Tell the agent “varimo-live exists” — then:
+If Live GitHub is ever empty again (disaster only):
 
 ```bash
 LIVE_REMOTE=https://github.com/snaughtyllc-cell/varimo-live.git ./scripts/seed-live-repo.sh
 ```
 
-That pushes today’s Live Studio branch
-(`cursor/railway-runpod-split-c975`) to `varimo-live` `main` and writes
-the Live lane file. It does **not** merge Lab `tier1`.
-
-6. Railway: production GitHub source → `varimo-live` `main`
-7. New Cursor Cloud environment whose repo is `varimo-live`
+That still must **not** merge Lab `tier1`.
 
 ## Copy something to Live (not merge)
 

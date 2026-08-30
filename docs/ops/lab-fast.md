@@ -15,8 +15,8 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
 `cursor/aqmtp-uniqueness-c975` and `cursor/ig-720-fast-20-c975` (plus the
 older look branches).
-Pushes the `variant-fast:lab` tag only. Live `:latest` builds from
-`cursor/railway-runpod-split-c975` and `cursor/ship-loop-c975`.
+Pushes the `variant-fast:lab` tag only. This Lab repo must **not** push
+`variant-fast:latest`. Live `:latest` CI belongs on `snaughtyllc-cell/varimo-live`.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.
