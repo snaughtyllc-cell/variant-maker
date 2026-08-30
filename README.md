@@ -8,6 +8,10 @@ original videos (not degraded re-encodes) → plus a manifest.
 > `varimo` is the product name. The repo, the Python package (`variant_maker/`), and the
 > CLI (`variant-maker`, `variant-farm`, `variant-server`) keep their existing names.
 > Brand assets and usage rules live in [`brand/`](brand/README.md).
+>
+> **This GitHub is Lab** (`snaughtyllc-cell/variant-maker`). Testers / production
+> Studio are **`snaughtyllc-cell/varimo-live`**. Copy files over; do not merge.
+> See [`docs/ops/two-githubs.md`](docs/ops/two-githubs.md).
 
 - **Tier 1 (FFmpeg, CPU):** correct color, budgeted transforms, in-loop quality guard.
 - **Tier 2 (neural, GPU, optional):** Real-ESRGAN upscale, RIFE interpolation, content

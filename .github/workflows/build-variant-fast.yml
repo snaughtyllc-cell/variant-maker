@@ -1,5 +1,9 @@
 name: Build varimo Fast CPU worker
 
+# Live Fast :latest. After the two-GitHubs cutover this workflow belongs on
+# snaughtyllc-cell/varimo-live (main), not this Lab repo.
+# Do not push :latest from Lab after cutover.
+
 on:
   push:
     branches:

@@ -2,6 +2,17 @@
 
 Operating context for Claude Code. Read this first, every session.
 
+## THIS REPO IS LAB
+
+GitHub: `snaughtyllc-cell/variant-maker` (default branch `tier1`).
+
+Live testers and production Studio are a **second GitHub**:
+`snaughtyllc-cell/varimo-live`. Do **not** `git merge` Lab ↔ Live — that is
+how UI and engine work get dropped. Copy chosen files with
+`scripts/promote-to-live.sh`, then commit on varimo-live.
+
+Contract + effects: `docs/ops/two-githubs.md`.
+
 ## What this is
 A local-first, CLI-first **video variant generator**. One source video in → N rendered
 variants + a manifest out. The variants must read as **real, original videos** — not

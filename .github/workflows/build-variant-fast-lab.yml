@@ -1,5 +1,6 @@
 name: Build varimo Fast CPU worker (lab)
 
+# Lab GitHub (snaughtyllc-cell/variant-maker) only.
 # Experiment image only. Does not overwrite variant-fast:latest (live).
 on:
   push:

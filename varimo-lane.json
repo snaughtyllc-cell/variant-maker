@@ -1,0 +1,15 @@
+{
+  "lane": "lab",
+  "github_repo": "snaughtyllc-cell/variant-maker",
+  "live_github_repo": "snaughtyllc-cell/varimo-live",
+  "default_branch": "tier1",
+  "live_seed_branch": "cursor/railway-runpod-split-c975",
+  "live_product_url": "https://varyforge-studio-production.up.railway.app",
+  "promote": "copy",
+  "do_not": [
+    "git merge Lab into Live",
+    "git merge Live into Lab",
+    "ship testers from this repo",
+    "auto-deploy production Railway from this repo after cutover"
+  ]
+}

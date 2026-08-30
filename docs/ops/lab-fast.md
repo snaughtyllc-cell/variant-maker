@@ -1,5 +1,8 @@
 # Lab Fast CPU (agent/Jeff experiments)
 
+GitHub: this repo is **Lab**. Testers are `snaughtyllc-cell/varimo-live`
+(copy files, never merge). See [`two-githubs.md`](two-githubs.md).
+
 Live Fast stays pinned. This endpoint is for engine experiments.
 
 | | Live | Lab |
