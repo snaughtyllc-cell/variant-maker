@@ -6,7 +6,7 @@ Contract:
     - every axis drawn from preset ranges via a seeded RNG
     - color/geometry axes are ZERO-MEAN (straddle neutral) — no systematic shift
     - transform axes scaled down so total normalized distortion <= preset.budget
-    - audio.speed MUST equal video.speed (sync); pitch only if rubberband available
+    - audio.speed MUST equal video.speed (sync); pitch only if rubberband AND audio_uniqueness
   total_distortion(preset, params) -> the normalized distortion these params spend
 
 The distortion model is the budget contract: each budgeted axis contributes a value in
@@ -227,6 +227,7 @@ def sample(
     shot: str | None = None,
     width: int | None = None,
     height: int | None = None,
+    audio_uniqueness: bool = False,
 ) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
@@ -333,24 +334,35 @@ def sample(
         video[name] = int(video[name])
     video["gop"] = gop
 
-    # Audio mirrors the single speed factor; everything else drawn independently.
-    eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)
-    eq_gains = [rng.uniform(-eq_d, eq_d) for _ in range(preset.eq_bands)]
-    loudnorm_i = rng.uniform(preset.loudnorm_i.lo, preset.loudnorm_i.hi)
-    aac_kbps = int(round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi)))
-    if rubberband:
-        p_d = min(0.0 - preset.pitch_pct.lo, preset.pitch_pct.hi - 0.0)
-        pitch_pct = rng.uniform(-p_d, p_d)
+    # Audio mirrors the single speed factor. Voice-safe default: no pitch / EQ /
+    # loudnorm (those make talking sound robotic). audio_uniqueness is the later
+    # "audio trends" switch.
+    if audio_uniqueness:
+        eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)
+        eq_gains = [rng.uniform(-eq_d, eq_d) for _ in range(preset.eq_bands)]
+        loudnorm_i = rng.uniform(preset.loudnorm_i.lo, preset.loudnorm_i.hi)
+        aac_kbps = int(round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi)))
+        if rubberband:
+            p_d = min(0.0 - preset.pitch_pct.lo, preset.pitch_pct.hi - 0.0)
+            pitch_pct = rng.uniform(-p_d, p_d)
+        else:
+            pitch_pct = 0.0
+        audio = {
+            "speed": video["speed"],  # invariant 3: one speed factor on both streams
+            "loudnorm_i": loudnorm_i,
+            "eq_bands": preset.eq_bands,
+            "eq_gains": eq_gains,
+            "pitch_pct": pitch_pct,
+            "aac_kbps": aac_kbps,
+        }
     else:
-        pitch_pct = 0.0
-
-    audio = {
-        "speed": video["speed"],  # invariant 3: one speed factor on both streams
-        "loudnorm_i": loudnorm_i,
-        "eq_bands": preset.eq_bands,
-        "eq_gains": eq_gains,
-        "pitch_pct": pitch_pct,
-        "aac_kbps": aac_kbps,
-    }
+        audio = {
+            "speed": video["speed"],
+            "loudnorm_i": None,
+            "eq_bands": preset.eq_bands,
+            "eq_gains": [0.0] * preset.eq_bands,
+            "pitch_pct": 0.0,
+            "aac_kbps": int(preset.aac_kbps.hi),
+        }
 
     return {"video": video, "audio": audio}

@@ -76,10 +76,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
 
-    rubberband = config.get("rubberband")
-    if rubberband is None:
-        rubberband = has_rubberband()
-        config = {**config, "rubberband": rubberband}
+    audio_uniqueness = bool(config.get("audio_uniqueness", False))
+    if audio_uniqueness:
+        rubberband = config.get("rubberband")
+        if rubberband is None:
+            rubberband = has_rubberband()
+    else:
+        rubberband = False
+    config = {**config, "rubberband": rubberband, "audio_uniqueness": audio_uniqueness}
 
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
@@ -151,6 +155,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),
+        "audio_uniqueness": bool(audio_uniqueness),
         "protect": False,
         "count": count,
         "shot": shot_info,
@@ -171,6 +176,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
                 shot=shot_kind, width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -212,6 +218,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s, shot=shot_kind,
                 width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if protect_frame is not None:
                 from .neural import protect
