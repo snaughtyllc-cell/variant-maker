@@ -13,6 +13,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from . import autotune, look, quality, uniqueness
+from .copyid import normalize_mode
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
@@ -98,15 +99,21 @@ def run(config: dict, *, on_event=None) -> Manifest:
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
 
-    rubberband = config.get("rubberband")
-    if rubberband is None:
-        rubberband = has_rubberband()
-        config = {**config, "rubberband": rubberband}
+    audio_uniqueness = bool(config.get("audio_uniqueness", False))
+    if audio_uniqueness:
+        rubberband = config.get("rubberband")
+        if rubberband is None:
+            rubberband = has_rubberband()
+    else:
+        rubberband = False
+    config = {**config, "rubberband": rubberband, "audio_uniqueness": audio_uniqueness}
 
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
     # attempt on the strong preset.
     uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
+    # off (default Fast) | record (score heads, SSIM gates) | gate (fused min).
+    copyid_mode = normalize_mode(config.get("copyid"))
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
@@ -173,11 +180,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),
+        "audio_uniqueness": bool(audio_uniqueness),
         "protect": False,
         "count": count,
         "shot": shot_info,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
+        "copyid": copyid_mode,
     }
 
     def _prep(i: int):
@@ -193,6 +202,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
                 shot=shot_kind, width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -233,6 +243,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s, shot=shot_kind,
                 width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if protect_frame is not None:
                 from .neural import protect
@@ -284,8 +295,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 return {}
 
         def _score_uniqueness_now() -> dict:
+            # Extra kwargs only when enabled so existing test fakes stay valid.
+            extra = {"copyid": copyid_mode} if copyid_mode != "off" else {}
             scored = uniqueness.score_uniqueness(
-                src.path, path, target=uniqueness_target,
+                src.path, path, target=uniqueness_target, **extra,
             )
             return _apply_peer_status(scored, _peer_bits(path))
 
@@ -456,6 +469,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 "uniqueness_target": tuned["uniqueness_target"],
                 "bits": tuned.get("bits"),
                 "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
+                # Fast auto_tune used to drop these — lab pack 3d4fae98ca77
+                # ran copyid=record and still wrote quality.heads=null.
+                "heads": tuned.get("heads"),
+                "copyid_mode": tuned.get("copyid_mode"),
+                "fused_from": tuned.get("fused_from"),
             }
             cleared = (
                 tuned.get("quality_passed")
@@ -544,6 +562,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_status": look_info.get("look_status"),
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
+            "heads": u.get("heads"),
         }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):

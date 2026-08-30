@@ -873,3 +873,64 @@ def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
     ))
     assert seen
     assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)
+
+
+def test_pipeline_forwards_copyid_gate(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    seen = {}
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        seen["kw"] = kw
+        return _ok_score(0.5, bits=32, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="gate", uniq_strengths=[1.0]))
+    assert seen["kw"].get("copyid") == "gate"
+    assert manifest.run.get("copyid") == "gate"
+
+
+def test_pipeline_records_heads_on_quality(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    heads = {
+        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
+        "visual": {"uniqueness": 0.2, "sim": 0.6, "available": True},
+    }
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        return {**_ok_score(0.5, bits=32, status="ok"), "heads": heads}
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="record", uniq_strengths=[1.0]))
+    assert manifest.variants[0].quality.get("heads")["visual"]["sim"] == 0.6
+    assert manifest.run.get("copyid") == "record"
+
+def test_pipeline_records_heads_through_fast_autotune(monkeypatch, tmp_path):
+    """Fast daily packs reconstruct ``u`` from tune() — must keep copyid heads.
+
+    Lab pack 3d4fae98ca77 ran copyid=record but wrote quality.heads=null
+    because the auto_tune success path copied bits/status and dropped heads.
+    """
+    _stub_common(monkeypatch)
+    heads = {
+        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True, "status": "ok"},
+        "audio": {"uniqueness": 0.26, "sim": 0.74, "available": True, "status": "ok"},
+        "visual": {"uniqueness": None, "sim": None, "available": False},
+    }
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        return {
+            **_ok_score(0.5, bits=32, status="ok"),
+            "heads": heads,
+            "copyid_mode": kw.get("copyid") or "record",
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(
+        tmp_path, copyid="record", auto_tune=True, allow_creative_escalate=False,
+    ))
+    got = manifest.variants[0].quality.get("heads")
+    assert got is not None
+    assert got["audio"]["sim"] == 0.74
+    assert got["visual"]["available"] is False
+    assert manifest.run.get("copyid") == "record"
+

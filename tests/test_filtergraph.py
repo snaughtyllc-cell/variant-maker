@@ -609,6 +609,74 @@ def test_crop_offset_omitted_when_no_crop():
     assert "crop=" not in vf
 
 
+def test_crop_omitted_when_keep_is_identity_even_with_end_keys():
+    p = make_params(video={
+        "crop_keep": 1.0, "crop_x_frac": 0.4, "crop_y_frac": 0.4,
+        "crop_x_end_frac": 0.6, "crop_y_end_frac": 0.6,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "crop=" not in vf
+
+
+def test_static_crop_when_end_equals_start():
+    """End keys present but equal to start → same static crop as the golden."""
+    p = make_params(video={
+        "crop_keep": 0.96, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
+        "crop_x_end_frac": 0.5, "crop_y_end_frac": 0.5,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
+    assert "sin(2*PI" not in vf
+
+
+def test_missing_end_keys_emit_static_crop():
+    """Backward compatible: no end keys → today's centered static crop string."""
+    vf = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
+
+
+def test_drifting_crop_lerps_window_with_escaped_commas():
+    p = make_params(video={
+        "crop_keep": 0.96, "crop_x_frac": 0.40, "crop_y_frac": 0.50,
+        "crop_x_end_frac": 0.55, "crop_y_end_frac": 0.60,
+        "trim_s": 0.2, "trim_end_s": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
+    assert "t/" in vf
+    assert r"\," in vf
+    assert "0.4000" in vf
+    assert "0.5500" in vf
+    assert "0.5000" in vf
+    assert "0.6000" in vf
+    assert "t/9.8000" in vf
+    assert "min(max(t/9.8000\\,0)\\,1)" in vf
+    # Ease, not a linear ramp — linear + integer crop is the hard pixel shift.
+    assert "*(3-2*" in vf or "3\\,-2*" in vf
+    assert "0.4000" in vf and "0.5500" in vf
+    # Half-pixel crop so 1px stair-steps get filtered on the way back down.
+    assert vf.index("scale=trunc(iw/2)*4:trunc(ih/2)*4") < vf.index("crop=")
+    assert vf.index("setpts=PTS-STARTPTS") < vf.index("crop=")
+    # Compete axes still sit after crop.
+    assert vf.index("crop=") < vf.index("eq=")
+    assert "vignette=" not in vf
+
+
+def test_handheld_crop_adds_two_sines_and_clamps_to_caption_band():
+    p = make_params(video={
+        "crop_keep": 0.88, "crop_x_frac": 0.50, "crop_y_frac": 0.95,
+        "crop_x_end_frac": 0.60, "crop_y_end_frac": 0.98,
+        "crop_hand_amp_x": 0.04, "crop_hand_amp_y": 0.01,
+        "crop_hand_p1": 2.0, "crop_hand_p2": 5.0,
+        "trim_s": 0.0, "trim_end_s": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(duration=12.0, w=720, h=1280), REELS)
+    assert "sin(2*PI*t/2.0000" in vf
+    assert "sin(2*PI*t/5.0000" in vf
+    assert "0.9000" in vf  # 720 caption floor
+    assert "1.0000" in vf
+    assert r"\," in vf
+
+
 def test_trim_end_only_uses_source_duration():
     p = make_params(video={"trim_s": 0.0, "trim_end_s": 0.5})
     vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
@@ -651,3 +719,24 @@ def test_loudnorm_kept_when_remaining_audio_is_long_enough():
     p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.0})
     af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)
     assert "loudnorm=I=-14.0:TP=-1.5:LRA=11" in af
+
+
+def test_voice_safe_audio_is_sync_only():
+    """No pitch / EQ / loudnorm — those make talking sound robotic. Tempo still matches video."""
+    p = make_params(audio={"pitch_pct": 0.0, "eq_gains": [0.0, 0.0], "loudnorm_i": None})
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert "rubberband=" not in af
+    assert "equalizer=" not in af
+    assert "loudnorm=" not in af
+    assert "atempo=1.020000" in af
+    assert "atrim=" in af
+
+
+def test_atempo_omitted_when_speed_is_one():
+    p = make_params(
+        video={"speed": 1.0},
+        audio={"speed": 1.0, "loudnorm_i": None, "eq_gains": [0.0, 0.0]},
+    )
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert "atempo=" not in af
+    assert "atrim=" in af

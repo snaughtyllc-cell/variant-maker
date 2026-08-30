@@ -4,6 +4,7 @@ import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
 import {
   FILE_FETCH_CONCURRENCY_APPLE,
+  downloadVariantUrls,
   fillFileCache,
   filesReadyNow,
   isAppleMobile,
@@ -56,6 +57,10 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
       }).finally(() => {
         shareLock.current = false;
       });
+      return;
+    }
+    if (plan === "os_download") {
+      downloadVariantUrls(saveRef);
       return;
     }
     setSaveBusy(true);

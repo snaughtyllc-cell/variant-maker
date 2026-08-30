@@ -44,6 +44,56 @@ def effective_share_email(
     return read_share_email(environ) or info.connected_email or info.sa_email
 
 
+def list_oauth_token_paths(data_dir: str, current: str | None = None) -> list[str]:
+    """Workspace token first, then other tenant tokens on this Studio volume."""
+    out: list[str] = []
+
+    def add(path: str) -> None:
+        abs_path = os.path.abspath(path)
+        if abs_path not in out:
+            out.append(abs_path)
+
+    if current:
+        add(current)
+    root = os.path.abspath(data_dir)
+    tenants = os.path.join(root, "tenants")
+    if os.path.isdir(tenants):
+        for name in sorted(os.listdir(tenants)):
+            add(os.path.join(tenants, name, "drive", "oauth_token.json"))
+    add(os.path.join(root, "drive", "oauth_token.json"))
+    return out
+
+
+def pick_oauth_token_path(
+    data_dir: str,
+    current: str | None,
+    environ: Mapping[str, str] | None = None,
+) -> str | None:
+    """Prefer the company mailbox token so every workspace uses studio@."""
+    env = environ if environ is not None else os.environ
+    share = read_share_email(env).lower()
+    ready: list[tuple[str, str]] = []
+    for path in list_oauth_token_paths(data_dir, current):
+        if not os.path.isfile(path):
+            continue
+        info = resolve_drive_status(None, oauth_token_path=path, environ=env)
+        if info.status == "ready" and info.auth_mode == "oauth":
+            ready.append((path, (info.connected_email or "").lower()))
+    if share:
+        for path, email in ready:
+            if email == share:
+                return path
+        return None
+    if current:
+        current_abs = os.path.abspath(current)
+        for path, _email in ready:
+            if path == current_abs:
+                return path
+    if ready:
+        return ready[0][0]
+    return current
+
+
 def read_sa_email(sa_json_path: str) -> str | None:
     try:
         with open(sa_json_path) as f:

@@ -140,6 +140,11 @@ share packs on purpose). Owner workspaces already have their own Drive.
 - Path-B ~35% similarity readout as a **display**, not a raised Fast gate.
 - RIFE in the HQ worker image (interpolation exists in code; binary may not
   be in the GPU image yet).
+- **In-app announcements** (Jeff 2026-08-29): a place in Studio where
+  operators see updates and bug fixes (captions model, Save-to-phone,
+  etc.) without a Slack/email. Not a tab this week. Not a changelog
+  page that redesigns invent early. Note only:
+  `docs/ops/studio-ia.md` → Later.
 
 ## Explicitly later / never for this product
 

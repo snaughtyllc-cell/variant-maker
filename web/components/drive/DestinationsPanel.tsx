@@ -11,15 +11,20 @@ import {
 } from "@/lib/api";
 import { oauthErrorMessage, truncateFolderId } from "@/lib/drive";
 import {
+  DRIVE_OPERATOR_WAIT,
   DRIVE_SHARE_BODY,
   DRIVE_SHARE_HEADING,
   driveShareEmail,
 } from "@/lib/driveShareCopy";
+import { canManageDriveOAuth } from "@/lib/navAccess";
+import { useAuthMe } from "@/lib/useAuthMe";
 import type { Destination, DriveStatus } from "@/lib/types";
 
 type TestResult = { ok: boolean; message: string };
 
 export function DestinationsPanel() {
+  const { data: me } = useAuthMe();
+  const manageOAuth = canManageDriveOAuth(me);
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -234,7 +239,7 @@ export function DestinationsPanel() {
         <div style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45 }}>
           {DRIVE_SHARE_BODY}
         </div>
-        {shareMismatch && (
+        {shareMismatch && manageOAuth && (
           <div style={{ fontSize: 12, color: "#8e6119", lineHeight: 1.45 }}>
             Studio is still signed in as {connectedEmail}. Reconnect Google as {shareEmail}{" "}
             so shared folders actually open — operators should not share with a personal inbox.
@@ -242,7 +247,8 @@ export function DestinationsPanel() {
         )}
       </div>
 
-      {/* Connection card */}
+      {/* Connection card — site admin only. Operators share studio@, they do not OAuth. */}
+      {manageOAuth && (
       <div
         style={{
           background: "var(--color-panel)",
@@ -310,6 +316,7 @@ export function DestinationsPanel() {
           </div>
         )}
       </div>
+      )}
 
       {/* Banner when Drive is not ready */}
       {driveNotReady && (
@@ -329,7 +336,7 @@ export function DestinationsPanel() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span>⚠</span>
-            <b>{status!.message}</b>
+            <b>{manageOAuth ? status!.message : DRIVE_OPERATOR_WAIT}</b>
           </div>
           <div style={{ color: "var(--color-muted)", fontSize: 12 }}>
             Share folders as Editor with {shareEmail}
@@ -355,7 +362,9 @@ export function DestinationsPanel() {
           Add destination
         </div>
         {driveNotReady && status && (
-          <div style={{ fontSize: 12, color: "#8e6119" }}>{status.message}</div>
+          <div style={{ fontSize: 12, color: "#8e6119" }}>
+            {manageOAuth ? status.message : DRIVE_OPERATOR_WAIT}
+          </div>
         )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input

@@ -47,12 +47,67 @@ export type FileCacheProgress = {
 export const FILE_FETCH_CONCURRENCY = 6;
 export const FILE_FETCH_CONCURRENCY_APPLE = 2;
 
-export type SaveTapAction = "share" | "prepare" | "prepare_then_save";
+export type SaveTapAction = "share" | "prepare" | "prepare_then_save" | "os_download";
 
-/** iPhone: never share after an async fetch — Safari drops the gesture and weaker phones OOM. */
+export type VisibilitySource = {
+  hidden: boolean;
+  addEventListener(type: string, listener: () => void): void;
+  removeEventListener(type: string, listener: () => void): void;
+};
+
+/** iPhone: never share after an async fetch — Safari drops the gesture and weaker phones OOM.
+ *  Android/desktop: hand the real URL to the OS download manager so leaving the app
+ *  does not kill an in-page blob fetch. */
 export function saveTapAction(ready: boolean, appleMobile: boolean): SaveTapAction {
   if (ready) return "share";
-  return appleMobile ? "prepare" : "prepare_then_save";
+  return appleMobile ? "prepare" : "os_download";
+}
+
+export function defaultVisibility(): VisibilitySource | null {
+  if (typeof document === "undefined") return null;
+  return document;
+}
+
+export function isRetryableFetchFailure(err: unknown, hidden = false): boolean {
+  if (hidden) return true;
+  return isAbortError(err);
+}
+
+export function waitUntilDocumentVisible(
+  visibility?: VisibilitySource | null,
+): Promise<void> {
+  const doc = visibility ?? defaultVisibility();
+  if (!doc || !doc.hidden) return Promise.resolve();
+  return new Promise((resolve) => {
+    const onChange = () => {
+      if (!doc.hidden) {
+        doc.removeEventListener("visibilitychange", onChange);
+        resolve();
+      }
+    };
+    doc.addEventListener("visibilitychange", onChange);
+  });
+}
+
+export function variantDownloadUrl(fileUrl: string, query = "dl=1"): string {
+  const join = fileUrl.includes("?") ? "&" : "?";
+  return `${fileUrl}${join}${query}`;
+}
+
+export function downloadVariantUrls(
+  variants: VariantFileRef[],
+  click?: (anchor: HTMLAnchorElement) => void,
+): void {
+  const trigger = click ?? ((a) => a.click());
+  for (const variant of variants) {
+    const a = document.createElement("a");
+    a.href = variantDownloadUrl(variant.file_url);
+    a.download = shareFileName(variant.filename);
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    trigger(a);
+    a.remove();
+  }
 }
 
 export const sharedVariantFileCache = new Map<string, File>();
@@ -205,21 +260,28 @@ async function mapPool<T, R>(
 async function fetchVariantFile(
   variant: VariantFileRef,
   fetchFn: typeof fetch,
+  visibility?: VisibilitySource | null,
 ): Promise<File | null> {
   const shared = sharedVariantFileCache.get(variant.file_url);
   if (shared) return shared;
   const pending = fetchInflight.get(variant.file_url);
   if (pending) return pending;
   const task = (async () => {
-    try {
-      const res = await fetchFn(variant.file_url, { cache: "force-cache" });
-      if (!res || !res.ok) return null;
-      const buf = await res.arrayBuffer();
-      const file = new File([buf], shareFileName(variant.filename), { type: "video/mp4" });
-      sharedVariantFileCache.set(variant.file_url, file);
-      return file;
-    } catch {
-      return null;
+    for (;;) {
+      const hidden = Boolean(visibility?.hidden);
+      try {
+        const res = await fetchFn(variant.file_url, { cache: "force-cache" });
+        if (res && res.ok) {
+          const buf = await res.arrayBuffer();
+          const file = new File([buf], shareFileName(variant.filename), { type: "video/mp4" });
+          sharedVariantFileCache.set(variant.file_url, file);
+          return file;
+        }
+        if (!hidden) return null;
+      } catch (err) {
+        if (!isRetryableFetchFailure(err, hidden)) return null;
+      }
+      await waitUntilDocumentVisible(visibility);
     }
   })();
   fetchInflight.set(variant.file_url, task);
@@ -235,8 +297,10 @@ export async function fetchVariantFiles(
   fetchFn?: typeof fetch,
   onProgress?: (progress: FileCacheProgress) => void,
   concurrency = FILE_FETCH_CONCURRENCY,
+  visibility?: VisibilitySource | null,
 ): Promise<File[]> {
   const fetchImpl = fetchFn ?? globalThis.fetch.bind(globalThis);
+  const vis = visibility === undefined ? defaultVisibility() : visibility;
   const cache = new Map<string, File>();
   const loading = new Set<string>();
   const failed = new Set<string>();
@@ -245,7 +309,7 @@ export async function fetchVariantFiles(
   const results = await mapPool(variants, concurrency, async (variant) => {
     loading.add(variant.file_url);
     emit();
-    const file = await fetchVariantFile(variant, fetchImpl);
+    const file = await fetchVariantFile(variant, fetchImpl, vis);
     loading.delete(variant.file_url);
     if (file) cache.set(variant.file_url, file);
     else failed.add(variant.file_url);
@@ -296,8 +360,10 @@ export async function fillFileCache(
   fetchFn?: typeof fetch,
   onProgress?: (progress: FileCacheProgress) => void,
   concurrency = FILE_FETCH_CONCURRENCY,
+  visibility?: VisibilitySource | null,
 ): Promise<File[]> {
   const fetchImpl = fetchFn ?? globalThis.fetch.bind(globalThis);
+  const vis = visibility === undefined ? defaultVisibility() : visibility;
   for (const variant of variants) {
     if (cache.has(variant.file_url)) continue;
     const shared = sharedVariantFileCache.get(variant.file_url);
@@ -326,6 +392,7 @@ export async function fillFileCache(
         emit();
       },
       concurrency,
+      vis,
     );
     emit();
   }
@@ -393,6 +460,10 @@ export function preparingClipsCopy(): string {
 export function shareClipsReadyCopy(ready: number): string {
   const noun = ready === 1 ? "clip" : "clips";
   return `${ready} ${noun} ready. Tap Save to Photos.`;
+}
+
+export function sharePrepareBackgroundCopy(): string {
+  return "If you switch apps, we'll pick up when you come back.";
 }
 
 export function sharePrepareProgressCopy(

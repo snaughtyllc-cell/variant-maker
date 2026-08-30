@@ -11,6 +11,7 @@ import threading
 from collections.abc import Iterator
 
 from .. import pipeline
+from ..copyid import normalize_mode
 from .runner import (
     DEFAULT_PLATFORM,
     DEFAULT_PRESET,
@@ -64,6 +65,13 @@ def resolve_us_metadata(job_input: dict) -> bool:
     return _flag(os.environ.get("VARIANT_MAKER_US_METADATA", ""))
 
 
+def resolve_copyid(job_input: dict) -> str:
+    """off | record | gate. Job wins; else VARIANT_MAKER_COPYID; else off."""
+    if "copyid" in job_input and job_input.get("copyid") is not None:
+        return normalize_mode(job_input.get("copyid"))
+    return normalize_mode(os.environ.get("VARIANT_MAKER_COPYID"))
+
+
 def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | None) -> None:
     if not name:
         return
@@ -104,9 +112,11 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "min_bits_vs_peers": job_input.get("min_bits_vs_peers", MIN_BITS_VS_PEERS),
         "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
         "auto_tune": auto_tune,
-        "rubberband": job_input.get("rubberband"),
+        "rubberband": job_input.get("rubberband", False),
+        "audio_uniqueness": bool(job_input.get("audio_uniqueness", False)),
         "rotate": resolve_rotate(job_input),
         "us_metadata": resolve_us_metadata(job_input),
+        "copyid": resolve_copyid(job_input),
     }
 
     q: queue.Queue = queue.Queue()

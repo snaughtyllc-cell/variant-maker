@@ -11,6 +11,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { uniquenessCoverageSubcopy } from "@/lib/prepareCopy";
 import { clearSharedVariantFileCache, phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
 import type { Destination, DriveStatus } from "@/lib/types";
 
@@ -166,9 +167,7 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v02.mp4"]);
       });
-      expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
-        "/api/variants/s1/v02.mp4",
-      ]);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
@@ -210,21 +209,16 @@ describe("SourceGroup phone save/share", () => {
     expect(screen.queryByRole("link", { name: /download zip/i })).not.toBeInTheDocument();
   });
 
-  it("fetches ready mp4s and downloads each file when share is unavailable", async () => {
+  it("starts OS downloads from the file URL when share is unavailable", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(async (input) => {
-      const url = String(input);
-      return new Response(url, {
-        status: 200,
-        headers: { "Content-Type": "video/mp4" },
-      });
-    });
     const downloads: string[] = [];
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:dl");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const hrefs: string[] = [];
     const protoClick = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function click() {
-      if (this.download) downloads.push(this.download);
+      if (this.download) {
+        downloads.push(this.download);
+        hrefs.push(this.getAttribute("href") || this.href);
+      }
     };
 
     try {
@@ -234,11 +228,9 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
       });
-      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-      expect(urls).toEqual(expect.arrayContaining([
-        "/api/variants/s1/v01.mp4",
-        "/api/variants/s1/v02.mp4",
-      ]));
+      expect(hrefs.some((href) => href.includes("v01.mp4") && href.includes("dl=1"))).toBe(true);
+      expect(hrefs.some((href) => href.includes("v02.mp4") && href.includes("dl=1"))).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
@@ -277,7 +269,7 @@ describe("SourceGroup phone save/share", () => {
     expect(payload.files.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
   });
 
-  it("shares File objects when canShare accepts them", async () => {
+  it("uses the OS download manager on Android/desktop even when share exists", async () => {
     const share = vi.fn(async () => {});
     Object.defineProperty(navigator, "canShare", {
       configurable: true,
@@ -287,42 +279,51 @@ describe("SourceGroup phone save/share", () => {
       configurable: true,
       value: share,
     });
-    vi.mocked(fetch).mockImplementation(async () =>
-      new Response("vid", { status: 200, headers: { "Content-Type": "video/mp4" } }),
-    );
-
-    render(<SourceGroup source={source()} {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: /save to photos/i }));
-
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    const payload = share.mock.calls[0][0] as { files: File[]; title?: string; url?: string };
-    expect(payload.files.map((f) => f.name)).toEqual(["v01.mp4", "v02.mp4"]);
-    expect(payload.title).toBeUndefined();
-    expect(payload.url).toBeUndefined();
+    const hrefs: string[] = [];
+    const protoClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      if (this.download) hrefs.push(this.getAttribute("href") || this.href);
+    };
+    try {
+      render(<SourceGroup source={source()} {...props} />);
+      fireEvent.click(screen.getByRole("button", { name: /save to photos/i }));
+      await waitFor(() => expect(hrefs.length).toBe(2));
+      expect(hrefs.every((href) => href.includes("dl=1"))).toBe(true);
+      expect(share).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      HTMLAnchorElement.prototype.click = protoClick;
+    }
   });
 
-  it("does not fetch variants that are not ready or not ok", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      new Response("x", { status: 200, headers: { "Content-Type": "video/mp4" } }),
-    );
-    render(
-      <SourceGroup
-        source={source({
-          files_ready: 1,
-          variants: [
-            variant({ file_ready: false }),
-            variant({ index: 2, filename: "v02.mp4", file_url: "/api/variants/s1/v02.mp4", status: "best_effort" }),
-            variant({ index: 3, filename: "v03.mp4", file_url: "/api/variants/s1/v03.mp4" }),
-          ],
-        })}
-        {...props}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
-    expect(urls.every((url) => url === "/api/variants/s1/v03.mp4")).toBe(true);
-    expect(urls.length).toBeGreaterThanOrEqual(1);
+  it("does not start downloads for variants that are not ready or not ok", async () => {
+    const hrefs: string[] = [];
+    const protoClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      if (this.download) hrefs.push(this.getAttribute("href") || this.href);
+    };
+    try {
+      render(
+        <SourceGroup
+          source={source({
+            files_ready: 1,
+            variants: [
+              variant({ file_ready: false }),
+              variant({ index: 2, filename: "v02.mp4", file_url: "/api/variants/s1/v02.mp4", status: "best_effort" }),
+              variant({ index: 3, filename: "v03.mp4", file_url: "/api/variants/s1/v03.mp4" }),
+            ],
+          })}
+          {...props}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
+      await waitFor(() => expect(hrefs.length).toBe(1));
+      expect(hrefs[0]).toContain("v03.mp4");
+      expect(hrefs[0]).toContain("dl=1");
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      HTMLAnchorElement.prototype.click = protoClick;
+    }
   });
 });
 
@@ -345,5 +346,28 @@ describe("SourceGroup live post count", () => {
       />,
     );
     expect(screen.getByText(/2 live posts/i)).toBeInTheDocument();
+  });
+});
+
+describe("SourceGroup originality summary", () => {
+  it("titles the Originality average as pixel SSIM, not a platform check", () => {
+    render(
+      <SourceGroup
+        source={source({
+          variants: [
+            variant({ uniqueness: 0.5 }),
+            variant({
+              index: 2,
+              filename: "v02.mp4",
+              file_url: "/api/variants/s1/v02.mp4",
+              uniqueness: 0.4,
+            }),
+          ],
+        })}
+        {...props}
+      />,
+    );
+    const summary = screen.getByText(/Originality 45% avg/);
+    expect(summary).toHaveAttribute("title", uniquenessCoverageSubcopy());
   });
 });

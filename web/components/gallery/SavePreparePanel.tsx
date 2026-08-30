@@ -1,7 +1,7 @@
 "use client";
 
 import type { FileCacheProgress } from "@/lib/shareVideos";
-import { sharePrepareItemLabel, sharePrepareProgressCopy } from "@/lib/shareVideos";
+import { sharePrepareBackgroundCopy, sharePrepareItemLabel, sharePrepareProgressCopy } from "@/lib/shareVideos";
 
 export function SavePreparePanel({ progress }: { progress: FileCacheProgress }) {
   const pct = progress.total > 0 ? Math.round((progress.ready / progress.total) * 100) : 0;
@@ -9,6 +9,9 @@ export function SavePreparePanel({ progress }: { progress: FileCacheProgress }) 
   return (
     <div className="gallery-save-progress" aria-live="polite" aria-busy={busy}>
       <p className="gallery-save-progress__status">{sharePrepareProgressCopy(progress)}</p>
+      {busy ? (
+        <p className="gallery-save-progress__background">{sharePrepareBackgroundCopy()}</p>
+      ) : null}
       <div
         className="gallery-save-progress__track"
         role="progressbar"

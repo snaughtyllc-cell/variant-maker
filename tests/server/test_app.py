@@ -462,6 +462,12 @@ def test_serve_variant_and_source_files(tmp_path):
     fname = src["variants"][0]["filename"]
     sid = src["source_id"]
     assert client.get(f"/api/variants/{sid}/{fname}").status_code == 200
+    inline = client.get(f"/api/variants/{sid}/{fname}")
+    assert "attachment" not in (inline.headers.get("content-disposition") or "").lower()
+    attached = client.get(f"/api/variants/{sid}/{fname}", params={"dl": "1"})
+    assert attached.status_code == 200
+    disposition = (attached.headers.get("content-disposition") or "").lower()
+    assert "attachment" in disposition
     assert client.get(f"/api/sources/{sid}/source").content == b"orig"
     assert client.get("/api/variants/nope/x.mp4").status_code == 404
 

@@ -60,6 +60,8 @@ class RunPodServerlessRunner:
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "auto_tune": limits.get("auto_tune", True),
             "jobs": encode_jobs_for_worker(quality_mode, count),
+            "rubberband": False,
+            "audio_uniqueness": False,
         }}
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),

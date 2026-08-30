@@ -59,6 +59,14 @@ def test_live_lane_template_is_live_not_lab():
     assert raw["promote"] == "copy"
 
 
+def test_ops_docs_have_no_leftover_conflict_markers():
+    markers = ("<<<<<<<", ">>>>>>>")
+    for path in (ROOT / "docs").rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            assert marker not in text, f"{path.relative_to(ROOT)} has {marker}"
+
+
 def test_promote_and_seed_scripts_exist():
     promote = ROOT / "scripts/promote-to-live.sh"
     seed = ROOT / "scripts/seed-live-repo.sh"

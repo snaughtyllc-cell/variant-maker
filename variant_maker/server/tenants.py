@@ -37,6 +37,20 @@ def is_admin_email(email: str, admin_email: str | None) -> bool:
     return normalize_email(email) == normalize_email(admin_email)
 
 
+def can_manage_drive_oauth(
+    *,
+    email: str | None,
+    admin_email: str | None,
+    auth_on: bool,
+) -> bool:
+    """Connect / Disconnect Google is the site admin. Operators share studio@."""
+    if not auth_on:
+        return True
+    if not email:
+        return False
+    return is_admin_email(email, admin_email)
+
+
 def auth_required(environ: dict | None = None) -> bool:
     env = environ if environ is not None else os.environ
     return bool((env.get(ADMIN_EMAIL_ENV) or "").strip())

@@ -70,7 +70,9 @@ input, select, textarea { font-size: 16px; }
 .vf-nav-link[data-active="true"] { background: #dff4f5; color: #075966; font-weight: 690; }
 .vf-nav-link-extra { font-size: 12px; }
 .vf-nav-separator { background: #d4e3e6; height: 20px; margin: 0 4px; width: 1px; }
-.vf-topbar-actions { align-items: center; display: flex; gap: 9px; margin-left: auto; }
+.vf-topbar-end { align-items: center; display: flex; gap: 9px; margin-left: auto; }
+.vf-topbar-status { align-items: center; display: flex; }
+.vf-topbar-actions { align-items: center; display: flex; gap: 9px; }
 .vf-account-email { color: var(--color-muted); font-size: 11.5px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vf-experience-label { color: var(--color-muted2); font-weight: 600; }
 .vf-logout, .vf-more-trigger, .vf-mobile-logout { align-items: center; background: #f3f8f9; border: 1px solid var(--color-line); border-radius: 8px; color: var(--ink); cursor: pointer; display: inline-flex; font-size: 11.5px; font-weight: 650; gap: 6px; min-height: 34px; padding: 7px 9px; }
@@ -309,6 +311,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 /* StatusStrip remains compact, but is now part of the light shell. */
 .status-engine, .status-cpu { background: #f2f8f8 !important; border-color: #d4e3e6 !important; }
+.status-engine__dot { height: 7px; width: 7px; }
 .status-cpu strong { color: var(--ink); }
 .status-queue { background: #fff8e9 !important; border-color: #ecd9b3 !important; color: #876019 !important; }
 
@@ -338,15 +341,40 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 @media (max-width: 639px) {
   :root { --nav-h: 58px; --tab-h: calc(68px + env(safe-area-inset-bottom, 0px)); }
-  .vf-topbar { min-height: var(--nav-h); padding: max(10px, env(safe-area-inset-top, 0px)) 14px 10px; }
-  .vf-brand-wordmark { display: none; }
-  .vf-brand-mark { display: block; }
+  /* Equal side columns keep the wordmark optically centered. */
+  .vf-topbar {
+    column-gap: 8px;
+    display: grid;
+    grid-template-areas: "status brand actions";
+    grid-template-columns: minmax(40px, 1fr) auto minmax(40px, 1fr);
+    min-height: var(--nav-h);
+    padding: max(10px, env(safe-area-inset-top, 0px)) 14px 10px;
+  }
+  .vf-topbar-end { display: contents; }
+  .vf-topbar-status { grid-area: status; justify-self: start; }
+  .vf-brand { grid-area: brand; justify-self: center; }
+  .vf-topbar-actions { gap: 0; grid-area: actions; justify-self: end; margin-left: 0; }
+  .vf-brand-mark { display: none; }
+  .vf-brand-wordmark { display: block; font-size: clamp(20px, 5.6vw, 25px); }
   .vf-desktop-nav, .vf-logout { display: none; }
-  .vf-topbar-actions { gap: 6px; }
-  .vf-topbar-actions .status-cpu, .status-ready-text { display: none; }
-  .status-engine { padding: 6px 8px !important; }
-  .vf-more-trigger { font-size: 11.5px; min-height: 32px; padding: 6px 8px; }
-  .vf-more-trigger { display: inline-flex; }
+  .status-cpu, .status-queue, .status-ready-text { display: none; }
+  .status-engine {
+    align-items: center;
+    background: transparent !important;
+    border-color: transparent !important;
+    justify-content: center;
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0 !important;
+  }
+  .status-engine__dot { height: 14px; width: 14px; }
+  .vf-more-trigger {
+    display: inline-flex;
+    justify-content: center;
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0;
+  }
   .vf-mobile-more { background: #fbfdfd; border-bottom: 1px solid var(--color-line); box-shadow: 0 12px 20px rgba(23, 58, 65, 0.08); display: flex; flex-direction: column; gap: 9px; padding: 12px 16px; position: relative; z-index: 20; }
   .vf-mobile-email { color: var(--color-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .vf-mobile-extra-links { display: flex; flex-wrap: wrap; gap: 7px; }
