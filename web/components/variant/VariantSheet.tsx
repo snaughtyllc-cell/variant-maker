@@ -254,6 +254,7 @@ export function VariantSheet({
               uniqueness={variant.uniqueness}
               uniquenessStatus={variant.uniqueness_status}
               bestEffort={variant.status === "best_effort"}
+              heads={variant.quality?.heads}
             />
 
             {/* Actions */}

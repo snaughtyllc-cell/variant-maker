@@ -2,6 +2,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { DropsBoard } from "@/components/drops/DropsBoard";
+import { RequireAgency } from "@/components/nav/RequireAgency";
 
 function DropsContent() {
   const searchParams = useSearchParams();
@@ -10,25 +11,27 @@ function DropsContent() {
 
 export default function DropsPage() {
   return (
-    <main className="drops-page">
-      <Suspense
-        fallback={
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "60px 0",
-              color: "var(--color-muted)",
-              fontSize: 13,
-            }}
-          >
-            Loading…
-          </div>
-        }
-      >
-        <DropsContent />
-      </Suspense>
-    </main>
+    <RequireAgency>
+      <main className="drops-page">
+        <Suspense
+          fallback={
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "60px 0",
+                color: "var(--color-muted)",
+                fontSize: 13,
+              }}
+            >
+              Loading…
+            </div>
+          }
+        >
+          <DropsContent />
+        </Suspense>
+      </main>
+    </RequireAgency>
   );
 }

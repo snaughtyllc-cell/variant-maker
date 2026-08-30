@@ -53,6 +53,7 @@ describe("AdvancedPanel output copy", () => {
     );
     fireEvent.click(screen.getByText("Advanced"));
     expect(screen.getByText(/Pass is 38%/)).toBeInTheDocument();
+    expect(screen.getByText(/Not a platform check/)).toBeInTheDocument();
     expect(screen.getByText(/one strong pass always runs/)).toBeInTheDocument();
     expect(screen.getByText(/Only after that hunt/)).toBeInTheDocument();
     expect(screen.getByText(/30%/)).toBeInTheDocument();

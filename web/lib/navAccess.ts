@@ -16,8 +16,11 @@ export function showDiagnosticsNav(me: {
 export function showTeamNav(me: {
   role?: string | null;
   is_admin?: boolean;
+  experience?: string | null;
+  auth_required?: boolean;
 } | undefined): boolean {
-  return me?.role === "owner" || Boolean(me?.is_admin);
+  if (!(me?.role === "owner" || Boolean(me?.is_admin))) return false;
+  return isAgencyExperience(me);
 }
 
 /** Phone + desktop primary row. Solo creators only see Studio, Gallery, Drive. */

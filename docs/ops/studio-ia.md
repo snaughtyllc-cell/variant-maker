@@ -20,14 +20,19 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Everyone signed in | **Studio · Gallery · Drops · Workflows · Drive** |
-| Workspace owner (or site admin) | + **Team** |
-| Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
+| Solo creator | **Studio · Gallery · Drive** (no Team, no invite) |
+| Agency member | **Studio · Gallery · Drops · Workflows · Drive** |
+| Agency owner | + **Team** (invite VAs into this studio) |
+| Site admin (`SITE_ADMIN_EMAILS`) | all of the above + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
-Phone (`< 640px`) only has room for the five everyone-tabs. Team /
-Admin / Diagnostics sit under **More**. Desktop shows extras in the
-top row when the session is allowed to see them.
+Missing/untagged `experience` is **agency** so Jeff Tingz and older
+operator studios keep Team. New-studio invites write **solo**. Flip a
+workspace to Agency in Admin when that studio should invite VAs.
+
+Phone (`< 640px`) only has room for the primary tabs that audience
+can see. Team / Admin / Diagnostics sit under **More**. Desktop shows
+extras in the top row when the session is allowed to see them.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -38,10 +43,10 @@ row + progress card.
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue. |
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
-| Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
-| Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
+| Drops | `/drops` | agency | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
+| Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. |
-| Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
+| Team | `/team` | agency owner / site admin | More | Workspace owner invites VAs. Solo creators cannot invite. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
@@ -62,7 +67,8 @@ old four-row list.
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
-- Do not hide Drops, Workflows, Drive, Team, or Admin — they are live.
+- Do not remove Drops, Workflows, Drive, Team, or Admin from the
+  catalog — they are live. Solo chrome hides Drops, Workflows, and Team.
 - Do not put Admin / Diagnostics in the phone bottom bar. They stay
   under More.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,

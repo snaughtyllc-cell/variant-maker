@@ -26,6 +26,17 @@ describe("QualityPanel", () => {
     expect(screen.queryByText(/stronger uniqueness pass/i)).not.toBeInTheDocument();
   });
 
+  it("says pixel SSIM is scored and copy-id heads are not yet", () => {
+    render(
+      <QualityPanel uniqueness={0.5} uniquenessStatus="ok" bestEffort={false} />,
+    );
+    expect(screen.getByText(/Pixel difference vs the original \(3 frames\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Not a platform check/)).toBeInTheDocument();
+    expect(screen.getByText("Pixel · scored")).toBeInTheDocument();
+    expect(screen.getByText("Visual copy-id · not scored")).toBeInTheDocument();
+    expect(screen.getByText("Audio · not scored")).toBeInTheDocument();
+  });
+
   it("uses mild copy when a copy needed extra processing", () => {
     render(<QualityPanel uniqueness={0.4} uniquenessStatus="ok" bestEffort />);
     expect(screen.getByText("This copy needed extra processing.")).toBeInTheDocument();

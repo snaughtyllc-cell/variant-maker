@@ -1,6 +1,7 @@
 """Tenant JSON store + session cookie."""
 from __future__ import annotations
 
+import json
 import os
 
 from variant_maker.server.sessions import load_or_create_secret, read_session, sign_session
@@ -177,11 +178,31 @@ def test_provision_new_workspace_invite(tmp_path):
         store, email="ops@x.com", name="Ops", admin_email="jeff@x.com",
     )
     assert ops is not None and ops.role == "owner"
+    ops_ws = store.get_workspace(ops.workspace_id)
+    assert ops_ws is not None and ops_ws.experience == "solo"
     jeff = provision_login(
         store, email="jeff@x.com", name="Jeff", admin_email="jeff@x.com",
     )
     assert jeff is not None
+    jeff_ws = store.get_workspace(jeff.workspace_id)
+    assert jeff_ws is not None and jeff_ws.experience == "agency"
     assert ops.workspace_id != jeff.workspace_id
+
+
+def test_provision_join_solo_workspace_is_blocked(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Creator", experience="solo")
+    store.upsert_user(UserInfo(
+        email="creator@x.com", name="Creator", workspace_id=ws.id, role="owner",
+    ))
+    store.add_invite(email="va@x.com", kind="join", workspace_id=ws.id)
+    va = provision_login(
+        store, email="va@x.com", name="VA", admin_email="jeff@x.com",
+    )
+    assert va is None
+    assert store.get_user("va@x.com") is None
+    pending = store.list_invites()
+    assert len(pending) == 1 and pending[0].email == "va@x.com"
 
 
 def test_set_workspace_experience_defaults_agency(tmp_path):
@@ -192,3 +213,18 @@ def test_set_workspace_experience_defaults_agency(tmp_path):
     assert updated is not None and updated.experience == "solo"
     got = store.get_workspace(ws.id)
     assert got is not None and got.experience == "solo"
+
+
+def test_missing_experience_key_is_agency(tmp_path):
+    """Pre-experience tenants.json (Jeff Tingz live) must stay agency, not solo."""
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps({
+        "workspaces": {
+            "ws_1": {"id": "ws_1", "name": "Jeff", "created_utc": "2026-08-20T00:00:00Z"},
+        },
+        "users": {},
+        "invites": [],
+    }))
+    store = TenantStore(str(path))
+    ws = store.get_workspace("ws_1")
+    assert ws is not None and ws.experience == "agency"

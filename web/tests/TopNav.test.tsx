@@ -98,6 +98,13 @@ describe("TopNav", () => {
     }
   });
 
+  it("hides Team for solo creators who own the workspace", () => {
+    me.data = { ...BASE, experience: "solo", role: "owner", is_admin: false };
+    render(<TopNav />);
+    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+  });
+
   it("hides Drops and Workflows for solo members", () => {
     me.data = { ...BASE, experience: "solo", role: "member", is_admin: false };
     render(<TopNav />);

@@ -44,6 +44,7 @@ const OWNER: AuthMe = {
   role: "owner",
   is_admin: false,
   has_password: true,
+  experience: "agency",
 };
 
 const team: Team = {
@@ -140,6 +141,17 @@ describe("Team page", () => {
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith("/");
     });
+  });
+
+  it("sends solo creators home even when they own the workspace", async () => {
+    me.data = { ...OWNER, experience: "solo", role: "owner", is_admin: false };
+    vi.mocked(getWorkspaceTeam).mockClear();
+    render(<TeamPage />);
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/");
+    });
+    expect(screen.queryByRole("heading", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^invite$/i })).not.toBeInTheDocument();
   });
 
   it("warns when the site admin is viewing another studio", async () => {

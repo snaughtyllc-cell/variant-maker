@@ -92,6 +92,7 @@ describe("VariantCard uniqueness", () => {
       />,
     );
     expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByTitle(/pixel SSIM vs the original/i)).toBeInTheDocument();
     expect(screen.queryByText("esc")).not.toBeInTheDocument();
     expect(screen.queryByText("95")).not.toBeInTheDocument();
     expect(screen.queryByText(/spatial/i)).not.toBeInTheDocument();

@@ -38,6 +38,7 @@ def _exchange(*, code: str, **_kwargs):
         "jeff": {"email": ADMIN, "name": "Jeff"},
         "va": {"email": "va@x.com", "name": "VA"},
         "ops": {"email": "ops@x.com", "name": "Ops"},
+        "creator": {"email": "creator@x.com", "name": "Creator"},
         "stranger": {"email": "stranger@x.com", "name": "Stranger"},
     }
     return mapping[code]
@@ -74,6 +75,13 @@ def _login(client: TestClient, code: str):
         f"/api/auth/google/callback?code={code}&state={state}",
         follow_redirects=False,
     )
+
+
+def _set_experience(admin: TestClient, workspace_id: str, experience: str) -> None:
+    r = admin.patch(
+        f"/api/admin/workspaces/{workspace_id}", json={"experience": experience},
+    )
+    assert r.status_code == 200, r.text
 
 
 def _tenant_wait(client: TestClient, job_id: str, timeout: float = 5) -> None:
@@ -372,12 +380,14 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
     _login(jeff, "jeff")
     jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
     _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    assert ops.get("/api/auth/me").json()["experience"] == "solo"
+    _set_experience(jeff, ops_id, "agency")
     jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
     _login(va, "va")
 
     assert va.get("/api/workspace/team").status_code == 403
     team = ops.get("/api/workspace/team").json()
-    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
     assert team["workspace_id"] == ops_id
     assert {m["email"] for m in team["members"]} == {"ops@x.com"}
 
@@ -524,16 +534,33 @@ def test_workspace_experience_assignment(tmp_path):
     _login(jeff, "jeff")
     jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
     _login(ops, "ops")
-    assert ops.get("/api/auth/me").json()["experience"] == "agency"
+    assert ops.get("/api/auth/me").json()["experience"] == "solo"
     ops_id = ops.get("/api/auth/me").json()["workspace_id"]
-    patched = jeff.patch(f"/api/admin/workspaces/{ops_id}", json={"experience": "solo"})
+    patched = jeff.patch(f"/api/admin/workspaces/{ops_id}", json={"experience": "agency"})
     assert patched.status_code == 200
-    assert patched.json()["experience"] == "solo"
+    assert patched.json()["experience"] == "agency"
+    assert ops.get("/api/auth/me").json()["experience"] == "agency"
+    _set_experience(jeff, ops_id, "solo")
     assert ops.get("/api/auth/me").json()["experience"] == "solo"
     assert jeff.get("/api/auth/me").json()["experience"] == "agency"
     assert ops.patch(
         f"/api/admin/workspaces/{ops_id}", json={"experience": "agency"},
     ).status_code == 403
+
+
+def test_solo_owner_cannot_invite_a_va(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    creator = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "creator@x.com", "kind": "new_workspace"})
+    _login(creator, "creator")
+    assert creator.get("/api/auth/me").json()["experience"] == "solo"
+    assert creator.get("/api/workspace/team").status_code == 403
+    blocked = creator.post("/api/workspace/invites", json={"email": "va@x.com"})
+    assert blocked.status_code == 403
+    assert "solo" in blocked.json()["detail"].lower()
+    assert jeff.get("/api/workspace/team").status_code == 200
 
 
 def test_password_set_requires_login(tmp_path):

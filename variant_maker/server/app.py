@@ -686,6 +686,19 @@ def create_app(
             raise HTTPException(status_code=403, detail="owner only")
         return user
 
+    def _require_agency_team(request: Request):
+        """Agency owners invite VAs. Solo creators cannot — they only get Studio/Gallery/Drive."""
+        user = _require_workspace_owner(request)
+        assert tenants is not None
+        ws = tenants.get_workspace(user.workspace_id)
+        exp = resolve_experience(
+            workspace_experience=getattr(ws, "experience", None) if ws else None,
+            email=user.email,
+        )
+        if exp != "agency" and not is_admin_email(user.email, admin_email):
+            raise HTTPException(status_code=403, detail="solo creators cannot invite")
+        return user
+
     def _team_out(home_id: str) -> TeamOut:
         assert tenants is not None
         ws = tenants.get_workspace(home_id)
@@ -1099,12 +1112,12 @@ def create_app(
 
     @app.get("/api/workspace/team", response_model=TeamOut)
     def workspace_team(request: Request) -> TeamOut:
-        owner = _require_workspace_owner(request)
+        owner = _require_agency_team(request)
         return _team_out(owner.workspace_id)
 
     @app.post("/api/workspace/invites", status_code=201, response_model=InviteOut)
     def workspace_create_invite(request: Request, body: WorkspaceInviteIn) -> InviteOut:
-        owner = _require_workspace_owner(request)
+        owner = _require_agency_team(request)
         assert tenants is not None
         try:
             inv = tenants.add_invite(
@@ -1119,7 +1132,7 @@ def create_app(
 
     @app.delete("/api/workspace/invites/{invite_id}", status_code=204)
     def workspace_delete_invite(request: Request, invite_id: str) -> None:
-        owner = _require_workspace_owner(request)
+        owner = _require_agency_team(request)
         assert tenants is not None
         inv = next((i for i in tenants.list_invites() if i.id == invite_id), None)
         if inv is None or inv.workspace_id != owner.workspace_id:
@@ -1128,7 +1141,7 @@ def create_app(
 
     @app.delete("/api/workspace/members/{email}", status_code=204)
     def workspace_remove_member(request: Request, email: str) -> None:
-        owner = _require_workspace_owner(request)
+        owner = _require_agency_team(request)
         assert tenants is not None
         addr = normalize_email(email)
         if addr == normalize_email(owner.email) or is_admin_email(addr, admin_email):

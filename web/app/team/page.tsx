@@ -7,18 +7,15 @@ import {
   getWorkspaceTeam,
   removeWorkspaceMember,
 } from "@/lib/api";
+import { showTeamNav } from "@/lib/navAccess";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { Team } from "@/lib/types";
 import { UsersRound } from "lucide-react";
 
-function canManageTeam(role: string | null | undefined, isAdmin: boolean | undefined): boolean {
-  return role === "owner" || Boolean(isAdmin);
-}
-
 export default function TeamPage() {
   const router = useRouter();
   const { data: me, isLoading: meLoading } = useAuthMe();
-  const allowed = canManageTeam(me?.role, me?.is_admin);
+  const allowed = showTeamNav(me);
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");

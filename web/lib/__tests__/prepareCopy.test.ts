@@ -8,6 +8,9 @@ import {
   preparingHeadline,
   preparingSubcopy,
   uniquenessCustomerLabel,
+  uniquenessCoverageChips,
+  uniquenessCoverageSubcopy,
+  uniquenessGalleryBadgeTitle,
 } from "@/lib/prepareCopy";
 
 describe("prepare copy", () => {
@@ -23,6 +26,18 @@ describe("prepare copy", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
     expect(captionToggleHint()).toMatch(/gallery/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
+  });
+
+  it("says Originality is 3-frame pixel SSIM, not a platform check", () => {
+    expect(uniquenessCoverageSubcopy()).toMatch(/3 frames/i);
+    expect(uniquenessCoverageSubcopy()).toMatch(/not a platform check/i);
+    expect(uniquenessGalleryBadgeTitle(38)).toMatch(/pixel SSIM/i);
+    expect(uniquenessGalleryBadgeTitle(38)).toMatch(/not a platform pass/i);
+    const chips = uniquenessCoverageChips(0.5, null);
+    expect(chips.map((c) => c.kind)).toEqual(["pixel", "visual", "audio"]);
+    expect(chips[0].state).toBe("scored");
+    expect(chips[1].state).toBe("not_scored");
+    expect(chips[2].state).toBe("not_scored");
   });
 
   it("snips captions to a single-line preview", () => {

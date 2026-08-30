@@ -3,6 +3,7 @@ import { VideoThumb } from "../common/VideoThumb";
 import { VariantOut } from "@/lib/types";
 import { isFileReady } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
+import { uniquenessGalleryBadgeTitle } from "@/lib/prepareCopy";
 import { CaptionSnippet } from "./CaptionSnippet";
 
 interface VariantCardProps {
@@ -37,6 +38,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
     >
       {uniquenessPct != null && (
         <span
+          title={uniquenessGalleryBadgeTitle(uniquenessPct)}
           style={{
             fontSize: 9,
             fontWeight: 800,

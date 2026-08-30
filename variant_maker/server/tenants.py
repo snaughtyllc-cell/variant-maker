@@ -190,9 +190,19 @@ class TenantStore:
             ))
         return out
 
-    def create_workspace(self, *, name: str, workspace_id: str | None = None) -> WorkspaceInfo:
-        ws = WorkspaceInfo(id=workspace_id or _new_id("ws"), name=name.strip() or "Workspace",
-                           created_utc=_now())
+    def create_workspace(
+        self,
+        *,
+        name: str,
+        workspace_id: str | None = None,
+        experience: Experience | None = None,
+    ) -> WorkspaceInfo:
+        ws = WorkspaceInfo(
+            id=workspace_id or _new_id("ws"),
+            name=name.strip() or "Workspace",
+            created_utc=_now(),
+            experience=normalize_experience(experience),
+        )
         with self._lock:
             data = self._load()
             data["workspaces"][ws.id] = asdict(ws)
@@ -401,6 +411,15 @@ def provision_login(
             email=addr, name=name or addr, workspace_id=ws.id, role="owner",
         ))
 
+    pending = next((i for i in store.list_invites() if i.email == addr), None)
+    if pending is None:
+        return None
+    if pending.kind == "join":
+        ws = store.get_workspace(pending.workspace_id or "")
+        # Solo studios are creator-only. Leave the invite so Admin can flip
+        # the workspace to agency, then the VA can join.
+        if ws is None or normalize_experience(ws.experience) != "agency":
+            return None
     invite = store.consume_invite(addr)
     if invite is None:
         return None
@@ -411,7 +430,12 @@ def provision_login(
         return store.upsert_user(UserInfo(
             email=addr, name=name or addr, workspace_id=ws_id, role="member",
         ))
-    ws = store.create_workspace(name=name or addr.split("@")[0] or "Studio")
+    # A new studio invite is a creator account: Studio / Gallery / Drive only.
+    # Site admin flips the workspace to agency in Admin when they need Team.
+    ws = store.create_workspace(
+        name=name or addr.split("@")[0] or "Studio",
+        experience="solo",
+    )
     return store.upsert_user(UserInfo(
         email=addr, name=name or addr, workspace_id=ws.id, role="owner",
     ))

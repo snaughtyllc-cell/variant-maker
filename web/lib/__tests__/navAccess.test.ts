@@ -17,13 +17,24 @@ describe("showDiagnosticsNav", () => {
 });
 
 describe("showTeamNav", () => {
-  it("shows for owners and site admin", () => {
-    expect(showTeamNav({ role: "owner", is_admin: false })).toBe(true);
-    expect(showTeamNav({ role: "member", is_admin: true })).toBe(true);
+  it("shows for agency owners and site admin", () => {
+    expect(showTeamNav({ role: "owner", is_admin: false, experience: "agency" })).toBe(true);
+    expect(showTeamNav({ role: "member", is_admin: true, experience: "solo" })).toBe(true);
   });
 
   it("hides for members", () => {
-    expect(showTeamNav({ role: "member", is_admin: false })).toBe(false);
+    expect(showTeamNav({ role: "member", is_admin: false, experience: "agency" })).toBe(false);
+  });
+
+  it("hides Team for solo creators even when they own the workspace", () => {
+    expect(
+      showTeamNav({
+        role: "owner",
+        is_admin: false,
+        experience: "solo",
+        auth_required: true,
+      }),
+    ).toBe(false);
   });
 });
 

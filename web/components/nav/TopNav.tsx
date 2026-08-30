@@ -37,7 +37,14 @@ const ICONS = {
 
 function extraTabVisible(
   href: string,
-  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
+  me:
+    | {
+        auth_required?: boolean;
+        is_admin?: boolean;
+        role?: string | null;
+        experience?: string | null;
+      }
+    | undefined,
 ): boolean {
   if (href === "/diagnostics") return showDiagnosticsNav(me);
   if (href === "/team") return showTeamNav(me);

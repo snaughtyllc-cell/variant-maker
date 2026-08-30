@@ -1,8 +1,11 @@
 """Workspace experience: solo creator vs agency.
 
-Missing/unknown values stay **agency** so existing operator studios keep
-Workflows, Drops, and the full chrome. Solo is opt-in via workspace field
-or VARIANT_SOLO_EMAILS.
+Missing/unknown values stay **agency** so existing operator studios (Jeff
+Tingz and any untagged workspace) keep Workflows, Drops, and Team. Solo is
+stored explicitly, or forced via VARIANT_SOLO_EMAILS.
+
+New-studio invites write **solo** so creators do not get Team. Site admin
+flips a workspace to agency in Admin when that studio should invite VAs.
 """
 from __future__ import annotations
 

@@ -66,7 +66,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Team",
     audience: "owner",
     tab: "extra",
-    summary: "Workspace owner invites VAs into this studio.",
+    summary: "Agency owner invites VAs into this studio. Solo creators cannot invite.",
   },
   {
     href: "/admin",
