@@ -9,6 +9,7 @@ from variant_maker.server.tenants import (
     TenantStore,
     UserInfo,
     auth_required,
+    is_admin_email,
     migrate_legacy_data,
     normalize_email,
     provision_login,
@@ -19,8 +20,20 @@ from variant_maker.server.tenants import (
 def test_normalize_and_auth_flag(monkeypatch):
     assert normalize_email("  Jeff@X.com ") == "jeff@x.com"
     monkeypatch.delenv("VARIANT_AUTH_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("SITE_ADMIN_EMAILS", raising=False)
     assert auth_required() is False
     monkeypatch.setenv("VARIANT_AUTH_ADMIN_EMAIL", "jeff@x.com")
+    assert auth_required() is True
+
+
+def test_is_admin_email_accepts_a_comma_list(monkeypatch):
+    blob = "jeff@x.com, Partner@X.com"
+    assert is_admin_email("JEFF@x.com", blob)
+    assert is_admin_email("partner@x.com", blob)
+    assert not is_admin_email("va@x.com", blob)
+    assert not is_admin_email("jeff@x.com", None)
+    monkeypatch.delenv("VARIANT_AUTH_ADMIN_EMAIL", raising=False)
+    monkeypatch.setenv("SITE_ADMIN_EMAILS", "partner@x.com")
     assert auth_required() is True
 
 

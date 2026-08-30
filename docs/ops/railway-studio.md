@@ -121,6 +121,8 @@ open Studio). To give each operator their own gallery + Drive:
 1. Add the login callback URI above to the Google OAuth client.
 2. Set on Railway:
    - `VARIANT_AUTH_ADMIN_EMAIL` — your Google email
+   - `SITE_ADMIN_EMAILS` — optional extra site admins, comma-separated
+     (Admin tab + **Open** on a workspace). Same Google login.
    - `VARIANT_AUTH_SECRET` — a long random string (or omit and Studio writes
      one to `{DATA_DIR}/auth/secret` on first boot)
 3. Redeploy, open Studio, sign in with **email + password** (first visit sets
@@ -136,7 +138,7 @@ open Studio). To give each operator their own gallery + Drive:
      Drive) with a **Viewing {name} — Exit to your studio** banner. Exit
      returns you home.
    - **Remove** on a member — they cannot sign in until you invite them
-     again. Workspace files stay. You cannot remove your own admin login.
+     again. Workspace files stay. You cannot remove a site-admin login.
 5. **Team** in the top nav (workspace owners, including those new-workspace
    operators): invite a VA into *this* studio. Same join-invite as Admin
    “Join my workspace,” without creating a new empty studio. They can

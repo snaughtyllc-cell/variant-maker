@@ -150,8 +150,8 @@ from .sessions import (
 from .sheets import GoogleSheets, SheetsClient
 from .tenant_runtime import TenantHub
 from .tenants import (
-    ADMIN_EMAIL_ENV,
     TenantStore,
+    combined_admin_emails,
     is_admin_email,
     normalize_email,
     provision_login,
@@ -434,7 +434,7 @@ def create_app(
     oauth_env: Mapping[str, str] = oauth_environ if oauth_environ is not None else os.environ
     auth_env: Mapping[str, str] = auth_environ if auth_environ is not None else os.environ
     auth_on = tenant_auth_required(auth_env)
-    admin_email = (auth_env.get(ADMIN_EMAIL_ENV) or "").strip() or None
+    admin_email = combined_admin_emails(auth_env) or None
     data_dir = fallback_store._ws.root
 
     app = FastAPI(title="variant-maker control plane")

@@ -1,7 +1,7 @@
 """Invite-only workspaces (JSON on the data volume). No Postgres this slice.
 
-Auth is off until VARIANT_AUTH_ADMIN_EMAIL is set. Tests keep using a single
-Workspace at the data-dir root.
+Auth is off until VARIANT_AUTH_ADMIN_EMAIL or SITE_ADMIN_EMAILS is set.
+Tests keep using a single Workspace at the data-dir root.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import threading
 import uuid
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Literal
 
@@ -22,6 +23,7 @@ InviteKind = Literal["join", "new_workspace"]
 MemberRole = Literal["owner", "member"]
 
 ADMIN_EMAIL_ENV = "VARIANT_AUTH_ADMIN_EMAIL"
+SITE_ADMIN_EMAILS_ENV = "SITE_ADMIN_EMAILS"
 LEGACY_DIR_NAMES = ("jobs", "drive", "uploads", "workflow-work")
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -31,15 +33,33 @@ def normalize_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
+def parse_admin_emails(*blobs: str | None) -> set[str]:
+    """Comma-separated site admins from VARIANT_AUTH_ADMIN_EMAIL and SITE_ADMIN_EMAILS."""
+    out: set[str] = set()
+    for blob in blobs:
+        for part in (blob or "").split(","):
+            addr = normalize_email(part)
+            if addr:
+                out.add(addr)
+    return out
+
+
+def combined_admin_emails(environ: Mapping[str, str] | None = None) -> str:
+    env = os.environ if environ is None else environ
+    emails = parse_admin_emails(env.get(ADMIN_EMAIL_ENV), env.get(SITE_ADMIN_EMAILS_ENV))
+    return ",".join(sorted(emails))
+
+
 def is_admin_email(email: str, admin_email: str | None) -> bool:
-    if not admin_email:
+    addr = normalize_email(email)
+    if not addr:
         return False
-    return normalize_email(email) == normalize_email(admin_email)
+    return addr in parse_admin_emails(admin_email)
 
 
 def auth_required(environ: dict | None = None) -> bool:
     env = environ if environ is not None else os.environ
-    return bool((env.get(ADMIN_EMAIL_ENV) or "").strip())
+    return bool(parse_admin_emails(env.get(ADMIN_EMAIL_ENV), env.get(SITE_ADMIN_EMAILS_ENV)))
 
 
 @dataclass

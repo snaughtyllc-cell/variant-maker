@@ -17,7 +17,7 @@ from variant_maker.server.drive_oauth import (
 )
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.sessions import COOKIE_NAME, VIEW_COOKIE_NAME
-from variant_maker.server.tenants import ADMIN_EMAIL_ENV
+from variant_maker.server.tenants import ADMIN_EMAIL_ENV, SITE_ADMIN_EMAILS_ENV
 from variant_maker.server.workspace import Workspace
 
 ADMIN = "jeff@x.com"
@@ -39,15 +39,18 @@ def _exchange(*, code: str, **_kwargs):
         "va": {"email": "va@x.com", "name": "VA"},
         "ops": {"email": "ops@x.com", "name": "Ops"},
         "creator": {"email": "creator@x.com", "name": "Creator"},
+        "partner": {"email": "partner@x.com", "name": "Partner"},
         "stranger": {"email": "stranger@x.com", "name": "Stranger"},
     }
     return mapping[code]
 
 
-def _auth_app(tmp_path, *, hydrate=True):
+def _auth_app(tmp_path, *, hydrate=True, extra_env: dict | None = None):
     ws = Workspace(str(tmp_path))
     store = JobStore(ws, FakeRunner({}))
     env = _env()
+    if extra_env:
+        env.update(extra_env)
     app = create_app(
         store,
         hydrate=hydrate,
@@ -561,6 +564,38 @@ def test_solo_owner_cannot_invite_a_va(tmp_path):
     assert blocked.status_code == 403
     assert "solo" in blocked.json()["detail"].lower()
     assert jeff.get("/api/workspace/team").status_code == 200
+
+
+def test_second_site_admin_can_open_another_workspace(tmp_path):
+    app, _ = _auth_app(tmp_path, extra_env={SITE_ADMIN_EMAILS_ENV: "partner@x.com"})
+    jeff = TestClient(app)
+    partner = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    _login(partner, "partner")
+
+    me = partner.get("/api/auth/me").json()
+    assert me["is_admin"] is True
+    assert me["email"] == "partner@x.com"
+    assert jeff.get("/api/auth/me").json()["is_admin"] is True
+    assert ops.get("/api/auth/me").json()["is_admin"] is False
+    assert ops.get("/api/admin/workspaces").status_code == 403
+
+    spaces = partner.get("/api/admin/workspaces")
+    assert spaces.status_code == 200
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    assert any(s["id"] == ops_id for s in spaces.json())
+
+    switched = partner.post("/api/admin/view", json={"workspace_id": ops_id})
+    assert switched.status_code == 204
+    viewing = partner.get("/api/auth/me").json()
+    assert viewing["viewing_other"] is True
+    assert viewing["workspace_id"] == ops_id
+    assert viewing["home_workspace_id"] != ops_id
+
+    assert partner.delete(f"/api/admin/users/{ADMIN}").status_code == 400
 
 
 def test_password_set_requires_login(tmp_path):
