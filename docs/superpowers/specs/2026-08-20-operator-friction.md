@@ -95,6 +95,9 @@ Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
 shoutout marketplace. The platform stays the oracle. Spec:
 `docs/superpowers/specs/2026-08-20-post-url-tracking.md`.
 
+Implementable v1 (Drive-sent list, identity, slices, competitor paste-slot):
+`docs/superpowers/specs/2026-08-20-studio-drops-board.md`.
+
 ## Parallel file boxes
 
 | Track | Box | Not |
