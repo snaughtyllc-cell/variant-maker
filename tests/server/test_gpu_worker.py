@@ -124,6 +124,8 @@ def test_worker_defaults_rotate_safe_and_us_metadata_off(monkeypatch, tmp_path):
     })
     assert captured["rotate"] == "safe"
     assert captured["us_metadata"] is False
+    assert captured["rubberband"] is False
+    assert captured["audio_uniqueness"] is False
 
 
 def test_worker_honors_rotate_never_and_us_metadata_flag(monkeypatch, tmp_path):

@@ -6,7 +6,8 @@ Video filter ORDER is load-bearing:
   [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
   -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
-  equalizer -> loudnorm.
+  [equalizer] -> [loudnorm]. Pitch / EQ / loudnorm are omitted unless sampled
+  (voice-safe default: talking stays natural; audio-uniqueness is a later switch).
 
 Trim supports an independent START (`trim_s`) and END (`trim_end_s`, a fingerprint
 micro-trim off the tail); end trim needs the source duration (both builders take `src`)
@@ -427,17 +428,23 @@ def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
         parts.append(f"rubberband=pitch={1.0 + pitch / 100.0:.6f}")
 
     # one speed factor on both streams — atempo MUST equal video speed
-    parts.append(f"atempo={a['speed']:.6f}")
+    speed = a.get("speed", 1.0)
+    if abs(speed - 1.0) > _EPS:
+        parts.append(f"atempo={speed:.6f}")
 
     gains = a.get("eq_gains", [])
     freqs = _EQ_BANDS.get(a.get("eq_bands", len(gains)), ())
     for freq, gain in zip(freqs, gains):
-        parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
+        if abs(gain) > _EPS:
+            parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
 
     # loudnorm after atempo — effective length is remaining/speed. Short clips
-    # make loudnorm emit NaN which AAC rejects (exit 234).
-    speed = max(a.get("speed", 1.0), _EPS)
-    effective_s = _remaining_duration_s(v, src.duration_s) / speed
-    if effective_s >= _LOUDNORM_MIN_S:
-        parts.append(f"loudnorm=I={a['loudnorm_i']:.1f}:TP=-1.5:LRA=11")
+    # make loudnorm emit NaN which AAC rejects (exit 234). Voice-safe params
+    # leave loudnorm_i unset so talking is not radio-processed.
+    ln = a.get("loudnorm_i")
+    if ln is not None:
+        speed = max(float(speed), _EPS)
+        effective_s = _remaining_duration_s(v, src.duration_s) / speed
+        if effective_s >= _LOUDNORM_MIN_S:
+            parts.append(f"loudnorm=I={float(ln):.1f}:TP=-1.5:LRA=11")
     return ",".join(parts)

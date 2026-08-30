@@ -719,3 +719,24 @@ def test_loudnorm_kept_when_remaining_audio_is_long_enough():
     p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.0})
     af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)
     assert "loudnorm=I=-14.0:TP=-1.5:LRA=11" in af
+
+
+def test_voice_safe_audio_is_sync_only():
+    """No pitch / EQ / loudnorm — those make talking sound robotic. Tempo still matches video."""
+    p = make_params(audio={"pitch_pct": 0.0, "eq_gains": [0.0, 0.0], "loudnorm_i": None})
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert "rubberband=" not in af
+    assert "equalizer=" not in af
+    assert "loudnorm=" not in af
+    assert "atempo=1.020000" in af
+    assert "atrim=" in af
+
+
+def test_atempo_omitted_when_speed_is_one():
+    p = make_params(
+        video={"speed": 1.0},
+        audio={"speed": 1.0, "loudnorm_i": None, "eq_gains": [0.0, 0.0]},
+    )
+    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
+    assert "atempo=" not in af
+    assert "atrim=" in af

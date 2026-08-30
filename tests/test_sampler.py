@@ -102,7 +102,7 @@ def test_video_axes_within_range_bounds(preset):
 @pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
 def test_audio_within_range_bounds(preset):
     for s in SEEDS[:50]:
-        a = sample(preset, s)["audio"]
+        a = sample(preset, s, audio_uniqueness=True)["audio"]
         assert preset.loudnorm_i.lo <= a["loudnorm_i"] <= preset.loudnorm_i.hi
         assert preset.aac_kbps.lo <= a["aac_kbps"] <= preset.aac_kbps.hi
         assert len(a["eq_gains"]) == preset.eq_bands
@@ -179,8 +179,26 @@ def test_pitch_is_zero_without_rubberband():
 
 def test_pitch_within_range_with_rubberband():
     for s in SEEDS[:50]:
-        pp = sample(MEDIUM, s, rubberband=True)["audio"]["pitch_pct"]
+        pp = sample(MEDIUM, s, rubberband=True, audio_uniqueness=True)["audio"]["pitch_pct"]
         assert MEDIUM.pitch_pct.lo <= pp <= MEDIUM.pitch_pct.hi
+
+
+def test_voice_safe_audio_skips_uniqueness_axes_by_default():
+    """Talking clips keep natural audio. Pitch/EQ/loudnorm are the robotic sound."""
+    for s in SEEDS[:50]:
+        a = sample(MEDIUM, s, rubberband=True)["audio"]
+        assert a["pitch_pct"] == 0.0
+        assert a["loudnorm_i"] is None
+        assert all(g == 0.0 for g in a["eq_gains"])
+
+
+def test_audio_uniqueness_draws_eq_and_loudnorm():
+    for s in SEEDS[:50]:
+        a = sample(MEDIUM, s, audio_uniqueness=True)["audio"]
+        assert MEDIUM.loudnorm_i.lo <= a["loudnorm_i"] <= MEDIUM.loudnorm_i.hi
+        assert len(a["eq_gains"]) == MEDIUM.eq_bands
+        for g in a["eq_gains"]:
+            assert MEDIUM.eq_gain_db.lo <= g <= MEDIUM.eq_gain_db.hi
 
 
 def test_sample_includes_crop_offset_and_trim_end():
