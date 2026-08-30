@@ -18,6 +18,7 @@ on:
       - cursor/crop-drift-live-cdb6
       - cursor/copyid-lab-record-cdb6
       - cursor/lab-backlog-6cba
+      - cursor/green-tint-6cba
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py
