@@ -15,6 +15,7 @@ import {
 import {
   FILE_FETCH_CONCURRENCY,
   FILE_FETCH_CONCURRENCY_APPLE,
+  downloadVariantUrls,
   fillFileCache,
   filesReadyNow,
   isAppleMobile,
@@ -153,6 +154,11 @@ export function SourceGroup({
     if (plan === "share" && ready) {
       // Must call WebKit share in this tap — setState first drops the gesture.
       shareNow(ready);
+      return;
+    }
+
+    if (plan === "os_download") {
+      downloadVariantUrls(actionShareable);
       return;
     }
 

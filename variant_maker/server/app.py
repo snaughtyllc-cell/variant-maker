@@ -1387,10 +1387,16 @@ def create_app(
         return FileResponse(path, media_type="image/jpeg")
 
     @app.get("/api/variants/{source_id}/{filename}")
-    def variant_file(source_id: str, filename: str):
+    def variant_file(source_id: str, filename: str, dl: int = 0):
         path = store.find_variant(source_id, filename)
         if path is None:
             raise HTTPException(status_code=404, detail="variant not found")
+        if int(dl or 0):
+            safe = os.path.basename(filename) or "variant.mp4"
+            return FileResponse(
+                path, media_type="video/mp4", filename=safe,
+                content_disposition_type="attachment",
+            )
         return FileResponse(path, media_type="video/mp4")
 
     @app.get("/api/sources/{source_id}/source")
