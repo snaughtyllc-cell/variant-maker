@@ -56,8 +56,10 @@ Two bugs, both on Fast daily path:
 2. **Audio head never scored.** The one heads blob we got (AQMTp 1) is
    `chromaprint_v1` `available: false`. Image has `fpcalc` (`Dockerfile.fast`
    runs `fpcalc -version`) but Debian libav cannot open our BtbN mp4s.
-   Fix: decode a 11.025 kHz wav with our ffmpeg, then `fpcalc` the wav.
-   Visual stays `available: false` on slim Fast (no torch/SSCD).
+   NEW pack `6f506c681f8b` was the same (`reason: error`) even after a wav
+   fallback existed — `_fpcalc` tried **direct first**. Fix: **wav-first**
+   (`pcm_s16le` @ 11025), empty fingerprint is a miss, then direct. Visual
+   stays `available: false` on slim Fast (no torch/SSCD). Stay **`record`**.
 
 Do **not** treat this pack as a copyid verdict. Re-run after the lab image
 rebuild. Stay on **`record`**. Do not `gate`. Do not PATCH live.

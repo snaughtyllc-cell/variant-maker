@@ -93,6 +93,7 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
                 ffmpeg, "-v", "error", "-y", "-i", path,
                 "-t", str(int(length)), "-vn",
                 "-ac", "1", "-ar", str(FPCALC_RATE),
+                "-c:a", "pcm_s16le",
                 wav,
             ],
             check=True,
@@ -102,10 +103,28 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
 
 
 def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
+    """Wav-first. Slim Fast fpcalc's libav cannot open our BtbN mp4s.
+
+    Lab pack 3d4fae98ca77 / 6f506c681f8b wrote ``available: false`` because
+    direct fpcalc ran first and errored; empty fingerprints were not a miss.
+    Stay ``record`` — this only has to *score*.
+    """
+    wav_err: BaseException | None = None
     try:
-        return _fpcalc_direct(path, length=length), "direct"
-    except (OSError, subprocess.CalledProcessError, ValueError):
-        return _fpcalc_via_ffmpeg(path, length=length), "ffmpeg_wav"
+        fp = _fpcalc_via_ffmpeg(path, length=length)
+        if fp:
+            return fp, "ffmpeg_wav"
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        wav_err = exc
+    try:
+        fp = _fpcalc_direct(path, length=length)
+        if fp:
+            return fp, "direct"
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        if wav_err is not None:
+            raise wav_err from exc
+        raise
+    raise ValueError("empty chromaprint")
 
 
 def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
