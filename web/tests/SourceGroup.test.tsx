@@ -11,6 +11,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { uniquenessCoverageSubcopy } from "@/lib/prepareCopy";
 import { clearSharedVariantFileCache, phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
 import type { Destination, DriveStatus } from "@/lib/types";
 
@@ -345,5 +346,28 @@ describe("SourceGroup live post count", () => {
       />,
     );
     expect(screen.getByText(/2 live posts/i)).toBeInTheDocument();
+  });
+});
+
+describe("SourceGroup originality summary", () => {
+  it("titles the Originality average as pixel SSIM, not a platform check", () => {
+    render(
+      <SourceGroup
+        source={source({
+          variants: [
+            variant({ uniqueness: 0.5 }),
+            variant({
+              index: 2,
+              filename: "v02.mp4",
+              file_url: "/api/variants/s1/v02.mp4",
+              uniqueness: 0.4,
+            }),
+          ],
+        })}
+        {...props}
+      />,
+    );
+    const summary = screen.getByText(/Originality 45% avg/);
+    expect(summary).toHaveAttribute("title", uniquenessCoverageSubcopy());
   });
 });

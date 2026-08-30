@@ -57,5 +57,7 @@ describe("AdvancedPanel output copy", () => {
     expect(screen.getByText(/Only after that hunt/)).toBeInTheDocument();
     expect(screen.getByText(/30%/)).toBeInTheDocument();
     expect(screen.getByText(/Under 30%/)).toBeInTheDocument();
+    expect(screen.getByText(/pixel SSIM/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a platform check/i)).toBeInTheDocument();
   });
 });

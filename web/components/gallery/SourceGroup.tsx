@@ -38,7 +38,7 @@ import {
 } from "@/lib/shareVideos";
 import { SavePreparePanel } from "./SavePreparePanel";
 import { postedCountCopy } from "@/lib/postUrl";
-import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -352,7 +352,11 @@ export function SourceGroup({
           </div>
           {summaryLine ? (
             <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}>
-              {summaryLine}
+              {originalitySummary ? (
+                <span title={uniquenessCoverageSubcopy()}>{originalitySummary}</span>
+              ) : null}
+              {originalitySummary && postedCopy ? " · " : null}
+              {postedCopy}
             </div>
           ) : null}
         </div>

@@ -157,10 +157,10 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Pass is 38%. If medium misses
+                file is scored vs the original with pixel SSIM (3 frames). Pass is 38%. If medium misses
                 38%, one strong pass always runs. Only after that hunt: 30%
                 and up still ships. Under 30% is a uniqueness miss — not a
-                Drive file.
+                Drive file. Not a platform check.
               </span>
             </span>
             <input
