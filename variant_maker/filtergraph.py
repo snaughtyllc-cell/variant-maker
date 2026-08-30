@@ -2,8 +2,8 @@
 
 Video filter ORDER is load-bearing:
   trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
-  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
-  [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
+  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(brightness/contrast/gamma) ->
+  hue(h+s) -> [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
   -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
   [equalizer] -> [loudnorm]. Pitch / EQ / loudnorm are omitted unless sampled
@@ -70,6 +70,36 @@ _CHROMA_CLOUD_BLUR = 4.0
 _LUMA_DUST_MAX = 13
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
+# ffmpeg vignette default PI/5 (~0.63) is a heavy lens on 9:16 (~40 RGB + olive
+# on white walls). Sampled 0.02–0.20 is already a mild edge falloff when used as
+# the angle. Cap so a leftover large param cannot crush the frame.
+_VIGNETTE_ANGLE_MAX = 0.45
+
+
+def vignette_angle(amount: float) -> float:
+    """Map sampled vignette amount to an ffmpeg `vignette=angle=` value.
+
+    Larger angle darkens more of the frame on this ffmpeg. Do **not** subtract
+    from PI/5 — that is the crush Jeff saw as a green tint on every clip.
+    """
+    a = float(amount or 0.0)
+    if a <= _EPS:
+        return 0.0
+    return min(a, _VIGNETTE_ANGLE_MAX)
+
+
+def _hue_filter(v: dict) -> str | None:
+    """YUV-native hue + saturation. eq=saturation= is an olive-cast RGB round-trip."""
+    h = float(v.get("hue_deg") or 0.0)
+    s = float(v.get("saturation") or 1.0)
+    parts: list[str] = []
+    if abs(h) > _EPS:
+        parts.append(f"h={h:.4f}")
+    if abs(s - 1.0) > _EPS:
+        parts.append(f"s={s:.4f}")
+    if not parts:
+        return None
+    return "hue=" + ":".join(parts)
 
 
 def grain_scale_for_size(width: int | None, height: int | None) -> float:
@@ -357,19 +387,21 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if abs(warp) >= _WARP_MIN:
         parts.append(f"lenscorrection=cx=0.5:cy=0.5:k1={warp:.6f}:k2=0")
 
-    # color (always emitted — this is the color stage)
+    # color (always emitted — this is the color stage). Saturation stays 1.0 here;
+    # ffmpeg eq sat is an RGB 601 round-trip that tints every clip olive.
     parts.append(
         f"eq=brightness={v['brightness']:.4f}:contrast={v['contrast']:.4f}:"
-        f"saturation={v['saturation']:.4f}:gamma={v['gamma']:.4f}"
+        f"saturation=1.0000:gamma={v['gamma']:.4f}"
     )
 
-    if abs(v.get("hue_deg", 0.0)) > _EPS:
-        parts.append(f"hue=h={v['hue_deg']:.4f}")
+    hue = _hue_filter(v)
+    if hue:
+        parts.append(hue)
     vig = float(v.get("vignette") or 0.0)
     if vig > _EPS:
-        # Smaller angle → stronger edge darken. Amount is added onto ffmpeg's PI/5 default.
-        angle = max(0.22, math.pi / 5.0 - vig)
-        parts.append(f"vignette=angle={angle:.4f}")
+        angle = vignette_angle(vig)
+        if angle > _EPS:
+            parts.append(f"vignette=angle={angle:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):

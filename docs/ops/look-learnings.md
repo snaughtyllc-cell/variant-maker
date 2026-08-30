@@ -54,13 +54,15 @@ Platform flags after a drop stay in Phase 12
 | — | Pixel AI scramble / DCT / odd size | — | — | Not this product. |
 | — | mid-freq luma shade / **16×28** cookie | — | — | Mesh on the face. |
 | **2026-08-25** | **`lookaqmtp`** / `lab8_aqmtp454_68054751` / `4540720` | Strong 720 TH: luma shade **8×14**, `gblur=10`, **c0s=100**, cloud 7, dust 13 | **33–34 bits**, VMAF **97–99** | **Lava / oil-slick blotches on the face.** Jeff: visually shit. VMAF never saw the shade (quality proxy strips it). Coarse luma MAE **41–57** vs signed medium **12–32**. Do not redraw. Do not pin live. |
+| **2026-08-30** | NEW pack `37f1a5ee9234` (0409 / 1277 / bradnded) vs source | Compete vignette `angle=PI/5−vig` (~0.55–0.61) + `eq=saturation=` | — | **Green / olive vs source on every clip.** White walls and grey shirts show it. Vignette crushed ~40 RGB; eq sat is a 601 RGB round-trip (G stays, R+B drop). Not chroma-cloud (these are 1080). Do not redraw PI/5. **Live `c497505` still has this mapping — do not PATCH; Lab-only fix first.** |
 
 ## Open
 
 | Hole | What we know | What we will not do |
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). Compete escalate-on `9ba1af34f29d` was 18/17 — Jeff 2026-08-29: not a pin blocker. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Build an escalate-rollback just for this clip. |
-| Handheld crop wander on live Fast `c497505` | Jeff 2026-08-29: **ok lets build that on live**, then lab-verify so we know if live must come off. Lab pack `1fbe4f51de83`: SaveInta **33/33**, motion **43/45**, AQMTp **18/17** parked. Stills not lava/snow. **Live stays.** Next real Generate stills are still the look check. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. Roll live back to `d0a7bc5` without a broken look. |
+| Handheld crop wander on live Fast `c497505` | Jeff 2026-08-29: **ok lets build that on live**, then lab-verify so we know if live must come off. Lab pack `1fbe4f51de83`: SaveInta **33/33**, motion **43/45**, AQMTp **18/17** parked. Stills not lava/snow. **Live stays.** Next real Generate stills are the look check. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. Roll live back to `d0a7bc5` without a broken look. |
+| Green / olive tint vs source (NEW pack, white-wall talking-head) | Compete vignette was ffmpeg’s default PI/5, not a mild edge. `eq=saturation=` tints olive. Lab remap: sampled 0.02–0.20 as the angle; sat via `hue=s=`. **Live Fast still on the old graph until a signed Lab pack + pin.** | PATCH live. Raise 24. Shade. Redraw chroma-cloud. |
 
 ## Engine backstop
 

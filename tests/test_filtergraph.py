@@ -38,8 +38,8 @@ EXPECTED_VF = (
     "trim=start=0.200,setpts=PTS-STARTPTS,"
     "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000,"
     "scale=1080:1920:force_original_aspect_ratio=disable,scale=trunc(iw/2)*2:trunc(ih/2)*2,"
-    "eq=brightness=0.0100:contrast=1.0200:saturation=1.0300:gamma=0.9900,"
-    "hue=h=2.0000,"
+    "eq=brightness=0.0100:contrast=1.0200:saturation=1.0000:gamma=0.9900,"
+    "hue=h=2.0000:s=1.0300,"
     "unsharp=5:5:0.3000:5:5:0.0,"
     "noise=alls=8:allf=t+u,"
     "fps=30,"
@@ -535,7 +535,7 @@ def test_chroma_cloud_omitted_when_zero():
 
 def test_neutral_axes_are_omitted():
     p = make_params(video={
-        "crop_keep": 1.0, "rotate_deg": 0.0, "hue_deg": 0.0,
+        "crop_keep": 1.0, "rotate_deg": 0.0, "hue_deg": 0.0, "saturation": 1.0,
         "unsharp": 0.0, "grain": 0.0, "speed": 1.0, "trim_s": 0.0, "trim_end_s": 0.0,
     })
     vf = filtergraph.build_video_filters(p, make_src(), REELS)
@@ -565,6 +565,38 @@ def test_vignette_emitted_after_color():
     assert vf.index("hue=") < vf.index("vignette=")
     assert vf.index("vignette=") < vf.index("unsharp=")
     assert "vignette=" not in filtergraph.build_video_filters(make_params(), make_src(), REELS)
+
+
+def test_vignette_angle_is_sampled_amount_not_ffmpeg_default():
+    """PI/5 (~0.63) is ffmpeg's default lens and crushes 9:16 (~40 RGB, olive walls).
+
+    Sampled medium 0.02–0.12 is already a mild edge falloff when used as the angle.
+    """
+    assert filtergraph.vignette_angle(0.0) == 0.0
+    assert filtergraph.vignette_angle(0.08) == pytest.approx(0.08)
+    assert filtergraph.vignette_angle(0.08) < 0.30
+    assert filtergraph.vignette_angle(0.20) == pytest.approx(0.20)
+    vf = filtergraph.build_video_filters(
+        make_params(video={"vignette": 0.08}), make_src(), REELS,
+    )
+    assert "vignette=angle=0.0800" in vf
+    assert "vignette=angle=0.5483" not in vf  # old pi/5 - 0.08
+
+
+def test_saturation_uses_hue_not_eq():
+    """ffmpeg eq saturation converts YUV→RGB with the wrong matrix → olive on skin.
+
+    hue=s= is YUV-native and zero-mean. eq keeps brightness/contrast/gamma only.
+    """
+    vf = filtergraph.build_video_filters(make_params(), make_src(), REELS)
+    assert "eq=brightness=0.0100:contrast=1.0200:saturation=1.0000:gamma=0.9900" in vf
+    assert "hue=h=2.0000:s=1.0300" in vf
+    sat_only = filtergraph.build_video_filters(
+        make_params(video={"hue_deg": 0.0, "saturation": 0.96}), make_src(), REELS,
+    )
+    assert "saturation=1.0000" in sat_only
+    assert "hue=s=0.9600" in sat_only
+    assert "hue=h=" not in sat_only
 
 
 def test_out_fps_overrides_platform_fps():
