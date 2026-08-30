@@ -27,6 +27,7 @@ Platform flags after a drop stay in Phase 12
 | 2026-08-25 | SaveInta Fast 8/20 `7dae269` | Same signed medium. Fail-forward uniqueness. | 25–27 bits, all medium | Wait-time shipped. Was live Fast. |
 | **2026-08-26** | SaveInta lab Fast 8 `472ab60` / live Fast 2 smoke | Stills overlap uniqueness; MAE after SSIM | **25–27 bits**, all medium. Lab 8 worker **3.1 min** (prior live uniqueness-only 8 was **4.2 min**) | Stills look like source. MAE can still trip on crop — stills are the oracle. **Shipped live** (`sha256:e7474975…`, no `VF_LAB`). |
 | 2026-08-25 | SaveInta lab `looksaveinta` / `4540720` | Medium, **shade-off** | 24–27 bits, VMAF 95–99 | Control pack. Do not put shade on medium. |
+| **2026-08-29** | Compete Fast `d0a7bc5` Gallery **LOOK-SaveInta** / **LOOK-AQMTp** / **LOOK-bring-me-down** (`166cf4bae4be`) | Lab Fast rotate + vignette + per-copy 30/48/60. Medium, escalate **off** on the Sign pack. | SaveInta **33/32**, AQMTp **20/19**, bring-me-down **45/46** | **Jeff: yea they look fine.** Average daily clips good. AQMTp escalate-on under-19 is the parked nose-close clip — **not a pin blocker.** Live Fast still `f05d803` until an explicit pin. |
 
 ## Usable (look OK, uniqueness under 24)
 
@@ -58,6 +59,7 @@ Platform flags after a drop stay in Phase 12
 | Hole | What we know | What we will not do |
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). SaveInta-class 720 already clears 24 on live. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Keep looping this one clip. Pin live from `lookshadeoff`. |
+| Compete Fast escalate-on vs 19-bit floor | Look **signed**. Escalate-on AQMTp `9ba1af34f29d` was **18/17** `uniqueness_fail`. **Jeff 2026-08-29:** that clip is super-close face-to-camera, unlikely on average uploads; do not block the tool on it. Average test clips have been good. | Raise 24. Redraw shade. Build an escalate-rollback just for this clip. |
 
 ## Engine backstop
 
