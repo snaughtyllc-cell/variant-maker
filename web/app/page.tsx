@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { FolderOpen } from "lucide-react";
 import { DropZone } from "@/components/studio/DropZone";
 import { FileList } from "@/components/studio/FileList";
@@ -11,7 +11,8 @@ import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
-import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
+import { DEFAULT_PER_VIDEO } from "@/lib/variantStepperCopy";
+import { copiesPerSourceMax, sourcesRemaining, trialCapHint } from "@/lib/trialCap";
 import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
 import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
@@ -23,6 +24,9 @@ export default function StudioPage() {
   const { start, beginPrepare, clear, jobId, complete } = useRun();
   const { data: me } = useAuthMe();
   const agency = isAgencyExperience(me);
+  const maxPerVideo = copiesPerSourceMax(me);
+  const remainingSources = sourcesRemaining(me);
+  const capHint = trialCapHint(me);
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
   const [drivePicks, setDrivePicks] = useState<DrivePick[]>([]);
@@ -37,19 +41,31 @@ export default function StudioPage() {
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
 
+  useEffect(() => {
+    if (perVideo > maxPerVideo) setPerVideo(maxPerVideo);
+  }, [maxPerVideo, perVideo]);
+
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
     if (blocked) {
       setError(blocked);
       return;
     }
-    setError(null);
     setFiles((prev) => {
       const combined = [...prev, ...incoming];
+      if (remainingSources !== null && combined.length > remainingSources) {
+        setError(
+          remainingSources === 0
+            ? "This studio has used its source cap."
+            : `This studio can generate ${remainingSources} more source clip${remainingSources === 1 ? "" : "s"}.`,
+        );
+        return prev;
+      }
+      setError(null);
       readDurations(combined).then(setDurations);
       return combined;
     });
-  }, []);
+  }, [remainingSources]);
 
   function handleRemoveFile(index: number) {
     setFiles((prev) => {
@@ -67,17 +83,38 @@ export default function StudioPage() {
     if (picks.length === 0) return;
     const destId = picks[0].destinationId;
     setDrivePicks((prev) => {
-      if (prev.length === 0 || prev[0].destinationId !== destId) return picks;
-      const byId = new Map(prev.map((p) => [p.id, p]));
-      for (const p of picks) byId.set(p.id, p);
-      return Array.from(byId.values());
+      const next =
+        prev.length === 0 || prev[0].destinationId !== destId
+          ? picks
+          : (() => {
+              const byId = new Map(prev.map((p) => [p.id, p]));
+              for (const p of picks) byId.set(p.id, p);
+              return Array.from(byId.values());
+            })();
+      if (remainingSources !== null && next.length > remainingSources) {
+        setError(
+          remainingSources === 0
+            ? "This studio has used its source cap."
+            : `This studio can generate ${remainingSources} more source clip${remainingSources === 1 ? "" : "s"}.`,
+        );
+        return prev;
+      }
+      setError(null);
+      return next;
     });
-    setError(null);
   }
 
   async function handleGenerate() {
     if (busy || sourceCount === 0) return;
     if (jobId && !complete) return;
+    if (remainingSources !== null && sourceCount > remainingSources) {
+      setError(
+        remainingSources === 0
+          ? "This studio has used its source cap."
+          : `This studio can generate ${remainingSources} more source clip${remainingSources === 1 ? "" : "s"}.`,
+      );
+      return;
+    }
     if (files.length > 0 && drivePicks.length > 0) {
       setError("Use either phone files or Drive clips in one run — not both.");
       return;
@@ -144,7 +181,7 @@ export default function StudioPage() {
             value={perVideo}
             onChange={setPerVideo}
             min={1}
-            max={MAX_PER_VIDEO}
+            max={maxPerVideo}
             fileCount={sourceCount}
             qualityMode={qualityMode}
           />
@@ -152,12 +189,18 @@ export default function StudioPage() {
             fileCount={sourceCount}
             perVideo={perVideo}
             onClick={handleGenerate}
-            disabled={Boolean(jobId && !complete)}
+            disabled={Boolean(jobId && !complete) || remainingSources === 0}
             busy={busy}
             jobId={jobId}
             complete={complete}
           />
         </div>
+
+        {capHint && (
+          <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45 }}>
+            {capHint}
+          </p>
+        )}
 
         <label className="studio-caption-toggle">
           <input

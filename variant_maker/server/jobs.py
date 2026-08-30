@@ -18,6 +18,7 @@ from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .caption_ai import captions_for_source
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
+from .usage import record_job
 from .workspace import Workspace
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
@@ -691,6 +692,10 @@ class JobStore:
                 for source in job.sources:
                     self._pull_missing_outputs(source.source_id)
                 self._refresh_copy_error(job)
+                try:
+                    record_job(self._ws, job)
+                except Exception as exc:
+                    print(f"usage ledger write failed: {exc}", flush=True)
             self._persist(job)
             self.prune_finished_jobs()
             ev = self._done.get(job.job_id)

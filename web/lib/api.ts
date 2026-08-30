@@ -494,11 +494,22 @@ export async function setStudioPassword(password: string): Promise<void> {
 
 export const listInvites = () => fetch("/api/auth/invites").then(json<Invite[]>);
 
-export function createInvite(email: string, kind: InviteKind): Promise<Invite> {
+export function createInvite(
+  email: string,
+  kind: InviteKind,
+  caps?: { source_limit?: number | null; variants_per_source_limit?: number | null },
+): Promise<Invite> {
+  const body: Record<string, unknown> = { email, kind };
+  if (kind === "new_workspace") {
+    const src = caps?.source_limit;
+    const per = caps?.variants_per_source_limit;
+    if (typeof src === "number" && src > 0) body.source_limit = src;
+    if (typeof per === "number" && per > 0) body.variants_per_source_limit = per;
+  }
   return fetch("/api/auth/invites", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, kind }),
+    body: JSON.stringify(body),
   }).then(json<Invite>);
 }
 
@@ -514,10 +525,23 @@ export function setWorkspaceExperience(
   id: string,
   experience: "solo" | "agency",
 ): Promise<AdminWorkspace> {
+  return patchAdminWorkspace(id, { experience });
+}
+
+export type AdminWorkspacePatch = {
+  experience?: "solo" | "agency";
+  source_limit?: number | null;
+  variants_per_source_limit?: number | null;
+};
+
+export function patchAdminWorkspace(
+  id: string,
+  body: AdminWorkspacePatch,
+): Promise<AdminWorkspace> {
   return fetch(`/api/admin/workspaces/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ experience }),
+    body: JSON.stringify(body),
   }).then(json<AdminWorkspace>);
 }
 

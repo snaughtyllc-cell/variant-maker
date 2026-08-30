@@ -598,6 +598,79 @@ def test_second_site_admin_can_open_another_workspace(tmp_path):
     assert partner.delete(f"/api/admin/users/{ADMIN}").status_code == 400
 
 
+def test_trial_caps_block_generate_except_site_admin(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    creator = TestClient(app)
+    _login(jeff, "jeff")
+    invited = jeff.post("/api/auth/invites", json={
+        "email": "creator@x.com", "kind": "new_workspace",
+        "source_limit": 1, "variants_per_source_limit": 2,
+    })
+    assert invited.status_code == 201
+    assert invited.json()["source_limit"] == 1
+    assert invited.json()["variants_per_source_limit"] == 2
+    _login(creator, "creator")
+    me = creator.get("/api/auth/me").json()
+    assert me["source_limit"] == 1
+    assert me["variants_per_source_limit"] == 2
+    assert me["sources_used"] == 0
+    ops_id = me["workspace_id"]
+
+    too_many = creator.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "3"},
+    )
+    assert too_many.status_code == 403
+    assert "copies per source" in too_many.json()["detail"]
+
+    ok = creator.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "2"},
+    )
+    assert ok.status_code == 201, ok.text
+    _tenant_wait(creator, ok.json()["job_id"])
+    used = creator.get("/api/auth/me").json()
+    assert used["sources_used"] == 1
+
+    blocked = creator.post(
+        "/api/jobs",
+        files=[("files", ("b.mp4", b"y", "video/mp4"))],
+        data={"count": "1"},
+    )
+    assert blocked.status_code == 403
+    assert "source clips" in blocked.json()["detail"]
+
+    spaces = jeff.get("/api/admin/workspaces").json()
+    row = next(s for s in spaces if s["id"] == ops_id)
+    assert row["week_sources"] == 1
+    assert row["week_copies"] == 2
+    assert row["month_sources"] == 1
+    assert row["all_sources"] == 1
+    assert row["source_limit"] == 1
+    assert row["variants_per_source_limit"] == 2
+
+    switched = jeff.post("/api/admin/view", json={"workspace_id": ops_id})
+    assert switched.status_code == 204
+    admin_run = jeff.post(
+        "/api/jobs",
+        files=[("files", ("c.mp4", b"z", "video/mp4"))],
+        data={"count": "5"},
+    )
+    assert admin_run.status_code == 201, admin_run.text
+
+    cleared = jeff.patch(
+        f"/api/admin/workspaces/{ops_id}",
+        json={"source_limit": None, "variants_per_source_limit": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["source_limit"] is None
+    assert cleared.json()["variants_per_source_limit"] is None
+    assert creator.get("/api/auth/me").json()["source_limit"] is None
+
+
 def test_password_set_requires_login(tmp_path):
     app, _ = _auth_app(tmp_path)
     anon = TestClient(app)

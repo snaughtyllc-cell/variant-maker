@@ -68,6 +68,8 @@ class WorkspaceInfo:
     name: str
     created_utc: str
     experience: Experience = "agency"
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
 
 
 @dataclass
@@ -86,6 +88,8 @@ class Invite:
     kind: InviteKind
     workspace_id: str | None
     created_utc: str
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
 
 
 def _parse_user(raw: object, key: str = "") -> UserInfo | None:
@@ -118,6 +122,33 @@ def _user_payload(user: UserInfo) -> dict:
     return payload
 
 
+def _optional_positive_int(raw: object) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _parse_invite(raw: object) -> Invite | None:
+    if not isinstance(raw, dict):
+        return None
+    kind = raw.get("kind")
+    if kind not in ("join", "new_workspace"):
+        return None
+    return Invite(
+        id=str(raw.get("id") or ""),
+        email=normalize_email(str(raw.get("email") or "")),
+        kind=kind,
+        workspace_id=raw.get("workspace_id"),
+        created_utc=str(raw.get("created_utc") or ""),
+        source_limit=_optional_positive_int(raw.get("source_limit")),
+        variants_per_source_limit=_optional_positive_int(raw.get("variants_per_source_limit")),
+    )
+
+
 def _parse_workspace(raw: object, workspace_id: str) -> WorkspaceInfo | None:
     if not isinstance(raw, dict):
         return None
@@ -126,6 +157,8 @@ def _parse_workspace(raw: object, workspace_id: str) -> WorkspaceInfo | None:
         name=str(raw.get("name") or workspace_id),
         created_utc=str(raw.get("created_utc") or ""),
         experience=normalize_experience(raw.get("experience")),
+        source_limit=_optional_positive_int(raw.get("source_limit")),
+        variants_per_source_limit=_optional_positive_int(raw.get("variants_per_source_limit")),
     )
 
 
@@ -196,18 +229,9 @@ class TenantStore:
             items = list(self._load()["invites"])
         out: list[Invite] = []
         for raw in items:
-            if not isinstance(raw, dict):
-                continue
-            kind = raw.get("kind")
-            if kind not in ("join", "new_workspace"):
-                continue
-            out.append(Invite(
-                id=str(raw.get("id") or ""),
-                email=normalize_email(str(raw.get("email") or "")),
-                kind=kind,
-                workspace_id=raw.get("workspace_id"),
-                created_utc=str(raw.get("created_utc") or ""),
-            ))
+            parsed = _parse_invite(raw)
+            if parsed is not None:
+                out.append(parsed)
         return out
 
     def create_workspace(
@@ -216,12 +240,16 @@ class TenantStore:
         name: str,
         workspace_id: str | None = None,
         experience: Experience | None = None,
+        source_limit: int | None = None,
+        variants_per_source_limit: int | None = None,
     ) -> WorkspaceInfo:
         ws = WorkspaceInfo(
             id=workspace_id or _new_id("ws"),
             name=name.strip() or "Workspace",
             created_utc=_now(),
             experience=normalize_experience(experience),
+            source_limit=_optional_positive_int(source_limit),
+            variants_per_source_limit=_optional_positive_int(variants_per_source_limit),
         )
         with self._lock:
             data = self._load()
@@ -260,16 +288,28 @@ class TenantStore:
             password_hash=password_hash,
         ))
 
-    def add_invite(self, *, email: str, kind: InviteKind,
-                   workspace_id: str | None) -> Invite:
+    def add_invite(
+        self,
+        *,
+        email: str,
+        kind: InviteKind,
+        workspace_id: str | None,
+        source_limit: int | None = None,
+        variants_per_source_limit: int | None = None,
+    ) -> Invite:
         addr = normalize_email(email)
         if not _EMAIL_RE.match(addr):
             raise ValueError("invalid email")
         if kind == "join" and not workspace_id:
             raise ValueError("join invite needs workspace_id")
+        caps = kind == "new_workspace"
         invite = Invite(
             id=_new_id("inv"), email=addr, kind=kind,
             workspace_id=workspace_id, created_utc=_now(),
+            source_limit=_optional_positive_int(source_limit) if caps else None,
+            variants_per_source_limit=(
+                _optional_positive_int(variants_per_source_limit) if caps else None
+            ),
         )
         with self._lock:
             data = self._load()
@@ -302,21 +342,14 @@ class TenantStore:
             found = None
             kept = []
             for raw in data["invites"]:
+                parsed = _parse_invite(raw)
                 if (
                     found is None
-                    and isinstance(raw, dict)
-                    and normalize_email(str(raw.get("email") or "")) == addr
+                    and parsed is not None
+                    and parsed.email == addr
                 ):
-                    kind = raw.get("kind")
-                    if kind in ("join", "new_workspace"):
-                        found = Invite(
-                            id=str(raw.get("id") or ""),
-                            email=addr,
-                            kind=kind,
-                            workspace_id=raw.get("workspace_id"),
-                            created_utc=str(raw.get("created_utc") or ""),
-                        )
-                        continue
+                    found = parsed
+                    continue
                 kept.append(raw)
             if found is None:
                 return None
@@ -364,13 +397,22 @@ class TenantStore:
         return out
 
     def set_workspace_experience(self, workspace_id: str, experience: Experience) -> WorkspaceInfo | None:
-        kind = normalize_experience(experience)
+        return self.patch_workspace(workspace_id, {"experience": experience})
+
+    def patch_workspace(self, workspace_id: str, fields: dict) -> WorkspaceInfo | None:
         with self._lock:
             data = self._load()
             raw = data["workspaces"].get(workspace_id)
             if not isinstance(raw, dict):
                 return None
-            raw["experience"] = kind
+            if "experience" in fields:
+                raw["experience"] = normalize_experience(fields.get("experience"))
+            if "source_limit" in fields:
+                raw["source_limit"] = _optional_positive_int(fields.get("source_limit"))
+            if "variants_per_source_limit" in fields:
+                raw["variants_per_source_limit"] = _optional_positive_int(
+                    fields.get("variants_per_source_limit"),
+                )
             data["workspaces"][workspace_id] = raw
             self._save(data)
         return _parse_workspace(raw, workspace_id)
@@ -455,6 +497,8 @@ def provision_login(
     ws = store.create_workspace(
         name=name or addr.split("@")[0] or "Studio",
         experience="solo",
+        source_limit=invite.source_limit,
+        variants_per_source_limit=invite.variants_per_source_limit,
     )
     return store.upsert_user(UserInfo(
         email=addr, name=name or addr, workspace_id=ws.id, role="owner",

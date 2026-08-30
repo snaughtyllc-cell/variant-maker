@@ -400,6 +400,9 @@ class AuthMeOut(BaseModel):
     is_admin: bool = False
     has_password: bool = False
     experience: Literal["solo", "agency"] = "agency"
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
+    sources_used: int = 0
 
 
 class PasswordLoginIn(BaseModel):
@@ -414,6 +417,8 @@ class PasswordSetIn(BaseModel):
 class InviteCreateIn(BaseModel):
     email: str
     kind: Literal["join", "new_workspace"]
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
 
 
 class InviteOut(BaseModel):
@@ -422,6 +427,8 @@ class InviteOut(BaseModel):
     kind: Literal["join", "new_workspace"]
     workspace_id: str | None = None
     created_utc: str
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
 
 
 class AdminMemberOut(BaseModel):
@@ -442,6 +449,14 @@ class AdminWorkspaceOut(BaseModel):
     last_job_utc: str | None = None
     last_error: str | None = None
     experience: Literal["solo", "agency"] = "agency"
+    week_sources: int = 0
+    week_copies: int = 0
+    month_sources: int = 0
+    month_copies: int = 0
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
+    all_sources: int = 0
+    all_copies: int = 0
 
 
 class WorkspaceInviteIn(BaseModel):
@@ -460,4 +475,6 @@ class AdminViewIn(BaseModel):
 
 
 class WorkspaceExperienceIn(BaseModel):
-    experience: Literal["solo", "agency"]
+    experience: Literal["solo", "agency"] | None = None
+    source_limit: int | None = None
+    variants_per_source_limit: int | None = None
