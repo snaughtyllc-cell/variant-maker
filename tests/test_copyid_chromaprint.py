@@ -1,12 +1,15 @@
 import shutil
 import subprocess
+import wave
 
 import pytest
 
 from variant_maker.copyid.chromaprint import (
     AUDIO_METRIC,
     VIA_FFMPEG,
+    _fpcalc_result,
     _fpcalc_via_ffmpeg,
+    _write_pcm_wav,
     available,
     match_fingerprints,
     parse_raw,
@@ -185,14 +188,8 @@ def test_score_audio_on_aac_mp4(tmp_path):
     assert r["via"] == VIA_FFMPEG
 
 
-def test_via_ffmpeg_fingerprints_raw_pcm_not_a_container(monkeypatch, tmp_path):
-    """Debian fpcalc's libav cannot demux our BtbN mp4s *or* some wavs.
-
-    Lab pack 5ef63612aaf3 still wrote reason=error after wav-first because
-    ``_fpcalc_via_ffmpeg`` handed a .wav back to ``fpcalc`` (same broken
-    demux). Feed raw s16le and tell fpcalc the format so it never opens a
-    container.
-    """
+def test_via_ffmpeg_wraps_classic_wav_for_fpcalc(monkeypatch, tmp_path):
+    """ffmpeg decodes s16le; stdlib wave wraps it. Debian EOF'd raw -format s16le."""
     src = tmp_path / "a.mp4"
     src.write_bytes(b"x")
     calls: list[list[str]] = []
@@ -221,9 +218,38 @@ def test_via_ffmpeg_fingerprints_raw_pcm_not_a_container(monkeypatch, tmp_path):
     fpcalc_cmd = next(c for c in calls if "fpcalc" in c[0])
     assert "-nostdin" in ffmpeg_cmd
     assert "-f" in ffmpeg_cmd and "s16le" in ffmpeg_cmd
-    assert "-format" in fpcalc_cmd and "s16le" in fpcalc_cmd
-    assert "-rate" in fpcalc_cmd and "11025" in fpcalc_cmd
-    assert not any(str(x).endswith(".wav") for c in calls for x in c)
+    assert any(str(x).endswith(".wav") for x in fpcalc_cmd)
+
+
+def test_fpcalc_eof_with_fingerprint_is_a_score():
+    """Pack bd19fcc20eed: Debian fpcalc exits 1 with EOF after printing FINGERPRINT=."""
+    proc = subprocess.CompletedProcess(
+        args=["fpcalc"], returncode=1,
+        stdout="FINGERPRINT=1,2,3,4,5,6,7,8\n",
+        stderr="ERROR: Error decoding audio frame (End of file)\n",
+    )
+    assert _fpcalc_result(proc) == [1, 2, 3, 4, 5, 6, 7, 8]
+
+
+def test_fpcalc_eof_without_fingerprint_is_empty():
+    proc = subprocess.CompletedProcess(
+        args=["fpcalc"], returncode=1,
+        stdout="",
+        stderr="ERROR: Error decoding audio frame (End of file)\n",
+    )
+    assert _fpcalc_result(proc) == []
+
+
+def test_write_pcm_wav_is_classic_riff(tmp_path):
+    raw = tmp_path / "a.s16"
+    raw.write_bytes(b"\x00\x01" * 64)
+    wav = tmp_path / "a.wav"
+    _write_pcm_wav(str(raw), str(wav))
+    assert wav.read_bytes()[:4] == b"RIFF"
+    with wave.open(str(wav), "rb") as w:
+        assert w.getnchannels() == 1
+        assert w.getsampwidth() == 2
+        assert w.getframerate() == 11025
 
 
 def test_score_audio_short_file_is_empty_not_error(monkeypatch, tmp_path):

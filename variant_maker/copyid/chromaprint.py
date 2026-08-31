@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import wave
 
 AUDIO_METRIC = "chromaprint_v1"
 # Decode with our ffmpeg, then fpcalc on raw PCM (not a container).
@@ -44,16 +45,24 @@ def _decode_text(raw) -> str:
 def _fpcalc_result(proc: subprocess.CompletedProcess) -> list[int]:
     text = _decode_text(proc.stdout)
     err = _decode_text(proc.stderr)
-    combined = f"{text}\n{err}".lower()
+    combined = f"{text}\n{err}"
+    for blob in (text, err):
+        try:
+            fp = parse_raw(blob)
+        except ValueError:
+            fp = None
+        if fp:
+            return fp
+    low = combined.lower()
+    # Debian fpcalc on raw PCM / short wav often exits 1 with EOF after
+    # it already printed FINGERPRINT= (handled above) or with none.
+    if "empty fingerprint" in low or "end of file" in low:
+        return []
     if proc.returncode != 0:
-        if "empty fingerprint" in combined:
-            return []
         raise subprocess.CalledProcessError(
             proc.returncode, proc.args, output=proc.stdout, stderr=proc.stderr,
         )
-    if not text.strip():
-        return []
-    return parse_raw(text or err)
+    return []
 
 
 def _exc_detail(exc: BaseException) -> str:
@@ -61,10 +70,27 @@ def _exc_detail(exc: BaseException) -> str:
     err = ""
     if isinstance(exc, subprocess.CalledProcessError):
         err = _decode_text(exc.stderr if exc.stderr is not None else exc.output)
+        if not err:
+            err = _decode_text(exc.output)
     if not err:
         err = str(exc)
     err = " ".join(err.split())
     return f"{type(exc).__name__}: {err}"[:240]
+
+
+def _write_pcm_wav(raw_path: str, wav_path: str, *, rate: int = FPCALC_RATE) -> None:
+    """Classic PCM WAV (fmt 16). BtbN's wav muxer is what Debian fpcalc EOF'd."""
+    with open(raw_path, "rb") as f:
+        data = f.read()
+    if len(data) % 2:
+        data = data[:-1]
+    if not data:
+        raise ValueError("empty pcm")
+    with wave.open(wav_path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(int(rate))
+        w.writeframes(data)
 
 
 def parse_raw(text: str) -> list[int]:
@@ -126,18 +152,17 @@ def _fpcalc_direct(path: str, *, length: int = 120) -> list[int]:
 
 
 def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
-    """Decode with our ffmpeg, then fingerprint raw s16le.
+    """Decode with our ffmpeg to s16le, wrap a classic WAV, then fpcalc.
 
-    Slim Fast installs ``fpcalc`` (``libchromaprint-tools``) but its libav
-    cannot open the BtbN static-ffmpeg mp4s we render. Lab pack 3d4fae98ca77
-    scored audio ``available: false`` that way. Wav-first still handed a
-    container to the same demux — pack ``5ef63612aaf3`` stayed ``reason:
-    error`` while this box scored the same files ``via=ffmpeg_wav``. Raw PCM
-    plus ``fpcalc -format s16le`` never asks libav to open a file.
+    Slim Fast ``fpcalc`` cannot demux BtbN mp4s. Raw ``-format s16le`` on
+    Debian still exits 1: ``Error decoding audio frame (End of file)``
+    (pack ``bd19fcc20eed``). A stdlib ``wave`` header gives libav a duration
+    so it does not treat EOF as a failed frame.
     """
     ffmpeg = _ffmpeg_bin()
     with tempfile.TemporaryDirectory(prefix="vm-fpcalc-") as td:
         raw = os.path.join(td, "a.s16")
+        wav = os.path.join(td, "a.wav")
         ff = subprocess.run(
             [
                 ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-y",
@@ -158,6 +183,13 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
             )
         if not os.path.isfile(raw) or os.path.getsize(raw) <= 0:
             return []
+        _write_pcm_wav(raw, wav)
+        try:
+            fp = _fpcalc_direct(wav, length=length)
+            if fp:
+                return fp
+        except (OSError, subprocess.CalledProcessError, ValueError):
+            pass
         proc = subprocess.run(
             [
                 "fpcalc", "-raw", "-length", str(int(length)),

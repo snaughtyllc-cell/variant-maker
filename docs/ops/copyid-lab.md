@@ -30,13 +30,13 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:1d0a9753…` /
-`f0651b8` (look stills zscale, wav-first chromaprint, crop-align MAE) /
-`VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Pack `5ef63612aaf3`
-look MAE is good; audio still `reason: error` (fpcalc demux). Next lab
-image: raw s16le. Prior `e5173d9a…` / `3caeb44`. Recycle **lab** workers
-for a new `:lab` tag. Live Fast stays `e7ab2cc` / no copyid / no `VF_LAB`.
-Do not PATCH live.
+Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:113a9dec…` /
+`4bd8a57` (raw s16le chromaprint) / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record`
+/ max 1. Pack `bd19fcc20eed` look MAE still ok; audio `detail`: Debian
+fpcalc `Error decoding audio frame (End of file)` on raw `-format s16le`.
+Next: classic `wave` wrap + treat EOF+fingerprint as a score. Prior
+`sha256:1d0a9753…` / `f0651b8`. Recycle **lab** only. Live Fast stays
+`e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
@@ -86,9 +86,16 @@ still the look oracle.
 (no SSCD — expected). Audio `reason: error` with no `via` on every copy.
 This box scores the same source+variant files `via=ffmpeg_s16le` /
 `sim` 0.66 / 0.73 / 0.81. Wav-first still handed a `.wav` to Debian
-`fpcalc` (same libav that cannot demux BtbN mp4s). Next image: ffmpeg
-raw **s16le** + `fpcalc -format s16le` so fpcalc never opens a container;
-`detail` on error. Stay **`record`**. Do not `gate`. Do not PATCH live.
+`fpcalc` (same libav that cannot demux BtbN mp4s).
+
+### Lab Generate — pack `bd19fcc20eed` (raw s16le image `4bd8a57`)
+
+Same three NEW clips. Image `sha256:113a9dec…`. Fast 2. Look still **ok**
+(MAE max 8/13, 4/9, 14/4). Audio every copy: `reason: error` /
+`detail: CalledProcessError: ERROR: Error decoding audio frame (End of file)`.
+Debian `fpcalc -format s16le` treats raw PCM EOF as a failed frame. Next
+image: stdlib `wave` header (duration known) + if FINGERPRINT= printed,
+use it even on exit 1. Stay **`record`**. Do not `gate`. Do not PATCH live.
 
 ## Enable record (lab) or the fused gate (later)
 
