@@ -140,6 +140,12 @@ Every copy `heads.audio.available: true` `via=ffmpeg_s16le`. Visual
 `gate`, every copy fails** (brad audio uniq ~5–7 bits). Stay **`record`**.
 Do not `gate`. Do not PATCH live. Jeff stills remain the look oracle.
 
+**Wall clock vs SaveInta Fast 8 (~5 min for 8):** this pack is **3 sources
+queued on 1 lab worker**, two of them ~1 min 1080 (0409 is 1920×1080 65s,
+1277 1080×1920 63s, brad 22s 60fps). Encode is the 20 min. Chromaprint is
+seconds after SSIM, not the extra 15 min. A SaveInta Fast 8 is one short
+720 talking-head × 8 in parallel on a worker sized for 8 x264s.
+
 ## Enable record (lab) or the fused gate (later)
 
 ```bash
