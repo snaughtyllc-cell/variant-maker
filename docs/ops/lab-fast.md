@@ -13,6 +13,7 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Recycle | promote only | whenever |
 
 CI: `.github/workflows/build-variant-fast-lab.yml` also on
+`cursor/copyid-audio-speed-6cba`, `cursor/lab-look-copyid-6cba`,
 `cursor/green-tint-6cba`, `cursor/aqmtp-uniqueness-c975` and
 `cursor/ig-720-fast-20-c975` (plus the older look branches).
 Pushes the `variant-fast:lab` tag only. This Lab repo must **not** push

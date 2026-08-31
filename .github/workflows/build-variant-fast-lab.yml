@@ -20,6 +20,7 @@ on:
       - cursor/lab-backlog-6cba
       - cursor/green-tint-6cba
       - cursor/lab-look-copyid-6cba
+      - cursor/copyid-audio-speed-6cba
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py
