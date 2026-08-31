@@ -1,0 +1,3520 @@
+From 9ad8f1e0b21097fbe3738613cba41577c1ea0f9c Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 31 Aug 2026 09:11:37 +0000
+Subject: [PATCH] Promote look stills, crop-align MAE, and CopyID WAV path from
+ Lab
+
+Copy files onto Live (no git merge). Matches digest 21691c4 so the next
+variant-fast:latest rebuild does not bake old look.py / filtergraph.py.
+
+Copyid stays off on live unless VARIANT_MAKER_COPYID is set.
+---
+ tests/test_copyid_chromaprint.py    | 361 ++++++++++++++++++++++++++++
+ tests/test_copyid_compare.py        |  64 +++++
+ tests/test_copyid_fuse.py           |  45 ++++
+ tests/test_copyid_uniqueness.py     | 133 ++++++++++
+ tests/test_copyid_visual.py         |  52 ++++
+ tests/test_filtergraph.py           | 146 ++++++++++-
+ tests/test_look.py                  | 148 ++++++++++++
+ tests/test_pipeline.py              |  26 ++
+ tests/test_sampler.py               | 169 ++++++++++++-
+ tests/test_uniqueness_pipeline.py   | 148 +++++++++++-
+ variant_maker/copyid/__init__.py    |  74 ++++++
+ variant_maker/copyid/backends.py    | 113 +++++++++
+ variant_maker/copyid/chromaprint.py | 327 +++++++++++++++++++++++++
+ variant_maker/copyid/compare.py     |  71 ++++++
+ variant_maker/copyid/dino.py        |  45 ++++
+ variant_maker/copyid/frames.py      |  75 ++++++
+ variant_maker/copyid/fuse.py        |  49 ++++
+ variant_maker/copyid/sscd.py        |  80 ++++++
+ variant_maker/copyid/visual.py      |  49 ++++
+ variant_maker/filtergraph.py        | 161 ++++++++++---
+ variant_maker/look.py               | 109 ++++++++-
+ variant_maker/pipeline.py           | 104 ++++++--
+ variant_maker/presets.py            |   4 +
+ variant_maker/sampler.py            | 183 ++++++++++++--
+ variant_maker/uniqueness.py         |  88 ++++++-
+ 25 files changed, 2737 insertions(+), 87 deletions(-)
+ create mode 100644 tests/test_copyid_chromaprint.py
+ create mode 100644 tests/test_copyid_compare.py
+ create mode 100644 tests/test_copyid_fuse.py
+ create mode 100644 tests/test_copyid_uniqueness.py
+ create mode 100644 tests/test_copyid_visual.py
+ create mode 100644 variant_maker/copyid/__init__.py
+ create mode 100644 variant_maker/copyid/backends.py
+ create mode 100644 variant_maker/copyid/chromaprint.py
+ create mode 100644 variant_maker/copyid/compare.py
+ create mode 100644 variant_maker/copyid/dino.py
+ create mode 100644 variant_maker/copyid/frames.py
+ create mode 100644 variant_maker/copyid/fuse.py
+ create mode 100644 variant_maker/copyid/sscd.py
+ create mode 100644 variant_maker/copyid/visual.py
+
+diff --git a/tests/test_copyid_chromaprint.py b/tests/test_copyid_chromaprint.py
+new file mode 100644
+index 0000000..49b4195
+--- /dev/null
++++ b/tests/test_copyid_chromaprint.py
+@@ -0,0 +1,361 @@
++import os
++import shutil
++import subprocess
++import wave
++
++import pytest
++
++from variant_maker.copyid.chromaprint import (
++    AUDIO_METRIC,
++    VIA_FFMPEG,
++    _fpcalc_result,
++    _fpcalc_via_ffmpeg,
++    _write_pcm_wav,
++    available,
++    clear_fingerprint_cache,
++    match_fingerprints,
++    parse_raw,
++    prefetch,
++    score_audio,
++)
++
++
++def test_parse_raw_comma_and_spaces():
++    text = "FILE=a.mp4\nDURATION=12\nFINGERPRINT=1,2,3,4\n"
++    assert parse_raw(text) == [1, 2, 3, 4]
++    text2 = "FINGERPRINT=10 20 30"
++    assert parse_raw(text2) == [10, 20, 30]
++
++
++def test_parse_raw_missing_raises():
++    try:
++        parse_raw("DURATION=1\n")
++    except ValueError:
++        return
++    raise AssertionError("expected ValueError")
++
++
++def test_identical_fingerprints_match():
++    a = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    assert match_fingerprints(a, a) == 1.0
++
++
++def test_offset_shift_still_matches():
++    a = [10, 20, 30, 40, 50, 60, 70, 80, 90]
++    b = [0, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
++    assert match_fingerprints(a, b) > 0.99
++
++
++def test_flipped_bits_lower_score():
++    a = [0] * 16
++    b = [0xFFFFFFFF] * 16
++    assert match_fingerprints(a, b) == 0.0
++
++
++def test_score_audio_unavailable_without_fpcalc(monkeypatch):
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: False)
++    r = score_audio("/nope/a.mp4", "/nope/b.mp4")
++    assert r["available"] is False
++    assert r["uniqueness"] is None
++    assert r["metric"] == AUDIO_METRIC
++    assert r["reason"] == "no_fpcalc"
++
++
++def test_score_audio_reason_missing_file(monkeypatch, tmp_path):
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++    r = score_audio(str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4"))
++    assert r["available"] is False
++    assert r["reason"] == "missing_file"
++
++
++def test_score_audio_prefers_ffmpeg_decode(monkeypatch, tmp_path):
++    """Always decode with our ffmpeg first. Direct fpcalc on BtbN mp4s is the miss."""
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++    calls: list[str] = []
++
++    def boom(path, *, length=120):
++        calls.append("direct")
++        raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="decode")
++
++    def decoded(path, *, length=120):
++        calls.append("ffmpeg")
++        return fp
++
++    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
++    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded)
++    r = score_audio(str(a), str(b))
++    assert r["available"] is True
++    assert r["via"] == VIA_FFMPEG
++    assert "ffmpeg" in calls
++    assert "direct" not in calls
++
++
++def test_score_audio_falls_back_to_ffmpeg_decode(monkeypatch, tmp_path):
++    """Slim Fast fpcalc's libav often cannot decode our BtbN mp4s."""
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++
++    def boom(path, *, length=120):
++        raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="decode")
++
++    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
++        lambda path, *, length=120: fp,
++    )
++    r = score_audio(str(a), str(b))
++    assert r["available"] is True
++    assert r["sim"] == 1.0
++    assert r["via"] == VIA_FFMPEG
++
++
++def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++
++    def boom(path, *, length=120):
++        raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="nope")
++
++    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
++    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", boom)
++    r = score_audio(str(a), str(b))
++    assert r["available"] is False
++    assert r["reason"] == "error"
++    assert "nope" in (r.get("detail") or "")
++
++
++def test_score_audio_empty_direct_uses_wav(monkeypatch, tmp_path):
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_direct",
++        lambda path, *, length=120: [],
++    )
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
++        lambda path, *, length=120: fp,
++    )
++    r = score_audio(str(a), str(b))
++    assert r["available"] is True
++    assert r["via"] == VIA_FFMPEG
++
++
++@pytest.mark.skipif(not shutil.which("fpcalc"), reason="fpcalc not on PATH")
++def test_fpcalc_binary_reports_available():
++    assert available() is True
++
++
++@pytest.mark.skipif(
++    not shutil.which("fpcalc") or not shutil.which("ffmpeg"),
++    reason="fpcalc+ffmpeg needed",
++)
++def test_score_audio_on_aac_mp4(tmp_path):
++    """Our encodes are BtbN libx264+aac. s16le-first must score those, not error."""
++    from conftest import HAS_FFMPEG
++    if not HAS_FFMPEG:
++        pytest.skip("needs ffmpeg")
++    def tone(path):
++        subprocess.run(
++            [
++                "ffmpeg", "-y", "-v", "error",
++                "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
++                "-f", "lavfi", "-i", "color=c=black:s=64x64:r=15:d=6",
++                "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
++                "-c:a", "aac", "-b:a", "96k", path,
++            ],
++            check=True, capture_output=True,
++        )
++    a = str(tmp_path / "a.mp4")
++    b = str(tmp_path / "b.mp4")
++    tone(a)
++    tone(b)
++    r = score_audio(a, b)
++    assert r["available"] is True, r
++    assert r["sim"] is not None and r["sim"] > 0.9
++    assert r["via"] == VIA_FFMPEG
++
++
++def test_via_ffmpeg_wraps_classic_wav_for_fpcalc(monkeypatch, tmp_path):
++    """ffmpeg decodes s16le; stdlib wave wraps it. Debian EOF'd raw -format s16le."""
++    src = tmp_path / "a.mp4"
++    src.write_bytes(b"x")
++    calls: list[list[str]] = []
++
++    def fake_which(name: str):
++        return f"/usr/bin/{name}"
++
++    def fake_run(argv, **kw):
++        argv = [str(x) for x in argv]
++        calls.append(argv)
++        class P:
++            returncode = 0
++            stdout = "FINGERPRINT=1,2,3,4,5,6,7,8\n"
++            stderr = ""
++        if "ffmpeg" in argv[0]:
++            out = argv[-1]
++            with open(out, "wb") as f:
++                f.write(b"\x00" * 256)
++        return P()
++
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.shutil.which", fake_which)
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.subprocess.run", fake_run)
++    fp = _fpcalc_via_ffmpeg(str(src))
++    assert fp == [1, 2, 3, 4, 5, 6, 7, 8]
++    ffmpeg_cmd = next(c for c in calls if "ffmpeg" in c[0])
++    fpcalc_cmd = next(c for c in calls if "fpcalc" in c[0])
++    assert "-nostdin" in ffmpeg_cmd
++    assert "-vn" in ffmpeg_cmd
++    assert "-f" in ffmpeg_cmd and "s16le" in ffmpeg_cmd
++    assert any(str(x).endswith(".wav") for x in fpcalc_cmd)
++
++
++def test_fpcalc_eof_with_fingerprint_is_a_score():
++    """Pack bd19fcc20eed: Debian fpcalc exits 1 with EOF after printing FINGERPRINT=."""
++    proc = subprocess.CompletedProcess(
++        args=["fpcalc"], returncode=1,
++        stdout="FINGERPRINT=1,2,3,4,5,6,7,8\n",
++        stderr="ERROR: Error decoding audio frame (End of file)\n",
++    )
++    assert _fpcalc_result(proc) == [1, 2, 3, 4, 5, 6, 7, 8]
++
++
++def test_fpcalc_eof_without_fingerprint_is_empty():
++    proc = subprocess.CompletedProcess(
++        args=["fpcalc"], returncode=1,
++        stdout="",
++        stderr="ERROR: Error decoding audio frame (End of file)\n",
++    )
++    assert _fpcalc_result(proc) == []
++
++
++def test_write_pcm_wav_is_classic_riff(tmp_path):
++    raw = tmp_path / "a.s16"
++    raw.write_bytes(b"\x00\x01" * 64)
++    wav = tmp_path / "a.wav"
++    _write_pcm_wav(str(raw), str(wav))
++    assert wav.read_bytes()[:4] == b"RIFF"
++    with wave.open(str(wav), "rb") as w:
++        assert w.getnchannels() == 1
++        assert w.getsampwidth() == 2
++        assert w.getframerate() == 11025
++
++
++def test_score_audio_short_file_is_empty_not_error(monkeypatch, tmp_path):
++    """fpcalc exits 2 with 'Empty fingerprint' on a 2s tone. That is a miss, not error."""
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
++        lambda path, *, length=120: [],
++    )
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_direct",
++        lambda path, *, length=120: [],
++    )
++    r = score_audio(str(a), str(b))
++    assert r["available"] is False
++    assert r["reason"] == "empty"
++
++
++def test_ffmpeg_empty_does_not_hand_mp4_to_fpcalc(monkeypatch, tmp_path):
++    """Debian fpcalc on the BtbN mp4 is a slow miss. ffmpeg already ran."""
++    a = tmp_path / "a.mp4"
++    b = tmp_path / "b.mp4"
++    a.write_bytes(b"x")
++    b.write_bytes(b"y")
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
++        lambda path, *, length=120: [],
++    )
++    direct_calls: list[str] = []
++
++    def count_direct(path, *, length=120):
++        direct_calls.append(path)
++        return []
++
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_direct", count_direct,
++    )
++    clear_fingerprint_cache()
++    r = score_audio(str(a), str(b))
++    assert r["available"] is False
++    assert r["reason"] == "empty"
++    assert direct_calls == []
++
++
++def test_fingerprint_cache_decodes_source_once(monkeypatch, tmp_path):
++    """N copies of one source must not ffmpeg-decode the source N times."""
++    src = tmp_path / "src.mp4"
++    v1 = tmp_path / "v1.mp4"
++    v2 = tmp_path / "v2.mp4"
++    src.write_bytes(b"s")
++    v1.write_bytes(b"1")
++    v2.write_bytes(b"2")
++    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    calls: list[str] = []
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++
++    def decoded(path, *, length=120):
++        calls.append(os.path.basename(path))
++        return fp
++
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded,
++    )
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_direct",
++        lambda path, *, length=120: [],
++    )
++    clear_fingerprint_cache()
++    assert score_audio(str(src), str(v1))["available"] is True
++    assert score_audio(str(src), str(v2))["available"] is True
++    assert calls.count("src.mp4") == 1
++    assert calls.count("v1.mp4") == 1
++    assert calls.count("v2.mp4") == 1
++
++
++def test_prefetch_fills_cache(monkeypatch, tmp_path):
++    src = tmp_path / "src.mp4"
++    var = tmp_path / "var.mp4"
++    src.write_bytes(b"s")
++    var.write_bytes(b"v")
++    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
++    calls: list[str] = []
++    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
++
++    def decoded(path, *, length=120):
++        calls.append(os.path.basename(path))
++        return fp
++
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded,
++    )
++    monkeypatch.setattr(
++        "variant_maker.copyid.chromaprint._fpcalc_direct",
++        lambda path, *, length=120: [],
++    )
++    clear_fingerprint_cache()
++    prefetch(str(src))
++    assert calls == ["src.mp4"]
++    assert score_audio(str(src), str(var))["available"] is True
++    assert calls == ["src.mp4", "var.mp4"]
+diff --git a/tests/test_copyid_compare.py b/tests/test_copyid_compare.py
+new file mode 100644
+index 0000000..cbb7459
+--- /dev/null
++++ b/tests/test_copyid_compare.py
+@@ -0,0 +1,64 @@
++"""Pure copy-detection compare math — no ffmpeg."""
++from variant_maker.copyid.compare import (
++    aligned_mean_sim,
++    chamfer_sim,
++    cosine,
++    mean_pool,
++    uniq_from_sim,
++)
++
++
++def test_cosine_identical_is_one():
++    v = [3.0, 4.0]
++    assert cosine(v, v) == 1.0
++    assert cosine(v, [6.0, 8.0]) == 1.0  # scale-invariant
++
++
++def test_cosine_orthogonal_is_zero():
++    assert abs(cosine([1.0, 0.0], [0.0, 1.0])) < 1e-9
++
++
++def test_cosine_empty_is_zero():
++    assert cosine([], [1.0]) == 0.0
++    assert cosine([0.0, 0.0], [1.0, 0.0]) == 0.0
++
++
++def test_mean_pool():
++    pooled = mean_pool([[1.0, 0.0], [3.0, 2.0]])
++    assert pooled == [2.0, 1.0]
++
++
++def test_mean_pool_empty_raises():
++    try:
++        mean_pool([])
++    except ValueError:
++        return
++    raise AssertionError("expected ValueError")
++
++
++def test_chamfer_identical_sequence():
++    seq = [[1.0, 0.0], [0.0, 1.0], [0.6, 0.8]]
++    assert chamfer_sim(seq, seq) > 0.999
++
++
++def test_chamfer_shifted_beats_aligned_mean():
++    """Micro-trim: query frames line up with ref at +1 index."""
++    ref = [[1.0, 0.0], [0.0, 1.0], [0.6, 0.8]]
++    query = [[0.0, 1.0], [0.6, 0.8], [0.6, 0.8]]
++    chamfer = chamfer_sim(query, ref)
++    aligned = aligned_mean_sim(query, ref)
++    assert chamfer > aligned
++    assert chamfer > 0.99
++
++
++def test_chamfer_orthogonal_low():
++    q = [[1.0, 0.0], [1.0, 0.0]]
++    r = [[0.0, 1.0], [0.0, 1.0]]
++    assert chamfer_sim(q, r) < 0.05
++
++
++def test_uniq_from_sim():
++    assert uniq_from_sim(0.75, 0.75) == 0.0
++    assert uniq_from_sim(1.0, 0.75) == 0.0
++    assert uniq_from_sim(0.0, 0.75) == 1.0
++    assert abs(uniq_from_sim(0.375, 0.75) - 0.5) < 1e-9
+diff --git a/tests/test_copyid_fuse.py b/tests/test_copyid_fuse.py
+new file mode 100644
+index 0000000..5936b63
+--- /dev/null
++++ b/tests/test_copyid_fuse.py
+@@ -0,0 +1,45 @@
++from variant_maker.copyid.fuse import FUSED_METRIC, fuse_heads
++
++
++def test_fuse_min_of_present():
++    r = fuse_heads(
++        {
++            "ssim": {"uniqueness": 0.50, "available": True},
++            "visual": {"uniqueness": 0.20, "available": True},
++            "audio": {"uniqueness": 0.80, "available": True},
++        },
++        target=0.375,
++    )
++    assert r["uniqueness"] == 0.20
++    assert r["uniqueness_status"] == "below_target"
++    assert r["uniqueness_metric"] == FUSED_METRIC
++    assert set(r["fused_from"]) == {"ssim", "visual", "audio"}
++
++
++def test_fuse_ignores_unavailable_and_none():
++    r = fuse_heads(
++        {
++            "ssim": {"uniqueness": 0.50, "available": True},
++            "visual": {"uniqueness": None, "available": False},
++            "audio": None,
++        },
++        target=0.375,
++    )
++    assert r["uniqueness"] == 0.50
++    assert r["uniqueness_status"] == "ok"
++    assert r["fused_from"] == ["ssim"]
++
++
++def test_fuse_all_missing_unknown():
++    r = fuse_heads({"visual": {"available": False, "uniqueness": None}}, target=0.375)
++    assert r["uniqueness"] is None
++    assert r["uniqueness_status"] == "unknown"
++    assert r["fused_from"] == []
++
++
++def test_fuse_ok_when_min_clears_target():
++    r = fuse_heads(
++        {"ssim": {"uniqueness": 0.5}, "audio": {"uniqueness": 0.4}},
++        target=0.375,
++    )
++    assert r["uniqueness_status"] == "ok"
+diff --git a/tests/test_copyid_uniqueness.py b/tests/test_copyid_uniqueness.py
+new file mode 100644
+index 0000000..5dfd2ad
+--- /dev/null
++++ b/tests/test_copyid_uniqueness.py
+@@ -0,0 +1,133 @@
++"""score_uniqueness fusion. SSIM path stays default (copyid off)."""
++import os
++import subprocess
++import tempfile
++
++from variant_maker import uniqueness
++from variant_maker.copyid import normalize_mode
++
++
++def _tiny_mp4(path, *, color="black"):
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-f", "lavfi",
++            "-i", f"color=c={color}:s=64x64:d=1",
++            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-t", "1", path,
++        ],
++        check=True,
++        capture_output=True,
++    )
++
++
++def test_normalize_mode():
++    assert normalize_mode("off") == "off"
++    assert normalize_mode("record") == "record"
++    assert normalize_mode("gate") == "gate"
++    assert normalize_mode(True) == "gate"
++    assert normalize_mode(False) == "off"
++    assert normalize_mode("AUTO") == "gate"
++
++
++def test_copyid_off_ignores_extra_heads_for_metric(monkeypatch):
++    monkeypatch.delenv("VARIANT_MAKER_COPYID", raising=False)
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a, color="white")
++        _tiny_mp4(b, color="black")
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="off",
++            extra_heads={"visual": {"uniqueness": 0.0, "available": True, "sim": 1.0}},
++        )
++        assert r["uniqueness_metric"] == "ssim_bits_v1"
++        assert r["uniqueness_status"] == "ok"
++        assert "heads" not in r or r["uniqueness"] >= uniqueness.DEFAULT_TARGET
++
++
++def test_copyid_record_keeps_ssim_gate():
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a, color="white")
++        _tiny_mp4(b, color="black")
++        visual = {"uniqueness": 0.01, "available": True, "sim": 0.99, "status": "ok"}
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="record",
++            extra_heads={"visual": visual},
++        )
++        assert r["uniqueness_metric"] == "ssim_bits_v1"
++        assert r["uniqueness_status"] == "ok"
++        assert r["uniqueness"] >= uniqueness.DEFAULT_TARGET
++        assert r["heads"]["visual"]["sim"] == 0.99
++        assert r["heads"]["ssim"]["bits"] == r["bits"]
++
++
++def test_copyid_gate_min_with_copy_like_visual():
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a, color="white")
++        _tiny_mp4(b, color="black")
++        visual = {"uniqueness": 0.05, "available": True, "sim": 0.96, "status": "ok"}
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="gate",
++            extra_heads={"visual": visual},
++        )
++        assert r["uniqueness_metric"] == "fused_v1"
++        assert r["uniqueness"] == 0.05
++        assert r["uniqueness_status"] == "below_target"
++        assert r["bits"] >= uniqueness.TARGET_BITS  # SSIM still saw different colors
++
++
++def test_copyid_gate_does_not_override_below_floor():
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a)
++        _tiny_mp4(b)
++        visual = {"uniqueness": 0.9, "available": True, "sim": 0.0, "status": "ok"}
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="gate",
++            extra_heads={"visual": visual},
++        )
++        assert r["uniqueness_status"] == "below_floor"
++        assert r["uniqueness_metric"] == "ssim_bits_v1"
++        assert r["bits"] < uniqueness.FLOOR_BITS
++
++
++def test_attach_heads_false_skips_copyid_on_record():
++    """record Generate wait is SSIM-only. Heads attach after uniqueness returns."""
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a, color="white")
++        _tiny_mp4(b, color="black")
++        visual = {"uniqueness": 0.01, "available": True, "sim": 0.99, "status": "ok"}
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="record",
++            extra_heads={"visual": visual}, attach_heads=False,
++        )
++        assert r["uniqueness_metric"] == "ssim_bits_v1"
++        assert "heads" not in r
++        attached = uniqueness.attach_copyid_heads(
++            r, a, b, copyid="record", extra_heads={"visual": visual},
++        )
++        assert attached["heads"]["visual"]["sim"] == 0.99
++        assert attached["uniqueness_metric"] == "ssim_bits_v1"
++        assert attached["uniqueness_status"] == "ok"
++
++
++def test_gate_still_fuses_when_attach_heads_false():
++    """gate uniqueness_status needs audio/visual — cannot defer."""
++    with tempfile.TemporaryDirectory() as d:
++        a = os.path.join(d, "a.mp4")
++        b = os.path.join(d, "b.mp4")
++        _tiny_mp4(a, color="white")
++        _tiny_mp4(b, color="black")
++        visual = {"uniqueness": 0.05, "available": True, "sim": 0.96, "status": "ok"}
++        r = uniqueness.score_uniqueness(
++            a, b, target=uniqueness.DEFAULT_TARGET, copyid="gate",
++            extra_heads={"visual": visual}, attach_heads=False,
++        )
++        assert r["uniqueness_metric"] == "fused_v1"
++        assert r["uniqueness"] == 0.05
+diff --git a/tests/test_copyid_visual.py b/tests/test_copyid_visual.py
+new file mode 100644
+index 0000000..be4b83b
+--- /dev/null
++++ b/tests/test_copyid_visual.py
+@@ -0,0 +1,52 @@
++from variant_maker.copyid.backends import FakeBackend, score_visual
++from variant_maker.copyid.visual import frame_fracs, score_visual_from_emb
++
++
++def test_frame_fracs_interior():
++    fr = frame_fracs(8)
++    assert len(fr) == 8
++    assert fr[0] > 0.05 and fr[-1] < 0.95
++    assert fr == tuple(sorted(fr))
++
++
++def test_score_visual_from_emb_identical():
++    seq = [[1.0, 0.0], [0.0, 1.0], [0.6, 0.8]]
++    r = score_visual_from_emb(seq, seq, tau=0.75, backend="fake")
++    assert r["available"] is True
++    assert r["sim"] > 0.99
++    assert r["uniqueness"] == 0.0
++
++
++def test_score_visual_from_emb_different():
++    q = [[1.0, 0.0], [1.0, 0.0]]
++    ref = [[0.0, 1.0], [0.0, 1.0]]
++    r = score_visual_from_emb(q, ref, tau=0.75)
++    assert r["uniqueness"] > 0.9
++    assert r["sim"] < 0.1
++
++
++def test_fake_backend_score_visual_no_ffmpeg():
++    seq = [[1.0, 0.0], [0.2, 0.9]]
++    backend = FakeBackend(sequence=seq)
++    r = score_visual(
++        "src.mp4", "var.mp4", backend,
++        extract_fn=lambda path, n=8, **k: [f"{path}-{i}" for i in range(2)],
++    )
++    assert r["available"] is True
++    assert r["backend"] == "fake"
++    assert r["uniqueness"] == 0.0
++
++
++def test_unavailable_backend():
++    backend = FakeBackend(available_flag=False)
++    r = score_visual("a", "b", backend, extract_fn=lambda *a, **k: [])
++    assert r["available"] is False
++    assert r["uniqueness"] is None
++
++
++def test_sscd_import_does_not_load_torch():
++    """Tier-1: importing the SSCD module must not require torch at import time."""
++    import variant_maker.copyid.sscd as sscd_mod
++    # If a previous test already imported torch, this still asserts the module
++    # body did not bind it as a top-level name.
++    assert "torch" not in sscd_mod.__dict__
+diff --git a/tests/test_filtergraph.py b/tests/test_filtergraph.py
+index 497c703..bda1afd 100644
+--- a/tests/test_filtergraph.py
++++ b/tests/test_filtergraph.py
+@@ -38,8 +38,8 @@ EXPECTED_VF = (
+     "trim=start=0.200,setpts=PTS-STARTPTS,"
+     "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000,"
+     "scale=1080:1920:force_original_aspect_ratio=disable,scale=trunc(iw/2)*2:trunc(ih/2)*2,"
+-    "eq=brightness=0.0100:contrast=1.0200:saturation=1.0300:gamma=0.9900,"
+-    "hue=h=2.0000,"
++    "eq=brightness=0.0100:contrast=1.0200:saturation=1.0000:gamma=0.9900,"
++    "hue=h=2.0000:s=1.0300,"
+     "unsharp=5:5:0.3000:5:5:0.0,"
+     "noise=alls=8:allf=t+u,"
+     "fps=30,"
+@@ -535,7 +535,7 @@ def test_chroma_cloud_omitted_when_zero():
+ 
+ def test_neutral_axes_are_omitted():
+     p = make_params(video={
+-        "crop_keep": 1.0, "rotate_deg": 0.0, "hue_deg": 0.0,
++        "crop_keep": 1.0, "rotate_deg": 0.0, "hue_deg": 0.0, "saturation": 1.0,
+         "unsharp": 0.0, "grain": 0.0, "speed": 1.0, "trim_s": 0.0, "trim_end_s": 0.0,
+     })
+     vf = filtergraph.build_video_filters(p, make_src(), REELS)
+@@ -557,6 +557,57 @@ def test_negligible_rotation_is_omitted():
+     assert "rotate=" not in filtergraph.build_video_filters(p, make_src(), REELS)
+ 
+ 
++def test_vignette_emitted_after_color():
++    p = make_params(video={"vignette": 0.08})
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "vignette=" in vf
++    assert vf.index("eq=") < vf.index("vignette=")
++    assert vf.index("hue=") < vf.index("vignette=")
++    assert vf.index("vignette=") < vf.index("unsharp=")
++    assert "vignette=" not in filtergraph.build_video_filters(make_params(), make_src(), REELS)
++
++
++def test_vignette_angle_is_sampled_amount_not_ffmpeg_default():
++    """PI/5 (~0.63) is ffmpeg's default lens and crushes 9:16 (~40 RGB, olive walls).
++
++    Sampled medium 0.02–0.12 is already a mild edge falloff when used as the angle.
++    """
++    assert filtergraph.vignette_angle(0.0) == 0.0
++    assert filtergraph.vignette_angle(0.08) == pytest.approx(0.08)
++    assert filtergraph.vignette_angle(0.08) < 0.30
++    assert filtergraph.vignette_angle(0.20) == pytest.approx(0.20)
++    vf = filtergraph.build_video_filters(
++        make_params(video={"vignette": 0.08}), make_src(), REELS,
++    )
++    assert "vignette=angle=0.0800" in vf
++    assert "vignette=angle=0.5483" not in vf  # old pi/5 - 0.08
++
++
++def test_saturation_uses_hue_not_eq():
++    """ffmpeg eq saturation converts YUV→RGB with the wrong matrix → olive on skin.
++
++    hue=s= is YUV-native and zero-mean. eq keeps brightness/contrast/gamma only.
++    """
++    vf = filtergraph.build_video_filters(make_params(), make_src(), REELS)
++    assert "eq=brightness=0.0100:contrast=1.0200:saturation=1.0000:gamma=0.9900" in vf
++    assert "hue=h=2.0000:s=1.0300" in vf
++    sat_only = filtergraph.build_video_filters(
++        make_params(video={"hue_deg": 0.0, "saturation": 0.96}), make_src(), REELS,
++    )
++    assert "saturation=1.0000" in sat_only
++    assert "hue=s=0.9600" in sat_only
++    assert "hue=h=" not in sat_only
++
++
++def test_out_fps_overrides_platform_fps():
++    p = make_params(video={"out_fps": 60})
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "fps=60" in vf
++    assert "fps=30" not in vf
++    pinned = filtergraph.build_video_filters(make_params(), make_src(), REELS)
++    assert "fps=30" in pinned
++
++
+ def test_pitch_only_with_rubberband_value():
+     base = filtergraph.build_audio_filters(make_params(), make_src(), has_audio=True)
+     assert "rubberband=" not in base
+@@ -590,6 +641,74 @@ def test_crop_offset_omitted_when_no_crop():
+     assert "crop=" not in vf
+ 
+ 
++def test_crop_omitted_when_keep_is_identity_even_with_end_keys():
++    p = make_params(video={
++        "crop_keep": 1.0, "crop_x_frac": 0.4, "crop_y_frac": 0.4,
++        "crop_x_end_frac": 0.6, "crop_y_end_frac": 0.6,
++    })
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "crop=" not in vf
++
++
++def test_static_crop_when_end_equals_start():
++    """End keys present but equal to start → same static crop as the golden."""
++    p = make_params(video={
++        "crop_keep": 0.96, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
++        "crop_x_end_frac": 0.5, "crop_y_end_frac": 0.5,
++    })
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
++    assert "sin(2*PI" not in vf
++
++
++def test_missing_end_keys_emit_static_crop():
++    """Backward compatible: no end keys → today's centered static crop string."""
++    vf = filtergraph.build_video_filters(make_params(), make_src(), REELS)
++    assert "crop=iw*0.9600:ih*0.9600:(iw-iw*0.9600)*0.5000:(ih-ih*0.9600)*0.5000" in vf
++
++
++def test_drifting_crop_lerps_window_with_escaped_commas():
++    p = make_params(video={
++        "crop_keep": 0.96, "crop_x_frac": 0.40, "crop_y_frac": 0.50,
++        "crop_x_end_frac": 0.55, "crop_y_end_frac": 0.60,
++        "trim_s": 0.2, "trim_end_s": 0.0,
++    })
++    vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
++    assert "t/" in vf
++    assert r"\," in vf
++    assert "0.4000" in vf
++    assert "0.5500" in vf
++    assert "0.5000" in vf
++    assert "0.6000" in vf
++    assert "t/9.8000" in vf
++    assert "min(max(t/9.8000\\,0)\\,1)" in vf
++    # Ease, not a linear ramp — linear + integer crop is the hard pixel shift.
++    assert "*(3-2*" in vf or "3\\,-2*" in vf
++    assert "0.4000" in vf and "0.5500" in vf
++    # Half-pixel crop so 1px stair-steps get filtered on the way back down.
++    assert vf.index("scale=trunc(iw/2)*4:trunc(ih/2)*4") < vf.index("crop=")
++    assert vf.index("setpts=PTS-STARTPTS") < vf.index("crop=")
++    # Compete axes still sit after crop.
++    assert vf.index("crop=") < vf.index("eq=")
++    assert "vignette=" not in vf
++
++
++def test_handheld_crop_adds_two_sines_and_clamps_to_caption_band():
++    p = make_params(video={
++        "crop_keep": 0.88, "crop_x_frac": 0.50, "crop_y_frac": 0.95,
++        "crop_x_end_frac": 0.60, "crop_y_end_frac": 0.98,
++        "crop_hand_amp_x": 0.04, "crop_hand_amp_y": 0.01,
++        "crop_hand_p1": 2.0, "crop_hand_p2": 5.0,
++        "trim_s": 0.0, "trim_end_s": 0.0,
++    })
++    vf = filtergraph.build_video_filters(p, make_src(duration=12.0, w=720, h=1280), REELS)
++    assert "sin(2*PI*t/2.0000" in vf
++    assert "sin(2*PI*t/5.0000" in vf
++    assert "0.9000" in vf  # 720 caption floor
++    assert "1.0000" in vf
++    assert r"\," in vf
++
++
+ def test_trim_end_only_uses_source_duration():
+     p = make_params(video={"trim_s": 0.0, "trim_end_s": 0.5})
+     vf = filtergraph.build_video_filters(p, make_src(duration=10.0), REELS)
+@@ -632,3 +751,24 @@ def test_loudnorm_kept_when_remaining_audio_is_long_enough():
+     p = make_params(video={"trim_s": 0.2, "trim_end_s": 0.0})
+     af = filtergraph.build_audio_filters(p, make_src(duration=10.0), has_audio=True)
+     assert "loudnorm=I=-14.0:TP=-1.5:LRA=11" in af
++
++
++def test_voice_safe_audio_is_sync_only():
++    """No pitch / EQ / loudnorm — those make talking sound robotic. Tempo still matches video."""
++    p = make_params(audio={"pitch_pct": 0.0, "eq_gains": [0.0, 0.0], "loudnorm_i": None})
++    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
++    assert "rubberband=" not in af
++    assert "equalizer=" not in af
++    assert "loudnorm=" not in af
++    assert "atempo=1.020000" in af
++    assert "atrim=" in af
++
++
++def test_atempo_omitted_when_speed_is_one():
++    p = make_params(
++        video={"speed": 1.0},
++        audio={"speed": 1.0, "loudnorm_i": None, "eq_gains": [0.0, 0.0]},
++    )
++    af = filtergraph.build_audio_filters(p, make_src(), has_audio=True)
++    assert "atempo=" not in af
++    assert "atrim=" in af
+diff --git a/tests/test_look.py b/tests/test_look.py
+index 012116e..c073dc5 100644
+--- a/tests/test_look.py
++++ b/tests/test_look.py
+@@ -132,3 +132,151 @@ def test_write_look_stills(tmp_path):
+     assert names["look_var"] == "look_v01.jpg"
+     assert os.path.getsize(tmp_path / names["look_src"]) > 0
+     assert os.path.getsize(tmp_path / names["look_var"]) > 0
++
++
++def _mean_rgb(path: str, vf: str) -> tuple[float, float, float]:
++    proc = subprocess.run(
++        [
++            "ffmpeg", "-v", "error", "-i", path, "-vf", vf,
++            "-frames:v", "1", "-f", "rawvideo", "pipe:1",
++        ],
++        check=True, capture_output=True,
++    )
++    buf = proc.stdout
++    n = len(buf) // 3
++    rs = gs = bs = 0
++    for i in range(0, len(buf), 3):
++        rs += buf[i]
++        gs += buf[i + 1]
++        bs += buf[i + 2]
++    return rs / n, gs / n, bs / n
++
++
++def test_still_vf_is_zscale_srgb():
++    """Naked scale=360 is the 601-ish JPEG path that olives Gallery stills."""
++    vf = look.still_vf()
++    assert "zscale=" in vf
++    assert "iec61966-2-1" in vf
++    assert f"scale={look.STILL_WIDTH}:-2" in vf
++    assert "eq=saturation" not in vf
++
++
++def test_look_stills_do_not_olive_a_tagged_skin(tmp_path):
++    """Gallery look JPEGs used a naked scale=360. Mid grey hides it (G−R ≈ 0
++    either way). Skin-ish 0xC68642 tagged bt709/tv shows the 601 JPEG olive."""
++    src = str(tmp_path / "skin.mp4")
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-v", "error",
++            "-f", "lavfi", "-i", "color=c=0xC68642:s=640x360:r=15:d=1",
++            "-vf", "format=yuv420p",
++            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
++            "-colorspace", "bt709", "-color_primaries", "bt709",
++            "-color_trc", "bt709", "-color_range", "tv",
++            src,
++        ],
++        check=True, capture_output=True,
++    )
++    names = look.write_look_stills(src, src, str(tmp_path), 1)
++    jpg = str(tmp_path / names["look_src"])
++    r, g, b = _mean_rgb(jpg, "format=rgb24")
++    truth_vf = (
++        "zscale=matrixin=709:transferin=709:primariesin=709:rangein=limited:"
++        "matrix=709:transfer=iec61966-2-1:primaries=bt709:range=full,format=rgb24"
++    )
++    tr, tg, tb = _mean_rgb(src, truth_vf)
++    assert abs((g - r) - (tg - tr)) < 2.5
++    assert abs((g - b) - (tg - tb)) < 2.5
++
++
++def _caption_bar(src: str, dest: str) -> str:
++    """Bottom caption / IG chrome — the bradnded overlay class."""
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-v", "error", "-i", src,
++            "-vf", "drawbox=x=0:y=ih*0.75:w=iw:h=ih*0.25:color=white:t=fill",
++            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dest,
++        ],
++        check=True, capture_output=True,
++    )
++    return dest
++
++
++def _crop_keep(
++    src: str, dest: str, keep: float = 0.90,
++    *, x_frac: float = 0.5, y_frac: float = 0.5,
++) -> str:
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-v", "error", "-i", src,
++            "-vf", (
++                f"crop=iw*{keep:.4f}:ih*{keep:.4f}:"
++                f"(iw-iw*{keep:.4f})*{x_frac:.4f}:(ih-ih*{keep:.4f})*{y_frac:.4f}"
++            ),
++            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dest,
++        ],
++        check=True, capture_output=True,
++    )
++    return dest
++
++
++def test_overlay_plus_caption_crop_does_not_fail_look(tmp_path):
++    """Caption + punch-in is a geometry miss, not lava. Naive full-frame MAE
++    trips 38; crop-align the source window so a pack Jeff would ship stays look-ok."""
++    src = _caption_bar(
++        _clip(str(tmp_path / "src.mp4"), w=360, h=640),
++        str(tmp_path / "overlay.mp4"),
++    )
++    cropped = _crop_keep(
++        src, str(tmp_path / "crop.mp4"), keep=0.80, x_frac=0.5, y_frac=0.0,
++    )
++    naive = look.score_look(src, cropped)
++    assert naive["look_mae_max"] > look.LOOK_LUMA_MAX
++    aligned = look.score_look(
++        src, cropped,
++        video={"crop_keep": 0.80, "crop_x_frac": 0.5, "crop_y_frac": 0.0},
++    )
++    assert aligned["look_status"] == "ok"
++    assert aligned["look_mae_max"] <= look.LOOK_LUMA_MAX
++
++
++def test_trim_and_out_fps_do_not_fail_look(tmp_path):
++    """NEW-bradnded MAE 119 was keyframe-seek on 60fps vs 48fps + trim, not
++    lava. Accurate frame times keep the same story moment under the 38 gate."""
++    src = str(tmp_path / "src.mp4")
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-v", "error",
++            "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=60:duration=4",
++            "-c:v", "libx264", "-pix_fmt", "yuv420p",
++            "-g", "60", "-keyint_min", "60", "-an", src,
++        ],
++        check=True, capture_output=True,
++    )
++    dest = str(tmp_path / "var.mp4")
++    subprocess.run(
++        [
++            "ffmpeg", "-y", "-v", "error", "-i", src,
++            "-vf", "trim=start=0.30:end=3.70,setpts=PTS-STARTPTS,setpts=PTS/1.06,fps=48",
++            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "48", "-an", dest,
++        ],
++        check=True, capture_output=True,
++    )
++    scored = look.score_look(
++        src, dest,
++        video={"trim_s": 0.30, "trim_end_s": 0.30, "speed": 1.06, "out_fps": 48},
++    )
++    assert scored["look_status"] == "ok"
++    assert scored["look_mae_max"] <= look.LOOK_LUMA_MAX
++
++
++def test_crop_align_does_not_pass_a_luma_blotch(tmp_path):
++    src = _clip(str(tmp_path / "src.mp4"), w=360, h=640)
++    cropped = _crop_keep(src, str(tmp_path / "crop.mp4"), keep=0.90)
++    blotch = _overlay_blotch(cropped, str(tmp_path / "blotch.mp4"))
++    scored = look.score_look(
++        src, blotch,
++        video={"crop_keep": 0.90, "crop_x_frac": 0.5, "crop_y_frac": 0.5},
++    )
++    assert scored["look_status"] == "fail"
++    assert scored["look_mae_max"] > look.LOOK_LUMA_MAX
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index a4e64de..c34cbd8 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -7,6 +7,7 @@ from conftest import HAS_FFMPEG
+ 
+ from variant_maker import pipeline
+ from variant_maker.neural import upscale
++from variant_maker.presets import MEDIUM, SUBTLE
+ from variant_maker.probe import probe
+ from variant_maker.uniqueness import DEFAULT_TARGET, FLOOR_BITS, MIN_PEER_BITS, TARGET_BITS
+ 
+@@ -31,6 +32,31 @@ def test_default_uniqueness_target_is_24_bits():
+     assert pipeline.use_face_protect("hq") is True
+ 
+ 
++def test_apply_variant_policy_safe_rotate_and_optional_us_metadata():
++    """Studio/CLI default is safe. never still zeros. US tags stay opt-in."""
++    motion = {"video": {"rotate_deg": 0.1}, "audio": {}}
++    pipeline._apply_variant_policy(motion, 99, MEDIUM, "motion", False, {"us_metadata": True})
++    assert motion["video"]["rotate_deg"] == pytest.approx(0.7)
++    assert motion["us_metadata"] is True
++    assert motion["video"]["us_metadata_seed"] == 99
++
++    head = {"video": {"rotate_deg": -2.0}, "audio": {}}
++    pipeline._apply_variant_policy(head, 1, MEDIUM, "talking_head", False, {})
++    assert head["video"]["rotate_deg"] == pytest.approx(-0.8)
++    assert "us_metadata" not in head
++
++    never = {"video": {"rotate_deg": 1.2}, "audio": {}}
++    pipeline._apply_variant_policy(never, 1, MEDIUM, "motion", True, {})
++    assert never["video"]["rotate_deg"] == 0.0
++
++    subtle = {"video": {"rotate_deg": 0.0}, "audio": {}}
++    pipeline._apply_variant_policy(subtle, 1, SUBTLE, "motion", False, {})
++    assert subtle["video"]["rotate_deg"] == 0.0
++
++
++# Live CLI does not grow --us-metadata in this promote. Engine policy is tested above.
++
++
+ HAS_RESR = upscale.available("models/realesrgan")
+ 
+ 
+diff --git a/tests/test_sampler.py b/tests/test_sampler.py
+index 2d8a333..fcab97a 100644
+--- a/tests/test_sampler.py
++++ b/tests/test_sampler.py
+@@ -3,17 +3,23 @@ import pytest
+ from variant_maker.presets import MEDIUM, STRONG, SUBTLE
+ from variant_maker.sampler import (
+     _VIDEO_AXES,
++    CROP_DRIFT_MAX_DEFAULT,
++    CROP_DRIFT_MAX_TALKING_HEAD,
+     CROP_OFFSET_HI,
+     CROP_OFFSET_LO,
+     CROP_Y_KEEP_BOTTOM_HI,
+     CROP_Y_KEEP_BOTTOM_LO,
++    FPS_CHOICES,
+     RESAMPLE_FLAGS,
+     RESAMPLE_PX_CHOICES,
+     _axis_distortion,
++    apply_rotate_safe,
++    clamp_crop_drift,
+     clamp_strength,
+     clamp_trims,
+     derive_seed,
+     disable_fast_pixel_ops,
++    ensure_crop_travel,
+     sample,
+     total_distortion,
+ )
+@@ -34,7 +40,7 @@ ZERO_MEAN_AXES = {
+ 
+ VIDEO_RANGE_AXES = (
+     "crop_keep", "rotate_deg", "brightness", "contrast", "saturation",
+-    "gamma", "hue_deg", "grain", "unsharp", "warp_k1", "rebuild_scale",
++    "gamma", "hue_deg", "vignette", "grain", "unsharp", "warp_k1", "rebuild_scale",
+     "speed", "trim_s",
+ )
+ 
+@@ -90,12 +96,13 @@ def test_video_axes_within_range_bounds(preset):
+         assert preset.crf.lo <= v["crf"] <= preset.crf.hi
+         assert v["crf"] == int(v["crf"])  # encoder setting is an integer
+         assert v["gop"] in preset.gop_choices
++        assert v["out_fps"] in FPS_CHOICES
+ 
+ 
+ @pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
+ def test_audio_within_range_bounds(preset):
+     for s in SEEDS[:50]:
+-        a = sample(preset, s)["audio"]
++        a = sample(preset, s, audio_uniqueness=True)["audio"]
+         assert preset.loudnorm_i.lo <= a["loudnorm_i"] <= preset.loudnorm_i.hi
+         assert preset.aac_kbps.lo <= a["aac_kbps"] <= preset.aac_kbps.hi
+         assert len(a["eq_gains"]) == preset.eq_bands
+@@ -172,10 +179,28 @@ def test_pitch_is_zero_without_rubberband():
+ 
+ def test_pitch_within_range_with_rubberband():
+     for s in SEEDS[:50]:
+-        pp = sample(MEDIUM, s, rubberband=True)["audio"]["pitch_pct"]
++        pp = sample(MEDIUM, s, rubberband=True, audio_uniqueness=True)["audio"]["pitch_pct"]
+         assert MEDIUM.pitch_pct.lo <= pp <= MEDIUM.pitch_pct.hi
+ 
+ 
++def test_voice_safe_audio_skips_uniqueness_axes_by_default():
++    """Talking clips keep natural audio. Pitch/EQ/loudnorm are the robotic sound."""
++    for s in SEEDS[:50]:
++        a = sample(MEDIUM, s, rubberband=True)["audio"]
++        assert a["pitch_pct"] == 0.0
++        assert a["loudnorm_i"] is None
++        assert all(g == 0.0 for g in a["eq_gains"])
++
++
++def test_audio_uniqueness_draws_eq_and_loudnorm():
++    for s in SEEDS[:50]:
++        a = sample(MEDIUM, s, audio_uniqueness=True)["audio"]
++        assert MEDIUM.loudnorm_i.lo <= a["loudnorm_i"] <= MEDIUM.loudnorm_i.hi
++        assert len(a["eq_gains"]) == MEDIUM.eq_bands
++        for g in a["eq_gains"]:
++            assert MEDIUM.eq_gain_db.lo <= g <= MEDIUM.eq_gain_db.hi
++
++
+ def test_sample_includes_crop_offset_and_trim_end():
+     p = sample(MEDIUM, seed=1)
+     assert CROP_OFFSET_LO <= p["video"]["crop_x_frac"] <= CROP_OFFSET_HI
+@@ -216,19 +241,24 @@ def test_instagram_720_crop_punches_from_top_and_keeps_bottom():
+         v = sample(MEDIUM, s, shot="talking_head", width=720, height=1280)["video"]
+         assert 0.86 - 1e-9 <= v["crop_keep"] <= 0.90 + 1e-9
+         assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
++        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
+         assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
++        assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_end_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+         assert v["crop_y_frac"] > 0.8
++        assert v["crop_y_end_frac"] > 0.8
+     # 1080 talking-head keeps the signed caption-safe center band.
+     for s in SEEDS[:80]:
+         v = sample(MEDIUM, s, shot="talking_head", width=1080, height=1920)["video"]
+         assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
+         assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
++        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
+ 
+ 
+ def test_instagram_720_motion_keeps_bottom_captions_without_th_punch():
+     v = sample(MEDIUM, SEEDS[0], shot="motion", width=720, height=1280)["video"]
+     assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
+     assert v["crop_y_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
++    assert v["crop_y_end_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+ 
+ 
+ def test_crop_offset_axes_are_zero_mean():
+@@ -631,3 +661,136 @@ def test_strong_720_talking_head_does_not_draw_luma_shade():
+     assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
+     moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
+     assert "luma_shade" not in moved["video"]
++
++
++def test_crop_end_does_not_shift_existing_fingerprint_draws():
++    """Drift uses a separate RNG; start crop / trim_end / resample stay seed-stable."""
++    seed = derive_seed(11, 5)
++    plain = sample(MEDIUM, seed)
++    head = sample(MEDIUM, seed, shot="talking_head")
++    assert plain["video"]["crop_x_frac"] == head["video"]["crop_x_frac"]
++    assert plain["video"]["crop_y_frac"] == head["video"]["crop_y_frac"]
++    assert plain["video"]["trim_end_s"] == head["video"]["trim_end_s"]
++    assert plain["video"]["resample_px"] == head["video"]["resample_px"]
++    assert "crop_x_end_frac" in plain["video"]
++    assert "crop_y_end_frac" in plain["video"]
++    assert "crop_x_end_frac" in head["video"]
++    assert "crop_y_end_frac" in head["video"]
++    assert "crop_hand_amp_x" in plain["video"]
++    assert "crop_hand_p1" in plain["video"]
++
++
++def test_crop_end_fracs_in_same_legal_ranges_as_start():
++    for s in SEEDS[:200]:
++        v = sample(MEDIUM, s)["video"]
++        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
++        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
++        assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
++        assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
++
++
++def test_crop_drift_respects_max_delta_for_shot():
++    assert CROP_DRIFT_MAX_TALKING_HEAD == pytest.approx(0.24)
++    assert CROP_DRIFT_MAX_DEFAULT == pytest.approx(0.28)
++    for s in SEEDS[:200]:
++        th = sample(MEDIUM, s, shot="talking_head")["video"]
++        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
++        assert abs(th["crop_y_end_frac"] - th["crop_y_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
++        moved = sample(MEDIUM, s, shot="motion")["video"]
++        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
++        assert abs(moved["crop_y_end_frac"] - moved["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
++        plain = sample(MEDIUM, s)["video"]
++        assert abs(plain["crop_x_end_frac"] - plain["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
++        assert abs(plain["crop_y_end_frac"] - plain["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
++
++
++def test_crop_x_end_frac_is_unbudgeted():
++    p = sample(MEDIUM, derive_seed(3, 1))
++    base = total_distortion(MEDIUM, p)
++    bumped = {"video": dict(p["video"])}
++    bumped["video"]["crop_x_end_frac"] = 0.0
++    bumped["video"]["crop_y_end_frac"] = 1.0
++    assert total_distortion(MEDIUM, bumped) == base
++
++
++def test_crop_travel_has_a_floor_so_the_window_actually_moves():
++    """Jeff barely saw the first pan — end can land on start. Force a floor."""
++    for s in SEEDS[:200]:
++        th = sample(MEDIUM, s, shot="talking_head")["video"]
++        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) >= 0.08 - 1e-9
++        moved = sample(MEDIUM, s, shot="motion")["video"]
++        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) >= 0.10 - 1e-9
++
++
++def test_handheld_amps_stay_in_band_and_do_not_shift_main_rng():
++    seed = derive_seed(11, 5)
++    a = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
++    b = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
++    va, vb = a["video"], b["video"]
++    assert va["trim_end_s"] == vb["trim_end_s"]
++    assert va["resample_px"] == vb["resample_px"]
++    assert va["crop_hand_amp_x"] == vb["crop_hand_amp_x"]
++    assert 0.02 <= va["crop_hand_amp_x"] <= 0.06
++    assert 0.005 <= va["crop_hand_amp_y"] <= 0.016
++    assert 1.5 <= va["crop_hand_p1"] <= 3.6
++    assert va["crop_hand_p2"] > va["crop_hand_p1"]
++    y0, y1, ay = va["crop_y_frac"], va["crop_y_end_frac"], va["crop_hand_amp_y"]
++    assert y0 - ay >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
++    assert y1 + ay <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
++
++
++def test_ensure_crop_travel():
++    assert ensure_crop_travel(0.50, 0.50, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.58)
++    assert ensure_crop_travel(0.62, 0.62, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.54)
++    assert ensure_crop_travel(0.95, 0.95, 0.90, 1.00, 0.06, 0.09) == pytest.approx(1.00)
++
++
++def test_clamp_crop_drift():
++    assert clamp_crop_drift(0.5, 0.55, 0.35, 0.65, 0.12) == pytest.approx(0.55)
++    assert clamp_crop_drift(0.5, 0.9, 0.35, 0.65, 0.12) == pytest.approx(0.62)
++    assert clamp_crop_drift(0.5, 0.0, 0.35, 0.65, 0.12) == pytest.approx(0.38)
++    assert clamp_crop_drift(0.35, 0.65, 0.35, 0.65, 0.12) == pytest.approx(0.47)
++    assert clamp_crop_drift(0.65, 0.35, 0.35, 0.65, 0.12) == pytest.approx(0.53)
++    assert clamp_crop_drift(0.95, 1.0, 0.90, 1.00, 0.12) == pytest.approx(1.0)
++    assert clamp_crop_drift(0.95, 0.80, 0.90, 1.00, 0.12) == pytest.approx(0.90)
++    assert clamp_crop_drift(0.5, 0.5, 0.35, 0.65, 0.12) == pytest.approx(0.5)
++    assert clamp_crop_drift(0.40, 0.40 + 0.20, 0.35, 0.65, 0.20) == pytest.approx(0.60)
++
++
++def test_crop_drift_pairs_differ_across_seeds():
++    pairs = {
++        (
++            round(v["crop_x_frac"], 6),
++            round(v["crop_x_end_frac"], 6),
++            round(v["crop_y_frac"], 6),
++            round(v["crop_y_end_frac"], 6),
++        )
++        for v in (sample(MEDIUM, s)["video"] for s in SEEDS[:80])
++    }
++    assert len(pairs) > 40
++
++
++def test_vignette_and_out_fps_use_separate_rng():
++    """New axes must not consume the main stream (crop / resample / GOP stay put)."""
++    v = sample(MEDIUM, 7)["video"]
++    assert v["crop_x_frac"] == pytest.approx(0.3871405883448937)
++    assert v["crop_y_frac"] == pytest.approx(0.4169716893821044)
++    assert v["trim_end_s"] == pytest.approx(0.36960162784195627)
++    assert v["resample_px"] == -30
++    assert v["resample_flags"] == "bicubic"
++    assert v["gop"] == 90
++    assert MEDIUM.vignette.lo <= v["vignette"] <= MEDIUM.vignette.hi
++    assert v["out_fps"] in FPS_CHOICES
++    assert sample(MEDIUM, 7)["video"]["vignette"] == v["vignette"]
++    assert sample(MEDIUM, 7)["video"]["out_fps"] == v["out_fps"]
++
++
++def test_apply_rotate_safe_uses_their_band():
++    assert apply_rotate_safe(0.0, None) == pytest.approx(0.7)
++    assert apply_rotate_safe(0.1, "motion") == pytest.approx(0.7)
++    assert apply_rotate_safe(-0.2, "motion") == pytest.approx(-0.7)
++    assert apply_rotate_safe(2.0, "motion") == pytest.approx(1.3)
++    assert apply_rotate_safe(0.1, "talking_head") == pytest.approx(0.35)
++    assert apply_rotate_safe(-2.0, "talking_head") == pytest.approx(-0.8)
++    assert apply_rotate_safe(0.5, "talking_head") == pytest.approx(0.5)
++    assert apply_rotate_safe(0.0, "talking_head", allow_zero=True) == 0.0
+diff --git a/tests/test_uniqueness_pipeline.py b/tests/test_uniqueness_pipeline.py
+index d19a262..10dda09 100644
+--- a/tests/test_uniqueness_pipeline.py
++++ b/tests/test_uniqueness_pipeline.py
+@@ -48,7 +48,7 @@ def _stub_common(monkeypatch):
+     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
+     monkeypatch.setattr(
+         pipeline.look, "score_look",
+-        lambda src_path, variant_path: {
++        lambda src_path, variant_path, video=None: {
+             "look_status": "ok", "look_metric": "coarse_luma_v1",
+             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+         },
+@@ -122,12 +122,41 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
+     assert record.uniqueness_status == "ok"
+ 
+ 
++def test_score_look_receives_video_params(monkeypatch, tmp_path):
++    """Crop/trim MAE needs the variant's sampled video dict, including auto-tune."""
++    _stub_common(monkeypatch)
++    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, **_kw: {
++        "video": {
++            "crop_keep": 0.90, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
++            "rotate_deg": 0.0,
++        },
++        "audio": {},
++    })
++    seen: dict = {}
++
++    def fake_look(src_path, variant_path, video=None):
++        seen["video"] = video
++        return {
++            "look_status": "ok", "look_metric": "coarse_luma_v1",
++            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
++        }
++
++    monkeypatch.setattr(pipeline.look, "score_look", fake_look)
++    monkeypatch.setattr(
++        pipeline.uniqueness, "score_uniqueness",
++        lambda src_path, variant_path, target=None: _ok_score(0.6, bits=38),
++    )
++    pipeline.run(_cfg(tmp_path))
++    assert seen.get("video") is not None
++    assert seen["video"]["crop_keep"] == 0.90
++
++
+ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
+     """lookaqmtp-class blotch must not escalate. Keep the medium file."""
+     _stub_common(monkeypatch)
+     monkeypatch.setattr(
+         pipeline.look, "score_look",
+-        lambda src_path, variant_path: {
++        lambda src_path, variant_path, video=None: {
+             "look_status": "fail", "look_metric": "coarse_luma_v1",
+             "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
+         },
+@@ -163,7 +192,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
+     ])
+     monkeypatch.setattr(
+         pipeline.look, "score_look",
+-        lambda src_path, variant_path: next(looks),
++        lambda src_path, variant_path, video=None: next(looks),
+     )
+     monkeypatch.setattr(
+         pipeline.uniqueness, "score_uniqueness",
+@@ -873,3 +902,116 @@ def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
+     ))
+     assert seen
+     assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)
++
++
++def test_pipeline_forwards_copyid_gate(monkeypatch, tmp_path):
++    _stub_common(monkeypatch)
++    seen = {}
++
++    def fake_score(src_path, variant_path, target=None, **kw):
++        seen["kw"] = kw
++        return _ok_score(0.5, bits=32, status="ok")
++
++    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
++    manifest = pipeline.run(_cfg(tmp_path, copyid="gate", uniq_strengths=[1.0]))
++    assert seen["kw"].get("copyid") == "gate"
++    assert manifest.run.get("copyid") == "gate"
++
++
++def test_pipeline_records_heads_on_quality(monkeypatch, tmp_path):
++    _stub_common(monkeypatch)
++    heads = {
++        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
++        "visual": {"uniqueness": 0.2, "sim": 0.6, "available": True},
++    }
++
++    def fake_score(src_path, variant_path, target=None, **kw):
++        return {**_ok_score(0.5, bits=32, status="ok"), "heads": heads}
++
++    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
++    manifest = pipeline.run(_cfg(tmp_path, copyid="record", uniq_strengths=[1.0]))
++    assert manifest.variants[0].quality.get("heads")["visual"]["sim"] == 0.6
++    assert manifest.run.get("copyid") == "record"
++
++def test_pipeline_records_heads_through_fast_autotune(monkeypatch, tmp_path):
++    """Fast daily packs reconstruct ``u`` from tune() — must keep copyid heads.
++
++    Lab pack 3d4fae98ca77 ran copyid=record but wrote quality.heads=null
++    because the auto_tune success path copied bits/status and dropped heads.
++    """
++    _stub_common(monkeypatch)
++    heads = {
++        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True, "status": "ok"},
++        "audio": {"uniqueness": 0.26, "sim": 0.74, "available": True, "status": "ok"},
++        "visual": {"uniqueness": None, "sim": None, "available": False},
++    }
++
++    def fake_score(src_path, variant_path, target=None, **kw):
++        return {
++            **_ok_score(0.5, bits=32, status="ok"),
++            "heads": heads,
++            "copyid_mode": kw.get("copyid") or "record",
++        }
++
++    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
++    manifest = pipeline.run(_cfg(
++        tmp_path, copyid="record", auto_tune=True, allow_creative_escalate=False,
++    ))
++    got = manifest.variants[0].quality.get("heads")
++    assert got is not None
++    assert got["audio"]["sim"] == 0.74
++    assert got["visual"]["available"] is False
++    assert manifest.run.get("copyid") == "record"
++
++
++def test_pipeline_record_scores_heads_after_uniqueness(monkeypatch, tmp_path):
++    """record must not fpcalc on the uniqueness thread. SSIM wait, then heads.
++
++    Lab pack ce6862e51d4c paid ~20s of Chromaprint inside uniqueness. Source
++    fingerprint also ran again on copy 2. Heads still land on quality.heads.
++    """
++    _stub_common(monkeypatch)
++    order: list[str] = []
++    uniq_kw: list[dict] = []
++
++    def fake_uniq(src_path, variant_path, target=None, **kw):
++        order.append("uniq")
++        uniq_kw.append(kw)
++        return _ok_score(0.5, bits=32, status="ok")
++
++    def fake_mae(src_path, variant_path, video=None):
++        order.append("mae")
++        return {
++            "look_status": "ok", "look_metric": "coarse_luma_v1",
++            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
++        }
++
++    def fake_attach(result, src_path, variant_path, **kw):
++        order.append("audio")
++        return {
++            **result,
++            "heads": {
++                "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
++                "audio": {
++                    "uniqueness": 0.18, "sim": 0.82, "available": True,
++                    "status": "ok", "via": "ffmpeg_s16le",
++                },
++            },
++            "copyid_mode": "record",
++        }
++
++    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
++    monkeypatch.setattr(pipeline.look, "score_look", fake_mae)
++    monkeypatch.setattr(pipeline.uniqueness, "attach_copyid_heads", fake_attach)
++
++    manifest = pipeline.run(_cfg(
++        tmp_path, copyid="record", uniq_strengths=[1.0],
++        allow_creative_escalate=False,
++    ))
++    assert uniq_kw[0].get("copyid") == "record"
++    assert uniq_kw[0].get("attach_heads") is False
++    assert order == ["uniq", "mae", "audio"]
++    audio = manifest.variants[0].quality.get("heads")["audio"]
++    assert audio["sim"] == 0.82
++    assert audio["via"] == "ffmpeg_s16le"
++
+diff --git a/variant_maker/copyid/__init__.py b/variant_maker/copyid/__init__.py
+new file mode 100644
+index 0000000..c215f25
+--- /dev/null
++++ b/variant_maker/copyid/__init__.py
+@@ -0,0 +1,74 @@
++"""Copy-detection uniqueness heads. Lazy: no torch import at package import."""
++from __future__ import annotations
++
++import os
++
++from .compare import chamfer_sim, cosine, uniq_from_sim
++from .fuse import FUSED_METRIC, fuse_heads
++from .visual import DEFAULT_N_FRAMES, DEFAULT_TAU, score_visual_from_emb
++
++MODES = ("off", "record", "gate")
++
++
++def normalize_mode(mode: str | bool | None) -> str:
++    """Map CLI/env/config to off|record|gate. Default off."""
++    if mode is None:
++        mode = os.environ.get("VARIANT_MAKER_COPYID", "off")
++    if mode is True:
++        return "gate"
++    if mode is False:
++        return "off"
++    raw = str(mode).strip().lower()
++    if raw in ("1", "true", "yes", "on", "auto"):
++        return "gate"
++    if raw in MODES:
++        return raw
++    return "off"
++
++
++def score_heads(
++    src_path: str,
++    variant_path: str,
++    *,
++    visual_backend=None,
++    audio: bool = True,
++    n_frames: int = DEFAULT_N_FRAMES,
++    tau: float = DEFAULT_TAU,
++) -> dict:
++    """Run optional visual + audio heads. Missing tools → omit that head."""
++    heads: dict = {}
++    if audio:
++        from .chromaprint import score_audio
++        a = score_audio(src_path, variant_path)
++        if a.get("available"):
++            heads["audio"] = a
++        else:
++            heads["audio"] = a  # still record unavailable for diagnostics
++    backend = visual_backend
++    if backend is None:
++        from .backends import get_visual_backend
++        backend = get_visual_backend()
++    if backend is not None:
++        from .backends import score_visual
++        heads["visual"] = score_visual(
++            src_path, variant_path, backend, n_frames=n_frames, tau=tau,
++        )
++    else:
++        heads["visual"] = {
++            "uniqueness": None, "sim": None, "status": "unknown",
++            "available": False, "backend": None, "n_frames": n_frames,
++        }
++    return heads
++
++
++__all__ = [
++    "FUSED_METRIC",
++    "MODES",
++    "chamfer_sim",
++    "cosine",
++    "fuse_heads",
++    "normalize_mode",
++    "score_heads",
++    "score_visual_from_emb",
++    "uniq_from_sim",
++]
+diff --git a/variant_maker/copyid/backends.py b/variant_maker/copyid/backends.py
+new file mode 100644
+index 0000000..3b81ed3
+--- /dev/null
++++ b/variant_maker/copyid/backends.py
+@@ -0,0 +1,113 @@
++"""Visual embedding backends. Torch is imported only inside SSCD/DINO modules."""
++from __future__ import annotations
++
++import os
++from abc import ABC, abstractmethod
++from collections.abc import Sequence
++
++from .visual import DEFAULT_N_FRAMES, DEFAULT_TAU, score_visual_from_emb
++
++VecSeq = Sequence[Sequence[float]]
++
++
++class VisualBackend(ABC):
++    name = "base"
++
++    @abstractmethod
++    def available(self) -> bool:
++        ...
++
++    @abstractmethod
++    def encode(self, frame_paths: Sequence[str]) -> list[list[float]]:
++        """One L2-friendly vector per frame image path."""
++
++
++class FakeBackend(VisualBackend):
++    """Test double. ``encode_fn(paths) -> embeddings`` or a fixed sequence."""
++
++    name = "fake"
++
++    def __init__(
++        self,
++        sequence: VecSeq | None = None,
++        encode_fn=None,
++        *,
++        available_flag: bool = True,
++    ):
++        self._sequence = [list(map(float, row)) for row in sequence] if sequence else None
++        self._encode_fn = encode_fn
++        self._available_flag = available_flag
++
++    def available(self) -> bool:
++        return bool(self._available_flag)
++
++    def encode(self, frame_paths: Sequence[str]) -> list[list[float]]:
++        if self._encode_fn is not None:
++            return self._encode_fn(frame_paths)
++        if self._sequence is not None:
++            return [list(row) for row in self._sequence]
++        # Deterministic toy embedding from path index so identical extracts match.
++        out: list[list[float]] = []
++        for i, _p in enumerate(frame_paths):
++            out.append([1.0, float(i), 0.0])
++        return out
++
++
++def get_visual_backend(kind: str | None = None) -> VisualBackend | None:
++    """Resolve SSCD → DINO → None. ``kind``: auto|sscd|dino|off|fake."""
++    raw = (kind or os.environ.get("VARIANT_MAKER_COPYID_VISUAL") or "auto").strip().lower()
++    if raw in ("off", "none", "0"):
++        return None
++    if raw == "fake":
++        return FakeBackend()
++    if raw in ("sscd", "auto"):
++        from .sscd import SscdBackend
++        b = SscdBackend()
++        if b.available():
++            return b
++        if raw == "sscd":
++            return None
++    if raw in ("dino", "auto"):
++        from .dino import DinoBackend
++        b = DinoBackend()
++        if b.available():
++            return b
++        if raw == "dino":
++            return None
++    return None
++
++
++def score_visual(
++    src_path: str,
++    variant_path: str,
++    backend: VisualBackend,
++    *,
++    n_frames: int = DEFAULT_N_FRAMES,
++    tau: float = DEFAULT_TAU,
++    extract_fn=None,
++) -> dict:
++    """Extract frames, embed, Chamfer. Backend/extract failures → unavailable."""
++    unavailable = {
++        "uniqueness": None,
++        "sim": None,
++        "status": "unknown",
++        "available": False,
++        "backend": getattr(backend, "name", "unknown"),
++        "n_frames": n_frames,
++    }
++    if not backend.available():
++        return unavailable
++    grab = extract_fn
++    if grab is None:
++        from .frames import extract_rgb_pngs
++        grab = extract_rgb_pngs
++    try:
++        src_frames = grab(src_path, n=n_frames)
++        var_frames = grab(variant_path, n=n_frames)
++        q = backend.encode(src_frames)
++        r = backend.encode(var_frames)
++        return score_visual_from_emb(
++            q, r, tau=tau, backend=backend.name, n_frames=n_frames,
++        )
++    except (OSError, ValueError, TypeError, RuntimeError):
++        return unavailable
+diff --git a/variant_maker/copyid/chromaprint.py b/variant_maker/copyid/chromaprint.py
+new file mode 100644
+index 0000000..36d546d
+--- /dev/null
++++ b/variant_maker/copyid/chromaprint.py
+@@ -0,0 +1,327 @@
++"""Chromaprint audio near-duplicate head. External ``fpcalc`` only — no AcoustID."""
++from __future__ import annotations
++
++import os
++import re
++import shutil
++import subprocess
++import tempfile
++import threading
++import wave
++from concurrent.futures import ThreadPoolExecutor
++
++AUDIO_METRIC = "chromaprint_v1"
++# Decode with our ffmpeg, then fpcalc on raw PCM (not a container).
++VIA_FFMPEG = "ffmpeg_s16le"
++# Match window in fingerprint *items* (fpcalc ~8192-ish samples/item at default).
++MAX_OFFSET = 120
++MIN_OVERLAP = 8
++# Chromaprint's usual decode rate. We resample here so fpcalc does not need
++# the worker image's libav to understand BtbN-encoded mp4s.
++FPCALC_RATE = 11025
++_FFMPEG_FALLBACKS = ("/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg")
++_fp_lock = threading.Lock()
++_fp_cache: dict[tuple, tuple[list[int], str]] = {}
++_fp_waiters: dict[tuple, threading.Event] = {}
++
++
++def available() -> bool:
++    return shutil.which("fpcalc") is not None
++
++
++def _ffmpeg_bin() -> str:
++    found = shutil.which("ffmpeg")
++    if found:
++        return found
++    for candidate in _FFMPEG_FALLBACKS:
++        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
++            return candidate
++    raise FileNotFoundError("ffmpeg not on PATH")
++
++
++def _decode_text(raw) -> str:
++    if raw is None:
++        return ""
++    if isinstance(raw, bytes):
++        return raw.decode("utf-8", "replace")
++    return str(raw)
++
++
++def _fpcalc_result(proc: subprocess.CompletedProcess) -> list[int]:
++    text = _decode_text(proc.stdout)
++    err = _decode_text(proc.stderr)
++    combined = f"{text}\n{err}"
++    for blob in (text, err):
++        try:
++            fp = parse_raw(blob)
++        except ValueError:
++            fp = None
++        if fp:
++            return fp
++    low = combined.lower()
++    # Debian fpcalc on raw PCM / short wav often exits 1 with EOF after
++    # it already printed FINGERPRINT= (handled above) or with none.
++    if "empty fingerprint" in low or "end of file" in low:
++        return []
++    if proc.returncode != 0:
++        raise subprocess.CalledProcessError(
++            proc.returncode, proc.args, output=proc.stdout, stderr=proc.stderr,
++        )
++    return []
++
++
++def _exc_detail(exc: BaseException) -> str:
++    """Short stderr for the record head. Pack 5ef63612aaf3 was reason=error with none."""
++    err = ""
++    if isinstance(exc, subprocess.CalledProcessError):
++        err = _decode_text(exc.stderr if exc.stderr is not None else exc.output)
++        if not err:
++            err = _decode_text(exc.output)
++    if not err:
++        err = str(exc)
++    err = " ".join(err.split())
++    return f"{type(exc).__name__}: {err}"[:240]
++
++
++def _write_pcm_wav(raw_path: str, wav_path: str, *, rate: int = FPCALC_RATE) -> None:
++    """Classic PCM WAV (fmt 16). BtbN's wav muxer is what Debian fpcalc EOF'd."""
++    with open(raw_path, "rb") as f:
++        data = f.read()
++    if len(data) % 2:
++        data = data[:-1]
++    if not data:
++        raise ValueError("empty pcm")
++    with wave.open(wav_path, "wb") as w:
++        w.setnchannels(1)
++        w.setsampwidth(2)
++        w.setframerate(int(rate))
++        w.writeframes(data)
++
++
++def parse_raw(text: str) -> list[int]:
++    """Parse ``fpcalc -raw`` stdout into unsigned 32-bit ints."""
++    for line in (text or "").splitlines():
++        if line.upper().startswith("FINGERPRINT="):
++            body = line.split("=", 1)[1].strip()
++            if not body:
++                return []
++            parts = re.split(r"[\s,]+", body)
++            out: list[int] = []
++            for p in parts:
++                if not p:
++                    continue
++                out.append(int(p) & 0xFFFFFFFF)
++            return out
++    raise ValueError("no FINGERPRINT= line in fpcalc output")
++
++
++def match_fingerprints(
++    a: list[int],
++    b: list[int],
++    *,
++    max_offset: int = MAX_OFFSET,
++    min_overlap: int = MIN_OVERLAP,
++) -> float:
++    """Best offset-aware bit agreement in [0, 1]. Identical lists → ~1."""
++    if not a or not b:
++        return 0.0
++    best = 0.0
++    off_lo = -min(max_offset, len(b) - 1)
++    off_hi = min(max_offset, len(a) - 1)
++    for off in range(off_lo, off_hi + 1):
++        if off >= 0:
++            aa, bb = a[off:], b
++        else:
++            aa, bb = a, b[-off:]
++        n = min(len(aa), len(bb))
++        if n < min_overlap:
++            continue
++        dist = 0
++        for i in range(n):
++            dist += (aa[i] ^ bb[i]).bit_count()
++        score = 1.0 - (dist / (n * 32.0))
++        best = max(best, score)
++    return max(0.0, min(1.0, best))
++
++
++def _fpcalc_direct(path: str, *, length: int = 120) -> list[int]:
++    proc = subprocess.run(
++        ["fpcalc", "-raw", "-length", str(int(length)), path],
++        check=False,
++        capture_output=True,
++        text=True,
++        errors="replace",
++        stdin=subprocess.DEVNULL,
++    )
++    return _fpcalc_result(proc)
++
++
++def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
++    """Decode with our ffmpeg to s16le, wrap a classic WAV, then fpcalc.
++
++    Slim Fast ``fpcalc`` cannot demux BtbN mp4s. Raw ``-format s16le`` on
++    Debian still exits 1: ``Error decoding audio frame (End of file)``
++    (pack ``bd19fcc20eed``). A stdlib ``wave`` header gives libav a duration
++    so it does not treat EOF as a failed frame.
++    """
++    ffmpeg = _ffmpeg_bin()
++    with tempfile.TemporaryDirectory(prefix="vm-fpcalc-") as td:
++        raw = os.path.join(td, "a.s16")
++        wav = os.path.join(td, "a.wav")
++        ff = subprocess.run(
++            [
++                ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-y",
++                "-i", path,
++                "-vn", "-sn",
++                "-t", str(int(length)),
++                "-map", "0:a:0",
++                "-ac", "1", "-ar", str(FPCALC_RATE),
++                "-f", "s16le",
++                raw,
++            ],
++            check=False,
++            capture_output=True,
++            stdin=subprocess.DEVNULL,
++        )
++        if ff.returncode != 0:
++            raise subprocess.CalledProcessError(
++                ff.returncode, ff.args, output=ff.stdout, stderr=ff.stderr,
++            )
++        if not os.path.isfile(raw) or os.path.getsize(raw) <= 0:
++            return []
++        _write_pcm_wav(raw, wav)
++        try:
++            fp = _fpcalc_direct(wav, length=length)
++            if fp:
++                return fp
++        except (OSError, subprocess.CalledProcessError, ValueError):
++            pass
++        proc = subprocess.run(
++            [
++                "fpcalc", "-raw", "-length", str(int(length)),
++                "-format", "s16le", "-rate", str(FPCALC_RATE),
++                "-channels", "1", raw,
++            ],
++            check=False,
++            capture_output=True,
++            text=True,
++            errors="replace",
++            stdin=subprocess.DEVNULL,
++        )
++        return _fpcalc_result(proc)
++
++
++def _fp_key(path: str, length: int) -> tuple:
++    st = os.stat(path)
++    mtime = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
++    return (os.path.abspath(path), st.st_size, mtime, int(length))
++
++
++def clear_fingerprint_cache() -> None:
++    """Tests only. Production keeps the source fingerprint for the job."""
++    with _fp_lock:
++        _fp_cache.clear()
++        _fp_waiters.clear()
++
++
++def prefetch(path: str, *, length: int = 120) -> None:
++    """Decode the source during encode so copy 1 uniqueness does not pay it."""
++    if not available() or not os.path.isfile(path):
++        return
++    try:
++        _fpcalc(path, length=length)
++    except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
++        return
++
++
++def _fpcalc_uncached(path: str, *, length: int = 120) -> tuple[list[int], str]:
++    """ffmpeg-s16le first. Slim Fast fpcalc's libav cannot open our BtbN mp4s.
++
++    Lab pack 3d4fae98ca77 / 6f506c681f8b / 5ef63612aaf3 wrote ``available:
++    false`` because fpcalc still had to demux a container. Stay ``record``.
++    If ffmpeg already ran (even empty), do not hand the mp4 to Debian fpcalc
++    — that miss is seconds on a 65s clip and never scores.
++    """
++    try:
++        wav_fp = _fpcalc_via_ffmpeg(path, length=length)
++        return (wav_fp or [], VIA_FFMPEG)
++    except (OSError, subprocess.CalledProcessError, ValueError) as wav_err:
++        try:
++            fp = _fpcalc_direct(path, length=length)
++            if fp:
++                return fp, "direct"
++        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
++            raise wav_err from exc
++        raise
++
++
++def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
++    key = _fp_key(path, length)
++    with _fp_lock:
++        hit = _fp_cache.get(key)
++        if hit is not None:
++            return hit
++        waiter = _fp_waiters.get(key)
++        if waiter is None:
++            waiter = threading.Event()
++            _fp_waiters[key] = waiter
++            owner = True
++        else:
++            owner = False
++    if not owner:
++        waiter.wait()
++        with _fp_lock:
++            cached = _fp_cache.get(key)
++        if cached is not None:
++            return cached
++        return _fpcalc_uncached(path, length=length)
++    try:
++        value = _fpcalc_uncached(path, length=length)
++        with _fp_lock:
++            _fp_cache[key] = value
++            _fp_waiters.pop(key, None)
++        waiter.set()
++        return value
++    except Exception:
++        with _fp_lock:
++            _fp_waiters.pop(key, None)
++        waiter.set()
++        raise
++
++
++def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
++    """Audio uniqueness vs a Chromaprint match. Missing binary → unavailable."""
++    base = {
++        "uniqueness": None,
++        "sim": None,
++        "status": "unknown",
++        "available": False,
++        "metric": AUDIO_METRIC,
++    }
++    if not available():
++        return {**base, "reason": "no_fpcalc"}
++    if not os.path.isfile(path_a) or not os.path.isfile(path_b):
++        return {**base, "reason": "missing_file"}
++    try:
++        with ThreadPoolExecutor(max_workers=2) as pool:
++            fa_f = pool.submit(_fpcalc, path_a, length=length)
++            fb_f = pool.submit(_fpcalc, path_b, length=length)
++            fa, via_a = fa_f.result()
++            fb, via_b = fb_f.result()
++        if not fa or not fb:
++            return {**base, "reason": "empty"}
++        sim = match_fingerprints(fa, fb)
++        uniq = 1.0 - sim
++        via = VIA_FFMPEG if VIA_FFMPEG in (via_a, via_b) else "direct"
++        return {
++            "uniqueness": uniq,
++            "sim": sim,
++            "status": "ok",
++            "available": True,
++            "metric": AUDIO_METRIC,
++            "n_a": len(fa),
++            "n_b": len(fb),
++            "via": via,
++        }
++    except (OSError, subprocess.CalledProcessError, ValueError, TypeError) as exc:
++        return {**base, "reason": "error", "detail": _exc_detail(exc)}
+diff --git a/variant_maker/copyid/compare.py b/variant_maker/copyid/compare.py
+new file mode 100644
+index 0000000..8b2255c
+--- /dev/null
++++ b/variant_maker/copyid/compare.py
+@@ -0,0 +1,71 @@
++"""Pure copy-detection compare math. No ffmpeg, no torch, no numpy."""
++from __future__ import annotations
++
++import math
++from collections.abc import Sequence
++
++Vec = Sequence[float]
++Seq = Sequence[Sequence[float]]
++
++
++def _dot(a: Vec, b: Vec) -> float:
++    n = min(len(a), len(b))
++    return sum(float(a[i]) * float(b[i]) for i in range(n))
++
++
++def _norm(a: Vec) -> float:
++    return math.sqrt(sum(float(x) * float(x) for x in a))
++
++
++def cosine(a: Vec, b: Vec) -> float:
++    """Cosine similarity in [-1, 1]. Identical direction → 1. Empty → 0."""
++    if not a or not b:
++        return 0.0
++    na, nb = _norm(a), _norm(b)
++    if na <= 0.0 or nb <= 0.0:
++        return 0.0
++    val = _dot(a, b) / (na * nb)
++    return max(-1.0, min(1.0, val))
++
++
++def mean_pool(seq: Seq) -> list[float]:
++    if not seq:
++        raise ValueError("mean_pool of empty sequence")
++    dim = len(seq[0])
++    out = [0.0] * dim
++    n = 0
++    for row in seq:
++        n += 1
++        for i in range(min(dim, len(row))):
++            out[i] += float(row[i])
++    return [x / n for x in out]
++
++
++def chamfer_sim(query: Seq, ref: Seq) -> float:
++    """Asymmetric Chamfer: mean over query of max cosine vs any ref vector.
++
++    Robust to micro-trim / mild speed (each query frame can match a nearby
++    ref frame). Empty → 0.
++    """
++    if not query or not ref:
++        return 0.0
++    acc = 0.0
++    for q in query:
++        acc += max(cosine(q, r) for r in ref)
++    return acc / len(query)
++
++
++def aligned_mean_sim(a: Seq, b: Seq) -> float:
++    """Diagnostic: mean cosine of same-index pairs (min length)."""
++    n = min(len(a), len(b))
++    if n <= 0:
++        return 0.0
++    return sum(cosine(a[i], b[i]) for i in range(n)) / n
++
++
++def uniq_from_sim(sim: float, tau: float) -> float:
++    """Map similarity to uniqueness in [0, 1]. sim >= tau → 0 (copy-like)."""
++    t = float(tau)
++    if t <= 0.0:
++        return 0.0
++    return max(0.0, min(1.0, (t - float(sim)) / t))
+diff --git a/variant_maker/copyid/dino.py b/variant_maker/copyid/dino.py
+new file mode 100644
+index 0000000..c2da9dd
+--- /dev/null
++++ b/variant_maker/copyid/dino.py
+@@ -0,0 +1,45 @@
++"""DINOv2-small visual fallback. Lazy transformers import."""
++from __future__ import annotations
++
++import os
++from collections.abc import Sequence
++
++DINO_REPO = os.environ.get("VARIANT_MAKER_DINO_REPO", "facebook/dinov2-small")
++
++
++class DinoBackend:
++    name = "dinov2_small"
++
++    def __init__(self, repo: str | None = None):
++        self.repo = repo or DINO_REPO
++        self._model = None
++        self._processor = None
++
++    def available(self) -> bool:
++        try:
++            import torch  # noqa: F401
++            import transformers  # noqa: F401
++        except ImportError:
++            return False
++        return True
++
++    def _load(self):
++        if self._model is not None:
++            return
++        from transformers import AutoImageProcessor, AutoModel
++        self._processor = AutoImageProcessor.from_pretrained(self.repo)
++        self._model = AutoModel.from_pretrained(self.repo)
++        self._model.eval()
++
++    def encode(self, frame_paths: Sequence[str]) -> list[list[float]]:
++        import torch
++        from PIL import Image
++
++        self._load()
++        images = [Image.open(p).convert("RGB") for p in frame_paths]
++        inputs = self._processor(images=images, return_tensors="pt")
++        with torch.no_grad():
++            out = self._model(**inputs)
++            cls = out.last_hidden_state[:, 0, :]
++            cls = torch.nn.functional.normalize(cls, dim=-1)
++        return [list(map(float, row)) for row in cls.cpu().tolist()]
+diff --git a/variant_maker/copyid/frames.py b/variant_maker/copyid/frames.py
+new file mode 100644
+index 0000000..319b044
+--- /dev/null
++++ b/variant_maker/copyid/frames.py
+@@ -0,0 +1,75 @@
++"""ffmpeg RGB frame grabs for visual backends. Lazy; tests can inject."""
++from __future__ import annotations
++
++import os
++import subprocess
++import tempfile
++
++from .visual import DEFAULT_N_FRAMES, frame_fracs
++
++
++def _probe_duration(path: str) -> float:
++    out = subprocess.run(
++        [
++            "ffprobe", "-v", "error",
++            "-show_entries", "format=duration",
++            "-of", "default=noprint_wrappers=1:nokey=1",
++            path,
++        ],
++        check=True,
++        capture_output=True,
++        text=True,
++    )
++    raw = (out.stdout or "").strip()
++    if not raw or raw.upper() == "N/A":
++        raise ValueError(f"no valid duration in ffprobe output: {raw!r}")
++    return max(float(raw), 0.1)
++
++
++def extract_rgb_pngs(
++    path: str,
++    *,
++    n: int = DEFAULT_N_FRAMES,
++    size: int = 288,
++    out_dir: str | None = None,
++) -> list[str]:
++    """Extract N PNG frames, short-side scaled then center-cropped to ``size``.
++
++    Returns file paths. Caller owns ``out_dir`` (temp if omitted — then files
++    live until that temp dir is cleaned by the caller).
++    """
++    dur = _probe_duration(path)
++    own = out_dir is None
++    tmp = out_dir or tempfile.mkdtemp(prefix="vm-copyid-")
++    os.makedirs(tmp, exist_ok=True)
++    vf = (
++        f"scale={size}:{size}:force_original_aspect_ratio=increase,"
++        f"crop={size}:{size}"
++    )
++    paths: list[str] = []
++    try:
++        for i, frac in enumerate(frame_fracs(n)):
++            dest = os.path.join(tmp, f"f_{i:02d}.png")
++            t = frac * dur
++            subprocess.run(
++                [
++                    "ffmpeg", "-v", "error",
++                    "-i", path,
++                    "-ss", f"{max(0.0, t):.6f}",
++                    "-vf", vf,
++                    "-frames:v", "1",
++                    "-y", dest,
++                ],
++                check=True,
++                capture_output=True,
++            )
++            if not os.path.isfile(dest) or os.path.getsize(dest) <= 0:
++                raise ValueError(f"empty frame extract at t={t}")
++            paths.append(dest)
++        return paths
++    except Exception:
++        if own:
++            for p in paths:
++                if os.path.isfile(p):
++                    os.remove(p)
++        raise
+diff --git a/variant_maker/copyid/fuse.py b/variant_maker/copyid/fuse.py
+new file mode 100644
+index 0000000..ba90bb0
+--- /dev/null
++++ b/variant_maker/copyid/fuse.py
+@@ -0,0 +1,49 @@
++"""Conservative fusion: uniqueness is the *min* of available heads."""
++from __future__ import annotations
++
++FUSED_METRIC = "fused_v1"
++
++
++def fuse_heads(
++    heads: dict[str, dict | None],
++    *,
++    target: float | None = None,
++) -> dict:
++    """Combine per-head scores.
++
++    Heads with ``available=False`` or ``uniqueness is None`` are omitted.
++    All omitted → unknown. Never invents a high score.
++    """
++    present: list[tuple[str, float]] = []
++    for name, head in heads.items():
++        if not head:
++            continue
++        if head.get("available") is False:
++            continue
++        uniq = head.get("uniqueness")
++        if uniq is None:
++            continue
++        present.append((name, float(uniq)))
++
++    if not present:
++        return {
++            "uniqueness": None,
++            "uniqueness_status": "unknown",
++            "uniqueness_metric": FUSED_METRIC,
++            "uniqueness_target": target,
++            "fused_from": [],
++        }
++
++    fused = min(u for _, u in present)
++    names = [n for n, _ in present]
++    if target is None or fused >= float(target):
++        status = "ok"
++    else:
++        status = "below_target"
++    return {
++        "uniqueness": fused,
++        "uniqueness_status": status,
++        "uniqueness_metric": FUSED_METRIC,
++        "uniqueness_target": target,
++        "fused_from": names,
++    }
+diff --git a/variant_maker/copyid/sscd.py b/variant_maker/copyid/sscd.py
+new file mode 100644
+index 0000000..3476869
+--- /dev/null
++++ b/variant_maker/copyid/sscd.py
+@@ -0,0 +1,80 @@
++"""SSCD disc_mixup TorchScript visual backend. Lazy torch import. No PIL."""
++from __future__ import annotations
++
++import os
++import subprocess
++from collections.abc import Sequence
++
++DEFAULT_WEIGHT = os.environ.get(
++    "VARIANT_MAKER_SSCD_PATH",
++    os.path.join("models", "sscd", "sscd_disc_mixup.torchscript.pt"),
++)
++INPUT_SIZE = 288
++IMAGENET_MEAN = (0.485, 0.456, 0.406)
++IMAGENET_STD = (0.229, 0.224, 0.225)
++
++
++class SscdBackend:
++    name = "sscd_disc_mixup"
++
++    def __init__(self, weight_path: str | None = None):
++        self.weight_path = weight_path or DEFAULT_WEIGHT
++        self._model = None
++
++    def available(self) -> bool:
++        if not os.path.isfile(self.weight_path):
++            return False
++        try:
++            import torch  # noqa: F401
++        except ImportError:
++            return False
++        return True
++
++    def _load(self):
++        if self._model is not None:
++            return self._model
++        import torch
++        model = torch.jit.load(self.weight_path, map_location="cpu")
++        model.eval()
++        self._model = model
++        return model
++
++    def encode(self, frame_paths: Sequence[str]) -> list[list[float]]:
++        import torch
++
++        model = self._load()
++        tensors = [_png_to_nchw(p, INPUT_SIZE) for p in frame_paths]
++        batch = torch.stack(tensors, dim=0)
++        with torch.no_grad():
++            emb = model(batch)
++        if hasattr(emb, "cpu"):
++            emb = emb.cpu()
++        return [list(map(float, row)) for row in emb.tolist()]
++
++
++def _png_to_nchw(path: str, size: int):
++    """PNG → ImageNet-normalized CHW tensor via ffmpeg (no PIL)."""
++    import torch
++
++    proc = subprocess.run(
++        [
++            "ffmpeg", "-v", "error",
++            "-i", path,
++            "-vf", f"scale={size}:{size}",
++            "-frames:v", "1",
++            "-f", "rawvideo",
++            "-pix_fmt", "rgb24",
++            "pipe:1",
++        ],
++        check=True,
++        capture_output=True,
++    )
++    raw = proc.stdout
++    expected = size * size * 3
++    if len(raw) < expected:
++        raise ValueError(f"short RGB dump from {path}: {len(raw)} < {expected}")
++    t = torch.frombuffer(bytearray(raw[:expected]), dtype=torch.uint8)
++    t = t.view(size, size, 3).permute(2, 0, 1).float() / 255.0
++    mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
++    std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
++    return (t - mean) / std
+diff --git a/variant_maker/copyid/visual.py b/variant_maker/copyid/visual.py
+new file mode 100644
+index 0000000..df8ebda
+--- /dev/null
++++ b/variant_maker/copyid/visual.py
+@@ -0,0 +1,49 @@
++"""Visual-temporal uniqueness from frame embeddings (Chamfer cosine)."""
++from __future__ import annotations
++
++from collections.abc import Sequence
++
++from .compare import aligned_mean_sim, chamfer_sim, uniq_from_sim
++
++# SSCD disc_mixup ~90% precision around cosine 0.75 (starting calibration).
++DEFAULT_TAU = 0.75
++DEFAULT_N_FRAMES = 8
++
++
++def score_visual_from_emb(
++    query: Sequence[Sequence[float]],
++    ref: Sequence[Sequence[float]],
++    *,
++    tau: float = DEFAULT_TAU,
++    backend: str = "fake",
++    n_frames: int | None = None,
++) -> dict:
++    """Pure: two embedding sequences → visual head dict."""
++    if not query or not ref:
++        return {
++            "uniqueness": None,
++            "sim": None,
++            "status": "unknown",
++            "available": False,
++            "backend": backend,
++            "n_frames": 0,
++        }
++    sim = chamfer_sim(query, ref)
++    aligned = aligned_mean_sim(query, ref)
++    uniq = uniq_from_sim(sim, tau)
++    return {
++        "uniqueness": uniq,
++        "sim": sim,
++        "sim_aligned": aligned,
++        "status": "ok",
++        "available": True,
++        "backend": backend,
++        "n_frames": n_frames if n_frames is not None else len(query),
++        "tau": tau,
++    }
++
++
++def frame_fracs(n: int = DEFAULT_N_FRAMES) -> tuple[float, ...]:
++    """Interior sample points 1/(n+1) … n/(n+1). Avoids exact 0/1 seeks."""
++    n = max(1, int(n))
++    return tuple((i + 1) / (n + 1) for i in range(n))
+diff --git a/variant_maker/filtergraph.py b/variant_maker/filtergraph.py
+index e127759..56e2d99 100644
+--- a/variant_maker/filtergraph.py
++++ b/variant_maker/filtergraph.py
+@@ -2,17 +2,21 @@
+ 
+ Video filter ORDER is load-bearing:
+   trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
+-  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
+-  unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
++  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(brightness/contrast/gamma) ->
++  hue(h+s) -> [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
++  -> format=yuv420p
+ Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
+-  equalizer -> loudnorm.
++  [equalizer] -> [loudnorm]. Pitch / EQ / loudnorm are omitted unless sampled
++  (voice-safe default: talking stays natural; audio-uniqueness is a later switch).
+ 
+ Trim supports an independent START (`trim_s`) and END (`trim_end_s`, a fingerprint
+ micro-trim off the tail); end trim needs the source duration (both builders take `src`)
+ since ffmpeg's `trim=end=` is an absolute timestamp, not an offset from the tail. Both
+ streams mirror the identical trim window, keeping video/audio in sync. Crop punch-in
+-also carries an x/y offset fraction (fingerprint axis; 0.5/0.5 == centered). The resize
+-uses color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
++carries an x/y offset fraction (fingerprint; 0.5/0.5 == centered), an optional
++start→end smoothstep (`crop_x_end_frac` / `crop_y_end_frac`) of the window over
++remaining time, and a two-sine handheld wander. The resize uses
++color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
+ if the output target ever differs from the carried source tags. NEVER let a naive scale
+ reinterpret color range. Fast uniqueness is a reconstructive rebuild (down to
+ `rebuild_scale` then back to the platform canvas) — not a ±32 px peek.
+@@ -29,11 +33,20 @@ from .color import (
+ )
+ from .platforms import Platform
+ from .probe import SourceInfo
+-from .sampler import clamp_trims
++from .sampler import (
++    CROP_OFFSET_HI,
++    CROP_OFFSET_LO,
++    CROP_Y_KEEP_BOTTOM_HI,
++    CROP_Y_KEEP_BOTTOM_LO,
++    clamp_trims,
++)
++from .shot import keeps_bottom_captions
+ 
+ _EPS = 1e-6
+ _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
+ _WARP_MIN = 1e-4
++_CROP_DRIFT_MIN = 1e-4
++_CROP_DRIFT_MIN_DURATION_S = 0.05
+ _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
+ # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
+ # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
+@@ -57,6 +70,36 @@ _CHROMA_CLOUD_BLUR = 4.0
+ _LUMA_DUST_MAX = 13
+ # Fixed EQ band centre frequencies by band count (data, not logic).
+ _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
++# ffmpeg vignette default PI/5 (~0.63) is a heavy lens on 9:16 (~40 RGB + olive
++# on white walls). Sampled 0.02–0.20 is already a mild edge falloff when used as
++# the angle. Cap so a leftover large param cannot crush the frame.
++_VIGNETTE_ANGLE_MAX = 0.45
++
++
++def vignette_angle(amount: float) -> float:
++    """Map sampled vignette amount to an ffmpeg `vignette=angle=` value.
++
++    Larger angle darkens more of the frame on this ffmpeg. Do **not** subtract
++    from PI/5 — that is the crush Jeff saw as a green tint on every clip.
++    """
++    a = float(amount or 0.0)
++    if a <= _EPS:
++        return 0.0
++    return min(a, _VIGNETTE_ANGLE_MAX)
++
++
++def _hue_filter(v: dict) -> str | None:
++    """YUV-native hue + saturation. eq=saturation= is an olive-cast RGB round-trip."""
++    h = float(v.get("hue_deg") or 0.0)
++    s = float(v.get("saturation") or 1.0)
++    parts: list[str] = []
++    if abs(h) > _EPS:
++        parts.append(f"h={h:.4f}")
++    if abs(s - 1.0) > _EPS:
++        parts.append(f"s={s:.4f}")
++    if not parts:
++        return None
++    return "hue=" + ":".join(parts)
+ 
+ 
+ def grain_scale_for_size(width: int | None, height: int | None) -> float:
+@@ -172,6 +215,55 @@ def _remaining_duration_s(v: dict, duration_s: float) -> float:
+     return max(0.0, duration_s - start_s - end_s)
+ 
+ 
++def _crop_filter(v: dict, duration_s: float, width: int | None = None, height: int | None = None) -> str:
++    """Crop punch-in; smoothstep + handheld when the window moves (escaped commas).
++
++    Missing/equal ends and zero handheld → today's static crop string. A real
++    start→end delta or handheld amp eases with smoothstep (not a linear ramp —
++    linear + integer crop is the hard pixel shift) and two sines, then a 2×
++    scale around the crop so 1px stair-steps get filtered on the way back down.
++    """
++    crop_keep = v.get("crop_keep", 1.0)
++    if crop_keep >= 1.0 - _EPS:
++        return ""
++    x0 = float(v.get("crop_x_frac", 0.5))
++    y0 = float(v.get("crop_y_frac", 0.5))
++    x1 = float(v.get("crop_x_end_frac", x0))
++    y1 = float(v.get("crop_y_end_frac", y0))
++    amp_x = float(v.get("crop_hand_amp_x", 0.0) or 0.0)
++    amp_y = float(v.get("crop_hand_amp_y", 0.0) or 0.0)
++    p1 = float(v.get("crop_hand_p1", 2.4) or 2.4)
++    p2 = float(v.get("crop_hand_p2", 3.8) or 3.8)
++    remaining = _remaining_duration_s(v, duration_s)
++    drifting = abs(x1 - x0) >= _CROP_DRIFT_MIN or abs(y1 - y0) >= _CROP_DRIFT_MIN
++    handheld = amp_x > _EPS or amp_y > _EPS
++    if (not drifting and not handheld) or remaining <= _CROP_DRIFT_MIN_DURATION_S:
++        return (
++            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
++            f"(iw-iw*{crop_keep:.4f})*{x0:.4f}:(ih-ih*{crop_keep:.4f})*{y0:.4f}"
++        )
++    x_lo, x_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
++    if keeps_bottom_captions(width, height):
++        y_lo, y_hi = CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI
++    else:
++        y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
++    keep = f"{crop_keep:.4f}"
++    p = f"min(max(t/{remaining:.4f}\\,0)\\,1)"
++    # smoothstep s = p^2 * (3-2p) — ease in/out instead of a linear ramp.
++    s = f"{p}*{p}*(3-2*{p})"
++    osc = f"(sin(2*PI*t/{p1:.4f})+0.4*sin(2*PI*t/{p2:.4f}))"
++    hand_x = f"+{amp_x:.4f}*{osc}" if amp_x > _EPS else ""
++    hand_y = f"+{amp_y:.4f}*{osc}" if amp_y > _EPS else ""
++    xf = f"min(max({x0:.4f}+({x1:.4f}-{x0:.4f})*{s}{hand_x}\\,{x_lo:.4f})\\,{x_hi:.4f})"
++    yf = f"min(max({y0:.4f}+({y1:.4f}-{y0:.4f})*{s}{hand_y}\\,{y_lo:.4f})\\,{y_hi:.4f})"
++    crop = f"crop=iw*{keep}:ih*{keep}:(iw-iw*{keep})*{xf}:(ih-ih*{keep})*{yf}"
++    # 2× before crop, even-down after: half-pixel x/y, then the later platform scale.
++    return (
++        f"scale=trunc(iw/2)*4:trunc(ih/2)*4,{crop},"
++        f"scale=trunc(iw/2)*2:trunc(ih/2)*2"
++    )
++
++
+ def _trim_expr(v: dict, duration_s: float) -> str:
+     """Build the `trim=...` (video) / caller prefixes `a` for `atrim=...` (audio) expr.
+ 
+@@ -249,16 +341,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
+     if trim_expr:
+         parts.append(f"{trim_expr},setpts=PTS-STARTPTS")
+ 
+-    # crop punch-in with an x/y offset fraction (fingerprint axis); the scale below
+-    # restores even dims. Offset 0.5/0.5 == the old centered crop.
+-    crop_keep = v.get("crop_keep", 1.0)
+-    if crop_keep < 1.0 - _EPS:
+-        crop_x = v.get("crop_x_frac", 0.5)
+-        crop_y = v.get("crop_y_frac", 0.5)
+-        parts.append(
+-            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
+-            f"(iw-iw*{crop_keep:.4f})*{crop_x:.4f}:(ih-ih*{crop_keep:.4f})*{crop_y:.4f}"
+-        )
++    # crop punch-in with an x/y offset (fingerprint). Missing end = static start;
++    # a real start→end delta or handheld amp eases the window over remaining duration.
++    crop = _crop_filter(v, src.duration_s, src.width, src.height)
++    if crop:
++        parts.append(crop)
+ 
+     # scale: range-aware conversion only when the target differs from source, then even resize
+     if needs_conversion(src.color, out):
+@@ -300,14 +387,21 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
+     if abs(warp) >= _WARP_MIN:
+         parts.append(f"lenscorrection=cx=0.5:cy=0.5:k1={warp:.6f}:k2=0")
+ 
+-    # color (always emitted — this is the color stage)
++    # color (always emitted — this is the color stage). Saturation stays 1.0 here;
++    # ffmpeg eq sat is an RGB 601 round-trip that tints every clip olive.
+     parts.append(
+         f"eq=brightness={v['brightness']:.4f}:contrast={v['contrast']:.4f}:"
+-        f"saturation={v['saturation']:.4f}:gamma={v['gamma']:.4f}"
++        f"saturation=1.0000:gamma={v['gamma']:.4f}"
+     )
+ 
+-    if abs(v.get("hue_deg", 0.0)) > _EPS:
+-        parts.append(f"hue=h={v['hue_deg']:.4f}")
++    hue = _hue_filter(v)
++    if hue:
++        parts.append(hue)
++    vig = float(v.get("vignette") or 0.0)
++    if vig > _EPS:
++        angle = vignette_angle(vig)
++        if angle > _EPS:
++            parts.append(f"vignette=angle={angle:.4f}")
+     if v.get("unsharp", 0.0) > _EPS:
+         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
+     if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
+@@ -317,8 +411,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
+         parts.append(_noise_filter(v, ow, oh))
+     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
+     if not v.get("defer_tempo"):
+-        if platform.fps:
+-            parts.append(f"fps={platform.fps:g}")
++        out_fps = v.get("out_fps")
++        if out_fps in (None, 0, ""):
++            out_fps = platform.fps
++        if out_fps:
++            parts.append(f"fps={float(out_fps):g}")
+         speed = v.get("speed", 1.0)
+         if abs(speed - 1.0) > _EPS:
+             parts.append(f"setpts={1.0 / speed:.6f}*PTS")
+@@ -363,17 +460,23 @@ def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
+         parts.append(f"rubberband=pitch={1.0 + pitch / 100.0:.6f}")
+ 
+     # one speed factor on both streams — atempo MUST equal video speed
+-    parts.append(f"atempo={a['speed']:.6f}")
++    speed = a.get("speed", 1.0)
++    if abs(speed - 1.0) > _EPS:
++        parts.append(f"atempo={speed:.6f}")
+ 
+     gains = a.get("eq_gains", [])
+     freqs = _EQ_BANDS.get(a.get("eq_bands", len(gains)), ())
+     for freq, gain in zip(freqs, gains):
+-        parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
++        if abs(gain) > _EPS:
++            parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
+ 
+     # loudnorm after atempo — effective length is remaining/speed. Short clips
+-    # make loudnorm emit NaN which AAC rejects (exit 234).
+-    speed = max(a.get("speed", 1.0), _EPS)
+-    effective_s = _remaining_duration_s(v, src.duration_s) / speed
+-    if effective_s >= _LOUDNORM_MIN_S:
+-        parts.append(f"loudnorm=I={a['loudnorm_i']:.1f}:TP=-1.5:LRA=11")
++    # make loudnorm emit NaN which AAC rejects (exit 234). Voice-safe params
++    # leave loudnorm_i unset so talking is not radio-processed.
++    ln = a.get("loudnorm_i")
++    if ln is not None:
++        speed = max(float(speed), _EPS)
++        effective_s = _remaining_duration_s(v, src.duration_s) / speed
++        if effective_s >= _LOUDNORM_MIN_S:
++            parts.append(f"loudnorm=I={float(ln):.1f}:TP=-1.5:LRA=11")
+     return ",".join(parts)
+diff --git a/variant_maker/look.py b/variant_maker/look.py
+index 8374814..e28b66e 100644
+--- a/variant_maker/look.py
++++ b/variant_maker/look.py
+@@ -16,6 +16,10 @@ Calibration 2026-08-25 (16×28, 8-bit MAE):
+ 
+ Gate **38**. One blotchy sample fails. Missing files / ffmpeg errors →
+ `unknown` (do not block uniqueness). Log: `docs/ops/look-learnings.md`.
++
++Stills: zscale bt709/tv → sRGB, not a naked `scale=360` (that olives Gallery
++JPEGs). MAE: accurate frame times (60fps vs 48fps keyframe-seek was NEW-bradnded
++MAE 119) and crop-align the source window so caption punch-in is not lava.
+ """
+ from __future__ import annotations
+ 
+@@ -23,6 +27,7 @@ import os
+ import subprocess
+ 
+ from . import uniqueness
++from .sampler import clamp_trims
+ 
+ LOOK_METRIC = "coarse_luma_v1"
+ LOOK_GRID = (16, 28)
+@@ -31,6 +36,12 @@ LOOK_GRID = (16, 28)
+ LOOK_LUMA_MAX = 38.0
+ FRAME_FRACS = uniqueness.FRAME_FRACS
+ STILL_WIDTH = 360
++_EPS = 1e-6
++# Gallery stills: tagged HD → sRGB. Naked scale=360 is a 601-ish JPEG path.
++_STILL_ZSCALE = (
++    "zscale=matrixin=709:transferin=709:primariesin=709:rangein=limited:"
++    "matrix=709:transfer=iec61966-2-1:primaries=bt709:range=full"
++)
+ 
+ 
+ def look_src_name(index: int) -> str:
+@@ -41,23 +52,88 @@ def look_var_name(index: int) -> str:
+     return f"look_v{int(index):02d}.jpg"
+ 
+ 
++def still_vf() -> str:
++    """Color-correct 360px JPEG extract. Even height for the encoder."""
++    return (
++        f"{_STILL_ZSCALE},format=rgb24,"
++        f"scale={STILL_WIDTH}:-2:flags=lanczos,"
++        f"scale=trunc(iw/2)*2:trunc(ih/2)*2"
++    )
++
++
+ def _probe_duration(path: str) -> float:
+     return uniqueness._probe_duration(path)
+ 
+ 
+-def _coarse_luma_mae(path_a: str, t_a: float, path_b: str, t_b: float) -> float:
+-    """8-bit MAE of luma after area-scale to LOOK_GRID. 0 = identical."""
++def _clamp_t(t: float, duration_s: float) -> float:
++    if duration_s <= 0.1:
++        return 0.0
++    return min(max(0.0, float(t)), max(duration_s - 0.05, 0.0))
++
++
++def _crop_prefix(video: dict | None) -> str:
++    """Static start-window crop on the *source* so MAE sees the variant window.
++
++    Handheld / start→end drift is a t-expr; a single -ss still cannot follow it.
++    Use crop_keep + crop_x_frac + crop_y_frac (the encode's opening punch-in).
++    """
++    if not video:
++        return ""
++    keep = float(video.get("crop_keep") or 1.0)
++    if keep >= 1.0 - _EPS:
++        return ""
++    x0 = float(video.get("crop_x_frac", 0.5))
++    y0 = float(video.get("crop_y_frac", 0.5))
++    return (
++        f"crop=iw*{keep:.4f}:ih*{keep:.4f}:"
++        f"(iw-iw*{keep:.4f})*{x0:.4f}:(ih-ih*{keep:.4f})*{y0:.4f},"
++    )
++
++
++def _sample_times(
++    src_dur: float, var_dur: float, video: dict | None,
++) -> list[tuple[float, float]]:
++    """(t_src, t_var) at FRAME_FRACS. Map trim/speed when those params exist."""
++    video = video or {}
++    trim_s = float(video.get("trim_s") or 0.0)
++    trim_end = float(video.get("trim_end_s") or 0.0)
++    speed = float(video.get("speed") or 1.0) or 1.0
++    start_s, end_s = clamp_trims(trim_s, trim_end, src_dur)
++    has_time = start_s > _EPS or end_s > _EPS or abs(speed - 1.0) > _EPS
++    remaining = max(src_dur - start_s - end_s, 0.1)
++    out: list[tuple[float, float]] = []
++    for frac in FRAME_FRACS:
++        if has_time:
++            t_src = start_s + frac * remaining
++            t_var = (t_src - start_s) / speed
++        else:
++            t_src = frac * src_dur
++            t_var = frac * var_dur
++        out.append((_clamp_t(t_src, src_dur), _clamp_t(t_var, var_dur)))
++    return out
++
++
++def _coarse_luma_mae(
++    path_a: str, t_a: float, path_b: str, t_b: float,
++    *, crop_a: str = "",
++) -> float:
++    """8-bit MAE of luma after area-scale to LOOK_GRID. 0 = identical.
++
++    Decode via trim= (accurate timestamps). Input -ss is keyframe-only and
++    scored NEW-bradnded ~125 when source was 60fps and the variant 48fps.
++    """
+     gw, gh = LOOK_GRID
+     vf = (
+-        f"[0:v]scale={gw}:{gh}:flags=area,format=gray[a];"
+-        f"[1:v]scale={gw}:{gh}:flags=area,format=gray[b];"
++        f"[0:v]trim=start={t_a:.6f},setpts=PTS-STARTPTS,{crop_a}"
++        f"scale={gw}:{gh}:flags=area,format=gray[a];"
++        f"[1:v]trim=start={t_b:.6f},setpts=PTS-STARTPTS,"
++        f"scale={gw}:{gh}:flags=area,format=gray[b];"
+         f"[a][b]blend=all_mode=difference,format=gray,scale=1:1:flags=area,format=gray"
+     )
+     proc = subprocess.run(
+         [
+             "ffmpeg", "-v", "error",
+-            "-ss", f"{max(0.0, t_a):.6f}", "-i", path_a,
+-            "-ss", f"{max(0.0, t_b):.6f}", "-i", path_b,
++            "-i", path_a, "-i", path_b,
+             "-filter_complex", vf,
+             "-frames:v", "1",
+             "-f", "rawvideo", "pipe:1",
+@@ -73,12 +149,14 @@ def _coarse_luma_mae(path_a: str, t_a: float, path_b: str, t_b: float) -> float:
+ def _extract_jpeg(path: str, t: float, out_path: str) -> None:
+     if os.path.exists(out_path):
+         os.remove(out_path)
++    # -ss after -i is accurate (output seek). Gallery stills must match the mp4.
+     subprocess.run(
+         [
+             "ffmpeg", "-v", "error",
+-            "-ss", f"{max(0.0, t):.6f}", "-i", path,
++            "-i", path,
++            "-ss", f"{max(0.0, t):.6f}",
+             "-frames:v", "1",
+-            "-vf", f"scale={STILL_WIDTH}:-2",
++            "-vf", still_vf(),
+             "-q:v", "3",
+             "-y", out_path,
+         ],
+@@ -106,8 +184,12 @@ def write_look_stills(
+     return {"look_src": src_name, "look_var": var_name}
+ 
+ 
+-def score_look(src_path: str, variant_path: str) -> dict:
+-    """Look gate on the real files. Never uses the VMAF quality proxy."""
++def score_look(src_path: str, variant_path: str, video: dict | None = None) -> dict:
++    """Look gate on the real files. Never uses the VMAF quality proxy.
++
++    ``video`` is the variant's sampled params (crop / trim / speed). Crop-align
++    the source; map story-time through trim+speed. Gate 38 is unchanged.
++    """
+     base = {
+         "look_status": "unknown",
+         "look_metric": LOOK_METRIC,
+@@ -118,9 +200,12 @@ def score_look(src_path: str, variant_path: str) -> dict:
+     try:
+         dur_a = max(_probe_duration(src_path), 0.1)
+         dur_b = max(_probe_duration(variant_path), 0.1)
++        crop_a = _crop_prefix(video)
+         maes: list[float] = []
+-        for frac in FRAME_FRACS:
+-            maes.append(_coarse_luma_mae(src_path, frac * dur_a, variant_path, frac * dur_b))
++        for t_a, t_b in _sample_times(dur_a, dur_b, video):
++            maes.append(
++                _coarse_luma_mae(src_path, t_a, variant_path, t_b, crop_a=crop_a),
++            )
+         mean_mae = sum(maes) / len(maes)
+         max_mae = max(maes)
+         passed = max_mae <= LOOK_LUMA_MAX
+diff --git a/variant_maker/pipeline.py b/variant_maker/pipeline.py
+index 63c0fa5..f0f8e4b 100644
+--- a/variant_maker/pipeline.py
++++ b/variant_maker/pipeline.py
+@@ -13,12 +13,13 @@ import threading
+ from concurrent.futures import ThreadPoolExecutor
+ 
+ from . import autotune, look, quality, uniqueness
++from .copyid import normalize_mode
+ from .ffmpeg import has_rubberband, render_variant
+ from .manifest import Manifest, VariantRecord
+ from .platforms import fit_platform_to_source, resolve_platform
+ from .presets import get_preset
+ from .probe import probe
+-from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
++from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+ from .shot import classify_shot
+ 
+ # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
+@@ -50,6 +51,27 @@ def use_face_protect(quality_mode: str | None) -> bool:
+     return str(quality_mode or "fast").strip().lower() == "hq"
+ 
+ 
++def _apply_variant_policy(
++    params: dict,
++    vseed: int,
++    preset,
++    shot_kind: str | None,
++    rotate_off: bool,
++    config: dict,
++) -> None:
++    """Rotate safe by default; optional US metadata. Mutates params."""
++    if rotate_off:
++        params["video"]["rotate_deg"] = 0.0
++    else:
++        allow_zero = abs(preset.rotate_deg.hi - preset.rotate_deg.lo) < 1e-12
++        params["video"]["rotate_deg"] = apply_rotate_safe(
++            params["video"]["rotate_deg"], shot_kind, allow_zero=allow_zero,
++        )
++    if config.get("us_metadata"):
++        params["us_metadata"] = True
++        params["video"]["us_metadata_seed"] = int(vseed)
++
++
+ def _ffmpeg_version() -> str:
+     out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
+     line = out.stdout.splitlines()[0] if out.stdout else ""
+@@ -72,19 +94,26 @@ def run(config: dict, *, on_event=None) -> Manifest:
+     # backend-specific floor could restore sensitivity to subtler corruption later.)
+     corruption_floor = config.get("corruption_floor", 20.0)
+     max_regen = config.get("max_regen", 3)
+-    rotate_off = config.get("rotate", "never") == "never"
++    rotate_mode = config.get("rotate", "safe")
++    rotate_off = rotate_mode == "never"
+     dry_run = config.get("dry_run", False)
+     jobs = max(1, config.get("jobs", 1))
+ 
+-    rubberband = config.get("rubberband")
+-    if rubberband is None:
+-        rubberband = has_rubberband()
+-        config = {**config, "rubberband": rubberband}
++    audio_uniqueness = bool(config.get("audio_uniqueness", False))
++    if audio_uniqueness:
++        rubberband = config.get("rubberband")
++        if rubberband is None:
++            rubberband = has_rubberband()
++    else:
++        rubberband = False
++    config = {**config, "rubberband": rubberband, "audio_uniqueness": audio_uniqueness}
+ 
+     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
+     # clears the target (and peer-bits floor), spend exactly one creative-escalate
+     # attempt on the strong preset.
+     uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
++    # off (default Fast) | record (score heads, SSIM gates) | gate (fused min).
++    copyid_mode = normalize_mode(config.get("copyid"))
+     allow_creative_escalate = config.get("allow_creative_escalate", True)
+     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
+     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
+@@ -151,11 +180,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
+         "quality_mode": config.get("quality_mode", "fast"),
+         "auto_tune": bool(auto_tune),
+         "rubberband": bool(rubberband),
++        "audio_uniqueness": bool(audio_uniqueness),
+         "protect": False,
+         "count": count,
+         "shot": shot_info,
+         "quality_floor": {"metric": "vmaf", "value": floor},
+         "ffmpeg_version": _ffmpeg_version(),
++        "copyid": copyid_mode,
+     }
+ 
+     def _prep(i: int):
+@@ -171,11 +202,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
+             params = sample(
+                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
+                 shot=shot_kind, width=src.width, height=src.height,
++                audio_uniqueness=audio_uniqueness,
+             )
+             if use_face_protect(config.get("quality_mode")):
+                 params = protect.apply_to_params(params)
+-            if rotate_off:
+-                params["video"]["rotate_deg"] = 0.0
++            _apply_variant_policy(params, vseed, preset, shot_kind, rotate_off, config)
+             if hq:
+                 params = disable_fast_pixel_ops(params)
+             _, cmd = render_variant(src, params, platform, path, dry_run=True)
+@@ -191,6 +222,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
+         protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
+     run_meta["protect"] = protect_frame is not None
+ 
++    if copyid_mode != "off":
++        def _prefetch_src_audio() -> None:
++            try:
++                from .copyid.chromaprint import prefetch
++                prefetch(src.path)
++            except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
++                return
++        threading.Thread(
++            target=_prefetch_src_audio, name="copyid-prefetch", daemon=True,
++        ).start()
++
+     def _render_one(i: int) -> VariantRecord:
+         token = config.get("cancel_token")
+         if token is not None and token.is_set():
+@@ -212,12 +254,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
+                 duration_s=src.duration_s, shot=shot_kind,
+                 width=src.width, height=src.height,
++                audio_uniqueness=audio_uniqueness,
+             )
+             if protect_frame is not None:
+                 from .neural import protect
+                 params = protect.apply_to_params(params, frame_path=protect_frame)
+-            if rotate_off:
+-                params["video"]["rotate_deg"] = 0.0
++            _apply_variant_policy(params, vseed, use_preset, shot_kind, rotate_off, config)
+             if hq:
+                 params = disable_fast_pixel_ops(params)
+             if hq:
+@@ -264,17 +306,30 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 return {}
+ 
+         def _score_uniqueness_now() -> dict:
++            # Extra kwargs only when enabled so existing test fakes stay valid.
++            # record: SSIM only on this thread (Generate wait). Chromaprint
++            # attaches after uniqueness on the kept file. gate still fuses here.
++            extra: dict = {}
++            if copyid_mode == "gate":
++                extra = {"copyid": "gate"}
++            elif copyid_mode == "record":
++                extra = {"copyid": "record", "attach_heads": False}
+             scored = uniqueness.score_uniqueness(
+-                src.path, path, target=uniqueness_target,
++                src.path, path, target=uniqueness_target, **extra,
+             )
+             return _apply_peer_status(scored, _peer_bits(path))
+ 
+-        def _look_then_uniqueness() -> dict:
++        def _look_then_uniqueness(video: dict | None = None) -> dict:
+             """Stills on the card first. Uniqueness work starts immediately.
+ 
+             Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
+             Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
+             on Fast contended the CPU and stretched the uniqueness phase.
++            ``record`` Chromaprint also waits until the kept file (after MAE) so
++            autotune attempts do not decode audio N times. ``gate`` still fuses
++            inside ``score_uniqueness``.
++            Auto-tune calls this before assigning outer ``r`` — pass ``video=``
++            from the attempt so crop/trim MAE aligns.
+             """
+             nonlocal look_info
+             with ThreadPoolExecutor(max_workers=1) as look_ex:
+@@ -283,7 +338,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 _emit_looking()
+                 emit("uniqueness", index=i)
+                 scored = uniq_f.result()
+-            look_info = {**look_info, **look.score_look(src.path, path)}
++            look_video = video
++            if look_video is None and r is not None:
++                look_video = (r.get("params") or {}).get("video")
++            look_info = {
++                **look_info,
++                **look.score_look(src.path, path, video=look_video),
++            }
+             return scored
+ 
+         def _snapshot_medium() -> dict:
+@@ -386,7 +447,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
+ 
+             def _tune_attempt(strength: float) -> dict:
+                 r_try = attempt(strength, preset, gate_quality=False)
+-                u_try = _look_then_uniqueness()
++                u_try = _look_then_uniqueness(
++                    video=(r_try.get("params") or {}).get("video"),
++                )
+                 peer_min = u_try.get("min_bits_vs_peers")
+                 peer_ok = (
+                     (not peer_gate)
+@@ -436,6 +499,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 "uniqueness_target": tuned["uniqueness_target"],
+                 "bits": tuned.get("bits"),
+                 "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
++                # Fast auto_tune used to drop these — lab pack 3d4fae98ca77
++                # ran copyid=record and still wrote quality.heads=null.
++                "heads": tuned.get("heads"),
++                "copyid_mode": tuned.get("copyid_mode"),
++                "fused_from": tuned.get("fused_from"),
+             }
+             cleared = (
+                 tuned.get("quality_passed")
+@@ -482,6 +550,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                     escalated = True
+                     _restore_medium_if_look_fail(snap)
+ 
++        # record: fingerprint the kept file once, after SSIM/MAE. Do not pay
++        # Chromaprint on every autotune attempt. gate already fused above.
++        if copyid_mode == "record" and not u.get("heads"):
++            u = uniqueness.attach_copyid_heads(
++                u, src.path, path, copyid="record",
++            )
++
+         if r is not None and r.get("vmaf") is None:
+             qr = path + ".qr.mp4"
+             quality.quality_render(src, r["params"], qr)
+@@ -524,6 +599,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
+             "look_status": look_info.get("look_status"),
+             "look_mae": look_info.get("look_mae"),
+             "look_mae_max": look_info.get("look_mae_max"),
++            "heads": u.get("heads"),
+         }
+         # Accept into the peer set only when we ship a usable file.
+         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
+diff --git a/variant_maker/presets.py b/variant_maker/presets.py
+index fa625d5..4486f29 100644
+--- a/variant_maker/presets.py
++++ b/variant_maker/presets.py
+@@ -27,6 +27,7 @@ class Preset:
+     saturation: Range
+     gamma: Range
+     hue_deg: Range
++    vignette: Range  # edge darken; 0 = skip; unbudgeted fingerprint
+     grain: Range
+     unsharp: Range
+     warp_k1: Range  # Fast pixel seed (lenscorrection); zero-mean; VMAF-capped
+@@ -48,6 +49,7 @@ SUBTLE = Preset(
+     crop_keep=Range(0.98, 1.00), rotate_deg=Range(0.0, 0.0),
+     brightness=Range(-0.01, 0.01), contrast=Range(0.99, 1.01),
+     saturation=Range(0.99, 1.02), gamma=Range(0.99, 1.01),     hue_deg=Range(-1, 1),
++    vignette=Range(0.0, 0.04),
+     grain=Range(3, 6), unsharp=Range(0.0, 0.0), warp_k1=Range(-0.004, 0.004),
+     rebuild_scale=Range(0.90, 0.98),
+     speed=Range(0.99, 1.01),
+@@ -64,6 +66,7 @@ MEDIUM = Preset(
+     crop_keep=Range(0.92, 0.96), rotate_deg=Range(-0.8, 0.8),
+     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
+     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03),     hue_deg=Range(-3, 3),
++    vignette=Range(0.02, 0.12),
+     grain=Range(7, 12), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.015, 0.015),
+     # ~720–864 then back to 1080×1920. The uniqueness frame (576×1024) can see this;
+     # ±32 px could not. Escalate's strong.hi sits below medium.lo.
+@@ -81,6 +84,7 @@ STRONG = Preset(
+     crop_keep=Range(0.88, 0.93), rotate_deg=Range(-2.0, 2.0),
+     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
+     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05),     hue_deg=Range(-6, 6),
++    vignette=Range(0.04, 0.20),
+     grain=Range(10, 16), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.020, 0.020),
+     rebuild_scale=Range(0.50, 0.66),
+     speed=Range(0.94, 1.06),
+diff --git a/variant_maker/sampler.py b/variant_maker/sampler.py
+index 03f58ac..73cb86c 100644
+--- a/variant_maker/sampler.py
++++ b/variant_maker/sampler.py
+@@ -6,7 +6,7 @@ Contract:
+     - every axis drawn from preset ranges via a seeded RNG
+     - color/geometry axes are ZERO-MEAN (straddle neutral) — no systematic shift
+     - transform axes scaled down so total normalized distortion <= preset.budget
+-    - audio.speed MUST equal video.speed (sync); pitch only if rubberband available
++    - audio.speed MUST equal video.speed (sync); pitch only if rubberband AND audio_uniqueness
+   total_distortion(preset, params) -> the normalized distortion these params spend
+ 
+ The distortion model is the budget contract: each budgeted axis contributes a value in
+@@ -88,11 +88,39 @@ CROP_OFFSET_HI = 0.65
+ # words when y drifted low. Unbudgeted; not zero-mean (that is the point).
+ CROP_Y_KEEP_BOTTOM_LO = 0.90
+ CROP_Y_KEEP_BOTTOM_HI = 1.00
++# Micro start→end crop-window travel + handheld wander. Unbudgeted; separate RNG.
++# v1 max was 0.12 / 0.20 — Jeff barely saw it. Floor so the window always moves.
++CROP_DRIFT_MAX_TALKING_HEAD = 0.24
++CROP_DRIFT_MAX_DEFAULT = 0.28
++CROP_TRAVEL_MIN_TALKING_HEAD = 0.08
++CROP_TRAVEL_MIN_DEFAULT = 0.10
++CROP_HAND_AMP_X_TALKING = (0.020, 0.060)
++CROP_HAND_AMP_Y_TALKING = (0.005, 0.016)
++CROP_HAND_AMP_X_DEFAULT = (0.028, 0.070)
++CROP_HAND_AMP_Y_DEFAULT = (0.010, 0.028)
++CROP_HAND_P1 = (1.5, 3.6)
++_CROP_DRIFT_RNG_XOR = 0xC0DE5
+ 
+ # Unbudgeted Fast pixel seed: even px off target width, never 0, never a 2px peek.
+ # Mix of smaller and larger intermediates so we do not systematically soften one way.
+ RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
+ RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
++# Per-copy output cadence. Instagram takes these. Not a second speed factor.
++FPS_CHOICES = (30, 48, 60)
++_EXTRA_AXES_XOR = 0xF95
++_ROTATE_SAFE_MOTION = (0.7, 1.3)
++_ROTATE_SAFE_HEAD = (0.35, 0.8)
++
++
++def apply_rotate_safe(deg: float, shot: str | None, *, allow_zero: bool = False) -> float:
++    """Keep rotate on. Motion matches the 0.7–1.3 band; talking-head stays subtler."""
++    value = float(deg)
++    if allow_zero and abs(value) < 1e-12:
++        return 0.0
++    lo, hi = _ROTATE_SAFE_HEAD if shot == "talking_head" else _ROTATE_SAFE_MOTION
++    sign = -1.0 if value < 0 else 1.0
++    mag = min(hi, max(abs(value), lo))
++    return sign * mag
+ 
+ 
+ def derive_seed(master_seed: int, index: int) -> int:
+@@ -156,6 +184,60 @@ def total_distortion(preset: Preset, params: dict) -> float:
+     return total
+ 
+ 
++def clamp_crop_drift(start: float, end: float, lo: float, hi: float, max_delta: float) -> float:
++    """Clamp end into [lo,hi] and within max_delta of start."""
++    lower = max(lo, start - max_delta)
++    upper = min(hi, start + max_delta)
++    if lower > upper:
++        return min(max(start, lo), hi)
++    return min(max(end, lower), upper)
++
++
++def ensure_crop_travel(
++    start: float,
++    end: float,
++    lo: float,
++    hi: float,
++    min_delta: float,
++    max_delta: float,
++) -> float:
++    """Push `end` at least `min_delta` from `start`, staying in band and max_delta.
++
++    Prefer the already-drawn direction (or up, when end landed on start). If
++    that side cannot fit the floor, try the other side; if neither can, travel
++    as far as the band/max allow (720 y is only 0.10 wide).
++    """
++    start = float(start)
++    end = clamp_crop_drift(start, float(end), lo, hi, max_delta)
++    if min_delta <= 0:
++        return end
++    if abs(end - start) + 1e-12 >= min_delta:
++        return end
++    up_room = min(hi - start, max_delta)
++    down_room = min(start - lo, max_delta)
++    hint = end - start
++
++    def _go_up() -> float | None:
++        if up_room + 1e-12 >= min_delta:
++            return start + min_delta
++        return None
++
++    def _go_down() -> float | None:
++        if down_room + 1e-12 >= min_delta:
++            return start - min_delta
++        return None
++
++    if abs(hint) < 1e-12 or hint > 0:
++        picked = _go_up() or _go_down()
++        if picked is not None:
++            return picked
++        return start + up_room if up_room >= down_room else start - down_room
++    picked = _go_down() or _go_up()
++    if picked is not None:
++        return picked
++    return start - down_room if down_room >= up_room else start + up_room
++
++
+ def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[float, float]:
+     """Scale head/tail trims so a short clip keeps a usable remaining duration.
+ 
+@@ -227,6 +309,7 @@ def sample(
+     shot: str | None = None,
+     width: int | None = None,
+     height: int | None = None,
++    audio_uniqueness: bool = False,
+ ) -> dict:
+     """Draw budgeted, zero-mean params for one variant.
+ 
+@@ -313,9 +396,51 @@ def sample(
+     # vs-source bits can clear 24. trim_end_s reuses the preset's trim_s range.
+     raw["crop_x_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
+     if keeps_bottom_captions(width, height):
+-        raw["crop_y_frac"] = rng.uniform(CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI)
++        y_lo, y_hi = CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI
+     else:
+-        raw["crop_y_frac"] = rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI)
++        y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
++    raw["crop_y_frac"] = rng.uniform(y_lo, y_hi)
++    # Keyframed crop pan + handheld wander: separate RNG so trim_end_s /
++    # resample_px / vignette / out_fps stay bit-identical.
++    talking = shot == "talking_head"
++    max_delta = CROP_DRIFT_MAX_TALKING_HEAD if talking else CROP_DRIFT_MAX_DEFAULT
++    min_dx = CROP_TRAVEL_MIN_TALKING_HEAD if talking else CROP_TRAVEL_MIN_DEFAULT
++    drift_rng = random.Random(int(seed) ^ _CROP_DRIFT_RNG_XOR)
++    raw["crop_x_end_frac"] = ensure_crop_travel(
++        raw["crop_x_frac"],
++        drift_rng.uniform(CROP_OFFSET_LO, CROP_OFFSET_HI),
++        CROP_OFFSET_LO,
++        CROP_OFFSET_HI,
++        min_dx,
++        max_delta,
++    )
++    raw["crop_y_end_frac"] = clamp_crop_drift(
++        raw["crop_y_frac"],
++        drift_rng.uniform(y_lo, y_hi),
++        y_lo,
++        y_hi,
++        max_delta,
++    )
++    if talking:
++        amp_x_lo, amp_x_hi = CROP_HAND_AMP_X_TALKING
++        amp_y_lo, amp_y_hi = CROP_HAND_AMP_Y_TALKING
++    else:
++        amp_x_lo, amp_x_hi = CROP_HAND_AMP_X_DEFAULT
++        amp_y_lo, amp_y_hi = CROP_HAND_AMP_Y_DEFAULT
++    raw["crop_hand_amp_x"] = drift_rng.uniform(amp_x_lo, amp_x_hi)
++    raw["crop_hand_amp_y"] = drift_rng.uniform(amp_y_lo, amp_y_hi)
++    raw["crop_hand_p1"] = drift_rng.uniform(CROP_HAND_P1[0], CROP_HAND_P1[1])
++    raw["crop_hand_p2"] = drift_rng.uniform(
++        raw["crop_hand_p1"] + 0.8, raw["crop_hand_p1"] + 3.4,
++    )
++    # 720 caption band is 0.10 wide: keep start/end ± amp inside 0.90–1.00.
++    if keeps_bottom_captions(width, height):
++        ay = raw["crop_hand_amp_y"]
++        inner_lo = y_lo + ay
++        inner_hi = y_hi - ay
++        if inner_lo <= inner_hi:
++            raw["crop_y_frac"] = min(max(raw["crop_y_frac"], inner_lo), inner_hi)
++            raw["crop_y_end_frac"] = min(max(raw["crop_y_end_frac"], inner_lo), inner_hi)
+     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
+     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
+     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)
+@@ -332,25 +457,39 @@ def sample(
+     for name in _INT_AXES:
+         video[name] = int(video[name])
+     video["gop"] = gop
+-
+-    # Audio mirrors the single speed factor; everything else drawn independently.
+-    eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)
+-    eq_gains = [rng.uniform(-eq_d, eq_d) for _ in range(preset.eq_bands)]
+-    loudnorm_i = rng.uniform(preset.loudnorm_i.lo, preset.loudnorm_i.hi)
+-    aac_kbps = int(round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi)))
+-    if rubberband:
+-        p_d = min(0.0 - preset.pitch_pct.lo, preset.pitch_pct.hi - 0.0)
+-        pitch_pct = rng.uniform(-p_d, p_d)
++    extra = random.Random(int(seed) ^ _EXTRA_AXES_XOR)
++    video["vignette"] = extra.uniform(preset.vignette.lo, preset.vignette.hi)
++    video["out_fps"] = extra.choice(FPS_CHOICES)
++
++    # Audio mirrors the single speed factor. Voice-safe default: no pitch / EQ /
++    # loudnorm (those make talking sound robotic). audio_uniqueness is the later
++    # "audio trends" switch.
++    if audio_uniqueness:
++        eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)
++        eq_gains = [rng.uniform(-eq_d, eq_d) for _ in range(preset.eq_bands)]
++        loudnorm_i = rng.uniform(preset.loudnorm_i.lo, preset.loudnorm_i.hi)
++        aac_kbps = int(round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi)))
++        if rubberband:
++            p_d = min(0.0 - preset.pitch_pct.lo, preset.pitch_pct.hi - 0.0)
++            pitch_pct = rng.uniform(-p_d, p_d)
++        else:
++            pitch_pct = 0.0
++        audio = {
++            "speed": video["speed"],  # invariant 3: one speed factor on both streams
++            "loudnorm_i": loudnorm_i,
++            "eq_bands": preset.eq_bands,
++            "eq_gains": eq_gains,
++            "pitch_pct": pitch_pct,
++            "aac_kbps": aac_kbps,
++        }
+     else:
+-        pitch_pct = 0.0
+-
+-    audio = {
+-        "speed": video["speed"],  # invariant 3: one speed factor on both streams
+-        "loudnorm_i": loudnorm_i,
+-        "eq_bands": preset.eq_bands,
+-        "eq_gains": eq_gains,
+-        "pitch_pct": pitch_pct,
+-        "aac_kbps": aac_kbps,
+-    }
++        audio = {
++            "speed": video["speed"],
++            "loudnorm_i": None,
++            "eq_bands": preset.eq_bands,
++            "eq_gains": [0.0] * preset.eq_bands,
++            "pitch_pct": 0.0,
++            "aac_kbps": int(preset.aac_kbps.hi),
++        }
+ 
+     return {"video": video, "audio": audio}
+diff --git a/variant_maker/uniqueness.py b/variant_maker/uniqueness.py
+index ba44843..907717e 100644
+--- a/variant_maker/uniqueness.py
++++ b/variant_maker/uniqueness.py
+@@ -211,10 +211,20 @@ def score_uniqueness(
+     *,
+     target: float | None = None,
+     n_frames: int | None = None,  # retained for call-site compat; ignored (fixed 3 frames)
++    copyid: str | bool | None = None,
++    extra_heads: dict | None = None,
++    attach_heads: bool = True,
+ ) -> dict:
+     """Score variant uniqueness vs source.
+ 
+     Returns uniqueness ∈ [0, 1] as bits/64, plus raw ``bits`` for logs/tests.
++
++    ``copyid``: ``off`` (default) | ``record`` | ``gate``. Extra visual/audio
++    heads are lazy (see ``variant_maker.copyid``). ``gate`` fuses with min
++    uniqueness; SSIM ``below_floor`` is never overridden. ``extra_heads``
++    injects already-scored heads (tests). ``attach_heads=False`` skips extra
++    heads on ``record`` so Generate wait stays SSIM-bound; ``gate`` still
++    fuses here because uniqueness_status depends on it.
+     """
+     del n_frames  # fixed FRAME_FRACS — kept in signature for older callers
+     base = {
+@@ -228,7 +238,7 @@ def score_uniqueness(
+         bits = bits_vs(src_path, variant_path)
+         score = max(0.0, min(1.0, bits / 64.0))
+         status = status_for_bits(bits, target=target)
+-        return {
++        result = {
+             "uniqueness": score,
+             "uniqueness_status": status,
+             "uniqueness_metric": METRIC_VERSION,
+@@ -238,3 +248,79 @@ def score_uniqueness(
+         }
+     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
+         return base
++    if not attach_heads:
++        from .copyid import normalize_mode
++        if normalize_mode(copyid) != "gate":
++            return result
++    return _attach_copyid(
++        result, src_path, variant_path,
++        target=target, copyid=copyid, extra_heads=extra_heads,
++    )
++
++
++def attach_copyid_heads(
++    result: dict,
++    src_path: str,
++    variant_path: str,
++    *,
++    copyid: str | bool | None = "record",
++    extra_heads: dict | None = None,
++) -> dict:
++    """Attach visual/audio heads after SSIM. Used by ``record`` so Chromaprint
++    is not on the uniqueness wait. ``gate`` should score inside ``score_uniqueness``.
++    """
++    return _attach_copyid(
++        dict(result), src_path, variant_path,
++        target=result.get("uniqueness_target"),
++        copyid=copyid, extra_heads=extra_heads,
++    )
++
++
++def _attach_copyid(
++    result: dict,
++    src_path: str,
++    variant_path: str,
++    *,
++    target: float | None,
++    copyid: str | bool | None,
++    extra_heads: dict | None,
++) -> dict:
++    # Fast path: do not import copyid (or probe fpcalc/torch) on the default off gate.
++    if extra_heads is None and copyid is None:
++        env = os.environ.get("VARIANT_MAKER_COPYID")
++        if not env or str(env).strip().lower() in ("off", "0", "false", "no", ""):
++            return result
++    from .copyid import fuse_heads, normalize_mode, score_heads
++
++    mode = normalize_mode(copyid)
++    # extra_heads is a test injection; it still requires record|gate to attach.
++    if mode == "off":
++        return result
++    extras = dict(extra_heads) if extra_heads is not None else score_heads(src_path, variant_path)
++    ssim_head = {
++        "uniqueness": result["uniqueness"],
++        "sim": None if result["uniqueness"] is None else 1.0 - result["uniqueness"],
++        "status": result["uniqueness_status"],
++        "available": result["uniqueness"] is not None,
++        "bits": result["bits"],
++        "metric": METRIC_VERSION,
++    }
++    heads = {"ssim": ssim_head, **extras}
++    result = {**result, "heads": heads, "copyid_mode": mode}
++    if mode != "gate":
++        return result
++    usable = [
++        name for name, head in extras.items()
++        if head and head.get("available") and head.get("uniqueness") is not None
++    ]
++    if not usable:
++        return result
++    # below_floor is the SSIM ship floor — embeddings must not hide a twin.
++    if result["uniqueness_status"] == "below_floor":
++        return result
++    fused = fuse_heads(heads, target=target)
++    result["uniqueness"] = fused["uniqueness"]
++    result["uniqueness_status"] = fused["uniqueness_status"]
++    result["uniqueness_metric"] = fused["uniqueness_metric"]
++    result["fused_from"] = fused["fused_from"]
++    return result
+-- 
+2.43.0
+

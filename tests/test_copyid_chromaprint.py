@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import wave
@@ -11,8 +12,10 @@ from variant_maker.copyid.chromaprint import (
     _fpcalc_via_ffmpeg,
     _write_pcm_wav,
     available,
+    clear_fingerprint_cache,
     match_fingerprints,
     parse_raw,
+    prefetch,
     score_audio,
 )
 
@@ -217,6 +220,7 @@ def test_via_ffmpeg_wraps_classic_wav_for_fpcalc(monkeypatch, tmp_path):
     ffmpeg_cmd = next(c for c in calls if "ffmpeg" in c[0])
     fpcalc_cmd = next(c for c in calls if "fpcalc" in c[0])
     assert "-nostdin" in ffmpeg_cmd
+    assert "-vn" in ffmpeg_cmd
     assert "-f" in ffmpeg_cmd and "s16le" in ffmpeg_cmd
     assert any(str(x).endswith(".wav") for x in fpcalc_cmd)
 
@@ -270,3 +274,88 @@ def test_score_audio_short_file_is_empty_not_error(monkeypatch, tmp_path):
     r = score_audio(str(a), str(b))
     assert r["available"] is False
     assert r["reason"] == "empty"
+
+
+def test_ffmpeg_empty_does_not_hand_mp4_to_fpcalc(monkeypatch, tmp_path):
+    """Debian fpcalc on the BtbN mp4 is a slow miss. ffmpeg already ran."""
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    a.write_bytes(b"x")
+    b.write_bytes(b"y")
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg",
+        lambda path, *, length=120: [],
+    )
+    direct_calls: list[str] = []
+
+    def count_direct(path, *, length=120):
+        direct_calls.append(path)
+        return []
+
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_direct", count_direct,
+    )
+    clear_fingerprint_cache()
+    r = score_audio(str(a), str(b))
+    assert r["available"] is False
+    assert r["reason"] == "empty"
+    assert direct_calls == []
+
+
+def test_fingerprint_cache_decodes_source_once(monkeypatch, tmp_path):
+    """N copies of one source must not ffmpeg-decode the source N times."""
+    src = tmp_path / "src.mp4"
+    v1 = tmp_path / "v1.mp4"
+    v2 = tmp_path / "v2.mp4"
+    src.write_bytes(b"s")
+    v1.write_bytes(b"1")
+    v2.write_bytes(b"2")
+    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
+    calls: list[str] = []
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+
+    def decoded(path, *, length=120):
+        calls.append(os.path.basename(path))
+        return fp
+
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded,
+    )
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_direct",
+        lambda path, *, length=120: [],
+    )
+    clear_fingerprint_cache()
+    assert score_audio(str(src), str(v1))["available"] is True
+    assert score_audio(str(src), str(v2))["available"] is True
+    assert calls.count("src.mp4") == 1
+    assert calls.count("v1.mp4") == 1
+    assert calls.count("v2.mp4") == 1
+
+
+def test_prefetch_fills_cache(monkeypatch, tmp_path):
+    src = tmp_path / "src.mp4"
+    var = tmp_path / "var.mp4"
+    src.write_bytes(b"s")
+    var.write_bytes(b"v")
+    fp = [0xAAAAAAAA, 0x55555555, 0xFFFFFFFF, 0x0, 0x1, 0x2, 0x3, 0x4]
+    calls: list[str] = []
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.available", lambda: True)
+
+    def decoded(path, *, length=120):
+        calls.append(os.path.basename(path))
+        return fp
+
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded,
+    )
+    monkeypatch.setattr(
+        "variant_maker.copyid.chromaprint._fpcalc_direct",
+        lambda path, *, length=120: [],
+    )
+    clear_fingerprint_cache()
+    prefetch(str(src))
+    assert calls == ["src.mp4"]
+    assert score_audio(str(src), str(var))["available"] is True
+    assert calls == ["src.mp4", "var.mp4"]

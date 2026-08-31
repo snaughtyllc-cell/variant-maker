@@ -93,3 +93,41 @@ def test_copyid_gate_does_not_override_below_floor():
         assert r["uniqueness_status"] == "below_floor"
         assert r["uniqueness_metric"] == "ssim_bits_v1"
         assert r["bits"] < uniqueness.FLOOR_BITS
+
+
+def test_attach_heads_false_skips_copyid_on_record():
+    """record Generate wait is SSIM-only. Heads attach after uniqueness returns."""
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        b = os.path.join(d, "b.mp4")
+        _tiny_mp4(a, color="white")
+        _tiny_mp4(b, color="black")
+        visual = {"uniqueness": 0.01, "available": True, "sim": 0.99, "status": "ok"}
+        r = uniqueness.score_uniqueness(
+            a, b, target=uniqueness.DEFAULT_TARGET, copyid="record",
+            extra_heads={"visual": visual}, attach_heads=False,
+        )
+        assert r["uniqueness_metric"] == "ssim_bits_v1"
+        assert "heads" not in r
+        attached = uniqueness.attach_copyid_heads(
+            r, a, b, copyid="record", extra_heads={"visual": visual},
+        )
+        assert attached["heads"]["visual"]["sim"] == 0.99
+        assert attached["uniqueness_metric"] == "ssim_bits_v1"
+        assert attached["uniqueness_status"] == "ok"
+
+
+def test_gate_still_fuses_when_attach_heads_false():
+    """gate uniqueness_status needs audio/visual — cannot defer."""
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        b = os.path.join(d, "b.mp4")
+        _tiny_mp4(a, color="white")
+        _tiny_mp4(b, color="black")
+        visual = {"uniqueness": 0.05, "available": True, "sim": 0.96, "status": "ok"}
+        r = uniqueness.score_uniqueness(
+            a, b, target=uniqueness.DEFAULT_TARGET, copyid="gate",
+            extra_heads={"visual": visual}, attach_heads=False,
+        )
+        assert r["uniqueness_metric"] == "fused_v1"
+        assert r["uniqueness"] == 0.05

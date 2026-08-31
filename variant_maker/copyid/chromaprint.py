@@ -6,7 +6,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import wave
+from concurrent.futures import ThreadPoolExecutor
 
 AUDIO_METRIC = "chromaprint_v1"
 # Decode with our ffmpeg, then fpcalc on raw PCM (not a container).
@@ -18,6 +20,9 @@ MIN_OVERLAP = 8
 # the worker image's libav to understand BtbN-encoded mp4s.
 FPCALC_RATE = 11025
 _FFMPEG_FALLBACKS = ("/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg")
+_fp_lock = threading.Lock()
+_fp_cache: dict[tuple, tuple[list[int], str]] = {}
+_fp_waiters: dict[tuple, threading.Event] = {}
 
 
 def available() -> bool:
@@ -167,6 +172,7 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
             [
                 ffmpeg, "-nostdin", "-hide_banner", "-v", "error", "-y",
                 "-i", path,
+                "-vn", "-sn",
                 "-t", str(int(length)),
                 "-map", "0:a:0",
                 "-ac", "1", "-ar", str(FPCALC_RATE),
@@ -205,33 +211,82 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
         return _fpcalc_result(proc)
 
 
-def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
+def _fp_key(path: str, length: int) -> tuple:
+    st = os.stat(path)
+    mtime = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
+    return (os.path.abspath(path), st.st_size, mtime, int(length))
+
+
+def clear_fingerprint_cache() -> None:
+    """Tests only. Production keeps the source fingerprint for the job."""
+    with _fp_lock:
+        _fp_cache.clear()
+        _fp_waiters.clear()
+
+
+def prefetch(path: str, *, length: int = 120) -> None:
+    """Decode the source during encode so copy 1 uniqueness does not pay it."""
+    if not available() or not os.path.isfile(path):
+        return
+    try:
+        _fpcalc(path, length=length)
+    except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
+        return
+
+
+def _fpcalc_uncached(path: str, *, length: int = 120) -> tuple[list[int], str]:
     """ffmpeg-s16le first. Slim Fast fpcalc's libav cannot open our BtbN mp4s.
 
     Lab pack 3d4fae98ca77 / 6f506c681f8b / 5ef63612aaf3 wrote ``available:
     false`` because fpcalc still had to demux a container. Stay ``record``.
+    If ffmpeg already ran (even empty), do not hand the mp4 to Debian fpcalc
+    — that miss is seconds on a 65s clip and never scores.
     """
-    wav_fp: list[int] | None = None
-    wav_err: BaseException | None = None
     try:
         wav_fp = _fpcalc_via_ffmpeg(path, length=length)
-        if wav_fp:
-            return wav_fp, VIA_FFMPEG
-    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-        wav_err = exc
-    try:
-        fp = _fpcalc_direct(path, length=length)
-        if fp:
-            return fp, "direct"
-    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-        if wav_fp is not None:
-            return wav_fp, VIA_FFMPEG
-        if wav_err is not None:
+        return (wav_fp or [], VIA_FFMPEG)
+    except (OSError, subprocess.CalledProcessError, ValueError) as wav_err:
+        try:
+            fp = _fpcalc_direct(path, length=length)
+            if fp:
+                return fp, "direct"
+        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
             raise wav_err from exc
         raise
-    if wav_fp is not None:
-        return wav_fp, VIA_FFMPEG
-    return [], "direct"
+
+
+def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
+    key = _fp_key(path, length)
+    with _fp_lock:
+        hit = _fp_cache.get(key)
+        if hit is not None:
+            return hit
+        waiter = _fp_waiters.get(key)
+        if waiter is None:
+            waiter = threading.Event()
+            _fp_waiters[key] = waiter
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        waiter.wait()
+        with _fp_lock:
+            cached = _fp_cache.get(key)
+        if cached is not None:
+            return cached
+        return _fpcalc_uncached(path, length=length)
+    try:
+        value = _fpcalc_uncached(path, length=length)
+        with _fp_lock:
+            _fp_cache[key] = value
+            _fp_waiters.pop(key, None)
+        waiter.set()
+        return value
+    except Exception:
+        with _fp_lock:
+            _fp_waiters.pop(key, None)
+        waiter.set()
+        raise
 
 
 def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
@@ -248,8 +303,11 @@ def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
     if not os.path.isfile(path_a) or not os.path.isfile(path_b):
         return {**base, "reason": "missing_file"}
     try:
-        fa, via_a = _fpcalc(path_a, length=length)
-        fb, via_b = _fpcalc(path_b, length=length)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fa_f = pool.submit(_fpcalc, path_a, length=length)
+            fb_f = pool.submit(_fpcalc, path_b, length=length)
+            fa, via_a = fa_f.result()
+            fb, via_b = fb_f.result()
         if not fa or not fb:
             return {**base, "reason": "empty"}
         sim = match_fingerprints(fa, fb)
