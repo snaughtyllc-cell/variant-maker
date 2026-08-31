@@ -213,6 +213,7 @@ def score_uniqueness(
     n_frames: int | None = None,  # retained for call-site compat; ignored (fixed 3 frames)
     copyid: str | bool | None = None,
     extra_heads: dict | None = None,
+    attach_heads: bool = True,
 ) -> dict:
     """Score variant uniqueness vs source.
 
@@ -221,7 +222,9 @@ def score_uniqueness(
     ``copyid``: ``off`` (default) | ``record`` | ``gate``. Extra visual/audio
     heads are lazy (see ``variant_maker.copyid``). ``gate`` fuses with min
     uniqueness; SSIM ``below_floor`` is never overridden. ``extra_heads``
-    injects already-scored heads (tests).
+    injects already-scored heads (tests). ``attach_heads=False`` skips extra
+    heads on ``record`` so Generate wait stays SSIM-bound; ``gate`` still
+    fuses here because uniqueness_status depends on it.
     """
     del n_frames  # fixed FRAME_FRACS — kept in signature for older callers
     base = {
@@ -245,9 +248,31 @@ def score_uniqueness(
         }
     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
         return base
+    if not attach_heads:
+        from .copyid import normalize_mode
+        if normalize_mode(copyid) != "gate":
+            return result
     return _attach_copyid(
         result, src_path, variant_path,
         target=target, copyid=copyid, extra_heads=extra_heads,
+    )
+
+
+def attach_copyid_heads(
+    result: dict,
+    src_path: str,
+    variant_path: str,
+    *,
+    copyid: str | bool | None = "record",
+    extra_heads: dict | None = None,
+) -> dict:
+    """Attach visual/audio heads after SSIM. Used by ``record`` so Chromaprint
+    is not on the uniqueness wait. ``gate`` should score inside ``score_uniqueness``.
+    """
+    return _attach_copyid(
+        dict(result), src_path, variant_path,
+        target=result.get("uniqueness_target"),
+        copyid=copyid, extra_heads=extra_heads,
     )
 
 

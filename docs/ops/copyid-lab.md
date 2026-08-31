@@ -112,6 +112,14 @@ Every copy `heads.audio.available: true` `via=ffmpeg_s16le`. Visual still
 on audio (uniq ~11–20 bits). Stay **`record`**. Do not `gate`. Do not
 PATCH live. Jeff stills remain the look oracle.
 
+Scoring that audio sat on the uniqueness thread (~20 s extra on copy 1 vs
+the EOF miss). Source was decoded again for every copy. Engine change on
+`cursor/copyid-audio-speed-6cba`: prefetch source Chromaprint during encode,
+cache the fingerprint for later copies, SSIM-only uniqueness wait for
+`record`, fingerprint the **kept** file after MAE (not every autotune
+attempt). `gate` still fuses inside uniqueness. Live stays `off`. Needs a
+new lab Fast image to land on Generate — do not PATCH live.
+
 ## Enable record (lab) or the fused gate (later)
 
 ```bash

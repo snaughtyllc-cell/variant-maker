@@ -31,7 +31,8 @@ see a frame. That is the wrong order.
    emits `looking` as soon as the first encode exists. Uniqueness SSIM
    starts at the same time as the two JPEG stills (not after them), so
    Generate wait stays uniqueness-bound. Coarse MAE runs after uniqueness
-   so 8-wide Fast SSIM is not fighting extra ffmpeg. Look fail keeps the
+   so 8-wide Fast SSIM is not fighting extra ffmpeg. `record` Chromaprint
+   is also after uniqueness (kept file only). Look fail keeps the
    medium file and does **not** escalate. If medium looks ok and
    uniqueness still misses, a look-fail strong escalate rolls back to medium.
 3. **Stills** — mid-frame source vs variant JPEGs next to the mp4.

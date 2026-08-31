@@ -222,6 +222,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
         protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
     run_meta["protect"] = protect_frame is not None
 
+    if copyid_mode != "off":
+        def _prefetch_src_audio() -> None:
+            try:
+                from .copyid.chromaprint import prefetch
+                prefetch(src.path)
+            except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
+                return
+        threading.Thread(
+            target=_prefetch_src_audio, name="copyid-prefetch", daemon=True,
+        ).start()
+
     def _render_one(i: int) -> VariantRecord:
         token = config.get("cancel_token")
         if token is not None and token.is_set():
@@ -296,7 +307,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         def _score_uniqueness_now() -> dict:
             # Extra kwargs only when enabled so existing test fakes stay valid.
-            extra = {"copyid": copyid_mode} if copyid_mode != "off" else {}
+            # record: SSIM only on this thread (Generate wait). Chromaprint
+            # attaches after uniqueness on the kept file. gate still fuses here.
+            extra: dict = {}
+            if copyid_mode == "gate":
+                extra = {"copyid": "gate"}
+            elif copyid_mode == "record":
+                extra = {"copyid": "record", "attach_heads": False}
             scored = uniqueness.score_uniqueness(
                 src.path, path, target=uniqueness_target, **extra,
             )
@@ -308,6 +325,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
             Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
             on Fast contended the CPU and stretched the uniqueness phase.
+            ``record`` Chromaprint also waits until the kept file (after MAE) so
+            autotune attempts do not decode audio N times. ``gate`` still fuses
+            inside ``score_uniqueness``.
             Auto-tune calls this before assigning outer ``r`` — pass ``video=``
             from the attempt so crop/trim MAE aligns.
             """
@@ -529,6 +549,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     preset_used = strong.name
                     escalated = True
                     _restore_medium_if_look_fail(snap)
+
+        # record: fingerprint the kept file once, after SSIM/MAE. Do not pay
+        # Chromaprint on every autotune attempt. gate already fused above.
+        if copyid_mode == "record" and not u.get("heads"):
+            u = uniqueness.attach_copyid_heads(
+                u, src.path, path, copyid="record",
+            )
 
         if r is not None and r.get("vmaf") is None:
             qr = path + ".qr.mp4"

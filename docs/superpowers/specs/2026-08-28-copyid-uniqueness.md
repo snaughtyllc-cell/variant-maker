@@ -47,10 +47,13 @@ score_uniqueness(src, variant)
               backend: SSCD TorchScript if weights exist
                      else DINOv2-small if transformers+weights cached
                      else skip
-  record: uniqueness stays SSIM; heads attached
+  record: uniqueness stays SSIM; heads attached after uniqueness on the
+          kept file so Generate wait stays SSIM-bound. Source fingerprint
+          is prefetched during encode and cached across copies.
   gate:   uniqueness = min(available head uniqueness)
           uniqueness_metric = fused_v1
           below_floor stays SSIM-bits-only (19-bit ship floor)
+          (audio/visual still run inside score_uniqueness — status depends)
 ```
 
 Tier 1 with no PyTorch, no `fpcalc`, no `models/` is unchanged. Lazy import, same pattern as Real-ESRGAN.
@@ -72,6 +75,8 @@ Tier 1 with no PyTorch, no `fpcalc`, no `models/` is unchanged. Lazy import, sam
 - External `fpcalc` (`fpcalc -raw -length 120`). No AcoustID network.
 - Offset-aware Hamming on raw uint32 hashes (`max_offset=120`).
 - `audio_uniq = 1 - match`. Missing binary / no audio → omit head, never fake a score.
+- Decode with our ffmpeg (`-vn`, s16le @ 11025 → classic WAV). Do not hand
+  BtbN mp4s to Debian `fpcalc`. Cache fingerprints per `(path, size, mtime)`.
 - Pitch/rubberband already exists as a **transform** (Phase 13). This head **measures** leftover audio identity.
 - CLAP is lab-later, not the v1 gate.
 

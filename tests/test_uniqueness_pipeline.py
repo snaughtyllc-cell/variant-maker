@@ -963,3 +963,55 @@ def test_pipeline_records_heads_through_fast_autotune(monkeypatch, tmp_path):
     assert got["visual"]["available"] is False
     assert manifest.run.get("copyid") == "record"
 
+
+def test_pipeline_record_scores_heads_after_uniqueness(monkeypatch, tmp_path):
+    """record must not fpcalc on the uniqueness thread. SSIM wait, then heads.
+
+    Lab pack ce6862e51d4c paid ~20s of Chromaprint inside uniqueness. Source
+    fingerprint also ran again on copy 2. Heads still land on quality.heads.
+    """
+    _stub_common(monkeypatch)
+    order: list[str] = []
+    uniq_kw: list[dict] = []
+
+    def fake_uniq(src_path, variant_path, target=None, **kw):
+        order.append("uniq")
+        uniq_kw.append(kw)
+        return _ok_score(0.5, bits=32, status="ok")
+
+    def fake_mae(src_path, variant_path, video=None):
+        order.append("mae")
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    def fake_attach(result, src_path, variant_path, **kw):
+        order.append("audio")
+        return {
+            **result,
+            "heads": {
+                "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
+                "audio": {
+                    "uniqueness": 0.18, "sim": 0.82, "available": True,
+                    "status": "ok", "via": "ffmpeg_s16le",
+                },
+            },
+            "copyid_mode": "record",
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+    monkeypatch.setattr(pipeline.look, "score_look", fake_mae)
+    monkeypatch.setattr(pipeline.uniqueness, "attach_copyid_heads", fake_attach)
+
+    manifest = pipeline.run(_cfg(
+        tmp_path, copyid="record", uniq_strengths=[1.0],
+        allow_creative_escalate=False,
+    ))
+    assert uniq_kw[0].get("copyid") == "record"
+    assert uniq_kw[0].get("attach_heads") is False
+    assert order == ["uniq", "mae", "audio"]
+    audio = manifest.variants[0].quality.get("heads")["audio"]
+    assert audio["sim"] == 0.82
+    assert audio["via"] == "ffmpeg_s16le"
+
