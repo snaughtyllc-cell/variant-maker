@@ -30,12 +30,12 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:caa55785…` /
-`c1af220` (classic WAV wrap + EOF-tolerant fpcalc) / `VF_LAB=1` /
-`VARIANT_MAKER_COPYID=record` / max 1. Pack `ce6862e51d4c` **audio
-scored** `via=ffmpeg_s16le` on every copy. Stay **`record`** — audio sim
-0.67–0.83 would fail `gate`. Prior `sha256:113a9dec…` / `4bd8a57`. Live
-Fast stays `e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
+Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:e8d77b9f…` /
+`21691c4` (record audio off uniqueness wait) / `VF_LAB=1` /
+`VARIANT_MAKER_COPYID=record` / max 1. Pack `c701c9fb3594` **audio
+scored** `via=ffmpeg_s16le` on every copy. Stay **`record`**. Prior
+`sha256:caa55785…` / `c1af220`. Live Fast stays `e7ab2cc` / no copyid /
+no `VF_LAB`. Do not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
@@ -117,8 +117,28 @@ the EOF miss). Source was decoded again for every copy. Engine change on
 `cursor/copyid-audio-speed-6cba`: prefetch source Chromaprint during encode,
 cache the fingerprint for later copies, SSIM-only uniqueness wait for
 `record`, fingerprint the **kept** file after MAE (not every autotune
-attempt). `gate` still fuses inside uniqueness. Live stays `off`. Needs a
-new lab Fast image to land on Generate — do not PATCH live.
+attempt). `gate` still fuses inside uniqueness. Live stays `off`.
+
+### Lab Generate — pack `c701c9fb3594` (`21691c4` speed)
+
+Same three NEW clips. Image `sha256:e8d77b9f…` / `VF_ENGINE_REV=21691c4`.
+Fast 2, escalate on, `quality_mode=fast`. Lab tenant only. Recycled lab
+Fast only. Live verified `e7ab2cc` / no `VF_LAB` / copyid off.
+
+Created `2026-08-31T08:00:51Z`, done `08:21:19Z` (~20.5 min including
+~2 min cold start). Uniqueness events fire after SSIM, before Chromaprint
+on the kept file.
+
+| Clip | Bits | Look MAE (max) | Audio sim | Audio uniq |
+|---|---|---|---|---|
+| NEW-0409 | **43 / 44** medium `ok` | **ok/ok** 4.67/2.67 (8/3) | 0.76 / 0.85 | 0.24 / 0.15 |
+| NEW-1277 | **34 / 31** medium `ok` | **ok/ok** 4.0/5.33 (5/8) | 0.70 / 0.82 | 0.30 / 0.18 |
+| NEW-bradnded | **32 / 32** medium `ok` | **ok/ok** 2.67/6.0 (3/7) | 0.92 / 0.89 | 0.08 / 0.11 |
+
+Every copy `heads.audio.available: true` `via=ffmpeg_s16le`. Visual
+`available: false`. Brad MAE is crop-align, not lava. **If this had been
+`gate`, every copy fails** (brad audio uniq ~5–7 bits). Stay **`record`**.
+Do not `gate`. Do not PATCH live. Jeff stills remain the look oracle.
 
 ## Enable record (lab) or the fused gate (later)
 

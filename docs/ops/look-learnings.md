@@ -63,7 +63,7 @@ Platform flags after a drop stay in Phase 12
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). Compete escalate-on `9ba1af34f29d` was 18/17 — Jeff 2026-08-29: not a pin blocker. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Build an escalate-rollback just for this clip. |
 | Handheld crop wander on live Fast `e7ab2cc` (was `c497505`) | Jeff 2026-08-29: **ok lets build that on live**. Lab pack `1fbe4f51de83`: SaveInta **33/33**, motion **43/45**, AQMTp **18/17** parked. Stills not lava/snow. Olive-tint fix `e7ab2cc` stacked on this digest. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. Roll live back to `c497505` / `d0a7bc5` without a broken look. |
-| Lab stills + CopyID audio on `ce6862e51d4c` | Same NEW clips. Look MAE **ok**. Agent stills not olive. Audio now **scores** `via=ffmpeg_s16le` sim 0.68–0.83. Stay `record` — `gate` would fail every copy. | Pin live. `gate`. Recycle live Fast. Raise 38. |
+| Lab stills + CopyID audio on `c701c9fb3594` (prior `ce6862e51d4c`) | Same NEW clips on `21691c4`. Look MAE **ok** (brad max 3/7). Agent stills not olive (skin, white wall, grey shirt). Audio scores `via=ffmpeg_s16le` sim 0.70–0.92. Uniqueness event is SSIM-only; Chromaprint is after. Stay `record` — `gate` would fail every copy. | Pin live. `gate`. Recycle live Fast. Raise 38. |
 
 ## Engine backstop
 
