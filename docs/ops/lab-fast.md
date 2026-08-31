@@ -23,9 +23,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:ceb96800c80ce087fc736b2aa0760216cb458354d78b0386f37cab4762222a94`
-- `VF_ENGINE_REV=e7ab2cc` (vignette angle = sampled amount; sat via `hue=s=`). `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
-- Live Fast is the **same digest** / `e7ab2cc`, **no `VF_LAB`**, copyid **off**.
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:1d0a97536631bd1be091f0bed259b35abb5b250e89a392144582cfbddc0098b7`
+- `VF_ENGINE_REV=f0651b8` (zscale stills, crop-align MAE, wav-first chromaprint — audio still `reason: error` on pack `5ef63612aaf3`; next image raw s16le). `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
+- Live Fast is `sha256:ceb96800…` / `e7ab2cc`, **no `VF_LAB`**, copyid **off**.
+- Prior lab image `sha256:ceb96800c80ce087fc736b2aa0760216cb458354d78b0386f37cab4762222a94` / `e7ab2cc` (vignette + `hue=s=`).
 - Prior lab image `sha256:e5173d9aaf663401e179d97a08a5b1bf14e9486703afa3d6010ebcc338d4e561` / `3caeb44` (copyid record + voice-safe audio).
 - Prior lab image `sha256:9754465319b22cdec6daa7c090bddc4aee1a5a1e49684c586ec0224c29de0f7e` / `c709df0` (copyid record + crop-drift).
 - Prior lab image `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef` / `c497505` (handheld crop + compete).
@@ -53,8 +54,8 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 Live Fast `j0b1q4iuunzhnq` is on `sha256:ceb96800…` / `e7ab2cc` (vignette
 angle = sampled amount + `hue=s=`, **no `VF_LAB`**, max **4**, idle 600).
 Prior live `c497505` / `sha256:3d24473a…`. Railway `RUNPOD_FAST_ENDPOINT_ID`
-stays the live id. Lab Fast is the same digest with `VF_LAB=1` / copyid
-`record`. Writeup: `docs/ops/live-pin-e7ab2cc-2026-08-30.md`.
+stays the live id. Lab Fast is `sha256:1d0a9753…` / `f0651b8` with
+`VF_LAB=1` / copyid `record`. Writeup: `docs/ops/live-pin-e7ab2cc-2026-08-30.md`.
 
 Lab packs:
 
@@ -83,6 +84,7 @@ Lab packs:
 | **`c709df0` copyid record Generate (`3d4fae98ca77`) — not a verdict** | Worker ran `copyid=record`. SaveInta **30/35** medium `ok`, heads **null**. AQMTp **19** strong / **21** medium `below_target`; escalate copy kept heads but audio `available: false` (fpcalc libav vs BtbN mp4). Motion **46/45**. Fast auto_tune dropped heads; wav fallback + pass-through fix next image. Stay `record`. Live untouched. | bring-me-down **46/45** bits, VMAF 98.4 / 100. |
 | **`3caeb44` voice-safe audio (`sha256:e5173d9a…`) — published, not a look pack** | CI `33310677990` pushed `:lab`. Pitch/EQ/loudnorm off unless `audio_uniqueness`. Stay `record`. Recycle **lab** workers to pick it up. **Do not PATCH live.** | — |
 | **`e7ab2cc` olive/green tint fix (`sha256:ceb96800…`) — live** | Lab pack `6f506c681f8b` same NEW clips as rejected `37f1a5ee9234`. Fast 2. **44/44**, **33/32**, **32/33** all medium. 0409/1277 look **ok** (MAE 12–16 vs old 22–32). Brad look fail MAE 119 is the **same crop hole** as the old pack. Full-frame luma vs source: old **−29 to −41**, new **−4 to +1**. | — |
+| **`f0651b8` look stills + crop-align (`sha256:1d0a9753…`) — lab only** | Pack `5ef63612aaf3` same NEW clips. Fast 2. **41/41**, **33/31**, **32/31** all medium `ok`. Look **ok** MAE 3–7 (brad max 6, was 119). Agent stills not olive. CopyID audio `reason: error` — wav-first still used fpcalc demux. Next `:lab` is raw s16le. **Do not PATCH live.** | — |
 
 Live pin: `sha256:ceb96800c80ce087fc736b2aa0760216cb458354d78b0386f37cab4762222a94` (`e7ab2cc`, vignette + `hue=s=`, **no `VF_LAB`**). Prior live `c497505` digest: `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef`. Prior live `d0a7bc5` digest: `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`. Prior live `f05d803` digest: `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`. Prior live `472ab60` digest: `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85`. Prior live `7dae269` digest: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`.
 

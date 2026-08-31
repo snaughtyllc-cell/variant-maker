@@ -30,11 +30,13 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` image 2026-08-30: digest `sha256:1d0a9753…` /
+Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:1d0a9753…` /
 `f0651b8` (look stills zscale, wav-first chromaprint, crop-align MAE) /
-`VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Prior `e5173d9a…` /
-`3caeb44`. Recycle **lab** workers for the new `:lab` tag. Live Fast stays
-`e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
+`VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Pack `5ef63612aaf3`
+look MAE is good; audio still `reason: error` (fpcalc demux). Next lab
+image: raw s16le. Prior `e5173d9a…` / `3caeb44`. Recycle **lab** workers
+for a new `:lab` tag. Live Fast stays `e7ab2cc` / no copyid / no `VF_LAB`.
+Do not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
@@ -63,6 +65,30 @@ Two bugs, both on Fast daily path:
 
 Do **not** treat this pack as a copyid verdict. Re-run after the lab image
 rebuild. Stay on **`record`**. Do not `gate`. Do not PATCH live.
+
+### Lab Generate — pack `5ef63612aaf3` (look stills + crop-align MAE)
+
+Same three NEW clips. Image `sha256:1d0a9753…` / `f0651b8`. Fast 2, escalate on,
+`quality_mode=fast`. Lab tenant only. Live untouched.
+
+| Clip | Copy | SSIM bits | Look MAE (max) | Audio |
+|---|---|---|---|---|
+| NEW-0409 | 1 / 2 | **41 / 41** medium `ok` | **ok/ok** 4.33/3.0 (max 6/4) | `reason: error` |
+| NEW-1277 | 1 / 2 | **33 / 31** medium `ok` | **ok/ok** 7.0/3.67 (max 10/4) | `reason: error` |
+| NEW-bradnded | 1 / 2 | **32 / 31** medium `ok` | **ok/ok** 4.0/4.67 (max 5/6) | `reason: error` |
+
+Look MAE is the win: brad was **119/84** on `6f506c681f8b` (keyframe seek +
+caption crop). Gate **38** unchanged. Gallery stills use `still_vf` zscale;
+agent stills are not olive (white wall / grey shirt / skin). Jeff’s eye is
+still the look oracle.
+
+**Audio still missed.** `copyid=record` wrote heads. Visual `available: false`
+(no SSCD — expected). Audio `reason: error` with no `via` on every copy.
+This box scores the same source+variant files `via=ffmpeg_s16le` /
+`sim` 0.66 / 0.73 / 0.81. Wav-first still handed a `.wav` to Debian
+`fpcalc` (same libav that cannot demux BtbN mp4s). Next image: ffmpeg
+raw **s16le** + `fpcalc -format s16le` so fpcalc never opens a container;
+`detail` on error. Stay **`record`**. Do not `gate`. Do not PATCH live.
 
 ## Enable record (lab) or the fused gate (later)
 

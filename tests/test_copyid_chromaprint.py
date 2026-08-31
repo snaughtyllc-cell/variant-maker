@@ -5,6 +5,8 @@ import pytest
 
 from variant_maker.copyid.chromaprint import (
     AUDIO_METRIC,
+    VIA_FFMPEG,
+    _fpcalc_via_ffmpeg,
     available,
     match_fingerprints,
     parse_raw,
@@ -60,7 +62,7 @@ def test_score_audio_reason_missing_file(monkeypatch, tmp_path):
     assert r["reason"] == "missing_file"
 
 
-def test_score_audio_prefers_ffmpeg_wav(monkeypatch, tmp_path):
+def test_score_audio_prefers_ffmpeg_decode(monkeypatch, tmp_path):
     """Always decode with our ffmpeg first. Direct fpcalc on BtbN mp4s is the miss."""
     a = tmp_path / "a.mp4"
     b = tmp_path / "b.mp4"
@@ -74,20 +76,20 @@ def test_score_audio_prefers_ffmpeg_wav(monkeypatch, tmp_path):
         calls.append("direct")
         raise subprocess.CalledProcessError(1, ["fpcalc"], stderr="decode")
 
-    def wav(path, *, length=120):
-        calls.append("wav")
+    def decoded(path, *, length=120):
+        calls.append("ffmpeg")
         return fp
 
     monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_direct", boom)
-    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", wav)
+    monkeypatch.setattr("variant_maker.copyid.chromaprint._fpcalc_via_ffmpeg", decoded)
     r = score_audio(str(a), str(b))
     assert r["available"] is True
-    assert r["via"] == "ffmpeg_wav"
-    assert "wav" in calls
+    assert r["via"] == VIA_FFMPEG
+    assert "ffmpeg" in calls
     assert "direct" not in calls
 
 
-def test_score_audio_falls_back_to_ffmpeg_wav(monkeypatch, tmp_path):
+def test_score_audio_falls_back_to_ffmpeg_decode(monkeypatch, tmp_path):
     """Slim Fast fpcalc's libav often cannot decode our BtbN mp4s."""
     a = tmp_path / "a.mp4"
     b = tmp_path / "b.mp4"
@@ -107,7 +109,7 @@ def test_score_audio_falls_back_to_ffmpeg_wav(monkeypatch, tmp_path):
     r = score_audio(str(a), str(b))
     assert r["available"] is True
     assert r["sim"] == 1.0
-    assert r["via"] == "ffmpeg_wav"
+    assert r["via"] == VIA_FFMPEG
 
 
 def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
@@ -125,6 +127,7 @@ def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
     r = score_audio(str(a), str(b))
     assert r["available"] is False
     assert r["reason"] == "error"
+    assert "nope" in (r.get("detail") or "")
 
 
 def test_score_audio_empty_direct_uses_wav(monkeypatch, tmp_path):
@@ -144,7 +147,7 @@ def test_score_audio_empty_direct_uses_wav(monkeypatch, tmp_path):
     )
     r = score_audio(str(a), str(b))
     assert r["available"] is True
-    assert r["via"] == "ffmpeg_wav"
+    assert r["via"] == VIA_FFMPEG
 
 
 @pytest.mark.skipif(not shutil.which("fpcalc"), reason="fpcalc not on PATH")
@@ -157,7 +160,7 @@ def test_fpcalc_binary_reports_available():
     reason="fpcalc+ffmpeg needed",
 )
 def test_score_audio_on_aac_mp4(tmp_path):
-    """Our encodes are BtbN libx264+aac. wav-first must score those, not error."""
+    """Our encodes are BtbN libx264+aac. s16le-first must score those, not error."""
     from conftest import HAS_FFMPEG
     if not HAS_FFMPEG:
         pytest.skip("needs ffmpeg")
@@ -179,7 +182,48 @@ def test_score_audio_on_aac_mp4(tmp_path):
     r = score_audio(a, b)
     assert r["available"] is True, r
     assert r["sim"] is not None and r["sim"] > 0.9
-    assert r["via"] == "ffmpeg_wav"
+    assert r["via"] == VIA_FFMPEG
+
+
+def test_via_ffmpeg_fingerprints_raw_pcm_not_a_container(monkeypatch, tmp_path):
+    """Debian fpcalc's libav cannot demux our BtbN mp4s *or* some wavs.
+
+    Lab pack 5ef63612aaf3 still wrote reason=error after wav-first because
+    ``_fpcalc_via_ffmpeg`` handed a .wav back to ``fpcalc`` (same broken
+    demux). Feed raw s16le and tell fpcalc the format so it never opens a
+    container.
+    """
+    src = tmp_path / "a.mp4"
+    src.write_bytes(b"x")
+    calls: list[list[str]] = []
+
+    def fake_which(name: str):
+        return f"/usr/bin/{name}"
+
+    def fake_run(argv, **kw):
+        argv = [str(x) for x in argv]
+        calls.append(argv)
+        class P:
+            returncode = 0
+            stdout = "FINGERPRINT=1,2,3,4,5,6,7,8\n"
+            stderr = ""
+        if "ffmpeg" in argv[0]:
+            out = argv[-1]
+            with open(out, "wb") as f:
+                f.write(b"\x00" * 256)
+        return P()
+
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.shutil.which", fake_which)
+    monkeypatch.setattr("variant_maker.copyid.chromaprint.subprocess.run", fake_run)
+    fp = _fpcalc_via_ffmpeg(str(src))
+    assert fp == [1, 2, 3, 4, 5, 6, 7, 8]
+    ffmpeg_cmd = next(c for c in calls if "ffmpeg" in c[0])
+    fpcalc_cmd = next(c for c in calls if "fpcalc" in c[0])
+    assert "-nostdin" in ffmpeg_cmd
+    assert "-f" in ffmpeg_cmd and "s16le" in ffmpeg_cmd
+    assert "-format" in fpcalc_cmd and "s16le" in fpcalc_cmd
+    assert "-rate" in fpcalc_cmd and "11025" in fpcalc_cmd
+    assert not any(str(x).endswith(".wav") for c in calls for x in c)
 
 
 def test_score_audio_short_file_is_empty_not_error(monkeypatch, tmp_path):

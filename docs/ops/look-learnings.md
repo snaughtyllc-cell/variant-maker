@@ -63,6 +63,7 @@ Platform flags after a drop stay in Phase 12
 |---|---|---|
 | AQMTp-class tight 720 talking-head that already fills 576 | **Parked.** Unusual nose-close crop; most uploads will not look like this. Jeff signed shade-off look (`lookshadeoff`, 17–21 bits). Compete escalate-on `9ba1af34f29d` was 18/17 — Jeff 2026-08-29: not a pin blocker. | Raise the 24 gate. Snow. Face-zoom. Shade/cookie. Build an escalate-rollback just for this clip. |
 | Handheld crop wander on live Fast `e7ab2cc` (was `c497505`) | Jeff 2026-08-29: **ok lets build that on live**. Lab pack `1fbe4f51de83`: SaveInta **33/33**, motion **43/45**, AQMTp **18/17** parked. Stills not lava/snow. Olive-tint fix `e7ab2cc` stacked on this digest. | Raise 24. Shade. Face-zoom. Set `VF_LAB` on live. Roll live back to `c497505` / `d0a7bc5` without a broken look. |
+| Lab stills + CopyID audio on `5ef63612aaf3` | Same NEW clips. Look MAE **ok** (brad 4 not 119). Agent stills not olive (zscale). Audio `reason: error` on worker; this box scores `via=ffmpeg_s16le` sim 0.66/0.73/0.81. | Pin live. `gate`. Recycle live Fast. Raise 38. |
 
 ## Engine backstop
 
