@@ -27,7 +27,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:e8d77b9f13e69cffd718d9ecb8737db762cef61c88b4ad2281bb3333d4304bb4`
 - `VF_ENGINE_REV=21691c4` (record Chromaprint off uniqueness wait — pack `c701c9fb3594`). `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
 - Prior lab image `sha256:caa55785fabf17260edf36116645314063e3c478d213185261e13dc189cb5dc6` / `c1af220` (classic WAV chromaprint — pack `ce6862e51d4c` audio scored).
-- Live Fast is `sha256:ceb96800…` / `e7ab2cc`, **no `VF_LAB`**, copyid **off**.
+- Live Fast is `sha256:e8d77b9f…` / `21691c4`, **no `VF_LAB`**, copyid **off**.
 - Prior lab image `sha256:113a9dec4c5baadad9ba76a5af3d4faeb143df51e51b29c897a3d0fa7a68ad56` / `4bd8a57` (raw s16le; audio EOF).
 - Prior lab image `sha256:1d0a97536631bd1be091f0bed259b35abb5b250e89a392144582cfbddc0098b7` / `f0651b8` (zscale stills, crop-align MAE).
 - Prior lab image `sha256:e5173d9aaf663401e179d97a08a5b1bf14e9486703afa3d6010ebcc338d4e561` / `3caeb44` (copyid record + voice-safe audio).
@@ -36,7 +36,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - Prior lab image `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520` / `d0a7bc5` (compete: rotate safe, vignette, 30/48/60).
 - Prior lab image `sha256:b7ab714f9d883aae052f1fbf5e44c3284d9be691de2ba970c9ee06fd8f742d2d` / `bc88da1` (handheld crop wander, no compete).
 - Prior lab image `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e` / `f05d803` (19-bit / 30% uniqueness ship floor).
-- Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Still live Fast.**
+- Prior lab image `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85` / `472ab60` (look stills overlap uniqueness). **Was live Fast.**
 - Prior lab image `sha256:d5b15167c5f2a8fab24e51937498f8a3e1511a6047698d9a234d91ac895938e6` / `9a04e62` (look-first + escalate look-fail rolls back to medium).
 - Prior lab image `sha256:20c7652f58da8753ec4b76c713ad9dc800b5ae4ce8247b95ad006c66c306f79b` / `21ae9d3` (look-first gate, no rollback). Pack `lookshadeoff` was rendered on this digest.
 - Prior lab image `sha256:5aed2f3d999507c9fa5e5d072c6a7880a80e0297d8e4fca803a071c0fa8e6043` / `4540720` (AQMTp uniqueness shade — **REJECTED look**, lava). Do not pin.
@@ -54,11 +54,11 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 - Live SaveInta look-test (ship-loop Gallery `looktest4c41`): cloud 6–10 + sigma=2 still **chroma a bit noticeable**. Lab `568973c` 4–7 + gblur 4 (`softestd3ce5`): c1s=5, **24/24 bits (38%)**. `815a262` dust 14–20 (`softdust815a`): **25/26 bits**, c0s 15/17 — **grain a little much**. `39ecb97` dust 8–12 (`quietdustmed`): **23/23 bits**, c0s=9 — **Jeff: that's usable**, under gate. Lab `13cd292` / `82daa69c…` dust **11–13**. SaveInta pack `cleargate24a` (`720-cloud-clear-24-test.mp4`): **26/28 bits (41/44%)**, VMAF **96.4 / 97.6**, c1s=6, c0s=12, sigma=4, both medium, `ok`, no escalate. Gate 24 **cleared**. Jeff: **Yea ship it.** Promoted that digest to live Fast.
 - Live pack `ced7cbec7c49` (hard crop): copy 1 keep **0.84** x=0.90 y=0.14 **cropped a word**. Lab `856e23d` same clip (`wordcrop856e` / `caption-safe-crop-test.mp4`): keep **0.953 / 0.928**, x/y **0.55/0.52** and **0.53/0.62**, **38/42 bits (59/66%)**, VMAF **99.9 / 100**, medium, `ok`. Jeff: **yea way better.** Promoted that digest to live Fast.
 
-Live Fast `j0b1q4iuunzhnq` is on `sha256:ceb96800…` / `e7ab2cc` (vignette
-angle = sampled amount + `hue=s=`, **no `VF_LAB`**, max **4**, idle 600).
-Prior live `c497505` / `sha256:3d24473a…`. Railway `RUNPOD_FAST_ENDPOINT_ID`
-stays the live id. Lab Fast is `sha256:e8d77b9f…` / `21691c4` with
-`VF_LAB=1` / copyid `record`. Writeup: `docs/ops/live-pin-e7ab2cc-2026-08-30.md`.
+Live Fast `j0b1q4iuunzhnq` is on `sha256:e8d77b9f…` / `21691c4` (color
+stills + crop-align MAE, **no `VF_LAB`**, copyid **off**, max **4**, idle 600).
+Prior live `e7ab2cc` / `sha256:ceb96800…`. Railway `RUNPOD_FAST_ENDPOINT_ID`
+stays the live id. Lab Fast is the **same digest** with
+`VF_LAB=1` / copyid `record`. Writeup: `docs/ops/live-pin-21691c4-2026-08-31.md`.
 
 Lab packs:
 
@@ -90,8 +90,8 @@ Lab packs:
 | **`f0651b8` look stills + crop-align (`sha256:1d0a9753…`) — lab only** | Pack `5ef63612aaf3` same NEW clips. Fast 2. **41/41**, **33/31**, **32/31** all medium `ok`. Look **ok** MAE 3–7 (brad max 6, was 119). Agent stills not olive. CopyID audio `reason: error` — wav-first still used fpcalc demux. **Do not PATCH live.** | — |
 | **`4bd8a57` raw s16le (`sha256:113a9dec…`) — lab only** | Pack `bd19fcc20eed`. Look still ok. Audio `detail`: Debian fpcalc `Error decoding audio frame (End of file)`. **Do not PATCH live.** | — |
 | **`c1af220` classic WAV (`sha256:caa55785…`) — lab only** | Pack `ce6862e51d4c`. Fast 2. **45/43**, **32/31**, **35/30** all medium `ok`. Look **ok**. Audio **scored** `via=ffmpeg_s16le` sim 0.68–0.83. Stay `record`. **Do not PATCH live.** | — |
-| **`21691c4` record audio off uniqueness wait (`sha256:e8d77b9f…`) — lab only** | Pack `c701c9fb3594`. Fast 2. **43/44**, **34/31**, **32/32** all medium `ok`. Look **ok** (brad MAE max 3/7, was 119). Audio **scored** `via=ffmpeg_s16le` sim 0.70–0.92. Create→done **~20.5 min** (cold start ~2 min). Uniqueness event fires before Chromaprint. Stay `record`. **Do not PATCH live.** | — |
+| **`21691c4` color stills + crop-align MAE (`sha256:e8d77b9f…`) — live** | Pack `c701c9fb3594`. Fast 2. **43/44**, **34/31**, **32/32** all medium `ok`. Look **ok** (brad MAE max 3/7, was 119). Jeff: **stills look good.** Lab `record` audio scored. Live pin **no `VF_LAB`**, copyid **off**. Speed parked. | — |
 
-Live pin: `sha256:ceb96800c80ce087fc736b2aa0760216cb458354d78b0386f37cab4762222a94` (`e7ab2cc`, vignette + `hue=s=`, **no `VF_LAB`**). Prior live `c497505` digest: `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef`. Prior live `d0a7bc5` digest: `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`. Prior live `f05d803` digest: `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`. Prior live `472ab60` digest: `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85`. Prior live `7dae269` digest: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`.
+Live pin: `sha256:e8d77b9f13e69cffd718d9ecb8737db762cef61c88b4ad2281bb3333d4304bb4` (`21691c4`, color stills + crop-align MAE, **no `VF_LAB`**, copyid **off**). Prior live `e7ab2cc` digest: `sha256:ceb96800c80ce087fc736b2aa0760216cb458354d78b0386f37cab4762222a94`. Prior live `c497505` digest: `sha256:3d24473a35c4c624ee1c90308ff15d78ea95c178f54798a7a532f258b11694ef`. Prior live `d0a7bc5` digest: `sha256:a5b703fa999d2fa51122eb7d549291db396e17c536f73aa6c6f508194911e520`. Prior live `f05d803` digest: `sha256:00564ea3d284dba82344c764b55ca449949e1c43faa461a216f7392cca04768e`. Prior live `472ab60` digest: `sha256:e747497533c4ca53fcce03d7ae0d287de3029a8edbd3298c33c1ceb885bf6e85`. Prior live `7dae269` digest: `sha256:5f815e72eba0b32b100943b6ea4546992149a073a3a421c8fddb740f59f6fc4e`.
 
 Live verify on `j0b1q4iuunzhnq` (same sources, not via Studio gallery): talking-head **39/39/39 bits (61%)**, VMAF **97.5 / 98.8 / 98.6**, crop 0.86–0.88, chroma grain ~37–38, rotate 0, all medium `ok`, no escalate, ~21 MB. Mid-frame caption upright (“then why don't you just let me help you?”), tattoo/shoulders in frame. Motion **53/51/51 bits (~80–83%)**, VMAF **100**, luma grain 7, peer 52–53, caption upright. Railway Fast endpoint unchanged.

@@ -34,8 +34,8 @@ Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:e8d77b9f…` /
 `21691c4` (record audio off uniqueness wait) / `VF_LAB=1` /
 `VARIANT_MAKER_COPYID=record` / max 1. Pack `c701c9fb3594` **audio
 scored** `via=ffmpeg_s16le` on every copy. Stay **`record`**. Prior
-`sha256:caa55785…` / `c1af220`. Live Fast stays `e7ab2cc` / no copyid /
-no `VF_LAB`. Do not PATCH live.
+`sha256:caa55785…` / `c1af220`. Live Fast is `sha256:e8d77b9f…` / `21691c4` /
+no copyid / no `VF_LAB`. Do not `gate`.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
