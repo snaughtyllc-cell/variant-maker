@@ -30,13 +30,12 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:113a9dec…` /
-`4bd8a57` (raw s16le chromaprint) / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record`
-/ max 1. Pack `bd19fcc20eed` look MAE still ok; audio `detail`: Debian
-fpcalc `Error decoding audio frame (End of file)` on raw `-format s16le`.
-Next: classic `wave` wrap + treat EOF+fingerprint as a score. Prior
-`sha256:1d0a9753…` / `f0651b8`. Recycle **lab** only. Live Fast stays
-`e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
+Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:caa55785…` /
+`c1af220` (classic WAV wrap + EOF-tolerant fpcalc) / `VF_LAB=1` /
+`VARIANT_MAKER_COPYID=record` / max 1. Pack `ce6862e51d4c` **audio
+scored** `via=ffmpeg_s16le` on every copy. Stay **`record`** — audio sim
+0.67–0.83 would fail `gate`. Prior `sha256:113a9dec…` / `4bd8a57`. Live
+Fast stays `e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
@@ -96,6 +95,22 @@ Same three NEW clips. Image `sha256:113a9dec…`. Fast 2. Look still **ok**
 Debian `fpcalc -format s16le` treats raw PCM EOF as a failed frame. Next
 image: stdlib `wave` header (duration known) + if FINGERPRINT= printed,
 use it even on exit 1. Stay **`record`**. Do not `gate`. Do not PATCH live.
+
+### Lab Generate — pack `ce6862e51d4c` (classic WAV `c1af220`)
+
+Same three NEW clips. Image `sha256:caa55785…`. Fast 2. First job after
+recycle (`1bf301c5711a`) 500'd on cold start; this retry delivered 6/6.
+
+| Clip | Bits | Look MAE (max) | Audio sim | Audio uniq |
+|---|---|---|---|---|
+| NEW-0409 | **45 / 43** medium `ok` | **ok/ok** 6.67/5.0 (11/7) | 0.82 / 0.83 | 0.18 / 0.17 |
+| NEW-1277 | **32 / 31** medium `ok` | **ok/ok** 2.33/4.0 (3/5) | 0.68 / 0.72 | 0.32 / 0.28 |
+| NEW-bradnded | **35 / 30** medium `ok` | **ok/ok** 5.0/6.33 (6/9) | 0.82 / 0.83 | 0.18 / 0.17 |
+
+Every copy `heads.audio.available: true` `via=ffmpeg_s16le`. Visual still
+`available: false` (no SSCD). **If this had been `gate`, every copy fails**
+on audio (uniq ~11–20 bits). Stay **`record`**. Do not `gate`. Do not
+PATCH live. Jeff stills remain the look oracle.
 
 ## Enable record (lab) or the fused gate (later)
 
