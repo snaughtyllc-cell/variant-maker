@@ -24,7 +24,7 @@ describe("workflow folder layout copy", () => {
     expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
     expect(workflowReconstructHint()).toMatch(/one GPU pass/i);
     expect(workflowReconstructHint()).toMatch(/Fast/i);
-    expect(workflowReconstructHint()).not.toMatch(/20 HQ/i);
+    expect(workflowReconstructHint()).toMatch(/not a 20 HQ/i);
     expect(workflowReconstructHint()).not.toMatch(/coming soon/i);
   });
 
