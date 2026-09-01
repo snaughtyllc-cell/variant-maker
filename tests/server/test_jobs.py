@@ -848,3 +848,66 @@ def test_regenerate_after_hq_prep_uses_prep_file(tmp_path):
     assert runner.calls[-1][0] == "fast"
     assert runner.calls[-1][2].endswith("prep_hq.mp4")
     assert len(src.variants) == 2
+
+
+def test_regenerate_after_failed_hq_prep_does_not_fast_from_original(tmp_path):
+    runner = FakeRunner({1: "uniqueness_fail"})
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"orig")], count=3, prep_mode="hq")
+    store.wait(job.job_id, timeout=5)
+    src = job.sources[0]
+    assert src.prep_status == "failed"
+    runner.calls.clear()
+    out = store.regenerate(src.source_id, 1)
+    assert out is src
+    assert runner.calls == []
+    assert src.variants == []
+
+
+def test_queue_counts_reconstruct_first_as_hq_while_prep_runs(tmp_path):
+    from variant_maker.server.jobs import queue_snapshot
+
+    class _HoldFirst:
+        def __init__(self) -> None:
+            self.gate = threading.Event()
+            self.started = threading.Event()
+            self.calls: list[tuple[str, int]] = []
+
+        def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
+                on_event: Callable[[VariantEvent], None],
+                allow_creative_escalate: bool = True, quality_mode: str = "fast",
+                cancel_token=None) -> SourceResult:
+            self.calls.append((quality_mode, count))
+            self.started.set()
+            os.makedirs(out_dir, exist_ok=True)
+            fname = "v01.mp4"
+            quality = {"vmaf": 95.0, "passed": True}
+            on_event(VariantEvent(
+                source_id=source_id, index=1, state="done",
+                status="ok", quality=quality, filename=fname,
+            ))
+            open(os.path.join(out_dir, fname), "w").close()
+            while not self.gate.wait(timeout=0.05):
+                if cancel_token is not None and cancel_token.is_set():
+                    from variant_maker.server.cancel import JobCancelled
+                    raise JobCancelled()
+            mpath = os.path.join(out_dir, "manifest.json")
+            open(mpath, "w").close()
+            return SourceResult(
+                variants=[VariantResult(
+                    index=1, filename=fname, status="ok", quality=quality,
+                    path=os.path.join(out_dir, fname),
+                )],
+                manifest_path=mpath,
+            )
+
+    runner = _HoldFirst()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    store.create_job([("a.mp4", b"x")], count=2, prep_mode="hq")
+    assert runner.started.wait(timeout=5)
+    snap = queue_snapshot(store.list())
+    assert snap["hq"] == 1
+    assert snap["fast"] == 0
+    assert snap["jobs"][0]["prep_mode"] == "hq"
+    assert snap["jobs"][0]["quality_mode"] == "fast"
+    runner.gate.set()

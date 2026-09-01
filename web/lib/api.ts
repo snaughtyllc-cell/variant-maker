@@ -345,6 +345,7 @@ export function createWorkflow(body: {
   output_destination_id: string;
   count?: number;
   quality_mode?: "fast" | "hq";
+  prep_mode?: "none" | "hq";
   allow_creative_escalate?: boolean;
   enabled?: boolean;
   poll_seconds?: number;
@@ -354,7 +355,11 @@ export function createWorkflow(body: {
   return fetch("/api/workflows", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      quality_mode: body.quality_mode ?? "fast",
+      prep_mode: body.prep_mode ?? "none",
+    }),
   }).then(json<Workflow>);
 }
 
@@ -366,6 +371,7 @@ export function updateWorkflow(
     output_destination_id: string;
     count: number;
     quality_mode: "fast" | "hq";
+    prep_mode: "none" | "hq";
     allow_creative_escalate: boolean;
     enabled: boolean;
     poll_seconds: number;

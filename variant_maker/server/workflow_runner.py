@@ -199,7 +199,8 @@ def _queue_new(
                 [(os.path.basename(f.name) or "clip.mp4", local)],
                 count=workflow.count,
                 allow_creative_escalate=workflow.allow_creative_escalate,
-                quality_mode=workflow.quality_mode,
+                quality_mode="fast",
+                prep_mode=workflow.prep_mode,
             )
             ledger.mark_running(
                 sha, job_id=job.job_id, file_id=f.id, md5=f.md5, filename=f.name,

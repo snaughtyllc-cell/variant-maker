@@ -367,6 +367,7 @@ describe("workflows API", () => {
     last_summary: null,
     auto_caption: false,
     caption_bank_id: null,
+    prep_mode: "none" as const,
   };
 
   it("listWorkflows GETs /api/workflows", async () => {
@@ -390,6 +391,31 @@ describe("workflows API", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/workflows");
     expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual(
+      expect.objectContaining({
+        name: "Inbox → Out",
+        prep_mode: "none",
+        quality_mode: "fast",
+      }),
+    );
+  });
+
+  it("createWorkflow sends prep_mode hq", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...sampleWorkflow, prep_mode: "hq" }), { status: 201 }),
+    );
+    await api.createWorkflow({
+      name: "Inbox → Out",
+      inbox_destination_id: "dst_in",
+      output_destination_id: "dst_out",
+      prep_mode: "hq",
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual(
+      expect.objectContaining({
+        prep_mode: "hq",
+        quality_mode: "fast",
+      }),
+    );
   });
 
   it("updateWorkflow PATCHes /api/workflows/:id", async () => {

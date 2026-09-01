@@ -51,7 +51,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack.",
+      "Watch folder auto-poll, inbox-to-output Drive folders, optional Reconstruct first (HQ), cancel a live pack.",
   },
   {
     href: "/settings/drive",
