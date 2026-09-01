@@ -3,6 +3,7 @@ import type { QueueSnapshot } from "@/lib/types";
 import {
   jobsAhead,
   queueHeadline,
+  queueOccupiesHq,
   queueRowLabel,
   queueStripLabel,
   queueWaitCopy,
@@ -77,5 +78,19 @@ describe("live Studio queue copy", () => {
 
   it("idle copy says packs do not overwrite each other", () => {
     expect(queueWaitCopy(snap(), "fast")).toMatch(/do not overwrite/i);
+  });
+
+  it("counts reconstruct-first as HQ occupancy until prep is done", () => {
+    const reconstructing = {
+      ...fastJob,
+      prep_mode: "hq" as const,
+      prep_status: "running" as const,
+    };
+    expect(queueOccupiesHq(reconstructing)).toBe(true);
+    expect(queueRowLabel(reconstructing)).toBe("1. HQ · IMG_0683.mp4 · 3/8");
+    expect(queueOccupiesHq({ ...reconstructing, prep_status: "done" })).toBe(false);
+    expect(queueRowLabel({ ...reconstructing, prep_status: "done" })).toBe(
+      "1. Fast · IMG_0683.mp4 · 3/8",
+    );
   });
 });

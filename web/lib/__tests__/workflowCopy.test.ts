@@ -7,6 +7,7 @@ import {
   workflowAutoCaptionHint,
   workflowPageBlurb,
   workflowCanCancel,
+  workflowReconstructHint,
 } from "@/lib/workflowCopy";
 
 describe("workflow folder layout copy", () => {
@@ -21,6 +22,10 @@ describe("workflow folder layout copy", () => {
     expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
     expect(workflowAutoCaptionHint()).toMatch(/custom/i);
     expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
+    expect(workflowReconstructHint()).toMatch(/one GPU pass/i);
+    expect(workflowReconstructHint()).toMatch(/Fast/i);
+    expect(workflowReconstructHint()).toMatch(/not a 20 HQ/i);
+    expect(workflowReconstructHint()).not.toMatch(/coming soon/i);
   });
 
   it("treats the same destination or the same Drive folder as a clash", () => {

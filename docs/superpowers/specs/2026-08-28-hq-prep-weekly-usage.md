@@ -32,6 +32,9 @@ Do **not** mix more Fast engine knobs into this PR (those stay on #58).
 Studio checkbox: **“Reconstruct first (HQ) — one GPU pass, then Fast variants.”**  
 Not an HQ quality dropdown. The Advanced HQ option stays disabled.
 
+Watch-folder **Workflows** use the same checkbox (`prep_mode=hq`, `quality_mode=fast`).
+They do not run an HQ 20-pack.
+
 API still accepts `quality_mode=hq` (tests / CLI). Studio Generate always sends
 `quality_mode=fast` plus optional `prep_mode=hq`.
 
@@ -86,6 +89,5 @@ Event: `job_completed` with job_id, prep_mode, quality_mode, counts.
 
 - Pin live Fast / merge #58
 - HQ 20-pack UI
-- Workflow `prep_mode` (Generate + Drive + uploads only)
 - Stripe / 30-day caps (PR #34)
 - Raising uniqueness gate or Pixel-AI scramble

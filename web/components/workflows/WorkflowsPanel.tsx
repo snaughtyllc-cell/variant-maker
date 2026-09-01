@@ -23,6 +23,7 @@ import {
   workflowOutputHint,
   workflowAutoCaptionHint,
   workflowCanCancel,
+  workflowReconstructHint,
 } from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
@@ -61,7 +62,7 @@ export function WorkflowsPanel() {
   const [inboxId, setInboxId] = useState("");
   const [outputId, setOutputId] = useState("");
   const [count, setCount] = useState(DEFAULT_PER_VIDEO);
-  const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
+  const [prepMode, setPrepMode] = useState<"none" | "hq">("none");
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
   const [autoCaption, setAutoCaption] = useState(false);
@@ -130,7 +131,8 @@ export function WorkflowsPanel() {
         inbox_destination_id: inboxId,
         output_destination_id: outputId,
         count,
-        quality_mode: qualityMode,
+        quality_mode: "fast",
+        prep_mode: prepMode,
         enabled,
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
@@ -152,6 +154,20 @@ export function WorkflowsPanel() {
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle workflow", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleTogglePrep(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const updated = await updateWorkflow(wf.id, {
+        prep_mode: wf.prep_mode === "hq" ? "none" : "hq",
+      });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to toggle reconstruct-first", err);
     } finally {
       setActionId(null);
     }
@@ -363,21 +379,6 @@ export function WorkflowsPanel() {
           </label>
 
           <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Quality</span>
-            <select
-              value="fast"
-              onChange={() => setQualityMode("fast")}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            >
-              <option value="fast">Fast</option>
-              <option value="hq" disabled>
-                HQ — coming soon
-              </option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Poll every (minutes)</span>
             <input
               type="number"
@@ -392,6 +393,22 @@ export function WorkflowsPanel() {
             />
           </label>
         </div>
+
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
+          <input
+            type="checkbox"
+            checked={prepMode === "hq"}
+            onChange={(e) => setPrepMode(e.target.checked ? "hq" : "none")}
+            disabled={destinations.length === 0 || driveNotReady}
+            style={{ accentColor: "#0caab8", marginTop: 2 }}
+          />
+          <span>
+            Reconstruct first (HQ)
+            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
+              {workflowReconstructHint()}
+            </span>
+          </span>
+        </label>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
           <input
@@ -503,7 +520,7 @@ export function WorkflowsPanel() {
                   {" · "}one subfolder per source clip
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
-                  {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
+                  {wf.count} variants · {wf.prep_mode === "hq" ? "reconstruct first" : "fast"} · poll every {Math.round(wf.poll_seconds / 60)} min
                   {wf.auto_caption ? " · auto-caption on" : ""}
                   {wf.auto_caption ? ` · ${bankLabel(banks, wf.caption_bank_id)}` : ""}
                 </div>
@@ -530,6 +547,24 @@ export function WorkflowsPanel() {
                     style={{ accentColor: "#0caab8" }}
                   />
                   Watch
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--color-text)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={wf.prep_mode === "hq"}
+                    disabled={busy}
+                    onChange={() => handleTogglePrep(wf)}
+                    style={{ accentColor: "#0caab8" }}
+                  />
+                  Reconstruct first
                 </label>
                 <label
                   style={{

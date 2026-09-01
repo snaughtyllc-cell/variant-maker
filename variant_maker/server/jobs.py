@@ -225,6 +225,13 @@ def _variant_to_dict(v: VariantInfo) -> dict:
     }
 
 
+def queue_occupies_hq(job: Job) -> bool:
+    """Live GPU occupancy: standalone HQ, or reconstruct-first until prep is done."""
+    if job.quality_mode == "hq":
+        return True
+    return job.prep_mode == "hq" and job.prep_status != "done"
+
+
 def queue_snapshot(jobs: list[Job]) -> dict:
     """Live generating packs on a shared Studio URL. Filenames only — no video."""
     running = [j for j in jobs if j.state == "running"]
@@ -237,6 +244,8 @@ def queue_snapshot(jobs: list[Job]) -> dict:
         items.append({
             "job_id": job.job_id,
             "quality_mode": job.quality_mode,
+            "prep_mode": job.prep_mode,
+            "prep_status": job.prep_status,
             "state": job.state,
             "created_utc": job.created_utc,
             "count": job.count,
@@ -246,10 +255,11 @@ def queue_snapshot(jobs: list[Job]) -> dict:
             "requested": requested,
             "position": i,
         })
+    hq_n = sum(1 for j in running if queue_occupies_hq(j))
     return {
         "running": len(items),
-        "fast": sum(1 for it in items if it["quality_mode"] != "hq"),
-        "hq": sum(1 for it in items if it["quality_mode"] == "hq"),
+        "fast": len(items) - hq_n,
+        "hq": hq_n,
         "jobs": items,
     }
 
@@ -601,11 +611,11 @@ class JobStore:
         in_dir = os.path.dirname(self._ws.source_in_path(job_id, source_id, filename))
         return os.path.join(in_dir, PREP_HQ_FILENAME)
 
-    def _fast_in_path(self, job: Job, source: JobSource, original: str) -> str:
+    def _fast_in_path(self, job: Job, _source: JobSource, original: str) -> str | None:
         if job.prep_mode != "hq":
             return original
         dest = os.path.join(os.path.dirname(original), PREP_HQ_FILENAME)
-        return dest if os.path.isfile(dest) else original
+        return dest if os.path.isfile(dest) else None
 
     def _ensure_hq_prep(
         self, job: Job, source: JobSource, in_path: str, token: CancelToken,
@@ -1078,6 +1088,8 @@ class JobStore:
         in_path = original
         if job is not None:
             in_path = self._fast_in_path(job, source, original)
+            if in_path is None:
+                return source
         result = self._runner.run(
             in_path,
             count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,

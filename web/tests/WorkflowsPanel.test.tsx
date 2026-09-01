@@ -16,6 +16,7 @@ vi.mock("@/lib/api", () => ({
 
 import {
   cancelWorkflow,
+  createWorkflow,
   getDriveStatus,
   listCaptionBanks,
   listDestinations,
@@ -55,6 +56,7 @@ const live: Workflow = {
   },
   auto_caption: false,
   caption_bank_id: null,
+  prep_mode: "none",
 };
 
 beforeEach(() => {
@@ -63,6 +65,39 @@ beforeEach(() => {
   vi.mocked(listWorkflows).mockResolvedValue([live]);
   vi.mocked(listCaptionBanks).mockResolvedValue([]);
   vi.mocked(cancelWorkflow).mockResolvedValue({ ...live, enabled: false, last_summary: { ...live.last_summary!, running: 0 } });
+});
+
+describe("WorkflowsPanel reconstruct-first", () => {
+  it("offers Reconstruct first, not an HQ 20-pack coming soon", async () => {
+    render(<WorkflowsPanel />);
+    await screen.findByRole("button", { name: /create workflow/i });
+    expect(screen.getByRole("checkbox", { name: /reconstruct first \(hq\)/i })).toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /hq/i })).not.toBeInTheDocument();
+  });
+
+  it("sends prep_mode hq and quality_mode fast when reconstruct first is on", async () => {
+    vi.mocked(createWorkflow).mockResolvedValue({
+      ...live,
+      id: "wf_new",
+      name: "Reels inbox",
+      prep_mode: "hq",
+    });
+    render(<WorkflowsPanel />);
+    const name = await screen.findByPlaceholderText(/reels inbox/i);
+    fireEvent.change(name, { target: { value: "Reels inbox" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /reconstruct first \(hq\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create workflow/i }));
+    await waitFor(() => {
+      expect(createWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Reels inbox",
+          prep_mode: "hq",
+          quality_mode: "fast",
+        }),
+      );
+    });
+  });
 });
 
 describe("WorkflowsPanel cancel", () => {
