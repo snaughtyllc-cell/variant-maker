@@ -22,7 +22,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-from .drive_oauth import OAuthPendingStore, new_oauth_state, public_request_base, studio_origin_from_redirect_uri
+from .drive_oauth import (
+    OAuthPendingStore,
+    new_oauth_state,
+    public_request_base,
+    studio_origin_from_redirect_uri,
+)
 
 ENV_APP_ID = "VARIANT_IG_APP_ID"
 ENV_APP_SECRET = "VARIANT_IG_APP_SECRET"
@@ -87,7 +92,7 @@ def _now_utc() -> str:
 def _read_json(resp) -> dict[str, Any]:
     raw = json.loads(resp.read().decode())
     if not isinstance(raw, dict):
-        raise ValueError("Instagram returned a non-object payload")
+        raise TypeError("Instagram returned a non-object payload")
     return raw
 
 
@@ -338,10 +343,10 @@ __all__ = [
     "ENV_APP_SECRET",
     "ENV_REDIRECT_URI",
     "GRAPH_HOST",
+    "SCOPES",
     "InstagramAccount",
     "InstagramAccountStore",
     "OAuthPendingStore",
-    "SCOPES",
     "build_authorization_url",
     "exchange_code_for_token",
     "fetch_profile",

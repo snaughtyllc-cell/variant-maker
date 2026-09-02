@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 from .instagram_oauth import GRAPH_HOST
 
 _CAPTION_SPACE = re.compile(r"\s+")
-_SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.I)
+_SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
 
 
@@ -238,10 +238,10 @@ def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
         raw = resp.read().decode()
     body = __import__("json").loads(raw)
     if not isinstance(body, dict):
-        raise ValueError("Instagram returned a non-object payload")
+        raise TypeError("Instagram returned a non-object payload")
     err = body.get("error")
     if isinstance(err, dict):
-        raise ValueError(str(err.get("message") or err))
+        raise ValueError(str(err.get("message") or err))  # noqa: TRY004
     return body
 
 

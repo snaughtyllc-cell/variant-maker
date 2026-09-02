@@ -1,6 +1,7 @@
 """Match Reels to Gallery copies; pack totals skip unlinked (unknown ≠ 0)."""
 from __future__ import annotations
 
+from tests.server.fakes import FakeRunner
 from variant_maker.server.instagram_insights import (
     IgMedia,
     VariantLink,
@@ -12,7 +13,6 @@ from variant_maker.server.instagram_insights import (
     permalink_key,
 )
 from variant_maker.server.jobs import JobStore
-from tests.server.fakes import FakeRunner
 from variant_maker.server.workspace import Workspace
 
 
