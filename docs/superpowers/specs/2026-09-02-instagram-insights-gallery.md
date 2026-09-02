@@ -81,28 +81,67 @@ Google — not Studio driving the Instagram app as someone else.
 
 Two different clocks. Do not mix them.
 
-### Connecting *your* Instagram (fast)
+### Testers first (this is the real path)
 
-Jeff-once: create the Meta app, add the Instagram product, set Studio’s
-redirect URL. Add **your** IG (and any tester handles) as roles / test
-users on that app. Those accounts Connect the same day — Instagram Login
-consent, token stored, Insights pull. Professional (Business/Creator)
-account required; Personal IG cannot grant Insights.
+**Yes — add people as testers. You do not need App Review to run Insights
+for invite-only Studio.**
 
-That is **not** App Review. That is Development mode, same as adding
-someone as a Google OAuth test user so Connect Google works for them.
+Meta’s own rule: if the app is only used by people who have a **role on
+the app**, Standard Access is enough. Instagram Platform says the same:
+if you only serve accounts you own or manage, Standard Access is all
+you need.
 
-### App Review (only when strangers Connect)
+That is the Drive pattern we already run (OAuth test users). Ops:
 
-Meta will not let a random operator’s Instagram grant
-`instagram_business_manage_insights` until the app has **Advanced Access**
-(App Review + a screencast of Insights in Studio). Until then, only
-people listed on the Meta app can finish OAuth.
+1. App Dashboard → **App roles → Roles** → add **Instagram Tester**
+   (`@handle`, not email).
+2. They accept in Instagram: Settings → Apps and websites → **Tester
+   invites**. Pending invites do not Connect.
+3. Their IG must be **Professional** (Business or Creator). Then Studio
+   Connect works; Insights work.
 
-That is the Drive parallel: **you** can Connect today; an outside
-workspace hits the unverified / test-user wall until Google (or Meta)
-approves the app. It is not Slack-install-and-done for every customer
-account. For Jeff’s own IGs, skip this worry.
+Caps (Meta App Roles docs): **~50 testers** on an app not linked to a
+verified Business; **up to 500** testers+analytics if the app is on a
+verified Business Manager. Jeff adding each new operator / client handle
+when he invites the workspace is the intended loop.
+
+Meta’s tester policy wording is “employee or acting on your behalf as a
+tester.” Invite-only operators Jeff onboarded fits that better than
+public signup. Do **not** use testers as a fake public app (no
+self-serve Connect for strangers).
+
+You are not missing a hidden Meta step for this path.
+
+### Advanced Access (only if strangers Connect with no role)
+
+Needed when an Instagram that is **not** a tester / admin / developer
+must grant Insights — e.g. public Studio, or “here’s the URL, Connect
+without Jeff adding your @handle.”
+
+They are **not** reviewing uniqueness, Fast, VMAF, or the variant
+engine. They are reviewing: *does this app use Instagram data the way
+the permission allows, and can a reviewer reproduce it?*
+
+Submission (official App Review + screen-recording guide):
+
+| They look at | What that means for us |
+|---|---|
+| **Which permissions** | Only `instagram_business_basic` (read media to match posts) and `instagram_business_manage_insights` (views/reach on Gallery). Do **not** request publish, comments, DMs, or Page scopes “just in case.” |
+| **Written use case** | English, step-by-step: operator Connects IG → Studio lists Reels → matches to Gallery copies → shows views on the pack. Allowed-usage checkbox per permission. |
+| **Screencast per permission** | Logged-out → Studio login → **Instagram Login consent** (must see the grant) → Gallery/sheet showing Insights numbers that permission unlocked. High-res, English UI, no audio. They follow this video when they test. |
+| **Reviewer can load the app** | Live Studio URL + a working invite / test login. Not a private intranet with no UI. |
+| **Business Verification** | Legal entity docs matching the Business portfolio that owns the app. Required for Advanced Access (since 2023). |
+| **Privacy policy URL** | Public page shown on Meta’s consent screen. What we store (tokens, view counts), why, how to disconnect / delete. |
+| **App extras** | 1024×1024 icon, category, business email. ≥1 successful Graph call with that permission in the last 30 days (`graph.instagram.com` for `instagram_business_*`). |
+| **Allowed use** | Insights for the connected account’s own performance in *our* UI — not scraping other people’s content, not a detector, not posting. |
+
+After Advanced Access: annual **Data Use Checkup**. Rejections are
+usually: skipped consent screen, numbers never shown in the UI (API
+only), extra unused permissions, reviewer cannot log in, privacy policy
+404, or Business Verification incomplete.
+
+Until we want Connect-without-a-tester-invite, **do not start this.**
+Ship G1–G4 on testers.
 
 ### Insights data lag (also not App Review)
 
