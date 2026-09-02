@@ -69,6 +69,8 @@ export interface SourceOut {
   insights_views?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
+  suggestion_kind?: string | null;
+  suggestion_copy?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface QueueItem {
@@ -365,11 +367,27 @@ export interface InstagramPackRow {
   insights_unknown?: number;
 }
 
+export interface InstagramSuggestion {
+  kind: string;
+  source_id: string;
+  filename: string;
+  copy: string;
+}
+
+export interface InstagramUnmatched {
+  media_id: string;
+  permalink?: string | null;
+  caption?: string | null;
+  username?: string | null;
+  ig_user_id?: string | null;
+}
+
 export interface InstagramAnalytics {
   insights_views: number | null;
   insights_linked: number;
   packs?: InstagramPackRow[];
   ranked: InstagramPackRow[];
+  suggestions?: InstagramSuggestion[];
   accounts: InstagramAccount[];
 }
 
@@ -377,9 +395,6 @@ export interface InstagramSync {
   matched: number;
   accounts: number;
   media: number;
-  analytics: {
-    insights_views: number | null;
-    insights_linked: number;
-    ranked?: InstagramPackRow[];
-  };
+  unmatched?: InstagramUnmatched[];
+  analytics: InstagramAnalytics;
 }

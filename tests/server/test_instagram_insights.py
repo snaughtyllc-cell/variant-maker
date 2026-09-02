@@ -1,6 +1,8 @@
 """Match Reels to Gallery copies; pack totals skip unlinked (unknown ≠ 0)."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from tests.server.fakes import FakeRunner
 from variant_maker.server.instagram_insights import (
     IgMedia,
@@ -9,8 +11,10 @@ from variant_maker.server.instagram_insights import (
     match_media,
     normalize_caption,
     pack_analytics,
+    pack_suggestions,
     parse_insights_payload,
     permalink_key,
+    unmatched_media,
 )
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.workspace import Workspace
@@ -127,3 +131,71 @@ def test_set_ig_insights_survives_hydrate(tmp_path):
     assert restored.ig_user_id == "17841"
     assert restored.ig_insights["views"] == 44
     assert restored.post_url == "https://www.instagram.com/reel/HydrateIg/"
+
+
+def test_unmatched_media_are_not_guessed():
+    variants = [
+        VariantLink("s1", 1, post_url="https://instagram.com/reel/Aaa/", caption="hook"),
+    ]
+    media = [
+        IgMedia("m1", permalink="https://www.instagram.com/reel/Aaa/", caption="hook"),
+        IgMedia("m2", permalink="https://www.instagram.com/reel/Orphan/", caption="other line"),
+    ]
+    hits = match_media(variants, media)
+    leftover = unmatched_media(media, hits)
+    assert [m.id for m in leftover] == ["m2"]
+
+
+def test_pack_suggestions_winner_needs_floor_and_gap():
+    now = datetime(2026, 9, 2, tzinfo=UTC)
+    packs = [
+        {
+            "source_id": "winner",
+            "filename": "winner.mp4",
+            "insights_views": 80_000,
+            "insights_linked": 8,
+            "created_utc": "2026-08-30T00:00:00Z",
+        },
+        {
+            "source_id": "ok",
+            "filename": "ok.mp4",
+            "insights_views": 12_000,
+            "insights_linked": 6,
+            "created_utc": "2026-08-30T00:00:00Z",
+        },
+        {
+            "source_id": "quiet",
+            "filename": "quiet.mp4",
+            "insights_views": 40,
+            "insights_linked": 5,
+            "created_utc": "2026-08-30T00:00:00Z",
+        },
+    ]
+    out = pack_suggestions(packs, now=now)
+    kinds = {row["kind"]: row for row in out}
+    assert kinds["winner"]["source_id"] == "winner"
+    assert "Generate 20 more" in kinds["winner"]["copy"]
+    assert kinds["quiet"]["source_id"] == "quiet"
+    assert "flagged" not in kinds["quiet"]["copy"].lower()
+    assert "not getting push" in kinds["quiet"]["copy"]
+
+
+def test_pack_suggestions_skips_fresh_quiet_and_weak_leaders():
+    now = datetime(2026, 9, 2, 12, tzinfo=UTC)
+    packs = [
+        {
+            "source_id": "fresh",
+            "filename": "fresh.mp4",
+            "insights_views": 10,
+            "insights_linked": 5,
+            "created_utc": "2026-09-02T01:00:00Z",
+        },
+        {
+            "source_id": "slight",
+            "filename": "slight.mp4",
+            "insights_views": 400,
+            "insights_linked": 2,
+            "created_utc": "2026-08-20T00:00:00Z",
+        },
+    ]
+    assert pack_suggestions(packs, now=now) == []

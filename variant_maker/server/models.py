@@ -52,6 +52,14 @@ class InstagramTokenIn(BaseModel):
     access_token: str
 
 
+class InstagramLinkIn(BaseModel):
+    source_id: str
+    index: int
+    media_id: str
+    ig_user_id: str | None = None
+    permalink: str | None = None
+
+
 class InstagramAccountOut(BaseModel):
     user_id: str
     username: str
@@ -70,6 +78,7 @@ class InstagramSyncOut(BaseModel):
     matched: int = 0
     accounts: int = 0
     media: int = 0
+    unmatched: list[dict] = []
     analytics: dict = {}
 
 
@@ -100,6 +109,8 @@ class SourceOut(BaseModel):
     insights_views: int | None = None
     insights_linked: int = 0
     insights_unknown: int = 0
+    suggestion_kind: str | None = None
+    suggestion_copy: str | None = None
 
 
 class JobSummary(BaseModel):

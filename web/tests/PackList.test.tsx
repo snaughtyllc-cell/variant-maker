@@ -81,4 +81,28 @@ describe("PackList", () => {
     expect(screen.getByText("No packs yet")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("appends a winner hint on the pack row", () => {
+    const packs = [
+      pack({
+        source_id: "s1",
+        filename: "winner.mp4",
+        insights_linked: 4,
+        insights_views: 80000,
+        suggestion_kind: "winner",
+      }),
+    ];
+    render(
+      <PackList
+        packs={packs}
+        totalCount={1}
+        activeId={undefined}
+        onSelect={() => undefined}
+        search=""
+        onSearchChange={() => undefined}
+        loading={false}
+      />,
+    );
+    expect(screen.getByText(/80k views · Winner/i)).toBeInTheDocument();
+  });
 });

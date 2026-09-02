@@ -749,6 +749,36 @@ describe("Instagram API", () => {
       access_token: "pasted-long-token",
     });
   });
+
+  it("linkInstagramMedia POSTs the unmatched Reel onto a Gallery copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: 50,
+        insights_linked: 1,
+        ranked: [],
+        suggestions: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    const out = await api.linkInstagramMedia({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+    expect(out.insights_linked).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/link");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+  });
 });
 
 describe("error responses surface FastAPI `detail`", () => {

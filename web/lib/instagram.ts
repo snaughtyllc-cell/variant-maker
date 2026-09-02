@@ -95,6 +95,59 @@ export function instagramTesterHint(): string {
 }
 
 export function handleLabel(username: string): string {
-  const trimmed = username.trim().replace(/^@/, "");
-  return trimmed ? `@${trimmed}` : "Connected account";
+  const t = username.trim().replace(/^@+/, "");
+  return t ? `@${t}` : "";
+}
+
+export function unmatchedCaptionPreview(caption: string, max = 80): string {
+  const t = caption.replace(/\s+/g, " ").trim();
+  if (!t) return "No caption";
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+export function suggestionButtonLabel(kind: string): string | null {
+  return kind === "winner" ? `Generate ${AMPLIFY_MORE_N} more of this original` : null;
+}
+
+export function packSuggestionHint(kind: string | null | undefined): string | null {
+  if (kind === "winner") return "Winner";
+  if (kind === "quiet") return "Quiet — try a new original";
+  return null;
+}
+
+export function copyPickerLabel(filename: string, index: number, linked = false): string {
+  const n = String(index).padStart(2, "0");
+  const base = `${filename} · copy ${n}`;
+  return linked ? `${base} (linked)` : base;
+}
+
+export function formatCopyPick(sourceId: string, index: number): string {
+  return `${sourceId}:${index}`;
+}
+
+export function parseCopyPick(value: string): { source_id: string; index: number } | null {
+  const i = value.lastIndexOf(":");
+  if (i <= 0) return null;
+  const source_id = value.slice(0, i);
+  const index = Number(value.slice(i + 1));
+  if (!source_id || !Number.isInteger(index)) return null;
+  return { source_id, index };
+}
+
+export function copyPickerOptions(
+  sources: {
+    source_id: string;
+    filename: string;
+    variants: { index: number; ig_media_id?: string | null }[];
+  }[],
+): { source_id: string; index: number; value: string; label: string }[] {
+  return sources.flatMap((source) =>
+    source.variants.map((variant) => ({
+      source_id: source.source_id,
+      index: variant.index,
+      value: formatCopyPick(source.source_id, variant.index),
+      label: copyPickerLabel(source.filename, variant.index, Boolean(variant.ig_media_id)),
+    })),
+  );
 }

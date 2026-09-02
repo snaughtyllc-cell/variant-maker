@@ -1159,6 +1159,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-ranked__row:first-child { border-top: none; padding-top: 4px; }
 .analytics-ranked__name { color: var(--ink); font-size: 14.5px; font-weight: 650; }
 .analytics-ranked__meta { color: var(--color-muted); font-size: 12.5px; margin-top: 4px; }
+.analytics-ranked__hint { font-size: 12.5px; line-height: 1.45; margin-top: 6px; max-width: 46em; }
+.analytics-ranked__hint[data-kind="winner"] { color: #0e5f66; }
+.analytics-ranked__hint[data-kind="quiet"] { color: #a9741b; }
+.analytics-picker { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.analytics-picker__row { align-items: flex-end; border-top: 1px solid #eff5f6; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 0; }
+.analytics-picker__row:first-child { border-top: none; padding-top: 4px; }
+.analytics-picker__caption { color: var(--ink); font-size: 14px; font-weight: 650; }
+.analytics-picker__meta { color: var(--color-muted); font-size: 12.5px; margin-top: 4px; }
+.analytics-picker__meta a { color: var(--color-violet); }
+.analytics-picker__actions { align-items: center; display: flex; flex: 1; gap: 8px; min-width: 220px; }
+.analytics-picker__actions select { background: #fff; border: 1px solid var(--color-line); border-radius: 10px; flex: 1; height: 34px; min-width: 0; padding: 0 10px; }
 .ig-panel__actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .ig-panel__paste { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .ig-panel__paste label { color: var(--color-muted); font-size: 12px; }
