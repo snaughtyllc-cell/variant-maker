@@ -79,41 +79,91 @@ Google — not Studio driving the Instagram app as someone else.
 
 ## Meta constraints (honest)
 
-- **Professional accounts only.** Personal IG cannot grant Insights.
-- **Jeff-once app.** Create the Meta app, add Instagram product, set
-  redirect to Studio. Operators never create a Meta app (same rule as Drive /
-  GCP).
-- **App Review** for `instagram_business_basic` +
-  `instagram_business_manage_insights` (Advanced Access). Until then: Meta
-  test users / test IG accounts only — same pain as unverified Drive OAuth.
-- **Tokens expire.** Store and refresh long-lived user tokens per connected
-  IG user. Disconnect deletes the file.
+Two different clocks. Do not mix them.
+
+### Connecting *your* Instagram (fast)
+
+Jeff-once: create the Meta app, add the Instagram product, set Studio’s
+redirect URL. Add **your** IG (and any tester handles) as roles / test
+users on that app. Those accounts Connect the same day — Instagram Login
+consent, token stored, Insights pull. Professional (Business/Creator)
+account required; Personal IG cannot grant Insights.
+
+That is **not** App Review. That is Development mode, same as adding
+someone as a Google OAuth test user so Connect Google works for them.
+
+### App Review (only when strangers Connect)
+
+Meta will not let a random operator’s Instagram grant
+`instagram_business_manage_insights` until the app has **Advanced Access**
+(App Review + a screencast of Insights in Studio). Until then, only
+people listed on the Meta app can finish OAuth.
+
+That is the Drive parallel: **you** can Connect today; an outside
+workspace hits the unverified / test-user wall until Google (or Meta)
+approves the app. It is not Slack-install-and-done for every customer
+account. For Jeff’s own IGs, skip this worry.
+
+### Insights data lag (also not App Review)
+
+Instagram’s numbers lag. A Reel posted 20 minutes ago often still reads
+**0 views** in the API even if it is getting push. Do not scream “this
+isn’t being pushed” at T+20. Suggestions need an age floor (see G4).
+That delay exists even after Connect works.
+
+### Other API notes
+
+- **Tokens expire.** Store and refresh long-lived user tokens per
+  connected IG user. Disconnect deletes the file.
 - **Metric name:** use **`views`** (replaces deprecated `impressions` /
   `plays` / `video_views` on current Graph versions). Reach +
   likes/comments/shares/saved stay useful. If `views` errors on a given
   login type, fail that metric honestly; do not silently substitute a dead
   field.
-- **Delay.** Insights lag. Do not scream “not getting pushed” at T+20
-  minutes. Suggestions need a floor (see G4).
 - **No “flagged” field.** Never invent one from the API.
 
 ## Identity (the join)
 
 We are still not the poster. Repurpose / the phone / a VA publishes. After
-Connect, the media **appears on the connected professional account**. Match
-that media to a variant.
+Connect, that account’s recent media shows up on Graph (`permalink`,
+`caption`, `id`, timestamp). Studio matches each Reel to **one Gallery
+copy**.
+
+Caption matching is a **hint**, not the id. It works when the posted
+caption is unique on that connected account and still equals the caption
+Studio assigned. It fails in the loop we already run:
+
+- Caption **banks reuse lines** when a folder is low (“a 20-pack will
+  reuse lines”).
+- **Main / trial / growth** share one niche caption folder — three
+  accounts can post the same caption on different files.
+- Drive filenames flatten newlines / strip `/ \`; the IG caption may
+  not be byte-identical.
+- VAs edit the caption on the phone; IG truncates long ones.
+
+So: auto-link **only** when the caption is a **unique** match on **that**
+connected `@handle` (normalized). If two copies share the line, or the
+Reel caption does not uniquely hit one variant, do not guess — picker.
 
 Stable keys, in order:
 
-1. **`ig_media_id`** once matched (survives caption edits).
+1. **`ig_media_id`** once matched (survives later caption edits).
 2. **Normalized permalink** ↔ `post_url` (v1 paste, or auto-filled from
-   `permalink` on the media object).
-3. **`job_id` + `source_id` + variant index** — Studio identity. Never the
-   Drive display name (Repurpose rename).
+   Graph `permalink`).
+3. **Unique caption on that connected account** — first-pass auto-link
+   only. Never across accounts. Never if the line is used twice in the
+   pack or the bank.
+4. **`job_id` + `source_id` + variant index** — Studio identity. Never
+   the Drive display name after Repurpose rename.
 
-Do **not** auto-guess by caption text or “posted around the same time.”
-Unmatched recent Reels get a **picker** on the pack (“this IG post is this
-copy”). Exact permalink match may fill `post_url` for them.
+Optional later (only if unique-caption miss rate is painful): a **short
+id prefix** on the caption Studio already writes (`v07_8a3f__` + hook),
+same idea as Drop Ledger 12b. That is a unique join on purpose. Do not
+lead with it; banks are marketing copy.
+
+Unmatched recent Reels get a **picker** on the pack (“this IG post is
+this copy”). One click stores `ig_media_id` + `post_url`; after that,
+captions can change and tracking still holds.
 
 `drop_url` stays Drive file id. `post_url` stays live permalink. Insights
 hang off the variant next to those, not on the ledger as a second truth.
@@ -176,10 +226,11 @@ Permissions: `instagram_business_basic`,
 
 ### G2 — Sync insights onto linked variants
 
-- `GET /{ig-user-id}/media` (permalink, timestamp, media product type)
+- `GET /{ig-user-id}/media` (permalink, caption, timestamp, media product type)
 - `GET /{ig-media-id}/insights?metric=views,reach,likes,comments,shares,saved`
   (request only metrics valid for that media type; skip missing)
-- Match permalink → `post_url` / store `ig_media_id`
+- Match in order: existing `ig_media_id` → permalink/`post_url` → **unique**
+  caption on this `@handle` → else unmatched (picker, do not guess)
 - Persist snapshot on the variant (`job.json`): counts + `fetched_at`
 - Refresh: on Gallery load (rate-limit) + a manual **Sync insights**
 - No Redis. No always-on queue. Same “poll when they look” pattern as
