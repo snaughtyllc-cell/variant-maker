@@ -79,7 +79,7 @@ product. North star for *flow*: `docs/superpowers/specs/2026-08-20-butter-loop.m
 Do not clone their poster, marketplace, or overlay engine.
 
 Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
-**our uniqueness + a Drops board**, not Sheets and not logging into Instagram.
+**our uniqueness + a Drops board**, not Sheets and not scraping Instagram.
 
 - One **Drops** view of packs sent to Drive: date, destination, unlabeled = pass,
   flagged / duplicate-reject as misses.
@@ -90,9 +90,15 @@ Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
   click to open; views later. Not a scraper, not Eagle Browser.
 - Amplify = Generate more of a **winning source**, same Fast engine — not
   Butter-style hook/overlay scrambles.
+- **Official Instagram Insights** (parked): Connect the professional account
+  like Connect Google; Gallery shows pack totals and winner/quiet
+  suggestions. Spec:
+  `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
 
-**Not:** Instagram login, auto-post, scraping insights, a local detector,
-shoutout marketplace. The platform stays the oracle. Spec:
+**Not:** scraping Insights, auto-post, logging into Instagram *as* the VA,
+a local detector, shoutout marketplace. Connect Instagram (OAuth) is the
+allowed later path — not a browser farm. The platform stays the policy
+oracle (`platform_result`). Spec:
 `docs/superpowers/specs/2026-08-20-post-url-tracking.md`.
 
 ## Parallel file boxes
@@ -102,7 +108,7 @@ shoutout marketplace. The platform stays the oracle. Spec:
 | Diagnostics | `TopNav.tsx`, `web/app/diagnostics/`, TopNav tests | Drive, Gallery zip |
 | Phone save | `web/lib/` share helpers, `SourceGroup.tsx`, gallery tests | TopNav, Drive OAuth, uniqueness |
 | Drive trust | this spec + `docs/ops/` Jeff-only OAuth test-user note | DestinationsPanel (onboarding PR), DropLedgerPanel |
-| Drops board | `web/app/drops/` later; see butter-loop spec | engine, Stripe, IG login |
+| Drops board | `web/app/drops/` later; see butter-loop spec | engine, Stripe, Insights OAuth |
 
 ## Frozen
 

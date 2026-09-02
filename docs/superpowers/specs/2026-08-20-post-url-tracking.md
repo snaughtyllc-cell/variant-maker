@@ -18,8 +18,8 @@ link back into Gallery.
 |---|---|---|
 | **v1 Paste permalink** | Now | VA copies IG/TikTok/Shorts URL into the variant sheet. Click to open. No login, no scrape. |
 | **v2 Public metadata** | Later, optional | oEmbed / OG on *public* posts only. Age-gated / 18+ accounts will fail without a session. |
-| **v3 Official APIs** | Later, if we own the connection | Real views/CPM on accounts the workspace connected. |
-| **Logged-in browser farm** (Eagle, etc.) | Parked | Sees only what a logged-in profile sees. Restricted 18+ needs that session. Out of scope: no account proxies (`CLAUDE.md`). Trial-and-error, not a product loop. |
+| **v3 Official APIs** | Parked — Insights gallery spec | Real views on accounts the workspace **Connected**. Instagram Login, not a scraper. Gallery pack rollup + amplify. `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`. |
+| **Logged-in browser farm** (Eagle, etc.) | Parked forever for this product | Sees only what a logged-in profile sees. Restricted 18+ needs that session. Out of scope: no account proxies (`CLAUDE.md`). Trial-and-error, not a product loop. |
 
 `drop_url` on the Drop Ledger is the **Drive file id**. `post_url` is the
 **live post**. Do not overload them.

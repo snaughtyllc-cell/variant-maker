@@ -84,7 +84,7 @@ from Studio, no “real-device posting,” no mass DMs, no unban marketplace.
 | Butter module | VaryForge stance |
 |---|---|
 | Native TikTok / IG / YT / X posting | **Out.** Repurpose (or the VA’s phone) stays the poster. |
-| Official CPM / views APIs | **Later / optional.** No scrape. Unlabeled = pass until someone labels. |
+| Official CPM / views APIs | **IG Insights track** (parked spec). Official Connect, no scrape. Unlabeled policy still = pass. |
 | Overlay / hook scramble | **Out.** That’s the cheap look. Our variants stay real. |
 | Shoutout / live / unban marketplace | **Out.** Not this product. |
 | Auto-queue 100 overlay variants of winners | **No overlays.** “Generate more of this source” is allowed. |
@@ -101,10 +101,12 @@ Source (phone / Drive inbox)
   → Split / Send to Drive  (one folder = one account / Repurpose queue)
   → VA posts from that folder
   → Drops board: unlabeled = pass; flag / duplicate if the platform said so
+  → Gallery Insights (F4): pack totals on connected IG; quiet original vs winner
   → Amplify: “more like this” on winners (same source, new seeds) — not overlays
 ```
 
-That is Post → Track → Amplify without logging into Instagram.
+That is Post → Track → Amplify without Studio posting or scraping Instagram.
+Connect Instagram (OAuth) is F4, not a VA browser farm.
 
 ## Build slices (flow, in order)
 
@@ -147,11 +149,19 @@ small “posted today” from Drops — not a native poster.
 and uniqueness gate. Feed **flagged** recipes the other way (don’t clone
 losers). Still not a detector.
 
-### F4 — Optional live metrics (only with a real API or public lookup)
+When F4 ships, **winning** is the original with the views — not “nobody
+clicked Flagged.” Generate-more stays `regenerate(source_id, n)`.
 
-v1 already stores `post_url`. If a platform gives us views on *our*
-connected account later, attach them to that URL. Public oEmbed is optional
-and will miss 18+ / restricted posts. Do not scrape logged-in Instagram.
+### F4 — Live metrics on the pack (official Instagram Insights)
+
+v1 already stores `post_url`. **F4 is the Meta developer-app track:** the
+workspace Connects an Instagram professional account, Studio pulls Insights,
+Gallery rolls views up per **pack / source / copy**, then F3 amplify uses
+those numbers. Spec:
+`docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
+
+Public oEmbed is optional and will miss 18+ / restricted posts. Do not
+scrape logged-in Instagram. Do not treat dead views as `flagged`.
 
 ## Success
 

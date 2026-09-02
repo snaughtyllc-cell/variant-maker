@@ -42,6 +42,10 @@ This is **not** a detector. Predicting a platform’s verdict stays out of scope
 - Logging into Instagram/TikTok as the VA and scraping insights.
 - A local classifier that claims to predict platform policy.
 - Replacing the manifest `platform_result` slot — extend it, don’t fork a second truth.
+- **View counts / “is it getting push?”** — that is the Instagram Insights
+  Gallery track (`2026-09-02-instagram-insights-gallery.md`). Official
+  Connect, pack rollup, amplify winners. Insights must never write
+  `flagged` / `duplicate_reject`. Phase 12 stays policy labels only.
 
 ## Suggested slices (when we build)
 

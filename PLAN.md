@@ -141,6 +141,9 @@ Status legend: ✅ done & verified · 🔨 to build
 - **Do not build this next.** Gallery labeling / Drop Ledger learning / `platform_result`
   bias is deferred until we ask for it. Unlabeled stays pass; the field remains on the manifest.
 - After Fast is the daily pack, next *product* work is Fast look/uniqueness — not Phase 12.
+- **Separate Studio track (also parked):** Instagram Insights in Gallery —
+  official Meta Connect, pack view totals, amplify winners. Not 12c. Not a
+  detector. Spec: `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
 
 ## Phase 14 — Split pack across creator destinations  ✅
 - One generate → partition variants into **main / trial / growth** Drive folders

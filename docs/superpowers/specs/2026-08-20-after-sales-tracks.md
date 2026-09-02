@@ -145,6 +145,11 @@ share packs on purpose). Owner workspaces already have their own Drive.
   etc.) without a Slack/email. Not a tab this week. Not a changelog
   page that redesigns invent early. Note only:
   `docs/ops/studio-ia.md` → Later.
+- **Instagram Insights in Gallery** (Jeff 2026-09-02): official Meta
+  Connect → pack rollup → amplify winners. Product track, not a capacity
+  wave. Can run in parallel with Waves 1–3 the same way butter-loop can.
+  Spec: `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
+  Do not mash into Phase 12c (policy labels ≠ view counts).
 
 ## Explicitly later / never for this product
 
@@ -164,8 +169,11 @@ share packs on purpose). Owner workspaces already have their own Drive.
 3. Else if flagged files vanish after rename → **Wave 4 (12b)**.
 4. Else if Jeff is drowning in invites/invoices → **Wave 6**, still
    invite-only until Stripe exists.
-5. Do not start 12c, Stripe, and hybrid runners in the same week — they
-   share almost no files, but they compete for “what is the product.”
+5. Else if Gallery-without-Insights is the complaint (open 20 Reels to see
+   which original won) → **Instagram Insights** spec (G1 Connect first).
+6. Do not start 12c, Stripe, Insights auto-amplify, and hybrid runners in
+   the same week — they share almost no files, but they compete for “what
+   is the product.”
 
 Operator-friction (Diagnostics hide, Drive trust, phone save-without-zip,
 drops board) is `docs/superpowers/specs/2026-08-20-operator-friction.md`.
