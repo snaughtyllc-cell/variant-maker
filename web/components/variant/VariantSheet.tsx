@@ -11,6 +11,7 @@ import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
 import { variantWipeHint } from "@/lib/galleryLayout";
+import { insightSnapshotCopy } from "@/lib/instagram";
 
 interface VariantSheetProps {
   sourceId: string;
@@ -71,6 +72,7 @@ export function VariantSheet({
 
   // Pad variant.index for display (v01, v02 …) — use the real 1-based variant.index
   const padded = String(variant.index).padStart(2, "0");
+  const insightsCopy = insightSnapshotCopy(variant.ig_insights);
 
   // Keyboard: ← → for nav, Esc is handled by Radix Dialog
   useEffect(() => {
@@ -168,6 +170,16 @@ export function VariantSheet({
             packAvgPct={packAvgPct}
             heads={variant.quality.heads}
           />
+
+          {insightsCopy && (
+            <>
+              <div className="variant-sheet__hr" />
+              <div className="variant-sheet__insights">
+                <div className="variant-sheet__insights-label">Insights</div>
+                <div>{insightsCopy}</div>
+              </div>
+            </>
+          )}
 
           <div className="variant-sheet__hr" />
 

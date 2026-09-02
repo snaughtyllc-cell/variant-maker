@@ -29,14 +29,16 @@ describe("studioDestinations", () => {
     expect(hrefs).toEqual(pages);
   });
 
-  it("keeps the phone/desktop primary row at the five operator tabs", () => {
+  it("keeps the phone/desktop primary row at the operator tabs", () => {
     expect(PRIMARY_TABS.map((d) => d.label)).toEqual([
       "Studio",
       "Gallery",
+      "Analytics",
       "Drops",
       "Workflows",
       "Drive",
     ]);
+    expect(PRIMARY_TABS.find((d) => d.href === "/analytics")?.short).toBe("Stats");
   });
 
   it("does not hide Team, Admin, or Diagnostics from the catalog", () => {

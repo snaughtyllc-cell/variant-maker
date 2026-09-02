@@ -10,6 +10,7 @@ import {
   LogOut,
   MoreHorizontal,
   PackageCheck,
+  ChartColumn,
   Settings2,
   ShieldCheck,
   UsersRound,
@@ -26,6 +27,7 @@ import { VarimoWordmark } from "../brand/VarimoWordmark";
 const ICONS = {
   "/": GalleryHorizontalEnd,
   "/gallery": FolderOpen,
+  "/analytics": ChartColumn,
   "/drops": PackageCheck,
   "/workflows": Workflow,
   "/settings/drive": Cloud,
@@ -48,7 +50,7 @@ export function TopNav() {
   // Phase C: Gallery, Drops, Flows and Drive each render their own 58px context
   // bar as the first element of their page. Suppress the shared desktop header on
   // those routes so there is a single bar, not two stacked ones.
-  const OWN_HEADER_ROUTES = ["/gallery", "/drops", "/workflows", "/settings/drive"];
+  const OWN_HEADER_ROUTES = ["/gallery", "/analytics", "/drops", "/workflows", "/settings/drive"];
   const ownsOwnHeader = OWN_HEADER_ROUTES.some(
     (r) => pathname === r || pathname.startsWith(`${r}/`),
   );

@@ -27,6 +27,9 @@ class VariantOut(BaseModel):
     look_src_url: str | None = None
     look_var_url: str | None = None
     caption: str | None = None
+    ig_media_id: str | None = None
+    ig_user_id: str | None = None
+    ig_insights: dict | None = None
 
 
 class LookPreviewOut(BaseModel):
@@ -43,6 +46,31 @@ class PlatformResultIn(BaseModel):
 
 class PostUrlIn(BaseModel):
     url: str = ""
+
+
+class InstagramTokenIn(BaseModel):
+    access_token: str
+
+
+class InstagramAccountOut(BaseModel):
+    user_id: str
+    username: str
+    name: str = ""
+    connected_utc: str | None = None
+
+
+class InstagramStatusOut(BaseModel):
+    oauth_available: bool
+    connected: bool
+    accounts: list[InstagramAccountOut] = []
+    message: str = ""
+
+
+class InstagramSyncOut(BaseModel):
+    matched: int = 0
+    accounts: int = 0
+    media: int = 0
+    analytics: dict = {}
 
 
 class InFlightOut(BaseModel):
@@ -69,6 +97,9 @@ class SourceOut(BaseModel):
     files_ready: int = 0          # ok variants whose mp4 is on Studio disk
     copy_status: Literal["ok", "copying", "missing"] = "ok"
     job_id: str | None = None
+    insights_views: int | None = None
+    insights_linked: int = 0
+    insights_unknown: int = 0
 
 
 class JobSummary(BaseModel):

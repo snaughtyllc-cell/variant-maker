@@ -25,14 +25,17 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Everyone signed in | **Studio · Gallery · Drops · Workflows · Drive** |
+| Everyone signed in | **Studio · Gallery · Analytics · Drops · Workflows · Drive** |
 | Workspace owner (or site admin) | + **Team** |
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
-Phone (`< 640px`) only has room for the five everyone-tabs. Team /
-Admin / Diagnostics sit under **More**. Desktop shows extras in the
-top row when the session is allowed to see them.
+Solo members (no Drops / Workflows) still see **Studio · Gallery ·
+Analytics · Drive** (`/`, `/gallery`, `/analytics`, `/settings/drive`).
+
+Phone (`< 640px`) shows the six everyone-tabs (Analytics short label
+**Stats**). Team / Admin / Diagnostics sit under **More**. Desktop shows
+extras in the top row when the session is allowed to see them.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -43,9 +46,10 @@ row + progress card.
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast, Reconstruct-first (HQ) switch default off, Advanced, live queue. |
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| Analytics | `/analytics` | everyone | yes (label **Stats**) | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
 | Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
-| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. |
+| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
@@ -60,6 +64,7 @@ old four-row list.
 | Surface | Parent | How it opens |
 |---|---|---|
 | Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, quality, uniqueness, platform flag, post URL, download. |
+| Instagram compact views | Gallery pack header / tile / variant sheet | Views rollup line, linked count, quiet/winner hint. Full scoreboard lives on Analytics. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
@@ -68,17 +73,20 @@ old four-row list.
 
 | Idea | Why it waits |
 |---|---|
-| **Announcements** — in-app updates / bug-fix notes so operators see what shipped (Jeff 2026-08-29) | Not a sixth phone tab. Not a Fast/uniqueness change. Park until a wave above is idle. When built: everyone signed in, short dated notes, no marketing blog. |
-| **Instagram Insights in Gallery** — Connect professional IG, pack view totals, winner / quiet suggestions, amplify the winning original (Jeff 2026-09-02) | Not a sixth phone tab. Connect lives on Drive (or that page). Numbers live on Gallery packs + tiles + variant sheet. Official Meta app, not a scraper. Spec: `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`. |
+| **Announcements** — in-app updates / bug-fix notes so operators see what shipped (Jeff 2026-08-29) | Not a seventh phone tab. Not a Fast/uniqueness change. Park until a wave above is idle. When built: everyone signed in, short dated notes, no marketing blog. |
+
+Instagram Analytics is live IA (not Later). Connect testers on Drive and
+Analytics; scoreboard on Analytics; compact views on Gallery. Ops:
+`docs/ops/instagram-testers.md`. Spec:
+`docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
 
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
 - Do not add an Updates / Announcements tab in a redesign pass. It is
   parked under Later above — not missing IA.
-- Do not add an Insights / Analytics tab. Pack totals and Connect
-  Instagram live on Gallery + Drive when that spec is unparked.
-- Do not hide Drops, Workflows, Drive, Team, or Admin — they are live.
+- Do not hide Analytics, Drops, Workflows, Drive, Team, or Admin — they
+  are live.
 - Do not put Admin / Diagnostics in the phone bottom bar. They stay
   under More.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,

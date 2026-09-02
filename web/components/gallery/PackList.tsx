@@ -2,6 +2,7 @@
 
 import { SourceOut } from "@/lib/types";
 import { avgOriginalityPct, filesReadyCount, isFileReady, packMetaLabel, packOriginalityColor } from "@/lib/gallery";
+import { formatViews } from "@/lib/instagram";
 
 interface PackListProps {
   packs: SourceOut[];
@@ -41,6 +42,9 @@ function PackRow({
         <div className="gallery-pack-row__meta">
           {packMetaLabel(source)}
           {delivered < source.requested ? ` · ${delivered}/${source.requested}` : ""}
+          {source.insights_linked
+            ? ` · ${source.insights_views == null ? "linked" : `${formatViews(source.insights_views)} views`}`
+            : ""}
         </div>
       </div>
       {pct != null && (

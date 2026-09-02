@@ -1,7 +1,17 @@
 import { isAgencyExperience } from "./experience";
 import { PRIMARY_TABS, type StudioDestination } from "./studioDestinations";
 
-const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/settings/drive"]);
+const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/analytics", "/settings/drive"]);
+
+/** Any signed-in workspace user can Connect another tester IG (not admin-only). */
+export function canManageInstagram(me: {
+  auth_required?: boolean;
+  email?: string | null;
+} | undefined): boolean {
+  if (!me) return false;
+  if (me.auth_required === false) return true;
+  return Boolean(me.email);
+}
 
 /** Failed-encode leftovers. Operators never use Diagnostics — site admin only. */
 export function showDiagnosticsNav(me: {
@@ -30,7 +40,7 @@ export function showTeamNav(me: {
   return me?.role === "owner" || Boolean(me?.is_admin);
 }
 
-/** Phone + desktop primary row. Solo creators only see Studio, Gallery, Drive. */
+/** Phone + desktop primary row. Solo creators see Studio, Gallery, Analytics, Drive. */
 export function visiblePrimaryTabs(me: {
   experience?: string | null;
   is_admin?: boolean;

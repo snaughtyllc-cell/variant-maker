@@ -229,6 +229,21 @@ describe("SourceGroup live post count", () => {
   });
 });
 
+describe("SourceGroup insights", () => {
+  it("shows packViewsCopy when insights are linked", () => {
+    render(
+      <SourceGroup
+        source={source({
+          insights_views: 1234,
+          insights_linked: 1,
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("1.2k views · 1 of 2 linked")).toBeInTheDocument();
+  });
+});
+
 describe("SourceGroup originality", () => {
   it("titles the Originality average as pixel SSIM, not a platform check", () => {
     render(

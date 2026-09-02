@@ -13,6 +13,7 @@ import { VarimoWordmark } from "../brand/VarimoWordmark";
 const NAV_ICONS = {
   "/": "movie_edit",
   "/gallery": "photo_library",
+  "/analytics": "monitoring",
   "/drops": "inventory_2",
   "/workflows": "schema",
   "/settings/drive": "cloud",

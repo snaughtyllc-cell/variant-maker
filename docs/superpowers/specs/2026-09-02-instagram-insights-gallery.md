@@ -1,7 +1,7 @@
 # Instagram Insights in Gallery (Track → Amplify)
 
 **Date:** 2026-09-02  
-**Status:** Design — parked until Jeff unparks a slice. This PR is the spec only.  
+**Status:** Design / building — Analytics tab + Connect testers (G1–G4).  
 **Product name:** VaryForge  
 **Jeff (2026-09-02):** Meta developer app → operator Connect Instagram → pull
 Insights → Gallery shows the pack (300k views, ranked copies) → suggestions
@@ -126,9 +126,9 @@ Submission (official App Review + screen-recording guide):
 
 | They look at | What that means for us |
 |---|---|
-| **Which permissions** | Only `instagram_business_basic` (read media to match posts) and `instagram_business_manage_insights` (views/reach on Gallery). Do **not** request publish, comments, DMs, or Page scopes “just in case.” |
-| **Written use case** | English, step-by-step: operator Connects IG → Studio lists Reels → matches to Gallery copies → shows views on the pack. Allowed-usage checkbox per permission. |
-| **Screencast per permission** | Logged-out → Studio login → **Instagram Login consent** (must see the grant) → Gallery/sheet showing Insights numbers that permission unlocked. High-res, English UI, no audio. They follow this video when they test. |
+| **Which permissions** | Only `instagram_business_basic` (read media to match posts) and `instagram_business_manage_insights` (views/reach on Analytics + Gallery). Do **not** request publish, comments, DMs, or Page scopes “just in case.” |
+| **Written use case** | English, step-by-step: operator Connects IG → Studio lists Reels → matches to Gallery copies → shows views on Analytics and compact Gallery surfaces. Allowed-usage checkbox per permission. |
+| **Screencast per permission** | Logged-out → Studio login → **Instagram Login consent** (must see the grant) → Analytics + Gallery sheet showing Insights numbers that permission unlocked. High-res, English UI, no audio. They follow this video when they test. |
 | **Reviewer can load the app** | Live Studio URL + a working invite / test login. Not a private intranet with no UI. |
 | **Business Verification** | Legal entity docs matching the Business portfolio that owns the app. Required for Advanced Access (since 2023). |
 | **Privacy policy URL** | Public page shown on Meta’s consent screen. What we store (tokens, view counts), why, how to disconnect / delete. |
@@ -207,19 +207,21 @@ captions can change and tracking still holds.
 `drop_url` stays Drive file id. `post_url` stays live permalink. Insights
 hang off the variant next to those, not on the ledger as a second truth.
 
-## Where it shows (no new tab)
+## Where it shows (Analytics tab)
 
-Studio IA stays: Studio · Gallery · Drops · Workflows · Drive.
+Studio IA: Studio · Gallery · **Analytics** · Drops · Workflows · Drive.
+Phone short label **Stats**.
 
 | Surface | What to add |
 |---|---|
-| **Drive** (or a card on that page) | Connect Instagram / connected @handle / Disconnect. Jeff-once env, not a phone tab. |
-| **Gallery pack header** | Total views for matched copies. “12 of 20 linked.” Winner / quiet suggestion line. |
+| **Analytics** (`/analytics`) | Scoreboard: totals, ranked originals, Sync insights, generate 20 more of winner, quiet/winner suggestions. **InstagramPanel** (Connect / connected @handles / Disconnect). OAuth callback lands on `/analytics?ig=connected`. |
+| **Drive** | Same **InstagramPanel** — Connect adds another @handle (main/trial/growth); never replaces other accounts. Drive Google OAuth stays one shared mailbox (site-admin Connect). |
+| **Gallery pack header** | Compact: total views for matched copies. “12 of 20 linked.” Winner / quiet hint line. |
 | **Gallery tile** | Compact views (and a dead/quiet mark only after G4 floors). Existing uniqueness + Flagged chips stay. |
 | **Variant sheet** | Views / reach / engagement + last synced. Keep paste + Passed/Duplicate/Flagged. |
 | **Drops** | Optional pack-level views once G3 exists. Drops is still the policy board (unlabeled = pass). |
 
-Watch is not a tab. Insights is not a tab.
+Watch is not a tab.
 
 ## Amplify (winners → more unique files)
 
@@ -245,9 +247,11 @@ No code. Cross-links from butter-loop F4, post-url v3, after-sales, IA.
 
 ### G1 — Connect Instagram (workspace OAuth)
 
-Mirror Drive: Settings → Drive (or adjacent card) → **Connect Instagram**
-→ Instagram Login consent → callback stores token at
-`{workspace}/instagram/oauth_<ig_user_id>.json` → status shows @handle.
+**InstagramPanel** on Drive and Analytics → **Connect Instagram** →
+Instagram Login consent → callback stores token at
+`{workspace}/instagram/account_{user_id}.json` → redirect
+`/analytics?ig=connected` → status shows @handle. Each Connect **adds**
+a tester account; never replaces others.
 
 Env (Jeff / Railway, not operators):
 
@@ -337,11 +341,12 @@ Still not a detector.
 
 ## Success
 
-An agency opens Gallery, not Instagram Insights, to answer: **which
-original is working, which copies are carrying it, should we mint more or
-shoot something else.** Connect once per professional account. Numbers
-update without a spreadsheet. Generate-more on a winner is the same Fast
-pack they already trust.
+An agency opens **Analytics** (and compact Gallery views), not Instagram
+Insights, to answer: **which original is working, which copies are
+carrying it, should we mint more or shoot something else.** Connect each
+professional account (main/trial/growth). Numbers update without a
+spreadsheet. Generate-more on a winner is the same Fast pack they already
+trust.
 
 ## Frozen
 

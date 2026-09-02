@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canManageDriveOAuth, showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import { canManageDriveOAuth, canManageInstagram, showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
 import { PRIMARY_TABS } from "@/lib/studioDestinations";
 
 describe("showDiagnosticsNav", () => {
@@ -41,8 +41,22 @@ describe("showTeamNav", () => {
   });
 });
 
+describe("canManageInstagram", () => {
+  it("lets any signed-in operator Connect another tester", () => {
+    expect(canManageInstagram({ auth_required: true, email: "va@x.com" })).toBe(true);
+  });
+
+  it("hides Connect when login is required and nobody is signed in", () => {
+    expect(canManageInstagram({ auth_required: true, email: null })).toBe(false);
+  });
+
+  it("allows Connect when login is off", () => {
+    expect(canManageInstagram({ auth_required: false, email: null })).toBe(true);
+  });
+});
+
 describe("visiblePrimaryTabs", () => {
-  it("keeps all five operator tabs for agency, admin, and auth off", () => {
+  it("keeps every operator tab for agency, admin, and auth off", () => {
     const labels = PRIMARY_TABS.map((d) => d.label);
     expect(
       visiblePrimaryTabs({
@@ -74,6 +88,6 @@ describe("visiblePrimaryTabs", () => {
         is_admin: false,
         auth_required: true,
       }).map((d) => d.href),
-    ).toEqual(["/", "/gallery", "/settings/drive"]);
+    ).toEqual(["/", "/gallery", "/analytics", "/settings/drive"]);
   });
 });

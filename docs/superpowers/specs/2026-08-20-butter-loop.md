@@ -101,7 +101,7 @@ Source (phone / Drive inbox)
   → Split / Send to Drive  (one folder = one account / Repurpose queue)
   → VA posts from that folder
   → Drops board: unlabeled = pass; flag / duplicate if the platform said so
-  → Gallery Insights (F4): pack totals on connected IG; quiet original vs winner
+  → Analytics (F4): pack totals on connected IG; quiet original vs winner
   → Amplify: “more like this” on winners (same source, new seeds) — not overlays
 ```
 
@@ -155,9 +155,10 @@ clicked Flagged.” Generate-more stays `regenerate(source_id, n)`.
 ### F4 — Live metrics on the pack (official Instagram Insights)
 
 v1 already stores `post_url`. **F4 is the Meta developer-app track:** the
-workspace Connects an Instagram professional account, Studio pulls Insights,
-Gallery rolls views up per **pack / source / copy**, then F3 amplify uses
-those numbers. Spec:
+workspace Connects Instagram professional accounts (many testers — main /
+trial / growth), Studio pulls Insights, **Analytics** rolls views up per
+**pack / source / copy** (compact lines also on Gallery), then F3 amplify
+uses those numbers. Spec:
 `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
 
 Public oEmbed is optional and will miss 18+ / restricted posts. Do not

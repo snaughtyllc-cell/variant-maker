@@ -102,6 +102,10 @@ describe("SideNav", () => {
     expect(screen.queryByRole("link", { name: "Workflows" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
+      "href",
+      "/analytics",
+    );
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",

@@ -2,6 +2,7 @@ import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
 import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
 import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
 import { PasswordPanel } from "@/components/auth/PasswordPanel";
+import { InstagramPanel } from "@/components/InstagramPanel";
 
 export default function DriveSettingsPage() {
   return (
@@ -35,6 +36,10 @@ export default function DriveSettingsPage() {
           </div>
 
           <DestinationsPanel />
+
+          <div className="drive-slot-ig">
+            <InstagramPanel />
+          </div>
 
           <DropLedgerPanel />
           <div className="drive-slot-password">

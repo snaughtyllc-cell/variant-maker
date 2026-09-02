@@ -37,6 +37,15 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
       "7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
   },
   {
+    href: "/analytics",
+    label: "Analytics",
+    short: "Stats",
+    audience: "everyone",
+    tab: "primary",
+    summary:
+      "Instagram Insights on the pack: connected testers, views rollup, ranked originals, generate more of a winner.",
+  },
+  {
     href: "/drops",
     label: "Drops",
     audience: "everyone",
@@ -59,7 +68,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, password.",
+      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, Instagram testers, password.",
   },
   {
     href: "/team",

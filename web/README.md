@@ -5,7 +5,7 @@ Pure client of the FastAPI backend via a same-origin dev proxy.
 
 **Redesign / Codex:** do not use the old four-screen list
 (Studio / Gallery / variant side-panel / Diagnostics). That was v1.
-The live product has nine destinations. Source of truth:
+The live product has ten destinations. Source of truth:
 [`docs/ops/studio-ia.md`](../docs/ops/studio-ia.md) and
 `web/lib/studioDestinations.ts`.
 
@@ -133,6 +133,7 @@ route is missing from that catalog.
 |---|---|---|---|---|
 | **Studio** | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast vs HQ, Advanced, live queue. Reload mid-run re-attaches. |
 | **Gallery** | `/gallery` | everyone | yes | 24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| **Analytics** | `/analytics` | everyone | yes (label **Stats**) | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
 | **Drops** | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
@@ -146,13 +147,15 @@ Nested (not tabs — a redesign must still include them):
 | Surface | Opens from | What it is |
 |---|---|---|
 | **Variant sheet** | Gallery card | Compare slider, scrub, quality, uniqueness, platform flag, post URL, download. |
+| **Instagram compact views** | Gallery pack header / tile / variant sheet | Views rollup, linked count, quiet/winner hint. Full scoreboard on Analytics. |
 | **Send to Drive** | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | **Drive picker** | Studio | Import source files from a saved Drive destination. |
 | **Watch / queue / cancel** | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
 
-Phone (`< 640px`) shows the five everyone-tabs. Team / Admin /
-Diagnostics sit under **More**. Desktop shows extras in the top row
-when the session is allowed. Auth gating: `web/lib/navAccess.ts`.
+Phone (`< 640px`) shows the six everyone-tabs (Analytics short label
+**Stats**). Team / Admin / Diagnostics sit under **More**. Desktop shows
+extras in the top row when the session is allowed. Auth gating:
+`web/lib/navAccess.ts`.
 
 ---
 

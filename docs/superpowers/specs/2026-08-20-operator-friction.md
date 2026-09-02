@@ -90,10 +90,12 @@ Drop Ledger 12a (Ensure/Sync + Flagged) is the seed. The no-brainer is
   click to open; views later. Not a scraper, not Eagle Browser.
 - Amplify = Generate more of a **winning source**, same Fast engine — not
   Butter-style hook/overlay scrambles.
-- **Official Instagram Insights** (parked): Connect the professional account
-  like Connect Google; Gallery shows pack totals and winner/quiet
-  suggestions. Spec:
+- **Official Instagram Insights** (building): Connect each professional
+  tester account like Connect Google (many @handles, not one mailbox);
+  **Analytics** tab is the scoreboard; Gallery keeps compact pack/tile/sheet
+  views. Spec:
   `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
+  Ops: `docs/ops/instagram-testers.md`.
 
 **Not:** scraping Insights, auto-post, logging into Instagram *as* the VA,
 a local detector, shoutout marketplace. Connect Instagram (OAuth) is the
