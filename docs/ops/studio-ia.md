@@ -7,6 +7,11 @@ and hid every destination shipped after v1.
 
 Live product: https://varyforge-studio-production.up.railway.app
 
+Purchased desktop redesign (Claude Design project expired; mock is in-repo):
+`docs/ops/bought-design.md` and `docs/design/Varimo Web Redesign.dc.html`.
+Live still uses the older stacked-card UI until that mock is signed and
+copied onto `varimo-live`.
+
 Machine-readable catalog: `web/lib/studioDestinations.ts`.
 `TopNav` renders `PRIMARY_TABS` / `EXTRA_TABS` from that file.
 The catalog test (`web/lib/__tests__/studioDestinations.test.ts`)

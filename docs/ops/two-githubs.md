@@ -106,7 +106,9 @@ branch), #23 (Lab Studio PR into the old Live branch).
 
 **Do not merge without a dedicated conflict pass:** #2 Create Mode, #47
 captions/Solo/mobile bar (conflicts with current Studio + Haiku 4.5), #60
-Lab redesign + HQ opt-in (DIRTY dump).
+Lab redesign + HQ opt-in (DIRTY dump). Purchased six-screen mock (Claude
+Design project is gone): `docs/ops/bought-design.md` and
+`docs/design/Varimo Web Redesign.dc.html`.
 
 **Do not merge (stacked look experiments / snow):** #20, #21, #22, #24, #26,
 #29. Uniqueness bits are not a look check.
