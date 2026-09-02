@@ -256,6 +256,56 @@ def test_sync_surfaces_graph_error_instead_of_pretending_zero(tmp_path):
     assert "tok" not in json.dumps(body)
 
 
+def test_sync_matches_drive_export_filename_when_gallery_caption_missing(tmp_path):
+    def fake_media(user_id, token):
+        return [{
+            "id": "media-drive",
+            "permalink": "https://www.instagram.com/reel/DriveCap/",
+            "caption": "unique lab hook",
+        }]
+
+    def fake_insights(media_id, token):
+        return {"views": 88}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    assert not src.variants[0].caption
+    from variant_maker.server.drive_exports import ExportFile, ExportStore
+    ExportStore(ws.exports_dir()).create(
+        destination_id="d1",
+        folder_id="f1",
+        files=[ExportFile(
+            source_id=src.source_id,
+            index=src.variants[0].index,
+            filename="Unique Lab Hook.mp4",
+            local_path="x",
+            status="succeeded",
+        )],
+    )
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    assert resp.json()["matched"] == 1
+    gallery = client.get("/api/gallery").json()
+    assert gallery[0]["variants"][0]["ig_media_id"] == "media-drive"
+
+
 def test_sync_returns_unmatched_reels_for_the_picker(tmp_path):
     def fake_media(user_id, token):
         return [

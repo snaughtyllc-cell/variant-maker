@@ -18,6 +18,7 @@ from .instagram_oauth import GRAPH_HOST
 
 _CAPTION_SPACE = re.compile(r"\s+")
 _SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
+_VARIANT_FILE = re.compile(r"^v\d+$", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
 
 
@@ -48,6 +49,43 @@ def permalink_key(url: str | None) -> str | None:
         return match.group(1).lower()
     path = (parsed.path or "").rstrip("/").lower()
     return path or None
+
+
+def caption_from_drive_filename(filename: str | None) -> str | None:
+    """Drive export names the file with the caption stem. Skip generic v01.mp4."""
+    if not filename or not str(filename).strip():
+        return None
+    stem = str(filename).replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if stem.lower().endswith(".mp4"):
+        stem = stem[:-4].rstrip(" .")
+    if not stem or _VARIANT_FILE.fullmatch(stem):
+        return None
+    return stem
+
+
+def export_caption_hints(exports: Sequence[Any]) -> dict[tuple[str, int], str]:
+    """Newest Drive export filename wins when Gallery never stored the bank line."""
+    out: dict[tuple[str, int], str] = {}
+    for exp in exports:
+        files = exp.files if not isinstance(exp, dict) else exp.get("files") or []
+        for item in files:
+            if isinstance(item, dict):
+                source_id = item.get("source_id")
+                index = item.get("index")
+                name = item.get("filename")
+            else:
+                source_id = getattr(item, "source_id", None)
+                index = getattr(item, "index", None)
+                name = getattr(item, "filename", None)
+            if not source_id or not isinstance(index, int):
+                continue
+            key = (str(source_id), int(index))
+            if key in out:
+                continue
+            cap = caption_from_drive_filename(name if isinstance(name, str) else None)
+            if cap:
+                out[key] = cap
+    return out
 
 
 @dataclass(frozen=True)

@@ -1155,6 +1155,24 @@ class JobStore:
             self._persist(job)
         return variant
 
+    def set_caption(self, source_id: str, index: int, caption: str) -> VariantInfo | None:
+        text = (caption or "").strip()
+        if not text:
+            return None
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        variant.caption = text
+        self._rewrite_manifest_fields(job_id, source_id, index, caption=text)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
     def set_ig_insights(
         self,
         source_id: str,

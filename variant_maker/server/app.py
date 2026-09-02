@@ -76,6 +76,7 @@ from .experience import resolve_experience
 from .instagram_insights import (
     IgMedia,
     VariantLink,
+    export_caption_hints,
     fetch_media_insights,
     gallery_analytics,
     list_media as list_ig_media,
@@ -969,6 +970,7 @@ def create_app(
                     username=str(acc.get("username") or "") or None,
                     user_id=user_id,
                 ))
+        hints = export_caption_hints(app.state.exports.list())
         links: list[VariantLink] = []
         for job in store.list():
             for source in job.sources:
@@ -977,7 +979,7 @@ def create_app(
                         source_id=source.source_id,
                         index=variant.index,
                         post_url=variant.post_url,
-                        caption=variant.caption,
+                        caption=variant.caption or hints.get((source.source_id, variant.index)),
                         ig_media_id=variant.ig_media_id,
                     ))
         hits = match_media(links, media_rows)

@@ -64,6 +64,12 @@ def test_build_export_files_empty_raises(tmp_path):
         build_export_files(store, [VariantRef("s1", 2)])  # missing index
 
 
+def test_build_export_files_persists_bank_caption_on_the_copy(tmp_path):
+    store, _ = _store_with_ok(tmp_path)
+    build_export_files(store, [VariantRef("s1", 1, caption="POV boil #reels")])
+    assert store.get_variant("s1", 1).caption == "POV boil #reels"
+
+
 def test_runner_still_uploads_when_tenant_context_drops(tmp_path):
     """Send to Drive starts a daemon thread. That thread has no request tenant.
 

@@ -7,6 +7,8 @@ from tests.server.fakes import FakeRunner
 from variant_maker.server.instagram_insights import (
     IgMedia,
     VariantLink,
+    caption_from_drive_filename,
+    export_caption_hints,
     gallery_analytics,
     list_media,
     match_media,
@@ -24,6 +26,32 @@ from variant_maker.server.workspace import Workspace
 def test_permalink_key_strips_query_and_host():
     assert permalink_key("https://www.instagram.com/reel/AbC123/?igsh=xyz") == "abc123"
     assert permalink_key("instagram.com/p/AbC123/") == "abc123"
+
+
+def test_caption_from_drive_filename_skips_generic_variant_names():
+    assert caption_from_drive_filename("Unique Lab Hook.mp4") == "Unique Lab Hook"
+    assert caption_from_drive_filename("v01.mp4") is None
+    assert caption_from_drive_filename("v12.mp4") is None
+
+
+def test_export_caption_hints_prefer_newest_non_generic_name():
+    class File:
+        def __init__(self, source_id, index, filename):
+            self.source_id = source_id
+            self.index = index
+            self.filename = filename
+
+    class Exp:
+        def __init__(self, files):
+            self.files = files
+
+    hints = export_caption_hints([
+        Exp([File("s1", 1, "Newer hook.mp4")]),
+        Exp([File("s1", 1, "Older hook.mp4")]),
+        Exp([File("s1", 2, "v02.mp4")]),
+    ])
+    assert hints[("s1", 1)] == "Newer hook"
+    assert ("s1", 2) not in hints
 
 
 def test_normalize_caption_flattens_drive_newlines():
