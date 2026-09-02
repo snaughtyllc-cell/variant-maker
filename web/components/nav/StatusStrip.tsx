@@ -34,7 +34,7 @@ export function StatusStrip() {
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
+        {loading ? <span className="status-ready-text">…</span> : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
       {queueLabel && (

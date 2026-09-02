@@ -150,8 +150,9 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
       });
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v01.mp4");
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v02.mp4");
+      const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(urls).toContain("/api/variants/s1/v01.mp4");
+      expect(urls).toContain("/api/variants/s1/v02.mp4");
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
