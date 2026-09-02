@@ -13,6 +13,7 @@ import {
   packViewsCopy,
   parseCopyPick,
   suggestionButtonLabel,
+  syncInsightsCopy,
   unmatchedCaptionPreview,
   variantViewsCopy,
 } from "@/lib/instagram";
@@ -70,6 +71,28 @@ describe("amplify count", () => {
 describe("igOauthErrorMessage", () => {
   it("does not tell them to paste a Meta token", () => {
     expect(igOauthErrorMessage("exchange_failed")).not.toMatch(/paste/i);
+  });
+});
+
+describe("syncInsightsCopy", () => {
+  it("does not treat Graph-empty as matched zero Gallery copies", () => {
+    expect(syncInsightsCopy({ matched: 0, accounts: 1, media: 0, unmatched: [] })).toMatch(
+      /returned 0 Reels/i,
+    );
+    expect(syncInsightsCopy({ matched: 0, accounts: 1, media: 0, unmatched: [] })).not.toMatch(
+      /^Matched 0 posts/i,
+    );
+  });
+
+  it("says how many Reels Graph sent when auto-link misses", () => {
+    expect(
+      syncInsightsCopy({
+        matched: 0,
+        accounts: 1,
+        media: 12,
+        unmatched: [{ media_id: "orphan" }],
+      }),
+    ).toMatch(/Saw 12 Reels, matched 0/i);
   });
 });
 

@@ -34,4 +34,17 @@ See `deploy/railway/studio.env.example`:
 Drive Google OAuth stays one shared mailbox (site-admin Connect). Instagram
 is many tester accounts per workspace.
 
+## Matched 0
+
+Connect working and Sync saying **matched 0** are different:
+
+- **Graph sent 0 Reels** — tester invite not accepted, not Professional, or
+  the token listed the wrong id. Studio now tries `/me/media` then
+  `/{IG_ID}/media`.
+- **Graph sent Reels, auto-link missed** — caption matching is a unique-on-
+  that-account hint. Banks reuse lines; VAs edit on the phone. Unmatched
+  Reels get a picker on Analytics. Identity after that is `ig_media_id`.
+
+Unlinked is **unknown**, not 0 views.
+
 Spec: `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.

@@ -8,6 +8,7 @@ from variant_maker.server.instagram_insights import (
     IgMedia,
     VariantLink,
     gallery_analytics,
+    list_media,
     match_media,
     normalize_caption,
     pack_analytics,
@@ -57,6 +58,42 @@ def test_unique_caption_links_when_exactly_one_each():
     assert len(hits) == 1
     assert hits[0].via == "caption"
     assert hits[0].media_id == "media7"
+
+
+def test_list_media_uses_me_when_populated():
+    urls: list[str] = []
+
+    def get_json(url: str):
+        urls.append(url)
+        return {"data": [{"id": "m1", "permalink": "https://instagram.com/reel/Aaa/"}]}
+
+    rows = list_media("17841", "tok", get_json=get_json)
+    assert rows[0]["id"] == "m1"
+    assert len(urls) == 1
+    assert "/me/media" in urls[0]
+    assert "access_token=tok" in urls[0]
+
+
+def test_list_media_falls_back_to_ig_id_when_me_is_empty():
+    def get_json(url: str):
+        if "/me/media" in url:
+            return {"data": []}
+        return {"data": [{"id": "m2"}]}
+
+    rows = list_media("17841", "tok", get_json=get_json)
+    assert rows[0]["id"] == "m2"
+
+
+def test_list_media_raises_when_both_paths_error():
+    def get_json(url: str):
+        raise ValueError("Instagram HTTP 400: Invalid user id")
+
+    try:
+        list_media("17841", "tok", get_json=get_json)
+    except ValueError as exc:
+        assert "Invalid user id" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_pack_analytics_unknown_is_not_zero():

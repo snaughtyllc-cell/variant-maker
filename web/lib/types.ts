@@ -396,5 +396,6 @@ export interface InstagramSync {
   accounts: number;
   media: number;
   unmatched?: InstagramUnmatched[];
+  errors?: string[];
   analytics: InstagramAnalytics;
 }

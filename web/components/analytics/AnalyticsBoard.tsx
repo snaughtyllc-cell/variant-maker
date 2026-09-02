@@ -18,6 +18,7 @@ import {
   packViewsCopy,
   parseCopyPick,
   suggestionButtonLabel,
+  syncInsightsCopy,
   unmatchedCaptionPreview,
 } from "@/lib/instagram";
 import type {
@@ -77,12 +78,7 @@ export function AnalyticsBoard() {
       if (leftover.length > 0) {
         setGallery(await getGallery());
       }
-      const extra = leftover.length
-        ? ` ${leftover.length} unmatched Reel${leftover.length === 1 ? "" : "s"} need a picker.`
-        : "";
-      setNote(
-        `Matched ${out.matched} post${out.matched === 1 ? "" : "s"} across ${out.accounts} account${out.accounts === 1 ? "" : "s"}.${extra}`,
-      );
+      setNote(syncInsightsCopy(out));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {

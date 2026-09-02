@@ -944,12 +944,20 @@ def create_app(
         accounts = _ig_accounts().tokens()
         media_rows: list[IgMedia] = []
         media_owner: dict[str, str] = {}
+        list_errors: list[str] = []
         for acc in accounts:
             token = acc.get("access_token")
             user_id = str(acc.get("user_id") or "")
             if not isinstance(token, str) or not token or not user_id:
                 continue
-            for row in app.state.instagram_list_media(user_id, token):
+            try:
+                listed = app.state.instagram_list_media(user_id, token)
+            except Exception as exc:
+                handle = str(acc.get("username") or user_id)
+                list_errors.append(f"@{handle}: {exc}")
+                print(f"instagram list_media failed for @{handle}: {exc}", flush=True)
+                continue
+            for row in listed:
                 mid = str(row.get("id") or "")
                 if not mid:
                     continue
@@ -1003,12 +1011,20 @@ def create_app(
                 post_url=permalink,
             )
             matched += 1
+        leftover = unmatched_payload(media_rows, hits)
         analytics = _ig_analytics_body()
+        print(
+            "instagram sync "
+            f"accounts={len(accounts)} media={len(media_rows)} "
+            f"matched={matched} unmatched={len(leftover)} errors={len(list_errors)}",
+            flush=True,
+        )
         return {
             "matched": matched,
             "accounts": len(accounts),
             "media": len(media_rows),
-            "unmatched": unmatched_payload(media_rows, hits),
+            "unmatched": leftover,
+            "errors": list_errors,
             "analytics": analytics,
         }
 

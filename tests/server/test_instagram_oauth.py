@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -226,6 +227,35 @@ def test_sync_matches_unique_caption_onto_gallery_copy(tmp_path):
     assert "suggestions" in body["analytics"]
 
 
+def test_sync_surfaces_graph_error_instead_of_pretending_zero(tmp_path):
+    def fake_media(user_id, token):
+        raise ValueError("Instagram HTTP 400: Invalid user id")
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["matched"] == 0
+    assert body["media"] == 0
+    assert body["errors"]
+    assert "Invalid user id" in body["errors"][0]
+    assert "tok" not in json.dumps(body)
+
+
 def test_sync_returns_unmatched_reels_for_the_picker(tmp_path):
     def fake_media(user_id, token):
         return [
@@ -309,7 +339,9 @@ def test_analytics_and_gallery_stamp_winner_and_quiet(tmp_path):
             insights={"views": 10, "fetched_at": "2026-08-30T00:00:00Z"},
         )
     job = store.get(job.job_id)
-    job.created_utc = "2026-08-01T00:00:00Z"
+    job.created_utc = (
+        datetime.now(UTC).replace(microsecond=0) - timedelta(hours=48)
+    ).isoformat().replace("+00:00", "Z")
     store._persist(job)
     client = TestClient(create_app(store, sa_json_path=""))
     body = client.get("/api/instagram/analytics").json()

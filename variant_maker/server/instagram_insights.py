@@ -337,20 +337,12 @@ def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
     return body
 
 
-def list_media(
-    user_id: str,
-    access_token: str,
-    *,
-    get_json: Callable[[str], dict[str, Any]] | None = None,
-    pages: int = 3,
+def _page_media(
+    start_url: str,
+    fetch: Callable[[str], dict[str, Any]],
+    pages: int,
 ) -> list[dict[str, Any]]:
-    fetch = get_json or _get_json
-    qs = urlencode({
-        "fields": "id,caption,permalink,timestamp,media_type,media_product_type",
-        "limit": "50",
-        "access_token": access_token,
-    })
-    url: str | None = f"{GRAPH_HOST}/{user_id}/media?{qs}"
+    url: str | None = start_url
     out: list[dict[str, Any]] = []
     for _ in range(max(1, pages)):
         if not url:
@@ -363,6 +355,45 @@ def list_media(
         nxt = paging.get("next") if isinstance(paging, dict) else None
         url = nxt if isinstance(nxt, str) and nxt else None
     return out
+
+
+def list_media(
+    user_id: str,
+    access_token: str,
+    *,
+    get_json: Callable[[str], dict[str, Any]] | None = None,
+    pages: int = 3,
+) -> list[dict[str, Any]]:
+    """List recent media. Instagram Login is token-scoped: try /me/media first.
+
+    `/{IG_ID}/media` is the documented professional-account path. Some tokens
+    return an empty `data` list on the wrong id (not an HTTP error), so we
+    fall back instead of treating that as "this account has no Reels."
+    """
+    fetch = get_json or _get_json
+    qs = urlencode({
+        "fields": "id,caption,permalink,timestamp,media_type,media_product_type",
+        "limit": "50",
+        "access_token": access_token,
+    })
+    starts = [f"{GRAPH_HOST}/me/media?{qs}"]
+    uid = (user_id or "").strip()
+    if uid and uid != "me":
+        starts.append(f"{GRAPH_HOST}/{uid}/media?{qs}")
+    last_err: ValueError | None = None
+    saw_success = False
+    for start in starts:
+        try:
+            rows = _page_media(start, fetch, pages)
+        except ValueError as exc:
+            last_err = exc
+            continue
+        saw_success = True
+        if rows:
+            return rows
+    if not saw_success and last_err is not None:
+        raise last_err
+    return []
 
 
 def fetch_media_insights(

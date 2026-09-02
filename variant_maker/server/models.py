@@ -79,6 +79,7 @@ class InstagramSyncOut(BaseModel):
     accounts: int = 0
     media: int = 0
     unmatched: list[dict] = []
+    errors: list[str] = []
     analytics: dict = {}
 
 

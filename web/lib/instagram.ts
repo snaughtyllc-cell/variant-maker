@@ -94,6 +94,34 @@ export function instagramTesterHint(): string {
   return INSTAGRAM_TESTER_HINT;
 }
 
+export function syncInsightsCopy(out: {
+  matched: number;
+  accounts: number;
+  media?: number;
+  unmatched?: unknown[];
+  errors?: string[];
+}): string {
+  const accounts = out.accounts;
+  const accountBit = `${accounts} account${accounts === 1 ? "" : "s"}`;
+  if (out.errors && out.errors.length > 0) {
+    return `Instagram sync hit an API error on ${accountBit}: ${out.errors[0]}`;
+  }
+  const media = out.media ?? 0;
+  const leftover = Array.isArray(out.unmatched) ? out.unmatched.length : 0;
+  if (media <= 0) {
+    return (
+      `Instagram returned 0 Reels across ${accountBit}. ` +
+      "The @handle is connected, but Graph sent no posts. " +
+      "Confirm the tester invite is accepted, the account is Professional, and it has Reels."
+    );
+  }
+  let note = `Saw ${media} Reel${media === 1 ? "" : "s"}, matched ${out.matched} across ${accountBit}.`;
+  if (leftover > 0) {
+    note += ` ${leftover} unmatched Reel${leftover === 1 ? "" : "s"} need a picker — caption banks reuse lines, so we do not guess.`;
+  }
+  return note;
+}
+
 export function handleLabel(username: string): string {
   const t = username.trim().replace(/^@+/, "");
   return t ? `@${t}` : "";
