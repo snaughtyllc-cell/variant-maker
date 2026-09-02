@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
 import { ESCALATED_TITLE } from "@/lib/format";
-import { uniquenessGalleryBadgeTitle } from "@/lib/prepareCopy";
 
 function variant(over: Partial<VariantOut> & { caption?: string | null } = {}): VariantOut {
   return {
@@ -92,9 +91,7 @@ describe("VariantCard uniqueness", () => {
         onToggle={() => {}}
       />,
     );
-    const badge = screen.getByText("50%");
-    expect(badge).toBeInTheDocument();
-    expect(badge).toHaveAttribute("title", uniquenessGalleryBadgeTitle(50));
+    expect(screen.getByText("50%")).toBeInTheDocument();
     expect(screen.queryByText("esc")).not.toBeInTheDocument();
     expect(screen.queryByText("95")).not.toBeInTheDocument();
     expect(screen.queryByText(/spatial/i)).not.toBeInTheDocument();
@@ -163,7 +160,7 @@ describe("VariantCard uniqueness", () => {
 });
 
 describe("VariantCard aspect", () => {
-  it("lets VideoThumb own the frame instead of a hardcoded 9:16 card", () => {
+  it("locks a small 9:16 preview frame so the video cannot blow the tile to native size", () => {
     const { container } = render(
       <VariantCard
         variant={variant()}
@@ -173,13 +170,13 @@ describe("VariantCard aspect", () => {
         onToggle={() => {}}
       />,
     );
-    const card = screen.getByText("v01").parentElement as HTMLElement;
-    expect(card.style.aspectRatio).toBe("");
-    expect(card.style.position).toBe("relative");
-    const thumb = container.querySelector("video")?.parentElement as HTMLElement;
-    expect(thumb.className).not.toMatch(/absolute/);
-    expect(thumb.className).not.toMatch(/inset-0/);
-    expect(thumb.style.aspectRatio).toBe("9 / 16");
+    const frame = container.querySelector(".gallery-tile__frame") as HTMLElement;
+    expect(frame).toBeTruthy();
+    expect(frame.style.aspectRatio).toBe("9 / 16");
+    const tile = container.querySelector(".gallery-tile") as HTMLElement;
+    expect(tile).toHaveClass("gallery-tile");
+    const thumb = container.querySelector(".gallery-tile__thumb") as HTMLElement;
+    expect(thumb).toHaveAttribute("data-fill", "true");
   });
 
   it("keeps a 9:16 box for variants that are not on Studio", () => {

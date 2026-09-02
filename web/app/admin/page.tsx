@@ -186,7 +186,7 @@ export default function AdminPage() {
             <tbody>
               {loading && workspaces.length === 0 ? (
                 <tr>
-                    <td colSpan={12} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
+                  <td colSpan={12} style={{ padding: "14px 12px", color: "var(--color-muted)" }}>
                     Loading…
                   </td>
                 </tr>

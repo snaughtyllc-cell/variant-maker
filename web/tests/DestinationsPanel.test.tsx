@@ -39,12 +39,12 @@ const ADMIN: AuthMe = { ...MEMBER, email: "jeff@example.com", is_admin: true };
 
 const ready: DriveStatus = {
   status: "ready",
-  sa_email: "studio@varimo.io",
+  sa_email: "bot@x.iam.gserviceaccount.com",
   message: "Drive ready",
   auth_mode: "oauth",
-  connected_email: "studio@varimo.io",
+  connected_email: "snaughtyllc@gmail.com",
   oauth_available: true,
-  share_email: "studio@varimo.io",
+  share_email: "drive@varyforge.app",
 };
 
 const notConfigured: DriveStatus = {
@@ -54,7 +54,7 @@ const notConfigured: DriveStatus = {
   auth_mode: null,
   connected_email: null,
   oauth_available: true,
-  share_email: "studio@varimo.io",
+  share_email: "drive@varyforge.app",
 };
 
 describe("DestinationsPanel share email", () => {
@@ -64,10 +64,10 @@ describe("DestinationsPanel share email", () => {
     vi.mocked(listDestinations).mockResolvedValue([]);
   });
 
-  it("shows studio@varimo.io as the Drive share email the team uses", async () => {
+  it("shows a copyable branded mailbox at the top of Drive", async () => {
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
     });
     expect(screen.getByText(/Share this email/i)).toBeTruthy();
     expect(screen.getByText(/paste the folder link below/i)).toBeTruthy();
@@ -79,7 +79,7 @@ describe("DestinationsPanel share email", () => {
     vi.mocked(getDriveStatus).mockResolvedValue(notConfigured);
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
     });
     expect(screen.queryByRole("link", { name: "Connect Google" })).not.toBeInTheDocument();
     expect(screen.queryByText("Google account")).not.toBeInTheDocument();
@@ -102,9 +102,9 @@ describe("DestinationsPanel share email", () => {
   it("hides Disconnect from operators on a connected workspace", async () => {
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
     });
-    expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /disconnect/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Google account")).not.toBeInTheDocument();
   });
 });

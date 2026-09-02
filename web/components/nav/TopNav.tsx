@@ -17,9 +17,8 @@ import {
 } from "lucide-react";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
-import { experienceLabel, normalizeExperience } from "@/lib/experience";
-import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
-import { EXTRA_TABS } from "@/lib/studioDestinations";
+import { extraTabVisible, linkActive, visiblePrimaryTabs } from "@/lib/navAccess";
+import { EXTRA_TABS, STUDIO_DESTINATIONS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 import { VarimoMark } from "../brand/VarimoMark";
 import { VarimoWordmark } from "../brand/VarimoWordmark";
@@ -35,19 +34,8 @@ const ICONS = {
   "/diagnostics": Settings2,
 } as const;
 
-function extraTabVisible(
-  href: string,
-  me: { auth_required?: boolean; is_admin?: boolean; role?: string | null } | undefined,
-): boolean {
-  if (href === "/diagnostics") return showDiagnosticsNav(me);
-  if (href === "/team") return showTeamNav(me);
-  if (href === "/admin") return Boolean(me?.is_admin);
-  return false;
-}
-
-function linkActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
-}
+// Destinations that get a header breadcrumb — everything except /login (tab: "none").
+const SECTION_DESTINATIONS = STUDIO_DESTINATIONS.filter((d) => d.tab !== "none");
 
 export function TopNav() {
   const pathname = usePathname();
@@ -55,6 +43,15 @@ export function TopNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
   const primaryTabs = visiblePrimaryTabs(me);
+  const section = SECTION_DESTINATIONS.find((d) => linkActive(pathname, d.href));
+  const isStudio = pathname === "/";
+  // Phase C: Gallery, Drops, Flows and Drive each render their own 58px context
+  // bar as the first element of their page. Suppress the shared desktop header on
+  // those routes so there is a single bar, not two stacked ones.
+  const OWN_HEADER_ROUTES = ["/gallery", "/drops", "/workflows", "/settings/drive"];
+  const ownsOwnHeader = OWN_HEADER_ROUTES.some(
+    (r) => pathname === r || pathname.startsWith(`${r}/`),
+  );
 
   async function handleLogout() {
     await logout();
@@ -68,64 +65,58 @@ export function TopNav() {
 
   return (
     <>
+      {/* Desktop header (58px) — nav itself now lives in the SideNav rail.
+          Studio ("/") gets the mock breadcrumb + search + GPU chip; every other
+          route keeps the section label + StatusStrip it had before. */}
+      {!ownsOwnHeader && (
+        <header className="vf-header">
+          {isStudio ? (
+            <>
+              <span className="vf-header-section">STUDIO</span>
+              <span className="vf-header-crumb-sep">/</span>
+              <span className="vf-header-crumb">New pack</span>
+              <div className="vf-header-spacer" />
+              <div className="vf-header-search" aria-hidden="true">
+                <span className="material-symbols-rounded">search</span>
+                <span>Search packs, drops, folders</span>
+              </div>
+              <div className="vf-header-gpu">
+                <span className="vf-header-gpu__dot" />
+                <span className="vf-header-gpu__label">GPU FREE</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="vf-header-section">{section ? section.label.toUpperCase() : ""}</span>
+              <div className="vf-header-spacer" />
+              <StatusStrip />
+            </>
+          )}
+        </header>
+      )}
+
+      {/* Phone top bar: Ready left, full varimo wordmark center, ⋯ right. */}
       <header className="vf-topbar">
+        <div className="vf-topbar-left">
+          <StatusStrip />
+        </div>
         <Link className="vf-brand" href="/" aria-label="varimo Studio home">
           <VarimoMark className="vf-brand-mark" size={22} />
           <VarimoWordmark className="vf-brand-wordmark" />
         </Link>
-
-        <nav className="vf-desktop-nav" aria-label="Primary navigation">
-          {primaryTabs.map(({ href, label }) => {
-            const Icon = ICONS[href as keyof typeof ICONS];
-            const active = linkActive(pathname, href);
-            return (
-              <Link key={href} href={href} className="vf-nav-link" data-active={active}>
-                <Icon size={15} strokeWidth={1.8} /> {label}
-              </Link>
-            );
-          })}
-          {allowedExtras.length > 0 && <span className="vf-nav-separator" aria-hidden="true" />}
-          {allowedExtras.map(({ href, label }) => {
-            const Icon = ICONS[href as keyof typeof ICONS];
-            const active = linkActive(pathname, href);
-            return (
-              <Link key={href} href={href} className="vf-nav-link vf-nav-link-extra" data-active={active}>
-                <Icon size={15} strokeWidth={1.8} /> {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="vf-topbar-end">
-          <div className="vf-topbar-status">
-            <StatusStrip />
-          </div>
-          <div className="vf-topbar-actions">
-            {(me?.email || allowedExtras.length > 0) && (
-              <>
-                {me?.email && (
-                  <span className="vf-account-email" title={me.email}>
-                    {me.email}
-                    <span className="vf-experience-label">
-                      {" "}
-                      {experienceLabel(normalizeExperience(me.experience))}
-                    </span>
-                  </span>
-                )}
-                {me?.email && <button type="button" className="vf-logout" onClick={handleLogout}><LogOut size={14} /> Log out</button>}
-                <button
-                  type="button"
-                  className="vf-more-trigger"
-                  aria-label="More"
-                  aria-expanded={moreOpen}
-                  aria-controls="vf-mobile-more"
-                  onClick={() => setMoreOpen((open) => !open)}
-                >
-                  <MoreHorizontal size={18} />
-                </button>
-              </>
-            )}
-          </div>
+        <div className="vf-topbar-actions">
+          {(me?.email || allowedExtras.length > 0) && (
+            <button
+              type="button"
+              className="vf-more-trigger"
+              aria-label="More"
+              aria-expanded={moreOpen}
+              aria-controls="vf-mobile-more"
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          )}
         </div>
       </header>
 

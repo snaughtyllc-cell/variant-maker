@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { QualityPanel } from "@/components/variant/QualityPanel";
-import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import {
+  uniquenessCoverageSubcopy,
+  uniquenessCustomerLabel,
+  uniquenessPassHint,
+} from "@/lib/prepareCopy";
 
 describe("QualityPanel", () => {
   it("shows an Originality meter and hides technical quality rows", () => {
@@ -24,10 +28,13 @@ describe("QualityPanel", () => {
     expect(screen.queryByText("Similarity")).not.toBeInTheDocument();
     expect(screen.queryByText("✗ fail")).not.toBeInTheDocument();
     expect(screen.queryByText(/stronger uniqueness pass/i)).not.toBeInTheDocument();
+    expect(screen.getByText(uniquenessPassHint())).toBeInTheDocument();
     expect(screen.getByText(uniquenessCoverageSubcopy())).toBeInTheDocument();
     expect(screen.getByText("Pixel · scored")).toBeInTheDocument();
     expect(screen.getByText("Visual copy-id · not scored")).toBeInTheDocument();
     expect(screen.getByText("Audio · not scored")).toBeInTheDocument();
+    expect(screen.queryByText(/verified-original/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/65% =/)).not.toBeInTheDocument();
   });
 
   it("lights visual and audio coverage chips when those heads ran", () => {

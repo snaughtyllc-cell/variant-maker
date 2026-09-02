@@ -15,8 +15,14 @@ const toolbarProps = {
   onFilter: () => undefined,
   sort: "newest" as const,
   onSort: () => undefined,
+  selectedCount: 0,
+  sendDisabledReason: "none selected",
+  onSend: () => undefined,
   selectAllLabel: "Select all",
   onSelectAll: () => undefined,
+  saveLabel: "Save to phone",
+  saveDisabledReason: "Select clips first",
+  onSave: () => undefined,
 };
 
 describe("GalleryToolbar drops chips", () => {
@@ -30,13 +36,55 @@ describe("GalleryToolbar drops chips", () => {
   });
 });
 
-describe("GalleryToolbar select all", () => {
-  it("keeps Select all and leaves Save and Send on each pack", () => {
+describe("GalleryToolbar review chrome", () => {
+  it("swaps grid actions for Back to grid when a variant is open", () => {
+    render(
+      <GalleryToolbar
+        {...toolbarProps}
+        crumb="boil.mp4"
+        review={{
+          variantLabel: "v03",
+          onBack: () => undefined,
+          onPrev: () => undefined,
+          onNext: () => undefined,
+          canPrev: false,
+          canNext: true,
+        }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /back to grid/i })).toBeInTheDocument();
+    expect(screen.getByText("v03")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /select all/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("GalleryToolbar select and save", () => {
+  it("shows Select all and a disabled Save to phone until clips are selected", () => {
     render(<GalleryToolbar {...toolbarProps} />);
     expect(screen.getByRole("button", { name: /select all/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /select all \( /i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save to phone/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save to photos/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /send to drive/i })).not.toBeInTheDocument();
+    const save = screen.getByRole("button", { name: /save to phone/i });
+    expect(save).toBeDisabled();
+    expect(screen.getByText("Select clips first")).toBeInTheDocument();
+  });
+
+  it("enables Save to Photos for a selection", () => {
+    const onSave = vi.fn();
+    render(
+      <GalleryToolbar
+        {...toolbarProps}
+        selectedCount={3}
+        sendDisabledReason={null}
+        saveLabel="Save to Photos"
+        saveDisabledReason={null}
+        saveHint="Opens the share sheet. Tap Save Video to put the clip in Photos — not Files."
+        onSave={onSave}
+      />,
+    );
+    const save = screen.getByRole("button", { name: /save to photos/i });
+    expect(save).toBeEnabled();
+    save.click();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /send to drive \(3\)/i })).toBeInTheDocument();
   });
 });

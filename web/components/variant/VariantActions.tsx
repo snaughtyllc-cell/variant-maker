@@ -3,18 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { PlatformResult, VariantOut } from "@/lib/types";
 import { regenerate, setPlatformResult } from "@/lib/api";
 import {
-  FILE_FETCH_CONCURRENCY_APPLE,
-  downloadVariantUrls,
   fillFileCache,
   filesReadyNow,
-  isAppleMobile,
   isShareableVideo,
   phoneShareHintCopy,
   saveOrShareVideoFiles,
-  saveTapAction,
   shareVideosBusyLabel,
   shareVideosLabel,
-  sharedVariantFileCache,
   shouldOfferPhotosSave,
 } from "@/lib/shareVideos";
 import { PostLinkField } from "./PostLinkField";
@@ -23,14 +18,24 @@ interface VariantActionsProps {
   sourceId: string;
   variant: VariantOut;
   onRegenerate: () => void;
+  onSendToDrive?: () => void;
 }
 
-export function VariantActions({ sourceId, variant, onRegenerate }: VariantActionsProps) {
+const EYEBROW_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-space-grotesk), monospace",
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase",
+  color: "var(--color-violet)",
+};
+
+export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive }: VariantActionsProps) {
   const [busy, setBusy] = useState(false);
   const [resultBusy, setResultBusy] = useState<PlatformResult | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [offerPhotos, setOfferPhotos] = useState(false);
-  const shareLock = useRef(false);
+  const fileCacheRef = useRef(new Map<string, File>());
 
   const saveRef = isShareableVideo(variant)
     ? [{ file_url: variant.file_url, filename: variant.filename }]
@@ -43,45 +48,20 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
 
   function handleSaveVariant(e: React.MouseEvent) {
     e.preventDefault();
-    if (saveBusy || shareLock.current || saveRef.length === 0) return;
+    if (saveBusy || saveRef.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const apple = isAppleMobile(nav?.userAgent, nav?.maxTouchPoints);
-    const ready = filesReadyNow(sharedVariantFileCache, saveRef);
-    const plan = saveTapAction(Boolean(ready), apple);
-    if (plan === "share" && ready) {
-      shareLock.current = true;
-      void saveOrShareVideoFiles(ready, {
+    const ready = filesReadyNow(fileCacheRef.current, saveRef);
+    setSaveBusy(true);
+    const run = async (files: File[]) => {
+      if (files.length === 0) return;
+      await saveOrShareVideoFiles(files, {
         share: nav,
         userAgent: nav?.userAgent,
         maxTouchPoints: nav?.maxTouchPoints,
-      }).finally(() => {
-        shareLock.current = false;
       });
-      return;
-    }
-    if (plan === "os_download") {
-      downloadVariantUrls(saveRef);
-      return;
-    }
-    setSaveBusy(true);
-    void fillFileCache(
-      sharedVariantFileCache,
-      saveRef,
-      undefined,
-      undefined,
-      apple ? FILE_FETCH_CONCURRENCY_APPLE : undefined,
-    )
-      .then((files) => {
-        if (files.length === 0) return;
-        if (plan === "prepare") return;
-        return saveOrShareVideoFiles(files, {
-          share: nav,
-          userAgent: nav?.userAgent,
-          maxTouchPoints: nav?.maxTouchPoints,
-        });
-      })
-      .catch((err) => console.error("Save variant failed", err))
-      .finally(() => setSaveBusy(false));
+    };
+    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, saveRef).then(run);
+    void task.catch((err) => console.error("Save variant failed", err)).finally(() => setSaveBusy(false));
   }
 
   async function handleRegenerate() {
@@ -112,86 +92,141 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
 
   const currentResult = variant.platform_result ?? "unknown";
   const isDuplicate = currentResult === "duplicate_reject";
+  const isFlagged = currentResult === "flagged";
+  const isPassActive = !isDuplicate && !isFlagged;
+  const duplicateBusy = resultBusy === "duplicate_reject";
+
+  const segmentBase: React.CSSProperties = {
+    flex: 1,
+    height: 38,
+    borderRadius: 9,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    fontSize: 12.5,
+    fontWeight: 700,
+    border: "none",
+  };
+  const segmentActive: React.CSSProperties = {
+    background: "#fff",
+    boxShadow: "0 1px 3px rgba(15,26,30,0.12)",
+    color: "var(--color-text)",
+  };
+  const segmentInactive: React.CSSProperties = {
+    background: "transparent",
+    color: "#6e868c",
+  };
 
   return (
-    <div style={{ marginTop: 18 }}>
+    <div style={{ marginTop: 20 }}>
+      {/* RESULT — Pass / Duplicate / Flag. Only Duplicate is a wired action here;
+          Pass and Flag are a read-out of variant.platform_result, matching the
+          product rule that an unlabeled variant already counts as a pass. */}
       <div
         style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.7px",
-          color: "var(--color-muted2)",
-          fontWeight: 700,
-          margin: "0 0 10px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          marginBottom: 9,
         }}
       >
-        <span>Actions</span>
+        <div style={EYEBROW_STYLE}>Result</div>
         {isDuplicate && (
           <span
             data-testid="platform-result-badge"
             style={{
               fontSize: 10,
-              fontWeight: 800,
+              fontWeight: 700,
               padding: "2px 8px",
               borderRadius: 999,
-              textTransform: "none",
-              letterSpacing: 0,
-              color: "#8e6119",
-              background: "#fff8eb",
-              border: "1px solid #efdfbd",
+              color: "var(--color-orange)",
+              background: "#fcf0e4",
+              border: "1px solid #f0d3ae",
             }}
           >
-            ⚠ Duplicate rejected
+            Duplicate rejected
           </span>
         )}
       </div>
 
-      <PostLinkField sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
-
-      <button
-        onClick={() => handleSetResult("duplicate_reject")}
-        disabled={!!resultBusy}
-        style={{
-          display: "flex",
-          width: "100%",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 7,
-          fontSize: 12.5,
-          fontWeight: 700,
-          padding: "10px",
-          marginBottom: 6,
-          borderRadius: 10,
-          background: isDuplicate ? "#fff8eb" : "#f3f8f9",
-          border: `1px solid ${isDuplicate ? "#efdfbd" : "var(--color-line)"}`,
-          color: isDuplicate ? "#8e6119" : "var(--color-text)",
-          cursor: resultBusy ? "not-allowed" : "pointer",
-          opacity: resultBusy && resultBusy !== "duplicate_reject" ? 0.6 : 1,
-        }}
-      >
-        ⚠ {resultBusy === "duplicate_reject" ? "Saving…" : "Duplicate rejected"}
-      </button>
       <div
         style={{
-          fontSize: 11,
-          color: "var(--color-muted)",
-          lineHeight: 1.45,
-          marginBottom: 9,
+          display: "flex",
+          gap: 6,
+          padding: 4,
+          borderRadius: 12,
+          background: "var(--color-panel2)",
+        }}
+      >
+        <div style={{ ...segmentBase, ...(isPassActive ? segmentActive : segmentInactive) }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-green)", flexShrink: 0 }} />
+          Pass
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleSetResult("duplicate_reject")}
+          disabled={!!resultBusy}
+          style={{
+            ...segmentBase,
+            ...(isDuplicate ? segmentActive : segmentInactive),
+            cursor: resultBusy ? "not-allowed" : "pointer",
+            opacity: resultBusy && !duplicateBusy ? 0.6 : 1,
+          }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-orange)", flexShrink: 0 }} />
+          {duplicateBusy ? "Saving…" : "Duplicate rejected"}
+        </button>
+
+        <div style={{ ...segmentBase, ...(isFlagged ? segmentActive : segmentInactive) }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-amber)", flexShrink: 0 }} />
+          Flag
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 9,
+          fontFamily: "var(--font-space-grotesk), monospace",
+          fontSize: 10,
+          lineHeight: 1.5,
+          letterSpacing: "0.04em",
+          color: "var(--color-muted2)",
         }}
       >
         Unlabeled = pass. Only mark duplicate when the platform took it down.
       </div>
 
+      <div style={{ marginTop: 20 }}>
+        <PostLinkField sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
+      </div>
+
+      {/* Footer — pinned to the bottom of the scrolling metadata panel. */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          position: "sticky",
+          bottom: 0,
+          marginTop: 20,
+          paddingTop: 14,
+          borderTop: "1px solid #eff5f6",
+          background: "#fff",
+          display: "flex",
           gap: 9,
         }}
       >
+        {onSendToDrive && (
+          <button
+            type="button"
+            onClick={onSendToDrive}
+            className="variant-review__send"
+          >
+            <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">
+              cloud_upload
+            </span>
+            Send to Drive
+          </button>
+        )}
         {offerPhotos ? (
           <button
             type="button"
@@ -199,72 +234,76 @@ export function VariantActions({ sourceId, variant, onRegenerate }: VariantActio
             onClick={handleSaveVariant}
             disabled={saveBusy}
             style={{
-              gridColumn: "span 2",
+              flex: onSendToDrive ? undefined : 1,
+              width: onSendToDrive ? 50 : undefined,
+              height: 50,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 7,
-              fontSize: 12.5,
+              gap: 8,
+              borderRadius: 13,
+              background: onSendToDrive ? "transparent" : "var(--ink)",
+              border: onSendToDrive ? "1px solid var(--color-line)" : "none",
+              color: onSendToDrive ? "#23393e" : "#f6fbfb",
+              fontSize: 14,
               fontWeight: 700,
-              padding: "11px",
-              borderRadius: 10,
-              background: "var(--ink)",
-              border: "none",
-              color: "#f7fbfb",
-              boxShadow: "none",
               cursor: saveBusy ? "wait" : "pointer",
               opacity: saveBusy ? 0.7 : 1,
             }}
+            aria-label={onSendToDrive ? "Download variant" : undefined}
           >
-            ⬇ {saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true)}
+            <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">download</span>
+            {!onSendToDrive && (saveBusy ? shareVideosBusyLabel() : shareVideosLabel(true))}
           </button>
         ) : (
           <a
             href={variant.file_url}
             download={variant.filename}
+            aria-label="Download variant"
             style={{
-              gridColumn: "span 2",
+              flex: onSendToDrive ? undefined : 1,
+              width: onSendToDrive ? 50 : undefined,
+              height: 50,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 7,
-              fontSize: 12.5,
+              gap: 8,
+              borderRadius: 13,
+              background: onSendToDrive ? "transparent" : "var(--ink)",
+              border: onSendToDrive ? "1px solid var(--color-line)" : "none",
+              color: onSendToDrive ? "#23393e" : "#f6fbfb",
+              fontSize: 14,
               fontWeight: 700,
-              padding: "11px",
-              borderRadius: 10,
-              background: "var(--ink)",
-              border: "none",
-              color: "#f7fbfb",
-              boxShadow: "none",
               textDecoration: "none",
               cursor: "pointer",
             }}
           >
-            ⬇ Download variant
+            <span className="material-symbols-rounded" style={{ fontSize: 19 }} aria-hidden="true">download</span>
+            {!onSendToDrive && "Download variant"}
           </a>
         )}
 
         <button
+          type="button"
           onClick={handleRegenerate}
           disabled={busy}
+          aria-label="Regenerate this one"
+          title="Regenerate this one"
           style={{
-            gridColumn: "span 2",
+            width: 50,
+            height: 50,
+            flexShrink: 0,
+            borderRadius: 13,
+            background: "transparent",
+            border: "1px solid var(--color-line)",
+            color: busy ? "var(--color-muted2)" : "#23393e",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 7,
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "11px",
-            borderRadius: 10,
-            background: "#f3f8f9",
-            border: "1px solid var(--color-line)",
-            color: busy ? "var(--color-muted)" : "var(--color-text)",
             cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy ? 0.7 : 1,
           }}
         >
-          ↻ {busy ? "Regenerating…" : "Regenerate this one"}
+          <span className="material-symbols-rounded" style={{ fontSize: 20 }} aria-hidden="true">refresh</span>
         </button>
       </div>
     </div>

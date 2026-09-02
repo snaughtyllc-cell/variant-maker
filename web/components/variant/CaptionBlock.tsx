@@ -4,14 +4,15 @@ export function CaptionBlock({ caption }: { caption?: string | null }) {
   const text = (caption || "").trim();
 
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: 18 }}>
       <div
         style={{
-          fontSize: 11,
+          fontFamily: "var(--font-space-grotesk), monospace",
+          fontSize: 10.5,
+          fontWeight: 600,
+          letterSpacing: "0.18em",
           textTransform: "uppercase",
-          letterSpacing: "0.7px",
-          color: "var(--color-muted2)",
-          fontWeight: 700,
+          color: "var(--color-violet)",
           margin: "0 0 10px",
         }}
       >
@@ -19,7 +20,7 @@ export function CaptionBlock({ caption }: { caption?: string | null }) {
       </div>
       <div
         style={{
-          fontSize: 13,
+          fontSize: 15,
           lineHeight: 1.5,
           color: text ? "var(--color-text)" : "var(--color-muted)",
           whiteSpace: "pre-wrap",

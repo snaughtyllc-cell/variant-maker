@@ -11,7 +11,6 @@ vi.mock("@/lib/runStore", () => ({
     complete: false,
     clear: vi.fn(),
     qualityMode: "fast",
-    prepMode: "none",
   }),
 }));
 

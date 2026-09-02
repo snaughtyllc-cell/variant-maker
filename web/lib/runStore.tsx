@@ -4,17 +4,20 @@ import { CreateJobResponse, SourceOut } from "./types";
 import { getJob } from "./api";
 import { useJobProgress } from "./useJobProgress";
 import { RunProgress } from "./progress";
-import { QualityMode } from "./hqWaitCopy";
+import { PrepMode, QualityMode } from "./hqWaitCopy";
 import { isPreparingJob, PREPARING_JOB_ID } from "./prepareCopy";
 
 type RunSource = { source_id: string; filename: string; requested: number };
 
 const QUALITY_KEY = "vm.quality";
 const PREP_KEY = "vm.prep";
-export type PrepMode = "none" | "hq";
 
 function readStoredQuality(): QualityMode {
   return "fast";
+}
+
+function readStoredPrep(): PrepMode {
+  return sessionStorage.getItem(PREP_KEY) === "hq" ? "hq" : "none";
 }
 
 interface RunCtx {
@@ -49,8 +52,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     setJobId(saved);
     setQualityMode(readStoredQuality());
-    const savedPrep = sessionStorage.getItem(PREP_KEY);
-    setPrepMode(savedPrep === "hq" ? "hq" : "none");
+    setPrepMode(readStoredPrep());
     // sources will be empty after a hard reload — fetch once to seed them
     getJob(saved)
       .then((detail) => {

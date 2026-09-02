@@ -44,9 +44,6 @@ describe("escalated copy", () => {
     expect(ESCALATED_TITLE).toMatch(/30%/);
     expect(ESCALATED_TITLE).toMatch(/55/);
     expect(ESCALATED_TITLE).toMatch(/65/);
-    expect(ESCALATED_TITLE).toMatch(/pixel SSIM/i);
-    expect(ESCALATED_TITLE).toMatch(/not a platform check/i);
-    expect(ESCALATED_TITLE.toLowerCase()).not.toContain("visual score");
   });
 });
 

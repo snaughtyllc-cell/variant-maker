@@ -64,7 +64,7 @@ describe("DropLedgerPanel", () => {
     vi.mocked(getDropLedgerStatus).mockResolvedValue(notConnected);
     render(<DropLedgerPanel />);
     expect(await screen.findByText(/does not change uniqueness/i)).toBeInTheDocument();
-    expect(await screen.findByText(/studio Drive email above first/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Connect Google above first/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ensure sheet" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Sync from Studio" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: "Open sheet" })).not.toBeInTheDocument();

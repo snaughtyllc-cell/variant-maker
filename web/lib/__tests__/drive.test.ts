@@ -4,7 +4,6 @@ import {
   oauthErrorMessage,
   okVariantKeys,
   okVariantRefs,
-  packActionSelected,
   selectAllLabel,
   selectionHasAllOk,
   sendDisabledReason,
@@ -81,28 +80,6 @@ describe("select all ok variants", () => {
     expect(selectAllLabel(true, 20)).toBe("Deselect all");
     expect(selectAllLabel(false, 0)).toBe("Select all");
     expect(selectAllLabel(true)).toBe("Deselect all");
-  });
-});
-
-describe("packActionSelected", () => {
-  it("uses every ok clip in the pack when none of that pack is selected", () => {
-    expect([...packActionSelected(sources[0], new Set())]).toEqual(["s1:1"]);
-    expect([...packActionSelected(sources[0], new Set(["other:9"]))]).toEqual(["s1:1"]);
-  });
-
-  it("uses only the ok clips selected in that pack", () => {
-    const pack: SourceOut = {
-      source_id: "s1",
-      filename: "a.mp4",
-      requested: 2,
-      delivered: 2,
-      shortfall: 0,
-      variants: [
-        { index: 1, filename: "v01.mp4", status: "ok", quality: {}, file_url: "/x", file_ready: true },
-        { index: 2, filename: "v02.mp4", status: "ok", quality: {}, file_url: "/y", file_ready: true },
-      ],
-    };
-    expect([...packActionSelected(pack, new Set(["s1:2"]))]).toEqual(["s1:2"]);
   });
 });
 

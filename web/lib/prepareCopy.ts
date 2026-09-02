@@ -27,6 +27,14 @@ export function captionToggleHint(): string {
   return "AI writes a post caption per variant. Preview them in Gallery under each clip.";
 }
 
+export function hqPrepToggleLabel(): string {
+  return "Reconstruct first (HQ)";
+}
+
+export function hqPrepToggleHint(): string {
+  return "One GPU pass, then Fast variants. Off by default.";
+}
+
 export function captionPreviewLabel(): string {
   return "Caption";
 }
@@ -45,6 +53,15 @@ export function uniquenessCoverageSubcopy(): string {
 
 export function uniquenessGalleryBadgeTitle(pct: number): string {
   return `Originality ${pct}% is pixel SSIM vs the original (3 frames). Not a platform pass.`;
+}
+
+/** UI % for the 24/64 vs-source pass (do not raise the gate). */
+export function uniquenessPassPct(): number {
+  return 38;
+}
+
+export function uniquenessPassHint(): string {
+  return "38% = pass vs the source";
 }
 
 export type UniquenessCoverageKind = "pixel" | "visual" | "audio";

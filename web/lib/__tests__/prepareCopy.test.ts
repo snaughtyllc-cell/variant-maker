@@ -4,13 +4,16 @@ import {
   captionSnippet,
   captionToggleHint,
   captionToggleLabel,
+  hqPrepToggleHint,
+  hqPrepToggleLabel,
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
   uniquenessCoverageChips,
   uniquenessCoverageSubcopy,
   uniquenessCustomerLabel,
-  uniquenessGalleryBadgeTitle,
+  uniquenessPassHint,
+  uniquenessPassPct,
 } from "@/lib/prepareCopy";
 
 describe("prepare copy", () => {
@@ -28,51 +31,31 @@ describe("prepare copy", () => {
     expect(uniquenessCustomerLabel()).toBe("Originality");
   });
 
-  it("names Originality as 3-frame pixel SSIM, not a platform check", () => {
+  it("names reconstruct-first as one GPU pass, then Fast — not an HQ 20-pack", () => {
+    expect(hqPrepToggleLabel()).toMatch(/reconstruct first/i);
+    expect(hqPrepToggleLabel()).toMatch(/HQ/i);
+    expect(hqPrepToggleHint()).toMatch(/one GPU pass/i);
+    expect(hqPrepToggleHint()).toMatch(/Fast/i);
+    expect(hqPrepToggleHint()).not.toMatch(/20-pack/i);
+    expect(hqPrepToggleHint()).not.toMatch(/lab only/i);
+  });
+
+  it("names Originality as pixel SSIM, not a platform check", () => {
     expect(uniquenessCoverageSubcopy()).toMatch(/pixel difference vs the original/i);
     expect(uniquenessCoverageSubcopy()).toMatch(/3 frames/i);
     expect(uniquenessCoverageSubcopy()).toMatch(/not a platform check/i);
-    expect(uniquenessGalleryBadgeTitle(50)).toMatch(/50%/);
-    expect(uniquenessGalleryBadgeTitle(50)).toMatch(/pixel SSIM/i);
-    expect(uniquenessGalleryBadgeTitle(50)).toMatch(/not a platform pass/i);
+    expect(uniquenessCoverageChips(0.5, null).map((c) => c.text)).toEqual([
+      "Pixel · scored",
+      "Visual copy-id · not scored",
+      "Audio · not scored",
+    ]);
   });
 
-  it("marks pixel scored from uniqueness and leaves copy-id heads off by default", () => {
-    const chips = uniquenessCoverageChips(0.5, null);
-    expect(chips.map((c) => c.kind)).toEqual(["pixel", "visual", "audio"]);
-    expect(chips[0]).toMatchObject({ kind: "pixel", state: "scored", text: "Pixel · scored" });
-    expect(chips[1]).toMatchObject({
-      kind: "visual",
-      state: "not_scored",
-      text: "Visual copy-id · not scored",
-    });
-    expect(chips[2]).toMatchObject({
-      kind: "audio",
-      state: "not_scored",
-      text: "Audio · not scored",
-    });
-    expect(chips.every((c) => /not a platform/i.test(c.title))).toBe(true);
-  });
-
-  it("lights visual and audio chips only when those heads are available", () => {
-    const chips = uniquenessCoverageChips(0.41, {
-      ssim: { available: true, uniqueness: 0.41, bits: 26 },
-      visual: { available: true, uniqueness: 0.22, backend: "sscd_disc_mixup" },
-      audio: { available: true, uniqueness: 0.05 },
-    });
-    expect(chips[0].state).toBe("scored");
-    expect(chips[1]).toMatchObject({ kind: "visual", state: "scored", text: "Visual copy-id · 22%" });
-    expect(chips[2]).toMatchObject({ kind: "audio", state: "scored", text: "Audio · 5%" });
-  });
-
-  it("does not treat a missing uniqueness as a scored pixel head", () => {
-    const chips = uniquenessCoverageChips(null, {
-      visual: { available: false },
-      audio: { uniqueness: 0.9 },
-    });
-    expect(chips[0].state).toBe("not_scored");
-    expect(chips[1].state).toBe("not_scored");
-    expect(chips[2].state).toBe("not_scored");
+  it("explains the real ~38% pass line, not a 65% verified band", () => {
+    expect(uniquenessPassPct()).toBe(38);
+    expect(uniquenessPassHint()).toBe("38% = pass vs the source");
+    expect(uniquenessPassHint()).not.toMatch(/verified/i);
+    expect(uniquenessPassHint()).not.toMatch(/65%/);
   });
 
   it("snips captions to a single-line preview", () => {

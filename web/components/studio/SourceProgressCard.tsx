@@ -54,15 +54,15 @@ function SlotTile({
         width: "100%",
         alignSelf: "start",
         borderRadius: 6,
-        background: "#14141d",
-        border: live ? "1px dashed #2a6f76" : "1px dashed var(--color-line2)",
+        background: "#14252a",
+        border: live ? "1px dashed rgba(126, 224, 230, 0.45)" : "1px dashed var(--color-line2)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         gap: 4,
         padding: 4,
-        boxShadow: live ? "0 0 0 1px #16c8d322" : "none",
+        boxShadow: live ? "0 0 0 1px rgba(126, 224, 230, 0.18)" : "none",
       }}
     >
       <span style={{ fontSize: 9, fontWeight: 800, color: live ? "var(--color-cyan)" : "var(--color-muted2)" }}>
@@ -131,12 +131,12 @@ export function SourceProgressCard({
     <div
       style={{
         background: "var(--color-panel)",
-        border: `1px solid ${isActive ? "#2f2a52" : "var(--color-line)"}`,
+        border: `1px solid ${isActive ? "var(--color-cyan)" : "var(--color-line)"}`,
         borderRadius: 13,
         padding: 14,
         marginBottom: 13,
         boxShadow: isActive
-          ? "0 0 0 1px #16c8d322, 0 8px 26px #00000040"
+          ? "0 0 0 1px rgba(126, 224, 230, 0.35), 0 8px 26px rgba(15, 26, 30, 0.35)"
           : "none",
         transition: "border-color 0.2s, box-shadow 0.2s",
       }}
@@ -148,7 +148,8 @@ export function SourceProgressCard({
             height: 34,
             borderRadius: 7,
             flex: "none",
-            background: "linear-gradient(135deg, #1c1430, #241a44)",
+            backgroundColor: "#14252a",
+            backgroundImage: "repeating-linear-gradient(135deg, rgba(126, 224, 230, 0.12) 0 5px, transparent 5px 10px)",
             border: "1px solid var(--color-line2)",
           }}
         />

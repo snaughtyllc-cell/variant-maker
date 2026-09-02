@@ -7,6 +7,11 @@ and hid every destination shipped after v1.
 
 Live product: https://varyforge-studio-production.up.railway.app
 
+Purchased desktop redesign (Claude Design project expired; mock is in-repo):
+`docs/ops/bought-design.md` and `docs/design/Varimo Web Redesign.dc.html`.
+Live still uses the older stacked-card UI until that mock is signed and
+copied onto `varimo-live`.
+
 Machine-readable catalog: `web/lib/studioDestinations.ts`.
 `TopNav` renders `PRIMARY_TABS` / `EXTRA_TABS` from that file.
 The catalog test (`web/lib/__tests__/studioDestinations.test.ts`)
@@ -36,7 +41,7 @@ row + progress card.
 
 | Tab | Route | Audience | Phone bar | What it is |
 |---|---|---|---|---|
-| Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue. |
+| Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast, Reconstruct-first (HQ) switch default off, Advanced, live queue. |
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |

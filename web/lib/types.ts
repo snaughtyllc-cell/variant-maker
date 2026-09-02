@@ -76,8 +76,14 @@ export interface QueueSnapshot {
   jobs: QueueItem[];
 }
 export interface JobDetail {
-  job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[];
-  error?: string | null; quality_mode?: "fast" | "hq" | string; prep_mode?: "none" | "hq";
+  job_id: string;
+  count: number;
+  created_utc: string;
+  state: string;
+  sources: SourceOut[];
+  error?: string | null;
+  quality_mode?: string;
+  prep_mode?: "none" | "hq" | string;
   prep_status?: string | null;
 }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }

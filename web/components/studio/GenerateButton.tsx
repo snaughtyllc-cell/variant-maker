@@ -27,11 +27,9 @@ export function GenerateButton({
     : complete
       ? "Generate another"
       : "Generate";
-  const support = inProgress
-    ? "in progress — Cancel on the live run if this was a mistake"
-    : complete
-      ? "Starts a new pack from the clips on this page"
-      : generatePackLabel(fileCount, perVideo);
+  const support = complete && !inProgress
+    ? "Starts a new pack from the clips on this page"
+    : generatePackLabel(fileCount, perVideo);
 
   return (
     <button
@@ -40,8 +38,13 @@ export function GenerateButton({
       className="studio-generate-button"
       data-complete={complete || undefined}
     >
-      {label}
-      <small>{support}</small>
+      <span className="studio-generate-button__copy">
+        <span className="studio-generate-button__title">{label}</span>
+        <small>{support}</small>
+      </span>
+      <span className="studio-generate-button__arrow" aria-hidden="true">
+        <span className="material-symbols-rounded" style={{ fontSize: 19 }}>arrow_forward</span>
+      </span>
     </button>
   );
 }

@@ -1,23 +1,33 @@
 "use client";
-import { useState, useCallback } from "react";
-import { FolderOpen } from "lucide-react";
-import { DropZone } from "@/components/studio/DropZone";
+import { useState, useCallback, useRef, DragEvent } from "react";
 import { FileList } from "@/components/studio/FileList";
 import { DrivePickList } from "@/components/studio/DrivePickList";
 import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePickerModal";
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
-import { StudioQueue } from "@/components/studio/StudioQueueLive";
-import { ProgressPanel } from "@/components/studio/ProgressPanel";
-import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
+import { StudioLiveQueue } from "@/components/studio/StudioLiveQueue";
+import { accepts, readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
-import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
 import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
-import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
+import { studioShellClass } from "@/lib/studioLayout";
+import {
+  captionToggleHint,
+  captionToggleLabel,
+  hqPrepToggleHint,
+  hqPrepToggleLabel,
+} from "@/lib/prepareCopy";
+
+function formatSize(bytes: number): string {
+  if (bytes <= 0) return "";
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  const mb = bytes / (1024 * 1024);
+  return `${Math.max(1, Math.round(mb))} MB`;
+}
 
 export default function StudioPage() {
   const { start, beginPrepare, clear, jobId, complete } = useRun();
@@ -30,13 +40,24 @@ export default function StudioPage() {
   const [perVideo, setPerVideo] = useState(DEFAULT_PER_VIDEO);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
+  const [hqPrep, setHqPrep] = useState(false);
   const [generateCaptions, setGenerateCaptions] = useState(true);
-  const [prepMode, setPrepMode] = useState<"none" | "hq">("none");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
+  const jobLocked = Boolean(jobId && !complete);
+  const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+  const sizeLabel = formatSize(totalBytes);
+  const sourceMeta =
+    sourceCount > 0
+      ? `${sourceCount} clip${sourceCount !== 1 ? "s" : ""}${sizeLabel ? ` · ${sizeLabel}` : ""}`
+      : "No clips yet";
+
+  const prepMode = hqPrep ? "hq" : "none";
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -51,6 +72,23 @@ export default function StudioPage() {
       return combined;
     });
   }, []);
+
+  function openPicker() {
+    if (jobLocked) return;
+    fileInputRef.current?.click();
+  }
+
+  function acceptDropped(list: FileList | null) {
+    const picked = Array.from(list ?? []).filter(accepts);
+    if (picked.length) handleFiles(picked);
+  }
+
+  function handleTileDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (jobLocked) return;
+    acceptDropped(event.dataTransfer.files);
+  }
 
   function handleRemoveFile(index: number) {
     setFiles((prev) => {
@@ -117,97 +155,189 @@ export default function StudioPage() {
 
   return (
     <main className={studioShellClass(!!jobId)}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(event) => {
+          acceptDropped(event.target.files);
+          event.target.value = "";
+        }}
+      />
+
       <div className="studio-cockpit">
-        <header className="studio-intro">
-          <p>Studio</p>
-          <h1>Build a new pack</h1>
-          <span>Choose source clips, set the output count, then track the live queue without leaving this workspace.</span>
-        </header>
-        <p className="studio-step-label">1 · Source videos</p>
+        <div className="studio-cockpit__scroll">
+          <div className="studio-cockpit__inner">
+            <header className="studio-intro">
+              <p>Studio</p>
+              <h1>Build a pack</h1>
+              <span>Pick clips, set variants, watch the queue on the right.</span>
+            </header>
 
-        <StudioQueue qualityMode={qualityMode} jobId={jobId} />
+            <section className="studio-section">
+              <div className="studio-section__head">
+                <p className="studio-eyebrow">01 · Source</p>
+                <span className="studio-section__meta">{sourceMeta}</span>
+              </div>
 
-        <DropZone onFiles={handleFiles} />
+              <div className="studio-source-grid">
+                <FileList files={files} durations={durations} onRemove={handleRemoveFile} />
+                <DrivePickList picks={drivePicks} onRemove={handleRemoveDrivePick} />
+                <div
+                  className="studio-drop-tile"
+                  data-dragging={dragging}
+                  data-disabled={jobLocked || undefined}
+                  onClick={openPicker}
+                  onDrop={handleTileDrop}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!jobLocked) setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Add or drop videos"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openPicker();
+                    }
+                  }}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>add</span>
+                  <span className="studio-drop-tile__label">DROP OR ADD</span>
+                </div>
+              </div>
 
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          disabled={Boolean(jobId && !complete)}
-          className="studio-drive-picker"
-        >
-          <FolderOpen size={16} /> Pick from Google Drive
-        </button>
+              <div className="studio-source-actions">
+                <button
+                  type="button"
+                  className="studio-upload-btn"
+                  onClick={openPicker}
+                  disabled={jobLocked}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>upload_file</span>
+                  Upload files
+                </button>
+                <button
+                  type="button"
+                  className="studio-drive-picker"
+                  onClick={() => setPickerOpen(true)}
+                  disabled={jobLocked}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>cloud</span>
+                  From Drive
+                </button>
+                <span className="studio-source-hint">MP4 / MOV · up to 1 GB each</span>
+              </div>
+            </section>
 
-        <FileList files={files} durations={durations} onRemove={handleRemoveFile} />
-        <DrivePickList picks={drivePicks} onRemove={handleRemoveDrivePick} />
+            <hr className="studio-divider" />
 
-        <div className="studio-actions">
-          <VariantStepper
-            value={perVideo}
-            onChange={setPerVideo}
-            min={1}
-            max={MAX_PER_VIDEO}
-            fileCount={sourceCount}
-            qualityMode={qualityMode}
-          />
-          <GenerateButton
-            fileCount={sourceCount}
-            perVideo={perVideo}
-            onClick={handleGenerate}
-            disabled={Boolean(jobId && !complete)}
-            busy={busy}
-            jobId={jobId}
-            complete={complete}
-          />
+            <section className="studio-section">
+              <p className="studio-eyebrow">02 · Variants per clip</p>
+              <VariantStepper
+                value={perVideo}
+                onChange={setPerVideo}
+                min={1}
+                max={MAX_PER_VIDEO}
+              />
+            </section>
+
+            <hr className="studio-divider" />
+
+            <section className="studio-section studio-section--options">
+              <p className="studio-eyebrow">03 · Options</p>
+              <div className="studio-options">
+                <label className="studio-option-row studio-caption-toggle">
+                  <div>
+                    <div className="studio-option-row__label">{captionToggleLabel()}</div>
+                    <div className="studio-option-row__hint">{captionToggleHint()}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={generateCaptions}
+                    onChange={(e) => setGenerateCaptions(e.target.checked)}
+                  />
+                  <span className="studio-switch" data-on={generateCaptions} aria-hidden="true">
+                    <span className="studio-switch__thumb" />
+                  </span>
+                </label>
+
+                <label
+                  className="studio-option-row studio-caption-toggle"
+                  data-testid="hq-prep-toggle"
+                >
+                  <div>
+                    <div className="studio-option-row__label">{hqPrepToggleLabel()}</div>
+                    <div className="studio-option-row__hint">{hqPrepToggleHint()}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={hqPrep}
+                    onChange={(e) => setHqPrep(e.target.checked)}
+                  />
+                  <span className="studio-switch" data-on={hqPrep} aria-hidden="true">
+                    <span className="studio-switch__thumb" />
+                  </span>
+                </label>
+
+                <div className="studio-option-row studio-option-row--static">
+                  <span className="studio-option-row__label">Output size</span>
+                  <span className="studio-option-row__value">
+                    Matches source
+                    <span className="material-symbols-rounded studio-option-row__chevron">chevron_right</span>
+                  </span>
+                </div>
+
+                {agency ? (
+                  <AdvancedPanel
+                    allowCreativeEscalate={allowCreativeEscalate}
+                    onAllowCreativeEscalateChange={setAllowCreativeEscalate}
+                    qualityMode={qualityMode}
+                    onQualityModeChange={setQualityMode}
+                    totalVariants={totalVariants(sourceCount, perVideo)}
+                  />
+                ) : (
+                  <div className="studio-option-row studio-option-row--static studio-option-row--last">
+                    <span className="studio-option-row__label">Advanced</span>
+                    <span className="studio-option-row__value">
+                      Defaults
+                      <span className="material-symbols-rounded studio-option-row__chevron">chevron_right</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {error && (
+              <div className="vf-alert vf-alert--error" style={{ margin: 0 }}>
+                {error}
+              </div>
+            )}
+
+            <div className="studio-cockpit__spacer" />
+          </div>
         </div>
 
-        <label className="studio-caption-toggle">
-          <input
-            type="checkbox"
-            checked={generateCaptions}
-            onChange={(e) => setGenerateCaptions(e.target.checked)}
-          />
-          <span>
-            {captionToggleLabel()}
-            <small>{captionToggleHint()}</small>
-          </span>
-        </label>
-
-        <label className="studio-caption-toggle">
-          <input
-            type="checkbox"
-            checked={prepMode === "hq"}
-            onChange={(e) => setPrepMode(e.target.checked ? "hq" : "none")}
-          />
-          <span>
-            Reconstruct first (HQ)
-            <small>
-              One GPU pass rewrites the pixels, then Fast builds the pack.
-              Not a 20 HQ run — that is too slow.
-            </small>
-          </span>
-        </label>
-
-        {error && (
-          <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>
-            {error}
+        <div className="studio-generate-bar studio-generate-bar--dock" data-testid="studio-generate-dock">
+          <div className="studio-generate-bar__inner">
+            <GenerateButton
+              fileCount={sourceCount}
+              perVideo={perVideo}
+              onClick={handleGenerate}
+              disabled={jobLocked}
+              busy={busy}
+              jobId={jobId}
+              complete={complete}
+            />
           </div>
-        )}
-
-        {agency && (
-          <AdvancedPanel
-            allowCreativeEscalate={allowCreativeEscalate}
-            onAllowCreativeEscalateChange={setAllowCreativeEscalate}
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-            totalVariants={totalVariants(sourceCount, perVideo)}
-          />
-        )}
+        </div>
       </div>
 
-      <div className={studioProgressIdleClass(!!jobId)}>
-        <ProgressPanel />
-      </div>
+      <StudioLiveQueue />
 
       {pickerOpen && (
         <DrivePickerModal

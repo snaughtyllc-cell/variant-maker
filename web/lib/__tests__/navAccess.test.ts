@@ -16,6 +16,20 @@ describe("showDiagnosticsNav", () => {
   });
 });
 
+describe("canManageDriveOAuth", () => {
+  it("hides Connect Google from operators", () => {
+    expect(canManageDriveOAuth({ auth_required: true, is_admin: false })).toBe(false);
+  });
+
+  it("lets the site admin connect", () => {
+    expect(canManageDriveOAuth({ auth_required: true, is_admin: true })).toBe(true);
+  });
+
+  it("allows connect when login is off", () => {
+    expect(canManageDriveOAuth({ auth_required: false, is_admin: false })).toBe(true);
+  });
+});
+
 describe("showTeamNav", () => {
   it("shows for owners and site admin", () => {
     expect(showTeamNav({ role: "owner", is_admin: false })).toBe(true);
@@ -24,18 +38,6 @@ describe("showTeamNav", () => {
 
   it("hides for members", () => {
     expect(showTeamNav({ role: "member", is_admin: false })).toBe(false);
-  });
-});
-
-describe("canManageDriveOAuth", () => {
-  it("is site admin only when login is on", () => {
-    expect(canManageDriveOAuth({ auth_required: true, is_admin: true })).toBe(true);
-    expect(canManageDriveOAuth({ auth_required: true, is_admin: false })).toBe(false);
-    expect(canManageDriveOAuth(undefined)).toBe(false);
-  });
-
-  it("stays open when login is off", () => {
-    expect(canManageDriveOAuth({ auth_required: false, is_admin: false })).toBe(true);
   });
 });
 

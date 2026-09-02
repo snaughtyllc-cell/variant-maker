@@ -29,11 +29,15 @@ describe("hqWaitCopy", () => {
     expect(liveRunSubcopy("fast")).toMatch(/tile/i);
   });
 
-  it("reconstruct-first copy names the one GPU pass before Fast", () => {
+  it("reconstruct-first names one GPU pass then Fast, not a 20-pack HQ", () => {
     expect(reconstructFirstHeadline()).toMatch(/Reconstruct/i);
-    expect(reconstructFirstSubcopy()).toMatch(/one HQ/i);
+    expect(reconstructFirstSubcopy()).toMatch(/one HQ GPU pass/i);
     expect(reconstructFirstSubcopy()).toMatch(/Fast/i);
-    expect(reconstructFirstSubcopy()).not.toMatch(/20 HQ/i);
+    const copy = liveRunSubcopy("fast", "hq");
+    expect(copy).toMatch(/reconstruct/i);
+    expect(copy).toMatch(/one/i);
+    expect(copy).toMatch(/Fast/i);
+    expect(copy).not.toMatch(/20 HQ/);
   });
 
   it("slot labels stay short on the tile", () => {
