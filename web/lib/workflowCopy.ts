@@ -32,6 +32,13 @@ export function workflowAutoCaptionHint(): string {
   );
 }
 
+export function workflowReconstructHint(): string {
+  return (
+    "One GPU pass rewrites the pixels, then Fast builds the pack. " +
+    "Not a 20 HQ run — that is too slow."
+  );
+}
+
 export function workflowFoldersClash(
   inbox: { id: string; folder_id: string },
   output: { id: string; folder_id: string },

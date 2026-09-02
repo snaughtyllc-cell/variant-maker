@@ -60,6 +60,8 @@ export interface JobSummary { job_id: string; count: number; created_utc: string
 export interface QueueItem {
   job_id: string;
   quality_mode: "fast" | "hq" | string;
+  prep_mode?: "none" | "hq" | string;
+  prep_status?: string | null;
   state: string;
   created_utc: string;
   count: number;
@@ -239,6 +241,7 @@ export interface Workflow {
   output_destination_id: string;
   count: number;
   quality_mode: "fast" | "hq";
+  prep_mode?: "none" | "hq";
   allow_creative_escalate: boolean;
   enabled: boolean;
   poll_seconds: number;

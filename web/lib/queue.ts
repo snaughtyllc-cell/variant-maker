@@ -18,9 +18,18 @@ export function queueHeadline(queue: QueueSnapshot): string {
   return `${queue.running} packs generating`;
 }
 
+export function queueOccupiesHq(job: {
+  quality_mode?: string;
+  prep_mode?: string;
+  prep_status?: string | null;
+}): boolean {
+  if (job.quality_mode === "hq") return true;
+  return job.prep_mode === "hq" && job.prep_status !== "done";
+}
+
 export function queueRowLabel(job: QueueItem): string {
   const names = job.filenames.map(displayClipName).join(", ") || "clip";
-  const mode = job.quality_mode === "hq" ? "HQ" : "Fast";
+  const mode = queueOccupiesHq(job) ? "HQ" : "Fast";
   return `${job.position}. ${mode} · ${names} · ${job.delivered}/${job.requested}`;
 }
 
@@ -28,7 +37,7 @@ export function queueStripLabel(queue: QueueSnapshot): string | null {
   if (queue.running === 0) return null;
   if (queue.running === 1 && queue.jobs[0]) {
     const j = queue.jobs[0];
-    const mode = j.quality_mode === "hq" ? "HQ" : "Fast";
+    const mode = queueOccupiesHq(j) ? "HQ" : "Fast";
     return `1 gen · ${mode} ${j.delivered}/${j.requested}`;
   }
   return `${queue.running} generating`;
@@ -43,7 +52,7 @@ export function queueWaitCopy(
   if (queue.running === 0) {
     return "Nobody else is generating. Fast packs from this shared URL run side by side and do not overwrite each other.";
   }
-  const otherHq = queue.hq - (mine?.quality_mode === "hq" ? 1 : 0);
+  const otherHq = queue.hq - (mine && queueOccupiesHq(mine) ? 1 : 0);
   if (qualityMode === "hq") {
     if (otherHq > 0) {
       const verb = otherHq === 1 ? "is" : "are";

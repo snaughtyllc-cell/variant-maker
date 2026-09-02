@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -34,7 +34,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "24h packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
+      "7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
   },
   {
     href: "/drops",
@@ -51,7 +51,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack.",
+      "Watch folder auto-poll, inbox-to-output Drive folders, optional Reconstruct first (HQ), cancel a live pack.",
   },
   {
     href: "/settings/drive",

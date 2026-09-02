@@ -7,6 +7,7 @@ import secrets
 import tempfile
 from dataclasses import asdict, dataclass
 
+from variant_maker.server.jobs import normalize_prep_mode
 from variant_maker.server.runner import normalize_quality_mode
 
 MAX_COUNT = 40
@@ -28,6 +29,7 @@ class Workflow:
     output_destination_id: str
     count: int = DEFAULT_COUNT
     quality_mode: str = "fast"
+    prep_mode: str = "none"
     allow_creative_escalate: bool = True
     enabled: bool = False
     poll_seconds: int = DEFAULT_POLL_SECONDS
@@ -88,6 +90,7 @@ class WorkflowStore:
         output_destination_id: str,
         count: int = DEFAULT_COUNT,
         quality_mode: str = "fast",
+        prep_mode: str = "none",
         allow_creative_escalate: bool = True,
         enabled: bool = False,
         poll_seconds: int = DEFAULT_POLL_SECONDS,
@@ -110,6 +113,7 @@ class WorkflowStore:
             output_destination_id=output,
             count=count,
             quality_mode=quality,
+            prep_mode=normalize_prep_mode(prep_mode),
             allow_creative_escalate=bool(allow_creative_escalate),
             enabled=bool(enabled),
             poll_seconds=poll_seconds,
@@ -129,6 +133,7 @@ class WorkflowStore:
         output_destination_id: str | None = None,
         count: int | None = None,
         quality_mode: str | None = None,
+        prep_mode: str | None = None,
         allow_creative_escalate: bool | None = None,
         enabled: bool | None = None,
         poll_seconds: int | None = None,
@@ -157,6 +162,7 @@ class WorkflowStore:
                 output_destination_id=output,
                 count=new_count,
                 quality_mode=quality,
+                prep_mode=w.prep_mode if prep_mode is None else normalize_prep_mode(prep_mode),
                 allow_creative_escalate=(
                     w.allow_creative_escalate if allow_creative_escalate is None else bool(allow_creative_escalate)
                 ),
@@ -198,6 +204,7 @@ class WorkflowStore:
                 output_destination_id=str(item.get("output_destination_id") or ""),
                 count=int(item.get("count") or DEFAULT_COUNT),
                 quality_mode=normalize_quality_mode(item.get("quality_mode")),
+                prep_mode=normalize_prep_mode(item.get("prep_mode")),
                 allow_creative_escalate=bool(item.get("allow_creative_escalate", True)),
                 enabled=bool(item.get("enabled") or False),
                 poll_seconds=int(item.get("poll_seconds") or DEFAULT_POLL_SECONDS),

@@ -26,6 +26,10 @@ The smoke branch is **`cursor/lab-redesign-smoke-cdb6`**: current Lab
 Merge that PR onto **`tier1`**. Lab Railway auto-deploys this repo’s Lab
 env from `tier1`. That Lab URL is the smoke test.
 
+This same smoke PR now also includes watch-folder **Reconstruct first (HQ)**
+on Flows (was PR #82), so Lab can exercise Generate HQ and Workflow HQ
+without merging #60 or #82 separately.
+
 After they sign Lab, copy chosen `web/` files onto `varimo-live` / `main`
 (see `docs/ops/two-githubs.md`). Do not merge Lab `tier1` into Live. Do not
 pin or PATCH live Fast as part of a UI ship.

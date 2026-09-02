@@ -56,6 +56,8 @@ def test_workflow_crud(tmp_path):
     assert wf["count"] == 5
     assert wf["enabled"] is True
     assert wf["auto_caption"] is False
+    assert wf["prep_mode"] == "none"
+    assert wf["quality_mode"] == "fast"
     listed = client.get("/api/workflows").json()
     assert len(listed) == 1
     patched = client.patch(f"/api/workflows/{wf['id']}", json={"enabled": False}).json()
@@ -364,3 +366,78 @@ def test_workflow_cancel_stops_running_job_and_turns_watch_off(tmp_path):
 def test_workflow_cancel_unknown_404(tmp_path):
     client, _, _ = _app(tmp_path)
     assert client.post("/api/workflows/wf_nope/cancel").status_code == 404
+
+
+def test_workflow_create_and_patch_prep_mode_hq(tmp_path):
+    drive = FakeDrive()
+    client, _, _ = _app(tmp_path, drive)
+    inbox, _ = _dest(client, drive, "Inbox")
+    out, _ = _dest(client, drive, "Out")
+    resp = client.post("/api/workflows", json={
+        "name": "HQ pack",
+        "inbox_destination_id": inbox["id"],
+        "output_destination_id": out["id"],
+        "count": 4,
+        "prep_mode": "hq",
+    })
+    assert resp.status_code == 201
+    wf = resp.json()
+    assert wf["prep_mode"] == "hq"
+    assert wf["quality_mode"] == "fast"
+    patched = client.patch(f"/api/workflows/{wf['id']}", json={"prep_mode": "none"}).json()
+    assert patched["prep_mode"] == "none"
+    again = client.patch(f"/api/workflows/{wf['id']}", json={"prep_mode": "hq"}).json()
+    assert again["prep_mode"] == "hq"
+
+
+def test_workflow_old_json_defaults_prep_mode_none(tmp_path):
+    from variant_maker.server.workflows import WorkflowStore
+
+    ws = Workspace(str(tmp_path))
+    path = ws.workflows_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump([{
+            "id": "wf_old",
+            "name": "Legacy",
+            "inbox_destination_id": "dst_a",
+            "output_destination_id": "dst_b",
+            "count": 8,
+            "quality_mode": "fast",
+            "enabled": True,
+            "poll_seconds": 120,
+        }], f)
+    wf = WorkflowStore(path).get("wf_old")
+    assert wf is not None
+    assert wf.prep_mode == "none"
+
+
+def test_workflow_prep_mode_hq_runs_reconstruct_then_fast(tmp_path):
+    """Watch-folder reconstruct-first: one HQ GPU pass, then Fast N — not a 20 HQ pack."""
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, _ = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"workflow-hq")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Reconstruct",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 2,
+        "poll_seconds": 60,
+        "prep_mode": "hq",
+    }).json()
+    first = client.post(f"/api/workflows/{wf['id']}/run")
+    assert first.status_code == 200
+    job_ids = first.json()["last_summary"].get("job_ids") or []
+    assert job_ids
+    for jid in job_ids:
+        store.wait(jid, timeout=5)
+    job = store.get(job_ids[0])
+    assert job is not None
+    assert job.prep_mode == "hq"
+    assert job.quality_mode == "fast"
+    assert [(c[0], c[1]) for c in store._runner.calls] == [("hq", 1), ("fast", 2)]
+    assert store._runner.calls[1][2].endswith("prep_hq.mp4")

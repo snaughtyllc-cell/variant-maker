@@ -16,14 +16,16 @@ import type { CaptionBankFolder, Destination, DriveStatus, Workflow, WorkflowSum
 import { captionFolderSelectLabel } from "@/lib/captions";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 import {
+  workflowAutoCaptionHint,
+  workflowCanCancel,
   workflowFoldersClash,
   workflowFoldersMustDiffer,
   workflowInboxHint,
   workflowNeedTwoFolders,
   workflowOutputHint,
-  workflowAutoCaptionHint,
-  workflowCanCancel,
+  workflowReconstructHint,
 } from "@/lib/workflowCopy";
+import { hqPrepToggleLabel } from "@/lib/prepareCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
 const MAX_POLL_MINUTES = 60;
@@ -98,7 +100,7 @@ export function WorkflowsPanel() {
   const [inboxId, setInboxId] = useState("");
   const [outputId, setOutputId] = useState("");
   const [count, setCount] = useState(DEFAULT_PER_VIDEO);
-  const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
+  const [prepMode, setPrepMode] = useState<"none" | "hq">("none");
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
   const [autoCaption, setAutoCaption] = useState(false);
@@ -171,7 +173,8 @@ export function WorkflowsPanel() {
         inbox_destination_id: inboxId,
         output_destination_id: outputId,
         count,
-        quality_mode: qualityMode,
+        quality_mode: "fast",
+        prep_mode: prepMode,
         enabled,
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
@@ -193,6 +196,20 @@ export function WorkflowsPanel() {
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle workflow", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleTogglePrep(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const updated = await updateWorkflow(wf.id, {
+        prep_mode: wf.prep_mode === "hq" ? "none" : "hq",
+      });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to toggle reconstruct-first", err);
     } finally {
       setActionId(null);
     }
@@ -414,6 +431,12 @@ export function WorkflowsPanel() {
                             label="Watch"
                           />
                           <Switch
+                            checked={wf.prep_mode === "hq"}
+                            disabled={busy}
+                            onChange={() => handleTogglePrep(wf)}
+                            label={hqPrepToggleLabel()}
+                          />
+                          <Switch
                             checked={!!wf.auto_caption}
                             disabled={busy}
                             onChange={() => handleToggleAutoCaption(wf)}
@@ -448,7 +471,7 @@ export function WorkflowsPanel() {
 
                     <div className="flow-card__meta">
                       <span className="flow-card__meta-item">
-                        {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
+                        {wf.count} variants · {wf.prep_mode === "hq" ? "reconstruct first" : "fast"} · poll every {Math.round(wf.poll_seconds / 60)} min
                       </span>
                       <span className="flow-card__divider" aria-hidden="true" />
                       <span className="flow-card__meta-item flow-card__meta-item--muted">
@@ -578,21 +601,8 @@ export function WorkflowsPanel() {
 
                 <label className="workflow-settings-field">
                   <span className="workflow-settings-field__label">Quality</span>
-                  <span className="workflow-select-wrap">
-                    <select
-                      className="workflow-field workflow-field--select"
-                      value="fast"
-                      onChange={() => setQualityMode("fast")}
-                      disabled={fieldsDisabled}
-                    >
-                      <option value="fast">Fast</option>
-                      <option value="hq" disabled>
-                        HQ — coming soon
-                      </option>
-                    </select>
-                    <span className="material-symbols-rounded workflow-select-icon" aria-hidden="true">
-                      expand_more
-                    </span>
+                  <span className="workflow-field" style={{ display: "flex", alignItems: "center" }}>
+                    Fast
                   </span>
                 </label>
 
@@ -614,6 +624,19 @@ export function WorkflowsPanel() {
             </div>
 
             <div className="workflow-toggles">
+              <div className="workflow-toggle-row" title={workflowReconstructHint()}>
+                <div>
+                  <div className="workflow-toggle-row__title">{hqPrepToggleLabel()}</div>
+                  <div className="workflow-toggle-row__hint">{workflowReconstructHint()}</div>
+                </div>
+                <Switch
+                  checked={prepMode === "hq"}
+                  disabled={fieldsDisabled}
+                  onChange={() => setPrepMode((v) => (v === "hq" ? "none" : "hq"))}
+                  label={hqPrepToggleLabel()}
+                  visibleLabel={false}
+                />
+              </div>
               <div className="workflow-toggle-row">
                 <div className="workflow-toggle-row__title">Auto-poll the inbox</div>
                 <Switch

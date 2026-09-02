@@ -390,6 +390,10 @@ describe("workflows API", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/workflows");
     expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      quality_mode: "fast",
+      prep_mode: "none",
+    });
   });
 
   it("updateWorkflow PATCHes /api/workflows/:id", async () => {
