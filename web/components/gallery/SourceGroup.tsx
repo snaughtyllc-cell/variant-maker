@@ -34,7 +34,7 @@ import {
   type FileCacheProgress,
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
-import { packViewsCopy } from "@/lib/instagram";
+import { packSuggestionHint, packViewsCopy } from "@/lib/instagram";
 import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { SavePreparePanel } from "./SavePreparePanel";
 import { VariantCard } from "./VariantCard";
@@ -211,6 +211,7 @@ export function SourceGroup({
     source.insights_linked ?? 0,
     source.variants.length,
   );
+  const suggestionHint = packSuggestionHint(source.suggestion_kind);
 
   return (
     <div className="gallery-pack-panel">
@@ -231,6 +232,11 @@ export function SourceGroup({
         </span>
         {postedCopy && <span className="gallery-pack-header__meta">{postedCopy}</span>}
         {viewsCopy && <span className="gallery-pack-header__meta">{viewsCopy}</span>}
+        {suggestionHint && (
+          <span className="gallery-pack-header__meta" title={source.suggestion_copy || undefined}>
+            {suggestionHint}
+          </span>
+        )}
         <div className="gallery-pack-header__actions">
           {okCount > 0 && (
             <button

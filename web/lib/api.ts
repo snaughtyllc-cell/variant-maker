@@ -22,6 +22,7 @@ import {
   InstagramAnalytics,
   InstagramStatus,
   InstagramSync,
+  InstagramUnmatched,
   JobDetail,
   JobSummary,
   PlatformResult,
@@ -208,6 +209,20 @@ export const getInstagramAnalytics = () =>
 
 export function syncInstagram(): Promise<InstagramSync> {
   return fetch("/api/instagram/sync", { method: "POST" }).then(json<InstagramSync>);
+}
+
+export function linkInstagramMedia(body: {
+  source_id: string;
+  index: number;
+  media_id: string;
+  ig_user_id?: string | null;
+  permalink?: string | null;
+}): Promise<InstagramAnalytics> {
+  return fetch("/api/instagram/link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<InstagramAnalytics>);
 }
 
 export function disconnectInstagram(userId: string): Promise<InstagramStatus> {

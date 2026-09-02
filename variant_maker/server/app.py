@@ -76,12 +76,15 @@ from .experience import resolve_experience
 from .instagram_insights import (
     IgMedia,
     VariantLink,
+    export_caption_hints,
     fetch_media_insights,
     gallery_analytics,
     list_media as list_ig_media,
     match_media,
     now_utc,
     pack_analytics,
+    pack_suggestions,
+    unmatched_payload,
 )
 from .instagram_oauth import (
     ENV_APP_ID,
@@ -134,6 +137,7 @@ from .models import (
     ExportJobOut,
     ExportSplitIn,
     InFlightOut,
+    InstagramLinkIn,
     InstagramStatusOut,
     InstagramSyncOut,
     InstagramTokenIn,
@@ -319,6 +323,27 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         insights_linked=int(pack["insights_linked"] or 0),
         insights_unknown=int(pack["insights_unknown"] or 0),
     )
+
+
+def _stamp_source_suggestions(sources: list[SourceOut]) -> list[SourceOut]:
+    packs = [
+        {
+            "source_id": s.source_id,
+            "filename": s.filename,
+            "insights_views": s.insights_views,
+            "insights_linked": s.insights_linked,
+            "created_utc": s.created_utc,
+        }
+        for s in sources
+    ]
+    by_id = {row["source_id"]: row for row in pack_suggestions(packs)}
+    for source in sources:
+        hit = by_id.get(source.source_id)
+        if not hit:
+            continue
+        source.suggestion_kind = str(hit.get("kind") or "") or None
+        source.suggestion_copy = str(hit.get("copy") or "") or None
+    return sources
 
 
 def _destination_out(d: Destination) -> DestinationOut:
@@ -920,12 +945,20 @@ def create_app(
         accounts = _ig_accounts().tokens()
         media_rows: list[IgMedia] = []
         media_owner: dict[str, str] = {}
+        list_errors: list[str] = []
         for acc in accounts:
             token = acc.get("access_token")
             user_id = str(acc.get("user_id") or "")
             if not isinstance(token, str) or not token or not user_id:
                 continue
-            for row in app.state.instagram_list_media(user_id, token):
+            try:
+                listed = app.state.instagram_list_media(user_id, token)
+            except Exception as exc:
+                handle = str(acc.get("username") or user_id)
+                list_errors.append(f"@{handle}: {exc}")
+                print(f"instagram list_media failed for @{handle}: {exc}", flush=True)
+                continue
+            for row in listed:
                 mid = str(row.get("id") or "")
                 if not mid:
                     continue
@@ -934,7 +967,10 @@ def create_app(
                     id=mid,
                     permalink=row.get("permalink") if isinstance(row.get("permalink"), str) else None,
                     caption=row.get("caption") if isinstance(row.get("caption"), str) else None,
+                    username=str(acc.get("username") or "") or None,
+                    user_id=user_id,
                 ))
+        hints = export_caption_hints(app.state.exports.list())
         links: list[VariantLink] = []
         for job in store.list():
             for source in job.sources:
@@ -943,7 +979,7 @@ def create_app(
                         source_id=source.source_id,
                         index=variant.index,
                         post_url=variant.post_url,
-                        caption=variant.caption,
+                        caption=variant.caption or hints.get((source.source_id, variant.index)),
                         ig_media_id=variant.ig_media_id,
                     ))
         hits = match_media(links, media_rows)
@@ -977,13 +1013,37 @@ def create_app(
                 post_url=permalink,
             )
             matched += 1
-        analytics = gallery_analytics([s for job in store.list() for s in job.sources])
+        leftover = unmatched_payload(media_rows, hits)
+        analytics = _ig_analytics_body()
+        print(
+            "instagram sync "
+            f"accounts={len(accounts)} media={len(media_rows)} "
+            f"matched={matched} unmatched={len(leftover)} errors={len(list_errors)}",
+            flush=True,
+        )
         return {
             "matched": matched,
             "accounts": len(accounts),
             "media": len(media_rows),
+            "unmatched": leftover,
+            "errors": list_errors,
             "analytics": analytics,
         }
+
+    def _ig_analytics_body() -> dict[str, Any]:
+        sources = [s for job in store.list() for s in job.sources]
+        body = gallery_analytics(sources)
+        created = {
+            s.source_id: job.created_utc
+            for job in store.list()
+            for s in job.sources
+        }
+        for row in list(body.get("packs") or []) + list(body.get("ranked") or []):
+            if isinstance(row, dict):
+                row["created_utc"] = created.get(row.get("source_id"))
+        body["suggestions"] = pack_suggestions(body.get("packs") or [])
+        body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        return body
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:
         from datetime import datetime
@@ -1537,7 +1597,7 @@ def create_app(
             for s in job.sources:
                 out.append(_source_out(s, ok_only=True, job=job, ws=store._ws))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
-        return out
+        return _stamp_source_suggestions(out)
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:
@@ -1792,10 +1852,7 @@ def create_app(
 
     @app.get("/api/instagram/analytics")
     def instagram_analytics() -> dict:
-        sources = [s for job in store.list() for s in job.sources]
-        body = gallery_analytics(sources)
-        body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
-        return body
+        return _ig_analytics_body()
 
     @app.get("/api/instagram/oauth/start")
     def instagram_oauth_start(request: Request):
@@ -1878,6 +1935,37 @@ def create_app(
         if not _ig_accounts().list_accounts():
             raise HTTPException(status_code=400, detail="Connect an Instagram tester account first")
         return InstagramSyncOut(**_run_instagram_sync())
+
+    @app.post("/api/instagram/link")
+    def instagram_link(request: Request, body: InstagramLinkIn) -> dict:
+        _require_instagram_manager(request)
+        media_id = (body.media_id or "").strip()
+        if not media_id:
+            raise HTTPException(status_code=400, detail="media_id required")
+        owner = (body.ig_user_id or "").strip() or None
+        token = None
+        if owner:
+            data = _ig_accounts().load(owner)
+            if data and isinstance(data.get("access_token"), str):
+                token = data["access_token"]
+        snapshot: dict[str, Any] = {"fetched_at": now_utc()}
+        if isinstance(token, str):
+            try:
+                counts = app.state.instagram_fetch_insights(media_id, token)
+            except Exception:
+                counts = {}
+            if counts:
+                snapshot.update(counts)
+        updated = store.set_ig_insights(
+            body.source_id, body.index,
+            ig_media_id=media_id,
+            ig_user_id=owner,
+            insights=snapshot,
+            post_url=(body.permalink or "").strip() or None,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variant not found")
+        return _ig_analytics_body()
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])
     def list_destinations() -> list[DestinationOut]:

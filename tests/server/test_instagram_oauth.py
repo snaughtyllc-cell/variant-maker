@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -222,6 +223,186 @@ def test_sync_matches_unique_caption_onto_gallery_copy(tmp_path):
     assert variant["ig_insights"]["views"] == 1234
     assert gallery[0]["insights_views"] == 1234
     assert gallery[0]["insights_linked"] == 1
+    assert body["unmatched"] == []
+    assert "suggestions" in body["analytics"]
+
+
+def test_sync_surfaces_graph_error_instead_of_pretending_zero(tmp_path):
+    def fake_media(user_id, token):
+        raise ValueError("Instagram HTTP 400: Invalid user id")
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["matched"] == 0
+    assert body["media"] == 0
+    assert body["errors"]
+    assert "Invalid user id" in body["errors"][0]
+    assert "tok" not in json.dumps(body)
+
+
+def test_sync_matches_drive_export_filename_when_gallery_caption_missing(tmp_path):
+    def fake_media(user_id, token):
+        return [{
+            "id": "media-drive",
+            "permalink": "https://www.instagram.com/reel/DriveCap/",
+            "caption": "unique lab hook",
+        }]
+
+    def fake_insights(media_id, token):
+        return {"views": 88}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    assert not src.variants[0].caption
+    from variant_maker.server.drive_exports import ExportFile, ExportStore
+    ExportStore(ws.exports_dir()).create(
+        destination_id="d1",
+        folder_id="f1",
+        files=[ExportFile(
+            source_id=src.source_id,
+            index=src.variants[0].index,
+            filename="Unique Lab Hook.mp4",
+            local_path="x",
+            status="succeeded",
+        )],
+    )
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    assert resp.json()["matched"] == 1
+    gallery = client.get("/api/gallery").json()
+    assert gallery[0]["variants"][0]["ig_media_id"] == "media-drive"
+
+
+def test_sync_returns_unmatched_reels_for_the_picker(tmp_path):
+    def fake_media(user_id, token):
+        return [
+            {
+                "id": "linked",
+                "permalink": "https://www.instagram.com/reel/SyncCap/",
+                "caption": "unique lab hook",
+            },
+            {
+                "id": "orphan",
+                "permalink": "https://www.instagram.com/reel/OrphanReel/",
+                "caption": "reused bank line",
+            },
+        ]
+
+    def fake_insights(media_id, token):
+        return {"views": 50}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    src.variants[0].caption = "Unique Lab Hook"
+    store._persist(job)
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    unmatched = resp.json()["unmatched"]
+    assert [u["media_id"] for u in unmatched] == ["orphan"]
+    assert unmatched[0]["permalink"].endswith("OrphanReel/")
+    assert "tok" not in json.dumps(unmatched)
+
+    src_id = src.source_id
+    idx = src.variants[0].index
+    linked = client.post("/api/instagram/link", json={
+        "source_id": src_id,
+        "index": idx,
+        "media_id": "orphan",
+        "ig_user_id": "178",
+        "permalink": "https://www.instagram.com/reel/OrphanReel/",
+    })
+    assert linked.status_code == 200
+    gallery = client.get("/api/gallery").json()
+    assert gallery[0]["variants"][0]["ig_media_id"] == "orphan"
+
+
+def test_analytics_and_gallery_stamp_winner_and_quiet(tmp_path):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("winner.mp4", b"x"), ("quiet.mp4", b"y")], count=3)
+    store.wait(job.job_id, timeout=5)
+    job = store.get(job.job_id)
+    job.created_utc = "2026-08-01T00:00:00Z"
+    winner, quiet = job.sources
+    for variant in winner.variants:
+        store.set_ig_insights(
+            winner.source_id, variant.index,
+            ig_media_id=f"w{variant.index}",
+            ig_user_id="178",
+            insights={"views": 40_000, "fetched_at": "2026-08-30T00:00:00Z"},
+        )
+    for variant in quiet.variants:
+        store.set_ig_insights(
+            quiet.source_id, variant.index,
+            ig_media_id=f"q{variant.index}",
+            ig_user_id="178",
+            insights={"views": 10, "fetched_at": "2026-08-30T00:00:00Z"},
+        )
+    job = store.get(job.job_id)
+    job.created_utc = (
+        datetime.now(UTC).replace(microsecond=0) - timedelta(hours=48)
+    ).isoformat().replace("+00:00", "Z")
+    store._persist(job)
+    client = TestClient(create_app(store, sa_json_path=""))
+    body = client.get("/api/instagram/analytics").json()
+    kinds = {row["kind"]: row["source_id"] for row in body["suggestions"]}
+    assert kinds["winner"] == winner.source_id
+    assert kinds["quiet"] == quiet.source_id
+    gallery = {row["filename"]: row for row in client.get("/api/gallery").json()}
+    assert gallery["winner.mp4"]["suggestion_kind"] == "winner"
+    assert "Generate 20 more" in gallery["winner.mp4"]["suggestion_copy"]
+    assert gallery["quiet.mp4"]["suggestion_kind"] == "quiet"
+    assert "flagged" not in gallery["quiet.mp4"]["suggestion_copy"].lower()
 
 
 def test_analytics_get_returns_insights_without_leaking_token(tmp_path):

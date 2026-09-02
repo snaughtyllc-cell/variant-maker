@@ -2,7 +2,7 @@
 
 import { SourceOut } from "@/lib/types";
 import { avgOriginalityPct, filesReadyCount, isFileReady, packMetaLabel, packOriginalityColor } from "@/lib/gallery";
-import { formatViews } from "@/lib/instagram";
+import { formatViews, packSuggestionHint } from "@/lib/instagram";
 
 interface PackListProps {
   packs: SourceOut[];
@@ -44,6 +44,9 @@ function PackRow({
           {delivered < source.requested ? ` · ${delivered}/${source.requested}` : ""}
           {source.insights_linked
             ? ` · ${source.insights_views == null ? "linked" : `${formatViews(source.insights_views)} views`}`
+            : ""}
+          {packSuggestionHint(source.suggestion_kind)
+            ? ` · ${packSuggestionHint(source.suggestion_kind)}`
             : ""}
         </div>
       </div>

@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   AMPLIFY_MORE_N,
+  copyPickerLabel,
+  copyPickerOptions,
+  formatCopyPick,
   formatViews,
   galleryViewsCopy,
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
+  packSuggestionHint,
   packViewsCopy,
+  parseCopyPick,
+  suggestionButtonLabel,
+  syncInsightsCopy,
+  unmatchedCaptionPreview,
   variantViewsCopy,
 } from "@/lib/instagram";
 
@@ -66,8 +74,72 @@ describe("igOauthErrorMessage", () => {
   });
 });
 
+describe("syncInsightsCopy", () => {
+  it("does not treat Graph-empty as matched zero Gallery copies", () => {
+    expect(syncInsightsCopy({ matched: 0, accounts: 1, media: 0, unmatched: [] })).toMatch(
+      /returned 0 Reels/i,
+    );
+    expect(syncInsightsCopy({ matched: 0, accounts: 1, media: 0, unmatched: [] })).not.toMatch(
+      /^Matched 0 posts/i,
+    );
+  });
+
+  it("says how many Reels Graph sent when auto-link misses", () => {
+    expect(
+      syncInsightsCopy({
+        matched: 0,
+        accounts: 1,
+        media: 12,
+        unmatched: [{ media_id: "orphan" }],
+      }),
+    ).toMatch(/Saw 12 Reels, matched 0/i);
+  });
+});
+
 describe("handleLabel", () => {
   it("prefixes at", () => {
     expect(handleLabel("maya.main")).toBe("@maya.main");
+  });
+});
+
+describe("suggestionButtonLabel", () => {
+  it("only puts Generate more on a winner", () => {
+    expect(suggestionButtonLabel("winner")).toMatch(/Generate 20 more/i);
+    expect(suggestionButtonLabel("quiet")).toBeNull();
+  });
+});
+
+describe("packSuggestionHint", () => {
+  it("is a compact Gallery chip, never flagged", () => {
+    expect(packSuggestionHint("winner")).toBe("Winner");
+    expect(packSuggestionHint("quiet")).toBe("Quiet — try a new original");
+    expect(packSuggestionHint("quiet")).not.toMatch(/flagged/i);
+    expect(packSuggestionHint(null)).toBeNull();
+  });
+});
+
+describe("unmatched picker helpers", () => {
+  it("truncates unmatched captions for the picker list", () => {
+    expect(unmatchedCaptionPreview("short")).toBe("short");
+    expect(unmatchedCaptionPreview("   ")).toBe("No caption");
+    expect(unmatchedCaptionPreview("x".repeat(90)).endsWith("…")).toBe(true);
+    expect(unmatchedCaptionPreview("x".repeat(90)).length).toBeLessThanOrEqual(80);
+  });
+
+  it("labels Gallery copies and round-trips the select value", () => {
+    expect(copyPickerLabel("winner.mp4", 7, false)).toBe("winner.mp4 · copy 07");
+    expect(copyPickerLabel("winner.mp4", 7, true)).toBe("winner.mp4 · copy 07 (linked)");
+    expect(formatCopyPick("src", 3)).toBe("src:3");
+    expect(parseCopyPick("src:3")).toEqual({ source_id: "src", index: 3 });
+    expect(copyPickerOptions([
+      {
+        source_id: "s1",
+        filename: "a.mp4",
+        variants: [{ index: 1, ig_media_id: null }, { index: 2, ig_media_id: "m" }],
+      },
+    ]).map((row) => row.label)).toEqual([
+      "a.mp4 · copy 01",
+      "a.mp4 · copy 02 (linked)",
+    ]);
   });
 });

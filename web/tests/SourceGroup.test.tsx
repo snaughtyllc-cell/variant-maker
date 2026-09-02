@@ -242,6 +242,22 @@ describe("SourceGroup insights", () => {
     );
     expect(screen.getByText("1.2k views · 1 of 2 linked")).toBeInTheDocument();
   });
+
+  it("shows a quiet original hint from Analytics, never flagged", () => {
+    render(
+      <SourceGroup
+        source={source({
+          insights_views: 40,
+          insights_linked: 5,
+          suggestion_kind: "quiet",
+          suggestion_copy: "These copies are not getting push. Try a new original.",
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("Quiet — try a new original")).toBeInTheDocument();
+    expect(screen.getByText("Quiet — try a new original").textContent).not.toMatch(/flagged/i);
+  });
 });
 
 describe("SourceGroup originality", () => {

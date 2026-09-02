@@ -9,6 +9,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from statistics import median
 from typing import Any
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -17,6 +18,7 @@ from .instagram_oauth import GRAPH_HOST
 
 _CAPTION_SPACE = re.compile(r"\s+")
 _SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
+_VARIANT_FILE = re.compile(r"^v\d+$", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
 
 
@@ -49,11 +51,50 @@ def permalink_key(url: str | None) -> str | None:
     return path or None
 
 
+def caption_from_drive_filename(filename: str | None) -> str | None:
+    """Drive export names the file with the caption stem. Skip generic v01.mp4."""
+    if not filename or not str(filename).strip():
+        return None
+    stem = str(filename).replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if stem.lower().endswith(".mp4"):
+        stem = stem[:-4].rstrip(" .")
+    if not stem or _VARIANT_FILE.fullmatch(stem):
+        return None
+    return stem
+
+
+def export_caption_hints(exports: Sequence[Any]) -> dict[tuple[str, int], str]:
+    """Newest Drive export filename wins when Gallery never stored the bank line."""
+    out: dict[tuple[str, int], str] = {}
+    for exp in exports:
+        files = exp.files if not isinstance(exp, dict) else exp.get("files") or []
+        for item in files:
+            if isinstance(item, dict):
+                source_id = item.get("source_id")
+                index = item.get("index")
+                name = item.get("filename")
+            else:
+                source_id = getattr(item, "source_id", None)
+                index = getattr(item, "index", None)
+                name = getattr(item, "filename", None)
+            if not source_id or not isinstance(index, int):
+                continue
+            key = (str(source_id), int(index))
+            if key in out:
+                continue
+            cap = caption_from_drive_filename(name if isinstance(name, str) else None)
+            if cap:
+                out[key] = cap
+    return out
+
+
 @dataclass(frozen=True)
 class IgMedia:
     id: str
     permalink: str | None = None
     caption: str | None = None
+    username: str | None = None
+    user_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -229,7 +270,96 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
         "insights_linked": linked,
         "packs": rows,
         "ranked": ranked,
+        "suggestions": pack_suggestions(rows),
     }
+
+
+def unmatched_media(media: Sequence[IgMedia], matches: Sequence[Match]) -> list[IgMedia]:
+    used = {m.media_id for m in matches}
+    return [item for item in media if item.id not in used]
+
+
+def unmatched_payload(media: Sequence[IgMedia], matches: Sequence[Match]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in unmatched_media(media, matches):
+        out.append({
+            "media_id": item.id,
+            "permalink": item.permalink,
+            "caption": item.caption,
+            "username": item.username,
+            "ig_user_id": item.user_id,
+        })
+    return out
+
+
+def _parse_utc(value: str | None) -> datetime | None:
+    if not value or not str(value).strip():
+        return None
+    raw = str(value).strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+WINNER_MIN_VIEWS = 10_000
+WINNER_MULT = 3.0
+QUIET_MAX_VIEWS = 1_000
+QUIET_MIN_LINKED = 3
+QUIET_MIN_AGE_HOURS = 24
+WINNER_COPY = "This original is carrying the week. Generate 20 more of this original."
+QUIET_COPY = (
+    "These copies are not getting push. Try a new original "
+    "— this may be the video, not the variant."
+)
+
+
+def pack_suggestions(
+    packs: Sequence[Mapping[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Winner / quiet copy. Never writes flagged. Fresh posts are not quiet."""
+    moment = now or datetime.now(UTC)
+    linked = [p for p in packs if int(p.get("insights_linked") or 0) > 0]
+    scored = [p for p in linked if isinstance(p.get("insights_views"), int)]
+    out: list[dict[str, Any]] = []
+
+    def row(kind: str, pack: Mapping[str, Any], copy: str) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "source_id": pack.get("source_id"),
+            "filename": pack.get("filename"),
+            "copy": copy,
+        }
+
+    account_has_push = any(int(p.get("insights_views") or 0) > QUIET_MAX_VIEWS for p in scored)
+
+    for pack in scored:
+        views = int(pack["insights_views"])
+        others = [int(p["insights_views"]) for p in scored if p is not pack]
+        if others and views >= WINNER_MIN_VIEWS and views >= WINNER_MULT * median(others):
+            out.append(row("winner", pack, WINNER_COPY))
+
+    for pack in scored:
+        views = int(pack["insights_views"])
+        linked_n = int(pack.get("insights_linked") or 0)
+        created = _parse_utc(pack.get("created_utc") if isinstance(pack.get("created_utc"), str) else None)
+        age_ok = created is not None and (moment - created).total_seconds() >= QUIET_MIN_AGE_HOURS * 3600
+        if (
+            account_has_push
+            and linked_n >= QUIET_MIN_LINKED
+            and age_ok
+            and views <= QUIET_MAX_VIEWS
+        ):
+            out.append(row("quiet", pack, QUIET_COPY))
+
+    return out
 
 
 def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
@@ -245,20 +375,12 @@ def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
     return body
 
 
-def list_media(
-    user_id: str,
-    access_token: str,
-    *,
-    get_json: Callable[[str], dict[str, Any]] | None = None,
-    pages: int = 3,
+def _page_media(
+    start_url: str,
+    fetch: Callable[[str], dict[str, Any]],
+    pages: int,
 ) -> list[dict[str, Any]]:
-    fetch = get_json or _get_json
-    qs = urlencode({
-        "fields": "id,caption,permalink,timestamp,media_type,media_product_type",
-        "limit": "50",
-        "access_token": access_token,
-    })
-    url: str | None = f"{GRAPH_HOST}/{user_id}/media?{qs}"
+    url: str | None = start_url
     out: list[dict[str, Any]] = []
     for _ in range(max(1, pages)):
         if not url:
@@ -271,6 +393,45 @@ def list_media(
         nxt = paging.get("next") if isinstance(paging, dict) else None
         url = nxt if isinstance(nxt, str) and nxt else None
     return out
+
+
+def list_media(
+    user_id: str,
+    access_token: str,
+    *,
+    get_json: Callable[[str], dict[str, Any]] | None = None,
+    pages: int = 3,
+) -> list[dict[str, Any]]:
+    """List recent media. Instagram Login is token-scoped: try /me/media first.
+
+    `/{IG_ID}/media` is the documented professional-account path. Some tokens
+    return an empty `data` list on the wrong id (not an HTTP error), so we
+    fall back instead of treating that as "this account has no Reels."
+    """
+    fetch = get_json or _get_json
+    qs = urlencode({
+        "fields": "id,caption,permalink,timestamp,media_type,media_product_type",
+        "limit": "50",
+        "access_token": access_token,
+    })
+    starts = [f"{GRAPH_HOST}/me/media?{qs}"]
+    uid = (user_id or "").strip()
+    if uid and uid != "me":
+        starts.append(f"{GRAPH_HOST}/{uid}/media?{qs}")
+    last_err: ValueError | None = None
+    saw_success = False
+    for start in starts:
+        try:
+            rows = _page_media(start, fetch, pages)
+        except ValueError as exc:
+            last_err = exc
+            continue
+        saw_success = True
+        if rows:
+            return rows
+    if not saw_success and last_err is not None:
+        raise last_err
+    return []
 
 
 def fetch_media_insights(
