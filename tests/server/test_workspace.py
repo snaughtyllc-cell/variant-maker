@@ -9,6 +9,14 @@ def test_save_upload_writes_file_and_returns_path(tmp_path):
         assert f.read() == b"\x00\x01data"
 
 
+def test_save_upload_strips_path_segments(tmp_path):
+    ws = Workspace(str(tmp_path))
+    p = ws.save_upload("job1", "srcA", "../../etc/passwd", b"nope")
+    assert p.endswith("/jobs/job1/srcA/in/passwd")
+    assert str(tmp_path) in p
+    assert "/etc/" not in p
+
+
 def test_out_dir_created_and_under_source(tmp_path):
     ws = Workspace(str(tmp_path))
     out = ws.source_out_dir("job1", "srcA")

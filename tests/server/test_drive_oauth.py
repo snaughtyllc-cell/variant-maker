@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -34,6 +35,7 @@ def test_oauth_token_store_roundtrip(tmp_path):
     data = store.load()
     assert data["refresh_token"] == "rt"
     assert data["email"] == "ops@company.com"
+    assert oct(os.stat(path).st_mode)[-3:] == "600"
     store.clear()
     assert store.exists() is False
 

@@ -281,6 +281,7 @@ class InstagramAccountStore:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
             os.replace(tmp, path)
+            os.chmod(path, 0o600)
         except Exception:
             try:
                 os.remove(tmp)

@@ -117,6 +117,15 @@ def test_session_rejects_tamper_and_expiry(tmp_path):
     assert read_session(token, secret, now=111) is None
 
 
+def test_truncated_session_sig_is_rejected(tmp_path):
+    secret = load_or_create_secret(str(tmp_path / "secret"))
+    token = sign_session(email="a@b.com", workspace_id="ws_1", secret=secret, now=100, ttl_s=10)
+    body, sig = token.rsplit(".", 1)
+    assert read_session(f"{body}.{sig[:8]}", secret, now=101) is None
+    assert read_session(f"{body}.", secret, now=101) is None
+    assert read_session("not-a-token", secret, now=101) is None
+
+
 def test_admin_view_cookie_roundtrip(tmp_path):
     from variant_maker.server.sessions import read_view, sign_view
     secret = load_or_create_secret(str(tmp_path / "secret"))

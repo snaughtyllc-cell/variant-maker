@@ -34,6 +34,19 @@ def upload_key(upload_id: str, filename: str) -> str:
     return f"uploads/{upload_id}/{_safe_name(filename)}"
 
 
+def is_direct_upload_key(key: str) -> bool:
+    """True only for ``uploads/{id}/{basename}`` — never inputs/ or outputs/."""
+    parts = str(key or "").split("/")
+    if len(parts) != 3 or parts[0] != "uploads":
+        return False
+    upload_id, name = parts[1], parts[2]
+    if not upload_id or upload_id != os.path.basename(upload_id) or upload_id in (".", ".."):
+        return False
+    if not name or name != os.path.basename(name) or name in (".", ".."):
+        return False
+    return True
+
+
 def package_zip_key(source_id: str) -> str:
     return f"outputs/{source_id}/variants.zip"
 

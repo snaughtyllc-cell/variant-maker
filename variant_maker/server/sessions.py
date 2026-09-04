@@ -27,7 +27,11 @@ def _decode(token: str | None, secret: str, *, now: float | None = None) -> dict
         return None
     body, sig = token.rsplit(".", 1)
     expect = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expect):
+    try:
+        ok = hmac.compare_digest(sig, expect)
+    except (TypeError, ValueError):
+        return None
+    if not ok:
         return None
     try:
         payload = json.loads(base64.urlsafe_b64decode(body.encode()))

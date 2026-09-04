@@ -210,6 +210,7 @@ def _queue_new(
     *,
     max_attempts: int,
     slots: int,
+    actor_email: str | None = None,
 ) -> None:
     if slots <= 0:
         return
@@ -247,6 +248,7 @@ def _queue_new(
                 caption_prompt=(
                     brief_from_filename(f.name) if workflow.caption_from_filename else ""
                 ),
+                actor_email=actor_email,
             )
             ledger.mark_running(
                 sha, job_id=job.job_id, file_id=f.id, md5=f.md5, filename=f.name,
@@ -301,6 +303,7 @@ def tick_workflow(
     max_attempts: int = 3,
     max_inflight: int = 1,
     caption_store: CaptionStore | None = None,
+    actor_email: str | None = None,
 ) -> TickSummary:
     summary = TickSummary()
     if inbox_folder_id == output_folder_id:
@@ -314,6 +317,7 @@ def tick_workflow(
     _queue_new(
         workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
         max_attempts=max_attempts, slots=max(0, max_inflight - still),
+        actor_email=actor_email,
     )
     # FakeRunner (and very short Fast jobs) may already be done — export in this tick.
     done_already = False

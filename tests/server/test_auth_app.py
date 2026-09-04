@@ -622,3 +622,41 @@ def test_drive_oauth_start_is_site_admin_only(tmp_path):
     assert denied.status_code == 403
     assert va.post("/api/drive/oauth/disconnect").status_code == 403
 
+
+def test_garbage_session_cookie_does_not_500(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    client = TestClient(app)
+    client.cookies.set(COOKIE_NAME, "aaa.bb")
+    resp = client.get("/api/gallery")
+    assert resp.status_code == 401
+
+
+def test_chunked_upload_is_tenant_scoped(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    init = jeff.post("/api/uploads", data={"filename": "clip.mp4", "size": "4"})
+    assert init.status_code == 200
+    uid = init.json()["upload_id"]
+    stolen = ops.put(f"/api/uploads/{uid}?offset=0", content=b"abcd")
+    assert stolen.status_code == 404
+    own = jeff.put(f"/api/uploads/{uid}?offset=0", content=b"abcd")
+    assert own.status_code == 200
+    assert own.json()["received"] == 4
+
+
+def test_password_login_locks_after_repeated_failures(tmp_path):
+    from variant_maker.server.login_limit import MAX_FAILURES, reset
+    reset()
+    app, _ = _auth_app(tmp_path)
+    client = TestClient(app)
+    for _ in range(MAX_FAILURES):
+        denied = _password_login(client, "hammer@x.com", "secret12")
+        assert denied.status_code == 401
+    locked = _password_login(client, "hammer@x.com", "secret12")
+    assert locked.status_code == 429
+    reset()
+

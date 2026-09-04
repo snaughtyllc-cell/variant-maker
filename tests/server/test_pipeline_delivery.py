@@ -50,6 +50,26 @@ def test_direct_upload_returns_presigned_put_and_starts_job(tmp_path):
     assert job.telemetry.get("processing_charge") == "Fast 1 pack"
 
 
+def test_from_object_rejects_keys_outside_this_upload(tmp_path):
+    blob = FakeObjectStore()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}), object_store=blob)
+    client = TestClient(create_app(store))
+    blob.put_bytes("inputs/s1/clip.mp4", b"stolen")
+    stolen = client.post(
+        "/api/jobs/from-object",
+        json={"items": [{"filename": "clip.mp4", "key": "inputs/s1/clip.mp4"}], "count": 1},
+    )
+    assert stolen.status_code == 400
+    missing = client.post(
+        "/api/jobs/from-object",
+        json={
+            "items": [{"filename": "clip.mp4", "key": "uploads/deadbeefdead/clip.mp4"}],
+            "count": 1,
+        },
+    )
+    assert missing.status_code == 404
+
+
 def test_local_upload_fallback_without_object_store(tmp_path):
     store = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
     client = TestClient(create_app(store))

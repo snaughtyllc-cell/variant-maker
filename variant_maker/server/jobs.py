@@ -517,8 +517,11 @@ class JobStore:
         sources = []
         for filename, data in uploads:
             source_id = uuid.uuid4().hex[:12]
-            self._ws.save_upload(job_id, source_id, filename, data)
-            source = JobSource(source_id=source_id, filename=filename, requested=count)
+            safe_name = os.path.basename(filename or "") or "video.mp4"
+            if safe_name in (".", ".."):
+                safe_name = "video.mp4"
+            self._ws.save_upload(job_id, source_id, safe_name, data)
+            source = JobSource(source_id=source_id, filename=safe_name, requested=count)
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,

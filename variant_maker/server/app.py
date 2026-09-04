@@ -109,11 +109,15 @@ from .jobs import (
     source_files_ready,
     variant_ready,
 )
+from .login_limit import clear as clear_login_failures
+from .login_limit import locked as login_locked
+from .login_limit import note_failure as note_login_failure
 from .media_links import (
     DOWNLOAD_TTL_SECONDS,
     MULTIPART_THRESHOLD,
     UPLOAD_TTL_SECONDS,
     input_key,
+    is_direct_upload_key,
     output_key,
     package_zip_key,
     upload_key,
@@ -216,6 +220,8 @@ from .workspace import Workspace
 
 _IN_FLIGHT_STATES = frozenset({"rendering", "checking", "looking", "rerolling", "uniqueness", "escalating"})
 _UPLOAD_META: dict[str, dict] = {}
+_UPLOAD_LOCK = threading.Lock()
+_MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
 ExchangeFn = Callable[..., dict[str, Any]]
 FetchEmailFn = Callable[[dict[str, Any]], str | None]
@@ -870,6 +876,52 @@ def create_app(
             "secure": secure,
         }
 
+    def _clear_auth_cookies(resp: Response, request: Request | None = None) -> None:
+        kw = {"path": "/"}
+        if request is not None:
+            proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            if str(proto).split(",")[0].strip() == "https":
+                kw["secure"] = True
+        resp.delete_cookie(COOKIE_NAME, **kw)
+        resp.delete_cookie(VIEW_COOKIE_NAME, **kw)
+
+    def _upload_workspace_id() -> str:
+        bundle = tenant_cv.get()
+        if bundle is not None:
+            return bundle.workspace_id
+        return "_"
+
+    def _store_upload_meta(upload_id: str, meta: dict[str, Any]) -> None:
+        row = {**meta, "workspace_id": _upload_workspace_id()}
+        with _UPLOAD_LOCK:
+            _UPLOAD_META[upload_id] = row
+
+    def _get_own_upload(upload_id: str) -> dict[str, Any] | None:
+        with _UPLOAD_LOCK:
+            meta = _UPLOAD_META.get(upload_id)
+        if meta is None:
+            return None
+        if meta.get("workspace_id") != _upload_workspace_id():
+            return None
+        return meta
+
+    def _pop_own_uploads(upload_ids: list[str]) -> None:
+        scope = _upload_workspace_id()
+        with _UPLOAD_LOCK:
+            for uid in upload_ids:
+                meta = _UPLOAD_META.get(uid)
+                if meta is not None and meta.get("workspace_id") == scope:
+                    _UPLOAD_META.pop(uid, None)
+
+    def _claim_direct_upload_key(key: str) -> str:
+        if not is_direct_upload_key(key):
+            raise HTTPException(status_code=400, detail="upload key is not from this Studio session")
+        upload_id = key.split("/")[1]
+        meta = _get_own_upload(upload_id)
+        if meta is None or meta.get("key") != key:
+            raise HTTPException(status_code=404, detail="upload not found")
+        return upload_id
+
     def _oauth_client_pair() -> tuple[str, str]:
         cid = str(oauth_env.get(ENV_OAUTH_CLIENT_ID) or auth_env.get(ENV_OAUTH_CLIENT_ID) or "")
         csec = str(oauth_env.get(ENV_OAUTH_CLIENT_SECRET) or auth_env.get(ENV_OAUTH_CLIENT_SECRET) or "")
@@ -939,6 +991,20 @@ def create_app(
         user = getattr(request.state, "user", None)
         raw = getattr(user, "email", None) if user is not None else None
         email = str(raw or "").strip().lower()
+        return email or None
+
+    def _workspace_owner_email() -> str | None:
+        if tenants is None:
+            return None
+        bundle = tenant_cv.get()
+        ws_id = bundle.workspace_id if bundle is not None else None
+        if not ws_id:
+            return None
+        owner = next(
+            (u for u in tenants.list_users() if u.workspace_id == ws_id and u.role == "owner"),
+            None,
+        )
+        email = str(getattr(owner, "email", None) or "").strip().lower()
         return email or None
 
     def _week_by_email(workspace_id: str) -> dict[str, Any]:
@@ -1181,7 +1247,7 @@ def create_app(
             "analytics": analytics,
         }
 
-    def _run_workflow_tick(wf: Workflow) -> Workflow:
+    def _run_workflow_tick(wf: Workflow, *, actor_email: str | None = None) -> Workflow:
         from datetime import datetime
         ts = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         inbox = app.state.destinations.get(wf.inbox_destination_id)
@@ -1216,6 +1282,7 @@ def create_app(
                 ledger=ledger,
                 work_dir=store._ws.workflow_work_dir(),
                 caption_store=app.state.captions,
+                actor_email=actor_email or _workspace_owner_email(),
             )
         return app.state.workflows.update(
             wf.id, last_sweep_at=ts, last_summary=result.as_dict(), touch_sweep=True,
@@ -1302,6 +1369,11 @@ def create_app(
         password = body.password or ""
         if not email:
             raise HTTPException(status_code=400, detail="email is required")
+        if login_locked(email):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many sign-in attempts. Wait a few minutes and try again.",
+            )
         if len(password) < MIN_PASSWORD_LENGTH:
             raise HTTPException(
                 status_code=400,
@@ -1310,6 +1382,7 @@ def create_app(
         existing = tenants.get_user(email)
         if existing is not None and existing.password_hash:
             if not verify_password(password, existing.password_hash):
+                note_login_failure(email)
                 raise HTTPException(status_code=401, detail="Email or password is wrong.")
             user = existing
         else:
@@ -1327,12 +1400,14 @@ def create_app(
                 data_dir=data_dir,
             )
             if user is None:
+                note_login_failure(email)
                 raise HTTPException(
                     status_code=401,
                     detail="This email isn't invited. Ask the operator to add you.",
                 )
             tenants.set_password(user.email, hash_password(password))
             user = tenants.get_user(user.email) or user
+        clear_login_failures(email)
         _set_session_cookie(response, request, user)
         return _auth_me_out(user)
 
@@ -1353,10 +1428,9 @@ def create_app(
         return Response(status_code=204)
 
     @app.post("/api/auth/logout", status_code=204)
-    def auth_logout() -> Response:
+    def auth_logout(request: Request) -> Response:
         resp = Response(status_code=204)
-        resp.delete_cookie(COOKIE_NAME, path="/")
-        resp.delete_cookie(VIEW_COOKIE_NAME, path="/")
+        _clear_auth_cookies(resp, request)
         return resp
 
     @app.get("/api/auth/google/start")
@@ -1529,7 +1603,11 @@ def create_app(
         assert tenants is not None
         resp = Response(status_code=204)
         if not body.workspace_id:
-            resp.delete_cookie(VIEW_COOKIE_NAME, path="/")
+            kw = {"path": "/"}
+            proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            if str(proto).split(",")[0].strip() == "https":
+                kw["secure"] = True
+            resp.delete_cookie(VIEW_COOKIE_NAME, **kw)
             return resp
         if tenants.get_workspace(body.workspace_id) is None:
             raise HTTPException(status_code=404, detail="workspace not found")
@@ -1562,11 +1640,13 @@ def create_app(
     @app.post("/api/uploads")
     def init_upload(filename: str = Form(...), size: int = Form(...)) -> dict:
         """Start a chunked upload (RunPod HTTP proxy drops large multipart bodies)."""
+        if int(size) < 0 or int(size) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="file too large")
         upload_id = uuid.uuid4().hex[:12]
         safe = os.path.basename(filename) or "video.mp4"
         path = store._ws.upload_blob_path(upload_id, safe)
         open(path, "wb").close()
-        _UPLOAD_META[upload_id] = {"filename": safe, "size": int(size), "received": 0, "path": path}
+        _store_upload_meta(upload_id, {"filename": safe, "size": int(size), "received": 0, "path": path})
         return {"upload_id": upload_id, "chunk_hint": 2_000_000}
 
     @app.post("/api/uploads/direct")
@@ -1576,6 +1656,8 @@ def create_app(
         content_type: str = Form("video/mp4"),
     ) -> dict:
         """Browser → object storage PUT. Falls back to local chunked upload."""
+        if int(size) < 0 or int(size) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="file too large")
         blob = getattr(store, "_object_store", None)
         safe = os.path.basename(filename) or "video.mp4"
         presign_put = getattr(blob, "presign_put", None) if blob is not None else None
@@ -1583,16 +1665,16 @@ def create_app(
             upload_id = uuid.uuid4().hex[:12]
             path = store._ws.upload_blob_path(upload_id, safe)
             open(path, "wb").close()
-            _UPLOAD_META[upload_id] = {
+            _store_upload_meta(upload_id, {
                 "filename": safe, "size": int(size), "received": 0, "path": path,
-            }
+            })
             return {"mode": "local", "upload_id": upload_id, "chunk_hint": 2_000_000}
         upload_id = uuid.uuid4().hex[:12]
         key = upload_key(upload_id, safe)
-        _UPLOAD_META[upload_id] = {
+        _store_upload_meta(upload_id, {
             "filename": safe, "size": int(size), "key": key, "received": int(size),
             "mode": "direct",
-        }
+        })
         url = presign_put(
             key, expires=UPLOAD_TTL_SECONDS, content_type=content_type or "video/mp4",
         )
@@ -1608,8 +1690,8 @@ def create_app(
 
     @app.put("/api/uploads/{upload_id}")
     async def put_upload_chunk(upload_id: str, request: Request, offset: int = 0) -> dict:
-        meta = _UPLOAD_META.get(upload_id)
-        if meta is None:
+        meta = _get_own_upload(upload_id)
+        if meta is None or "path" not in meta:
             raise HTTPException(status_code=404, detail="upload not found")
         try:
             data = await request.body()
@@ -1618,6 +1700,8 @@ def create_app(
                 status_code=400,
                 detail="Upload dropped — hit Generate again.",
             ) from exc
+        if int(offset) < 0 or int(offset) + len(data) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="file too large")
         path = meta["path"]
         with open(path, "r+b") as f:
             f.seek(int(offset))
@@ -1646,7 +1730,7 @@ def create_app(
             raise HTTPException(status_code=400, detail="upload_ids required")
         paths: list[tuple[str, str]] = []
         for uid in ids:
-            meta = _UPLOAD_META.get(uid)
+            meta = _get_own_upload(uid)
             if meta is None:
                 raise HTTPException(status_code=404, detail=f"upload not found: {uid}")
             if meta["received"] <= 0 or not os.path.exists(meta["path"]):
@@ -1660,8 +1744,7 @@ def create_app(
             caption_prompts=parse_caption_prompts_field(caption_prompts),
             actor_email=_actor_email(request),
         )
-        for uid in ids:
-            _UPLOAD_META.pop(uid, None)
+        _pop_own_uploads(ids)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -1671,6 +1754,7 @@ def create_app(
         items = [(it.filename or "video.mp4", it.key) for it in body.items if it.key]
         if not items:
             raise HTTPException(status_code=400, detail="items required")
+        claimed = [_claim_direct_upload_key(key) for _name, key in items]
         job = store.create_job_from_object_keys(
             items, count=body.count,
             allow_creative_escalate=body.allow_creative_escalate,
@@ -1681,6 +1765,7 @@ def create_app(
             caption_prompts=list(body.caption_prompts or []),
             actor_email=_actor_email(request),
         )
+        _pop_own_uploads(claimed)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -2490,12 +2575,12 @@ def create_app(
             pass
 
     @app.post("/api/workflows/{workflow_id}/run", response_model=WorkflowOut)
-    def run_workflow(workflow_id: str) -> WorkflowOut:
+    def run_workflow(request: Request, workflow_id: str) -> WorkflowOut:
         _require_drive()
         wf = app.state.workflows.get(workflow_id)
         if wf is None:
             raise HTTPException(status_code=404, detail="workflow not found")
-        return _workflow_out(_run_workflow_tick(wf))
+        return _workflow_out(_run_workflow_tick(wf, actor_email=_actor_email(request)))
 
     @app.post("/api/workflows/{workflow_id}/cancel", response_model=WorkflowOut)
     def cancel_workflow(workflow_id: str) -> WorkflowOut:

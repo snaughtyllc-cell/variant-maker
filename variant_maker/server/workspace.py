@@ -4,6 +4,13 @@ from __future__ import annotations
 import os
 
 
+def _safe_filename(filename: str, *, fallback: str = "video.mp4") -> str:
+    base = os.path.basename(str(filename or ""))
+    if not base or base in (".", ".."):
+        return fallback
+    return base
+
+
 class Workspace:
     def __init__(self, root: str) -> None:
         self.root = os.path.abspath(root)
@@ -12,7 +19,7 @@ class Workspace:
         return os.path.join(self.root, "jobs", job_id, source_id)
 
     def source_in_path(self, job_id: str, source_id: str, filename: str) -> str:
-        return os.path.join(self._source_dir(job_id, source_id), "in", filename)
+        return os.path.join(self._source_dir(job_id, source_id), "in", _safe_filename(filename))
 
     def source_out_dir(self, job_id: str, source_id: str) -> str:
         out = os.path.join(self._source_dir(job_id, source_id), "out")
@@ -23,7 +30,7 @@ class Workspace:
         return os.path.join(self.root, "jobs", job_id, "job.json")
 
     def variant_path(self, job_id: str, source_id: str, filename: str) -> str:
-        return os.path.join(self.source_out_dir(job_id, source_id), filename)
+        return os.path.join(self.source_out_dir(job_id, source_id), _safe_filename(filename))
 
     def job_dir(self, job_id: str) -> str:
         return os.path.join(self.root, "jobs", job_id)
@@ -44,12 +51,12 @@ class Workspace:
         return path
 
     def upload_staging_dir(self, upload_id: str) -> str:
-        d = os.path.join(self.root, "uploads", upload_id)
+        d = os.path.join(self.root, "uploads", _safe_filename(upload_id, fallback="upload"))
         os.makedirs(d, exist_ok=True)
         return d
 
     def upload_blob_path(self, upload_id: str, filename: str) -> str:
-        return os.path.join(self.upload_staging_dir(upload_id), filename)
+        return os.path.join(self.upload_staging_dir(upload_id), _safe_filename(filename))
 
     def drive_dir(self) -> str:
         d = os.path.join(self.root, "drive")

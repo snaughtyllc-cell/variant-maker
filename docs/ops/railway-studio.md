@@ -125,8 +125,12 @@ open Studio). To give each operator their own gallery + Drive:
 1. Add the login callback URI above to the Google OAuth client.
 2. Set on Railway:
    - `VARIANT_AUTH_ADMIN_EMAIL` — your Google email
-   - `VARIANT_AUTH_SECRET` — a long random string (or omit and Studio writes
-     one to `{DATA_DIR}/auth/secret` on first boot)
+   - `VARIANT_AUTH_SECRET` — a long random string. Do not omit in production;
+     if unset, Studio writes one to `{DATA_DIR}/auth/secret` on first boot, which
+     is weaker on a shared volume.
+   - `VARIANT_AUTH_OAUTH_REDIRECT_URI` — pin the Google login callback
+     (`https://<studio>/api/auth/google/callback`) so post-login redirects
+     cannot follow a spoofed `Host` / `X-Forwarded-Host` header.
 3. Redeploy, open Studio, sign in with **email + password** (first visit sets
    the password) or **Continue with Google**. First admin login moves
    existing packs into your workspace.

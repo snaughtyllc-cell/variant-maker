@@ -69,6 +69,7 @@ class OAuthTokenStore:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(dict(data), f, indent=2)
             os.replace(tmp, self._path)
+            os.chmod(self._path, 0o600)
         except Exception:
             try:
                 os.remove(tmp)
@@ -169,6 +170,7 @@ class OAuthPendingStore:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(dict(data), f)
             os.replace(tmp, self._path)
+            os.chmod(self._path, 0o600)
         except Exception:
             try:
                 os.remove(tmp)
