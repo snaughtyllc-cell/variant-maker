@@ -1,13 +1,23 @@
 """Object-storage delivery: Railway issues signed URLs and never copies MP4s."""
 from __future__ import annotations
 
+import json
 import os
+import time
+from datetime import UTC, datetime, timedelta
 
+from farm_fakes import FakeDrive
 from fastapi.testclient import TestClient
 
 from tests.server.fakes import FakeObjectStore, FakeRunner
 from variant_maker.server.app import create_app
-from variant_maker.server.jobs import JobStore
+from variant_maker.server.drive_exports import (
+    ExportRunner,
+    ExportStore,
+    VariantRef,
+    build_export_files,
+)
+from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
 from variant_maker.server.workspace import Workspace
 
 
@@ -67,8 +77,6 @@ def test_finished_job_records_runpod_telemetry_fields(tmp_path):
 
 
 def test_prune_expired_outputs_keeps_job_metadata(tmp_path):
-    from datetime import UTC, datetime, timedelta
-
     blob = FakeObjectStore()
     blob.put_bytes("outputs/s1/v01.mp4", b"mp4-bytes")
     store = JobStore(Workspace(str(tmp_path)), FakeRunner({}), object_store=blob)
@@ -86,11 +94,18 @@ def test_prune_expired_outputs_keeps_job_metadata(tmp_path):
     assert blob.list_prefix(f"outputs/{sid}/") == []
 
 
+def test_zip_ok_variants_skips_local_archive_when_object_store_holds_files(tmp_path):
+    blob = FakeObjectStore()
+    store = JobStore(Workspace(str(tmp_path)), FakeRunner({}), object_store=blob)
+    job = store.create_job([("a.mp4", b"xxxx")], count=1)
+    store.wait(job.job_id, timeout=5)
+    sid = job.sources[0].source_id
+    blob.put_bytes(f"outputs/{sid}/v01.mp4", b"mp4-bytes")
+    assert store.zip_ok_variants(sid) is None
+    assert store._keep_local_media is False
+
+
 def test_from_drive_skips_volume_when_object_store_is_set(tmp_path):
-    import json
-
-    from farm_fakes import FakeDrive
-
     drive = FakeDrive()
     blob = FakeObjectStore()
     ws = Workspace(str(tmp_path))
@@ -120,11 +135,6 @@ def test_from_drive_skips_volume_when_object_store_is_set(tmp_path):
 
 
 def test_export_runner_uses_remote_deliver_without_object_get(tmp_path):
-    from farm_fakes import FakeDrive
-
-    from variant_maker.server.drive_exports import ExportRunner, ExportStore, VariantRef, build_export_files
-    from variant_maker.server.jobs import Job, JobSource, VariantInfo
-
     blob = FakeObjectStore()
     blob.put_bytes("outputs/s1/v01.mp4", b"video-bytes")
     ws = Workspace(str(tmp_path))
@@ -153,7 +163,6 @@ def test_export_runner_uses_remote_deliver_without_object_get(tmp_path):
         drive, exports, object_store=blob,
         remote_deliver=remote, mint_token=lambda: "ya29.job",
     ).start(exp)
-    import time
     for _ in range(50):
         exp = exports.get(exp.export_id)
         if exp.state in ("succeeded", "partial", "failed"):

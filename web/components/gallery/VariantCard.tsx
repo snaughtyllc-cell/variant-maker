@@ -102,7 +102,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
             />
           ) : (
             <div className="gallery-tile__placeholder" style={{ aspectRatio: "9 / 16" }}>
-              Not on Studio
+              Not ready
             </div>
           )}
         </div>

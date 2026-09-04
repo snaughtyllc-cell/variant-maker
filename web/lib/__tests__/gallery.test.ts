@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  copyLandingCopy,
   copyMissingCopy,
   deliveryComplete,
+  expiresLabel,
   filesReadyCount,
   filterSources,
   gallerySearchPath,
@@ -53,7 +55,15 @@ describe("gallery helpers", () => {
     };
     expect(filesReadyCount(missing)).toBe(0);
     expect(deliveryComplete(missing)).toBe(false);
-    expect(copyMissingCopy()).toMatch(/Retry copy/i);
+    expect(copyMissingCopy()).toMatch(/Retry delivery/i);
+    expect(copyLandingCopy()).toMatch(/landing/i);
+  });
+
+  it("formats download expiration without loading media", () => {
+    const now = new Date("2026-09-04T12:00:00Z");
+    expect(expiresLabel("2026-09-05T15:42:00Z", now)).toMatch(/Expires/i);
+    expect(expiresLabel("2026-09-04T11:00:00Z", now)).toBe("Downloads expired");
+    expect(expiresLabel(null, now)).toBeNull();
   });
 
   it("explains removing a pack, including a live one", () => {

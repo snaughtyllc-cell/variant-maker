@@ -1,7 +1,7 @@
 import os
 
-from variant_maker.server import gpu_worker
 from tests.server.fakes import FakeObjectStore
+from variant_maker.server import gpu_worker
 
 
 def test_process_job_streams_progress_then_uploads_and_results(monkeypatch, tmp_path):
@@ -192,7 +192,8 @@ def test_deliver_drive_copies_object_keys_to_drive(tmp_path, monkeypatch):
             assert access_token == "ya29.job"
 
         def upload(self, local_path, folder_id, name=None):
-            uploaded.append((open(local_path, "rb").read(), folder_id, name))
+            with open(local_path, "rb") as fh:
+                uploaded.append((fh.read(), folder_id, name))
             return "drv1"
 
     monkeypatch.setattr(gpu_worker, "GoogleDrive", FakeDrive, raising=False)

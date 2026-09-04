@@ -249,6 +249,39 @@ describe("SourceGroup insights", () => {
   });
 });
 
+describe("SourceGroup job record", () => {
+  it("shows processing charge, Drive destination, and expiration", () => {
+    render(
+      <SourceGroup
+        source={source({
+          processing_charge: "Fast 20 pack",
+          delivery_destination: "google_drive",
+          expires_utc: "2099-09-05T15:42:00Z",
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("Fast 20 pack")).toBeInTheDocument();
+    expect(screen.getByText("Google Drive")).toBeInTheDocument();
+    expect(screen.getByText(/Expires/i)).toBeInTheDocument();
+  });
+
+  it("offers Retry delivery when the download package is missing", () => {
+    render(
+      <SourceGroup
+        source={source({
+          copy_status: "missing",
+          files_ready: 0,
+          delivered: 2,
+          job_state: "done",
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /retry delivery/i })).toBeInTheDocument();
+  });
+});
+
 describe("SourceGroup originality", () => {
   it("titles the Originality average as pixel SSIM, not a platform check", () => {
     render(

@@ -195,7 +195,7 @@ describe("VariantCard aspect", () => {
     expect(thumb).toHaveAttribute("data-fill", "true");
   });
 
-  it("keeps a 9:16 box for variants that are not on Studio", () => {
+  it("keeps a 9:16 box for variants that are not ready", () => {
     render(
       <VariantCard
         variant={variant({ file_ready: false })}
@@ -205,7 +205,7 @@ describe("VariantCard aspect", () => {
         onToggle={() => {}}
       />,
     );
-    const placeholder = screen.getByText("Not on Studio");
+    const placeholder = screen.getByText("Not ready");
     expect(placeholder.style.aspectRatio).toBe("9 / 16");
     expect(placeholder.className).not.toMatch(/absolute/);
   });

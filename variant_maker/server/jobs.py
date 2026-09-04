@@ -50,8 +50,8 @@ DEFAULT_GALLERY_KEEP_HOURS = float(GALLERY_KEEP_DAYS * 24)
 
 PLATFORM_RESULTS = ("passed", "duplicate_reject", "flagged", "unknown")
 COPY_FAILED_MSG = (
-    "GPU finished, but videos didn't copy back to Studio. "
-    "Retry copy, or Regenerate if that still fails."
+    "Processing finished, but the download package isn't ready. "
+    "Retry delivery, or regenerate if that still fails."
 )
 
 
@@ -1466,8 +1466,11 @@ class JobStore:
         if loc is None:
             return None
         job_id, source = loc
-        if self._keep_local_media:
-            self._pull_missing_outputs(source_id)
+        if not self._keep_local_media:
+            # Object-storage jobs: browser downloads via signed URLs, not a
+            # Railway-built zip streamed through the web service.
+            return None
+        self._pull_missing_outputs(source_id)
         members: list[tuple[str, str]] = []
         for v in source.variants:
             if v.status != "ok" or not v.filename:

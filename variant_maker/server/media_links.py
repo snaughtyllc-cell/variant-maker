@@ -67,7 +67,7 @@ def outputs_expire_utc(
 
 def is_jpeg_name(name: str | None) -> bool:
     base = os.path.basename(str(name or "")).lower()
-    return base.endswith(".jpg") or base.endswith(".jpeg")
+    return base.endswith((".jpg", ".jpeg"))
 
 
 def is_mp4_name(name: str | None) -> bool:

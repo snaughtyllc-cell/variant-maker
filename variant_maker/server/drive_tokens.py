@@ -1,7 +1,8 @@
 """Short-lived Google Drive access tokens for RunPod — never the refresh token."""
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 from urllib.parse import urlencode
 
 TOKEN_URI = "https://oauth2.googleapis.com/token"

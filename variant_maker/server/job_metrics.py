@@ -6,8 +6,9 @@ defended without PostHog. Missing probe/ffmpeg never fails a job.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 FAST_USD_PER_HOUR = 0.58
 HQ_USD_PER_HOUR = 1.50  # 4090-class estimate; override via env

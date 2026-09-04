@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { SourceOut } from "@/lib/types";
 import { regenerate, retryCopy, sourceZipUrl, removeSource, getSourceDownloads } from "@/lib/api";
 import {
+  copyLandingCopy,
   copyMissingCopy,
   deliveryComplete,
+  expiresLabel,
   filesReadyCount,
   removePackCopy,
   zipEmptyCopy,
@@ -104,6 +106,7 @@ export function SourceGroup({
         ? `${uniquenessCustomerLabel()} ${avgUniquenessPct}%`
         : `${uniquenessCustomerLabel()} ${avgUniquenessPct}% avg`
       : "";
+  const expiresCopy = expiresLabel(source.expires_utc);
 
   function handleSaveShare() {
     if (stillRunning || shareBusy || shareLock.current || actionShareable.length === 0) return;
@@ -185,7 +188,7 @@ export function SourceGroup({
       await retryCopy(source.source_id);
       onRegenerate();
     } catch (e) {
-      console.error("Retry copy failed", e);
+      console.error("Retry delivery failed", e);
     } finally {
       setCopyLoading(false);
     }
@@ -226,9 +229,9 @@ export function SourceGroup({
         >
           {fullDelivery ? "✓ " : ""}
           {copyMissing
-            ? `${filesReady} / ${source.requested} on Studio`
+            ? `${filesReady} / ${source.requested} ready`
             : copyLanding
-              ? `${filesReady} / ${source.requested} copying`
+              ? `${filesReady} / ${source.requested} landing`
               : `${filesReady} / ${source.requested} delivered`}
         </span>
         {postedCopy && <span className="gallery-pack-header__meta">{postedCopy}</span>}
@@ -238,6 +241,9 @@ export function SourceGroup({
         )}
         {source.delivery_destination === "google_drive" && (
           <span className="gallery-pack-header__meta">Google Drive</span>
+        )}
+        {expiresCopy && (
+          <span className="gallery-pack-header__meta">{expiresCopy}</span>
         )}
         <div className="gallery-pack-header__actions">
           {okCount > 0 && (
@@ -302,12 +308,12 @@ export function SourceGroup({
         <div className="gallery-banner">
           ⚠ {copyMissingCopy()}
           <button type="button" onClick={handleRetryCopy} disabled={copyLoading}>
-            {copyLoading ? "Copying…" : "↻ Retry copy"}
+            {copyLoading ? "Retrying…" : "↻ Retry delivery"}
           </button>
         </div>
       )}
       {copyLanding && !copyMissing && (
-        <div className="gallery-banner">Videos are still landing on Studio…</div>
+        <div className="gallery-banner">{copyLandingCopy()}</div>
       )}
       {hasShortfall && shortfallMsg && (
         <div className="gallery-banner">
