@@ -43,7 +43,7 @@ export function liveTileLabel(tile: LiveTile, preparing = false): string {
 /** Source poster while copies are still rendering. Prep ids have no file yet. */
 export function liveTilePreviewSrc(source: SourceProgress): string | null {
   const poster = source.variants.find((v) => v.look_var_url)?.look_var_url
-    ?? source.look_preview?.look_var_url;
+    ?? source.lookPreview?.var;
   return poster ?? null;
 }
 

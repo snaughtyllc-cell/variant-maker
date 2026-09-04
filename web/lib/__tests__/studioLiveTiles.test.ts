@@ -48,6 +48,6 @@ describe("packLiveTiles", () => {
     expect(liveTileMediaSrc(tiles[0], source)).toBe("/api/look/s1/look_v01.jpg");
     expect(liveTileMediaSrc(tiles[1], source)).toBe("/api/look/s1/look_v01.jpg");
     expect(liveRowThumbSrc(source)).toBe("/api/look/s1/look_v01.jpg");
-    expect(liveTilePreviewSrc({ ...source, variants: [], look_preview: undefined })).toBeNull();
+    expect(liveTilePreviewSrc({ ...source, variants: [], lookPreview: undefined })).toBeNull();
   });
 });
