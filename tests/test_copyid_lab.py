@@ -21,9 +21,9 @@ def _skip_unless_lab():
 def _clip(path, *, lavfi, has_audio=False):
     cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi]
     if has_audio:
-        cmd += ["-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-shortest"]
+        cmd += ["-f", "lavfi", "-i", "sine=frequency=440:duration=6", "-shortest"]
         cmd += ["-c:a", "aac"]
-    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-t", "1", path]
+    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-t", "6", path]
     subprocess.run(cmd, check=True, capture_output=True)
 
 

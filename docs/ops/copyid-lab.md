@@ -30,11 +30,12 @@ still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
 floor. That is why lab is `record` only. Do not turn `gate` on until we
 decide what “different enough audio” means — not this week, not on live.
 
-Lab Fast `xar25v77v3j27u` image 2026-08-30: digest `sha256:e5173d9a…` /
-`3caeb44` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Prior
-`c709df0` / `sha256:97544653…`. Live `j0b1q4iuunzhnq` left on `c497505` /
-no copyid / no `VF_LAB`. Recycle **lab** workers for the new digest; do
-not PATCH live.
+Lab Fast `xar25v77v3j27u` image 2026-08-31: digest `sha256:caa55785…` /
+`c1af220` (classic WAV wrap + EOF-tolerant fpcalc) / `VF_LAB=1` /
+`VARIANT_MAKER_COPYID=record` / max 1. Pack `ce6862e51d4c` **audio
+scored** `via=ffmpeg_s16le` on every copy. Stay **`record`** — audio sim
+0.67–0.83 would fail `gate`. Prior `sha256:113a9dec…` / `4bd8a57`. Live
+Fast stays `e7ab2cc` / no copyid / no `VF_LAB`. Do not PATCH live.
 
 ### First lab Generate — pack `3d4fae98ca77` (2026-08-29)
 
@@ -56,11 +57,60 @@ Two bugs, both on Fast daily path:
 2. **Audio head never scored.** The one heads blob we got (AQMTp 1) is
    `chromaprint_v1` `available: false`. Image has `fpcalc` (`Dockerfile.fast`
    runs `fpcalc -version`) but Debian libav cannot open our BtbN mp4s.
-   Fix: decode a 11.025 kHz wav with our ffmpeg, then `fpcalc` the wav.
-   Visual stays `available: false` on slim Fast (no torch/SSCD).
+   NEW pack `6f506c681f8b` was the same (`reason: error`) even after a wav
+   fallback existed — `_fpcalc` tried **direct first**. Fix: **wav-first**
+   (`pcm_s16le` @ 11025), empty fingerprint is a miss, then direct. Visual
+   stays `available: false` on slim Fast (no torch/SSCD). Stay **`record`**.
 
 Do **not** treat this pack as a copyid verdict. Re-run after the lab image
 rebuild. Stay on **`record`**. Do not `gate`. Do not PATCH live.
+
+### Lab Generate — pack `5ef63612aaf3` (look stills + crop-align MAE)
+
+Same three NEW clips. Image `sha256:1d0a9753…` / `f0651b8`. Fast 2, escalate on,
+`quality_mode=fast`. Lab tenant only. Live untouched.
+
+| Clip | Copy | SSIM bits | Look MAE (max) | Audio |
+|---|---|---|---|---|
+| NEW-0409 | 1 / 2 | **41 / 41** medium `ok` | **ok/ok** 4.33/3.0 (max 6/4) | `reason: error` |
+| NEW-1277 | 1 / 2 | **33 / 31** medium `ok` | **ok/ok** 7.0/3.67 (max 10/4) | `reason: error` |
+| NEW-bradnded | 1 / 2 | **32 / 31** medium `ok` | **ok/ok** 4.0/4.67 (max 5/6) | `reason: error` |
+
+Look MAE is the win: brad was **119/84** on `6f506c681f8b` (keyframe seek +
+caption crop). Gate **38** unchanged. Gallery stills use `still_vf` zscale;
+agent stills are not olive (white wall / grey shirt / skin). Jeff’s eye is
+still the look oracle.
+
+**Audio still missed.** `copyid=record` wrote heads. Visual `available: false`
+(no SSCD — expected). Audio `reason: error` with no `via` on every copy.
+This box scores the same source+variant files `via=ffmpeg_s16le` /
+`sim` 0.66 / 0.73 / 0.81. Wav-first still handed a `.wav` to Debian
+`fpcalc` (same libav that cannot demux BtbN mp4s).
+
+### Lab Generate — pack `bd19fcc20eed` (raw s16le image `4bd8a57`)
+
+Same three NEW clips. Image `sha256:113a9dec…`. Fast 2. Look still **ok**
+(MAE max 8/13, 4/9, 14/4). Audio every copy: `reason: error` /
+`detail: CalledProcessError: ERROR: Error decoding audio frame (End of file)`.
+Debian `fpcalc -format s16le` treats raw PCM EOF as a failed frame. Next
+image: stdlib `wave` header (duration known) + if FINGERPRINT= printed,
+use it even on exit 1. Stay **`record`**. Do not `gate`. Do not PATCH live.
+
+### Lab Generate — pack `ce6862e51d4c` (classic WAV `c1af220`)
+
+Same three NEW clips. Image `sha256:caa55785…`. Fast 2. First job after
+recycle (`1bf301c5711a`) 500'd on cold start; this retry delivered 6/6.
+
+| Clip | Bits | Look MAE (max) | Audio sim | Audio uniq |
+|---|---|---|---|---|
+| NEW-0409 | **45 / 43** medium `ok` | **ok/ok** 6.67/5.0 (11/7) | 0.82 / 0.83 | 0.18 / 0.17 |
+| NEW-1277 | **32 / 31** medium `ok` | **ok/ok** 2.33/4.0 (3/5) | 0.68 / 0.72 | 0.32 / 0.28 |
+| NEW-bradnded | **35 / 30** medium `ok` | **ok/ok** 5.0/6.33 (6/9) | 0.82 / 0.83 | 0.18 / 0.17 |
+
+Every copy `heads.audio.available: true` `via=ffmpeg_s16le`. Visual still
+`available: false` (no SSCD). **If this had been `gate`, every copy fails**
+on audio (uniq ~11–20 bits). Stay **`record`**. Do not `gate`. Do not
+PATCH live. Jeff stills remain the look oracle.
 
 ## Enable record (lab) or the fused gate (later)
 

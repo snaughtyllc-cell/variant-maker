@@ -48,7 +48,7 @@ def _stub_common(monkeypatch):
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: {
+        lambda src_path, variant_path, video=None: {
             "look_status": "ok", "look_metric": "coarse_luma_v1",
             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
         },
@@ -122,12 +122,41 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
     assert record.uniqueness_status == "ok"
 
 
+def test_score_look_receives_video_params(monkeypatch, tmp_path):
+    """Crop/trim MAE needs the variant's sampled video dict, including auto-tune."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, **_kw: {
+        "video": {
+            "crop_keep": 0.90, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
+            "rotate_deg": 0.0,
+        },
+        "audio": {},
+    })
+    seen: dict = {}
+
+    def fake_look(src_path, variant_path, video=None):
+        seen["video"] = video
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    monkeypatch.setattr(pipeline.look, "score_look", fake_look)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.6, bits=38),
+    )
+    pipeline.run(_cfg(tmp_path))
+    assert seen.get("video") is not None
+    assert seen["video"]["crop_keep"] == 0.90
+
+
 def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     """lookaqmtp-class blotch must not escalate. Keep the medium file."""
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: {
+        lambda src_path, variant_path, video=None: {
             "look_status": "fail", "look_metric": "coarse_luma_v1",
             "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
         },
@@ -163,7 +192,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     ])
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: next(looks),
+        lambda src_path, variant_path, video=None: next(looks),
     )
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",

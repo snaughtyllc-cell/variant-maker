@@ -302,12 +302,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
             return _apply_peer_status(scored, _peer_bits(path))
 
-        def _look_then_uniqueness() -> dict:
+        def _look_then_uniqueness(video: dict | None = None) -> dict:
             """Stills on the card first. Uniqueness work starts immediately.
 
             Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
             Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
             on Fast contended the CPU and stretched the uniqueness phase.
+            Auto-tune calls this before assigning outer ``r`` — pass ``video=``
+            from the attempt so crop/trim MAE aligns.
             """
             nonlocal look_info
             with ThreadPoolExecutor(max_workers=1) as look_ex:
@@ -316,7 +318,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 _emit_looking()
                 emit("uniqueness", index=i)
                 scored = uniq_f.result()
-            look_info = {**look_info, **look.score_look(src.path, path)}
+            look_video = video
+            if look_video is None and r is not None:
+                look_video = (r.get("params") or {}).get("video")
+            look_info = {
+                **look_info,
+                **look.score_look(src.path, path, video=look_video),
+            }
             return scored
 
         def _snapshot_medium() -> dict:
@@ -419,7 +427,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
             def _tune_attempt(strength: float) -> dict:
                 r_try = attempt(strength, preset, gate_quality=False)
-                u_try = _look_then_uniqueness()
+                u_try = _look_then_uniqueness(
+                    video=(r_try.get("params") or {}).get("video"),
+                )
                 peer_min = u_try.get("min_bits_vs_peers")
                 peer_ok = (
                     (not peer_gate)
