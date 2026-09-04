@@ -102,10 +102,12 @@ class GoogleDrive(DriveClient):
     extra and are built lazily."""
 
     def __init__(self, service_account_json: str | None = None, *,
-                 oauth_token: str | None = None, service=None):
+                 oauth_token: str | None = None, access_token: str | None = None,
+                 service=None):
         self._service = service
         self._sa_json = service_account_json
         self._oauth_token = oauth_token
+        self._access_token = access_token
 
     @classmethod
     def from_auth(cls, auth, *, service=None) -> "GoogleDrive":
@@ -127,11 +129,21 @@ class GoogleDrive(DriveClient):
         return self._service
 
     def _build_service(self):
+        if self._access_token:
+            return self._build_access_token(self._access_token)
         if self._oauth_token:
             return self._build_oauth(self._oauth_token)
         if self._sa_json:
             return self._build_service_account(self._sa_json)
-        raise ValueError("GoogleDrive needs a service_account_json or oauth_token")
+        raise ValueError("GoogleDrive needs a service_account_json, oauth_token, or access_token")
+
+    @staticmethod
+    def _build_access_token(token: str):  # pragma: no cover - needs google libs
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        creds = Credentials(token=token)
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
 
     @staticmethod
     def _build_service_account(sa_json: str):  # pragma: no cover - needs google libs + creds

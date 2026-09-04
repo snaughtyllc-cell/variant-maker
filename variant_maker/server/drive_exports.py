@@ -21,6 +21,7 @@ from variant_maker.farm.drive import DriveClient
 from variant_maker.server.captions import caption_filename
 from variant_maker.server.drive_names import unique_upload_name
 from variant_maker.server.jobs import JobStore
+from variant_maker.server.media_links import output_key
 
 
 class ExportError(Exception):
@@ -43,6 +44,7 @@ class ExportFile:
     status: str  # pending | uploading | succeeded | failed
     error: str | None = None
     drive_file_id: str | None = None
+    object_key: str | None = None
 
 
 @dataclass
@@ -61,20 +63,31 @@ def _now() -> str:
 
 
 def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[ExportFile]:
-    """Resolve refs to on-disk, quality-passing variants. Anything missing (variant,
-    file) or not `status == "ok"` is silently dropped from the export selection."""
+    """Resolve refs to quality-passing variants on disk or in object storage."""
     files: list[ExportFile] = []
+    store = getattr(job_store, "_object_store", None)
     for ref in refs:
         variant = job_store.get_variant(ref.source_id, ref.index)
         if variant is None or variant.status != "ok":
             continue
         local_path = job_store.find_variant(ref.source_id, variant.filename)
-        if local_path is None:
+        object_key = getattr(variant, "object_key", None)
+        if not object_key and store is not None:
+            candidate = output_key(ref.source_id, variant.filename)
+            exists = getattr(store, "exists", None)
+            if callable(exists):
+                try:
+                    if exists(candidate):
+                        object_key = candidate
+                except Exception:
+                    object_key = None
+        if local_path is None and not object_key:
             continue
         files.append(ExportFile(
             source_id=ref.source_id, index=ref.index,
             filename=caption_filename(ref.caption, variant.filename),
-            local_path=local_path, status="pending",
+            local_path=local_path or "", status="pending",
+            object_key=object_key,
         ))
     if not files:
         raise ExportError("No ok videos in selection")
@@ -161,11 +174,19 @@ def _concrete_store(store: ExportStore) -> ExportStore:
 
 
 class ExportRunner:
-    """Uploads an `ExportJob`'s files to Drive sequentially, on a background thread."""
+    """Uploads an `ExportJob`'s files to Drive sequentially, on a background thread.
 
-    def __init__(self, drive: DriveClient, export_store: ExportStore) -> None:
+    Prefers RunPod ``deliver_drive`` (object storage → Drive, no Railway
+    bytes). Falls back to a process tempfile, never the Studio volume.
+    """
+
+    def __init__(self, drive: DriveClient, export_store: ExportStore,
+                 object_store=None, remote_deliver=None, mint_token=None) -> None:
         self._drive = drive
         self._store = export_store
+        self._object_store = object_store
+        self._remote_deliver = remote_deliver
+        self._mint_token = mint_token
 
     def start(self, job: ExportJob) -> None:
         self._store = _concrete_store(self._store)
@@ -188,6 +209,15 @@ class ExportRunner:
         job = self._store.get(export_id)
         if job is None:
             return
+        pending = [f for f in job.files if f.status in ("pending", "failed")]
+        if (
+            pending
+            and callable(self._remote_deliver)
+            and callable(self._mint_token)
+            and all(f.object_key for f in pending)
+        ):
+            self._run_remote(job, pending)
+            return
         for f in job.files:
             if f.status not in ("pending", "failed"):
                 continue
@@ -197,14 +227,66 @@ class ExportRunner:
             try:
                 existing = {d.name for d in self._drive.list_files(job.folder_id)}
                 name = unique_upload_name(f.filename, existing)
-                f.drive_file_id = self._drive.upload(f.local_path, job.folder_id, name=name)
+                path = f.local_path
+                tmp_dir = None
+                if (not path or not os.path.isfile(path)) and f.object_key and self._object_store:
+                    tmp_dir = tempfile.mkdtemp(prefix="vm_drv_")
+                    path = os.path.join(tmp_dir, os.path.basename(f.filename) or "v.mp4")
+                    self._object_store.get(f.object_key, path)
+                try:
+                    f.drive_file_id = self._drive.upload(path, job.folder_id, name=name)
+                finally:
+                    if tmp_dir:
+                        import shutil
+                        shutil.rmtree(tmp_dir, ignore_errors=True)
                 f.status = "succeeded"
                 f.error = None
             except Exception as exc:
                 f.status = "failed"
                 f.error = str(exc)
             self._store.save(job)
+        self._finish(job)
 
+    def _run_remote(self, job: ExportJob, pending: list[ExportFile]) -> None:
+        for f in pending:
+            f.status = "uploading"
+            f.error = None
+        self._store.save(job)
+        try:
+            existing = {d.name for d in self._drive.list_files(job.folder_id)}
+            files = []
+            used = set(existing)
+            for f in pending:
+                name = unique_upload_name(f.filename, used)
+                used.add(name)
+                files.append({"key": f.object_key, "name": name, "source_id": f.source_id, "index": f.index})
+            token = self._mint_token()
+            result = self._remote_deliver(
+                folder_id=job.folder_id, access_token=token, files=files,
+            )
+            delivered = {
+                (item.get("key"), item.get("name")): item
+                for item in (result.get("delivered") or [])
+            }
+            by_key = {item.get("key"): item for item in (result.get("delivered") or [])}
+            for f, spec in zip(pending, files):
+                item = delivered.get((spec["key"], spec["name"])) or by_key.get(spec["key"])
+                if item:
+                    f.drive_file_id = item.get("drive_file_id")
+                    f.status = "succeeded"
+                    f.error = None
+                else:
+                    f.status = "failed"
+                    f.error = "Drive worker did not confirm this file"
+        except Exception as exc:
+            for f in pending:
+                if f.status != "succeeded":
+                    f.status = "failed"
+                    f.error = str(exc)
+        self._store.save(job)
+        self._finish(job)
+
+    def _finish(self, job: ExportJob) -> None:
         statuses = {f.status for f in job.files}
         if statuses == {"succeeded"}:
             job.state = "succeeded"

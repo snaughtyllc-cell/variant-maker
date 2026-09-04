@@ -1,4 +1,3 @@
-import { sourceUrl } from "./api";
 import type { InFlight, SourceProgress, VariantTile } from "./progress";
 
 export type LiveTileKind = "done" | "live" | "waiting";
@@ -43,18 +42,19 @@ export function liveTileLabel(tile: LiveTile, preparing = false): string {
 
 /** Source poster while copies are still rendering. Prep ids have no file yet. */
 export function liveTilePreviewSrc(source: SourceProgress): string | null {
-  if (source.source_id && !source.source_id.startsWith("prep-")) {
-    return sourceUrl(source.source_id);
-  }
-  return null;
+  const poster = source.variants.find((v) => v.look_var_url)?.look_var_url
+    ?? source.look_preview?.look_var_url;
+  return poster ?? null;
 }
 
 export function liveTileMediaSrc(tile: LiveTile, source: SourceProgress): string | null {
-  if (tile.kind === "done" && tile.variant?.file_url) return tile.variant.file_url;
+  if (tile.kind === "done") {
+    return tile.variant?.look_var_url ?? liveTilePreviewSrc(source);
+  }
   return liveTilePreviewSrc(source);
 }
 
 export function liveRowThumbSrc(source: SourceProgress | undefined): string | null {
   if (!source) return null;
-  return source.variants.find((v) => v.file_url)?.file_url ?? liveTilePreviewSrc(source);
+  return source.variants.find((v) => v.look_var_url)?.look_var_url ?? liveTilePreviewSrc(source);
 }

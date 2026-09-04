@@ -17,6 +17,7 @@ from variant_maker.farm.ledger import Ledger
 from variant_maker.probe import sha256_file
 from variant_maker.server.captions import CaptionStore, caption_filename
 from variant_maker.server.jobs import COPY_FAILED_MSG, Job, JobSource, JobStore
+from variant_maker.server.media_links import output_key
 from variant_maker.server.workflows import Workflow
 
 
@@ -88,13 +89,36 @@ def _export_source(
         if caption_store is not None else []
     )
     uploaded = 0
+    deliver = getattr(job_store._runner, "deliver_drive", None)
+    token_fn = getattr(job_store, "_drive_token_fn", None)
+    remote_files = []
     for i, v in enumerate(variants):
-        path = job_store.find_variant(source.source_id, v.filename)
-        if path is None:
-            continue
         cap = captions[i] if i < len(captions) else None
-        drive.upload(path, sub_id, name=caption_filename(cap, v.filename))
-        uploaded += 1
+        name = caption_filename(cap, v.filename)
+        key = getattr(v, "object_key", None) or (
+            output_key(source.source_id, v.filename)
+            if getattr(job_store, "_object_store", None) is not None else None
+        )
+        if callable(deliver) and callable(token_fn) and key:
+            remote_files.append({"key": key, "name": name})
+            continue
+        path = job_store.find_variant(source.source_id, v.filename)
+        tmp_dir = None
+        if path is None and key and getattr(job_store, "_object_store", None) is not None:
+            tmp_dir = tempfile.mkdtemp(prefix="vm_wf_")
+            path = os.path.join(tmp_dir, os.path.basename(v.filename) or "v.mp4")
+            job_store._object_store.get(key, path)
+        try:
+            if path is None:
+                continue
+            drive.upload(path, sub_id, name=name)
+            uploaded += 1
+        finally:
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+    if remote_files:
+        result = deliver(folder_id=sub_id, access_token=token_fn(), files=remote_files)
+        uploaded += len(result.get("delivered") or [])
     if uploaded == 0:
         raise RuntimeError(COPY_FAILED_MSG)
     manifest = os.path.join(job_store._ws.source_out_dir(job.job_id, source.source_id), "manifest.json")

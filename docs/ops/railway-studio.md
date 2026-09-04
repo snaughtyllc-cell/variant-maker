@@ -6,24 +6,28 @@ between them.
 
 ```
 Team browser
-  → Railway  (Next.js + variant-server, CPU, cheap)
-        → uploads, gallery, Drive OAuth
-        → RunPod serverless  (render; $0 idle)
-        → R2 / S3 / Railway bucket
-        → Railway downloads variants into the gallery
+  → Railway  (Next.js + variant-server: auth, jobs, billing, metadata)
+        → signed upload/download links
+        → RunPod serverless  (render)
+        → R2 / S3 mailbox  (source + variants)
+        → customer downloads from object storage (or Drive)
 ```
+
+Railway does **not** copy finished MP4s onto `/data` or stream them through
+the application service. Architecture: [`pipeline-hosting.md`](pipeline-hosting.md).
 
 Studio is live at https://varyforge-studio-production.up.railway.app
 
 Until RunPod + object-store env is set, Studio still works: the start script
 falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
 too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,
-**idle timeout ~10 min**, `VARIANT_QUALITY_MODE=fast` (see
+`VARIANT_QUALITY_MODE=fast` (see
 [`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)).
+Idle timeout is a dashboard setting: production Fast is **600s** today;
+**trial 30–60s** after measuring cold-start (see pipeline-hosting.md).
 Overnight GPU is $0; a warm window after the last job costs GPU-hours only while
 that worker is still up. Prefer a **4090-class** card (~$1–2/hr while running) over
-L4 for HQ; **min workers stay 0**. HQ is still one variant at a time — do not expect
-20 HQ files in a few minutes from GPU class alone.
+L4 for HQ; **min workers stay 0**. HQ stays off until separately benchmarked.
 
 ## 1. Railway (Codex can do this)
 
@@ -57,8 +61,8 @@ R2 `inputs/{source_id}/` and `outputs/{source_id}/`. Running jobs are never
 deleted. Opening Gallery and next Studio boot (`hydrate_from_disk`) also prune.
 
 Age window: `VARIANT_GALLERY_KEEP_HOURS` (default `168` = 7 days; `0` disables age prune).
-Optional count cap: `VARIANT_GALLERY_KEEP_JOBS` (default `0` = off). The volume
-holds the files — 7 days is what post tracking needs (Flagged / live post URL).
+Optional count cap: `VARIANT_GALLERY_KEEP_JOBS` (default `0` = off). The volume holds **job metadata + look JPEGs**. Finished MP4s live in object
+storage and expire sooner (`VARIANT_OUTPUT_KEEP_HOURS`, default 48h).
 
 ## 3. RunPod serverless (engine)
 
@@ -91,7 +95,7 @@ RunPod **CPU** serverless endpoint from that image:
 
 - Compute type: **CPU**. Instance with **8+ cores** (e.g. `cpu3g-8-32`).
 - Start command is already `python -u /app/deploy/runpod/cp_handler.py`.
-- Min workers **0**, max workers **4** (team Fast; HQ GPU max **3**), idle timeout **600s**, FlashBoot on.
+- Min workers **0**, max workers **4** (team Fast; HQ GPU max **3**), idle timeout **600s** (trial **30–60s** after measuring cold-start), FlashBoot on.
 - Execution timeout **3600s** (a 20-pack must not die at 10–20 min).
 - Same `R2_*` env as the GPU endpoint.
 

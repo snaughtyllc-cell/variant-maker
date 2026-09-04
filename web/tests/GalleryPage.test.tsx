@@ -24,6 +24,7 @@ vi.mock("@/lib/api", () => ({
   listDestinations: () => Promise.resolve([]),
   sourceUrl: (id: string) => `/api/sources/${id}/source`,
   sourceZipUrl: () => "/api/sources/s1/zip",
+  getSourceDownloads: vi.fn(async () => ({ source_id: "s1", files: [], zip_url: null })),
   regenerate: vi.fn(),
   retryCopy: vi.fn(),
   removeSource: vi.fn(),

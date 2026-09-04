@@ -7,6 +7,11 @@ vi.mock("@/lib/api", () => ({
   retryCopy: vi.fn(),
   sourceUrl: () => "/api/source/s1",
   sourceZipUrl: () => "/api/sources/s1/zip",
+  getSourceDownloads: vi.fn(async () => ({
+    source_id: "s1",
+    files: [{ filename: "v01.mp4", url: "https://objects.test/v01.mp4" }],
+    zip_url: "https://objects.test/zip",
+  })),
   removeSource: vi.fn(),
 }));
 

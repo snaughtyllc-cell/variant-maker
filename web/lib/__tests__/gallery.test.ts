@@ -40,8 +40,8 @@ describe("gallery helpers", () => {
     ];
     expect(sortSources(all, "newest").map(s => s.source_id)).toEqual(["zebra", "apple"]);
   });
-  it("explains an empty zip as missing GPU copies, not a Files app glitch", () => {
-    expect(zipEmptyCopy()).toMatch(/copied back from the GPU/i);
+  it("explains an empty zip as a missing download package, not a Files app glitch", () => {
+    expect(zipEmptyCopy()).toMatch(/available for download/i);
   });
 
   it("does not treat metadata delivery as files on Studio", () => {

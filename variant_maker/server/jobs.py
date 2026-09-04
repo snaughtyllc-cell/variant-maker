@@ -17,6 +17,13 @@ from variant_maker.normalize import maybe_normalize_upload
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .caption_ai import captions_for_source
 from .events import VariantEvent, event_to_dict
+from .job_metrics import (
+    finalize_telemetry,
+    merge_telemetry,
+    processing_charge_label,
+    source_snapshot,
+)
+from .media_links import input_key, is_jpeg_name, output_key, outputs_expire_utc
 from .runner import Runner, normalize_quality_mode
 from .telemetry import capture_event, capture_exception
 from .usage import record_job
@@ -54,28 +61,62 @@ def variant_on_disk(ws: Workspace, job_id: str, source_id: str, filename: str) -
     return os.path.isfile(ws.variant_path(job_id, source_id, filename))
 
 
-def missing_ok_filenames(source: JobSource, ws: Workspace, job_id: str) -> list[str]:
+def variant_object_key(source_id: str, filename: str, variant: VariantInfo | None = None) -> str:
+    if variant is not None and getattr(variant, "object_key", None):
+        return str(variant.object_key)
+    return output_key(source_id, filename)
+
+
+def variant_in_object_store(object_store, source_id: str, filename: str,
+                            variant: VariantInfo | None = None) -> bool:
+    if object_store is None or not filename:
+        return False
+    exists = getattr(object_store, "exists", None)
+    if not callable(exists):
+        return False
+    try:
+        return bool(exists(variant_object_key(source_id, filename, variant)))
+    except Exception:
+        return False
+
+
+def variant_ready(ws: Workspace, job_id: str, source_id: str, filename: str,
+                  *, object_store=None, variant: VariantInfo | None = None) -> bool:
+    if variant_on_disk(ws, job_id, source_id, filename):
+        return True
+    return variant_in_object_store(object_store, source_id, filename, variant)
+
+
+def missing_ok_filenames(source: JobSource, ws: Workspace, job_id: str,
+                         object_store=None) -> list[str]:
     missing: list[str] = []
     for v in source.variants:
         if v.status != "ok" or not v.filename:
             continue
-        if not variant_on_disk(ws, job_id, source.source_id, v.filename):
+        if not variant_ready(
+            ws, job_id, source.source_id, v.filename,
+            object_store=object_store, variant=v,
+        ):
             missing.append(v.filename)
     return missing
 
 
-def source_files_ready(source: JobSource, ws: Workspace, job_id: str) -> int:
+def source_files_ready(source: JobSource, ws: Workspace, job_id: str,
+                       object_store=None) -> int:
     return sum(
         1 for v in source.variants
         if v.status == "ok" and v.filename
-        and variant_on_disk(ws, job_id, source.source_id, v.filename)
+        and variant_ready(
+            ws, job_id, source.source_id, v.filename,
+            object_store=object_store, variant=v,
+        )
     )
 
 
 def source_copy_status(source: JobSource, ws: Workspace, job_id: str,
-                       job_state: str | None) -> Literal["ok", "copying", "missing"]:
-    """ok = files on disk; copying = job still running; missing = GPU done, files not here."""
-    if not missing_ok_filenames(source, ws, job_id):
+                       job_state: str | None, object_store=None) -> Literal["ok", "copying", "missing"]:
+    """ok = files on disk or object storage; copying = job still running; missing = GPU done, files not here."""
+    if not missing_ok_filenames(source, ws, job_id, object_store=object_store):
         return "ok"
     if job_state == "running":
         return "copying"
@@ -106,6 +147,8 @@ class VariantInfo:
     look_src: str | None = None
     look_var: str | None = None
     caption: str | None = None
+    object_key: str | None = None
+    nbytes: int | None = None
 
 
 @dataclass
@@ -117,6 +160,8 @@ class JobSource:
     runpod_job_id: str | None = None
     planned_captions: list[str] = field(default_factory=list)
     prep_status: str | None = None
+    source_object_key: str | None = None
+    drive_file_id: str | None = None
 
     @property
     def delivered(self) -> int:
@@ -150,6 +195,9 @@ class Job:
     generate_captions: bool = False
     prep_mode: str = "none"
     prep_status: str | None = None
+    telemetry: dict = field(default_factory=dict)
+    outputs_expires_utc: str | None = None
+    delivery_destination: str = "download"
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -227,6 +275,8 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "look_status": v.look_status, "look_mae": v.look_mae,
         "look_src": v.look_src, "look_var": v.look_var,
         "caption": v.caption,
+        "object_key": v.object_key,
+        "nbytes": v.nbytes,
     }
 
 
@@ -294,6 +344,8 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         look_src=data.get("look_src"),
         look_var=data.get("look_var"),
         caption=data.get("caption") or None,
+        object_key=data.get("object_key") or None,
+        nbytes=data.get("nbytes"),
     )
 
 
@@ -335,6 +387,9 @@ def _job_to_dict(job: Job) -> dict:
         "prep_mode": job.prep_mode,
         "prep_status": job.prep_status,
         "error": job.error,
+        "telemetry": dict(job.telemetry or {}),
+        "outputs_expires_utc": job.outputs_expires_utc,
+        "delivery_destination": job.delivery_destination,
         "sources": [
             {
                 "source_id": s.source_id,
@@ -343,6 +398,8 @@ def _job_to_dict(job: Job) -> dict:
                 "runpod_job_id": s.runpod_job_id,
                 "planned_captions": list(s.planned_captions or []),
                 "prep_status": s.prep_status,
+                "source_object_key": s.source_object_key,
+                "drive_file_id": s.drive_file_id,
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -364,6 +421,8 @@ def _job_from_dict(data: dict) -> Job:
             runpod_job_id=raw.get("runpod_job_id"),
             planned_captions=[str(c) for c in (raw.get("planned_captions") or []) if str(c).strip()],
             prep_status=raw.get("prep_status"),
+            source_object_key=raw.get("source_object_key") or None,
+            drive_file_id=raw.get("drive_file_id") or None,
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -391,31 +450,39 @@ def _job_from_dict(data: dict) -> Job:
         generate_captions=bool(data.get("generate_captions") or False),
         prep_mode=normalize_prep_mode(data.get("prep_mode")),
         prep_status=data.get("prep_status"),
+        telemetry=data.get("telemetry") if isinstance(data.get("telemetry"), dict) else {},
+        outputs_expires_utc=data.get("outputs_expires_utc"),
+        delivery_destination=str(data.get("delivery_destination") or "download"),
     )
 
 
 def _source_finished(source: JobSource, *, ws: Workspace | None = None,
-                     job_id: str | None = None) -> bool:
-    """Done only when we have the requested slots AND ok files are on disk.
-
-    Progress events can fill `source.variants` before RunPod copies mp4s back.
-    Treating that as finished skipped the copy on Studio restart — Gallery
-    showed 5/5 with black thumbs and a 22-byte zip.
-    """
+                     job_id: str | None = None, object_store=None) -> bool:
+    """Done when requested slots exist and ok files are on disk or in object storage."""
     if len(source.variants) < source.requested or source.requested <= 0:
         return False
     if ws is None or not job_id:
         return True
-    return not missing_ok_filenames(source, ws, job_id)
+    return not missing_ok_filenames(source, ws, job_id, object_store=object_store)
 
 
 class JobStore:
     def __init__(self, workspace: Workspace, runner: Runner,
                  object_store=None, gallery_keep_jobs: int | None = None,
-                 gallery_keep_hours: float | None = None) -> None:
+                 gallery_keep_hours: float | None = None,
+                 keep_local_media: bool | None = None,
+                 workspace_id: str | None = None,
+                 drive_token_fn=None) -> None:
         self._ws = workspace
         self._runner = runner
         self._object_store = object_store
+        self._workspace_id = workspace_id
+        self._drive_token_fn = drive_token_fn
+        # Object storage is the mailbox. Railway disk is only for local-dev /
+        # FakeRunner and for tiny look JPEG posters.
+        if keep_local_media is None:
+            keep_local_media = object_store is None
+        self._keep_local_media = bool(keep_local_media)
         keep_n = gallery_keep_jobs
         self._keep = _keep_from_env() if keep_n is None else max(0, int(keep_n))
         hours = gallery_keep_hours
@@ -466,6 +533,77 @@ class JobStore:
             generate_captions=generate_captions, prep_mode=prep_mode,
         )
 
+    def create_job_from_object_keys(
+        self, items: list[tuple[str, str]], count: int,
+        allow_creative_escalate: bool = True,
+        quality_mode: str = "fast",
+        generate_captions: bool = False,
+        prep_mode: str = "none",
+    ) -> Job:
+        """Create a job from object-storage keys: [(filename, object_key), ...].
+
+        Copies each upload key to ``inputs/{source_id}/`` without reading bytes
+        through Railway when the store supports ``copy``. Local runners still
+        download once so FakeRunner/ffmpeg have a path.
+        """
+        store = self._object_store
+        if store is None:
+            raise RuntimeError("object store is required for direct uploads")
+        job_id = uuid.uuid4().hex[:12]
+        sources = []
+        for filename, key in items:
+            source_id = uuid.uuid4().hex[:12]
+            dest_key = input_key(source_id, filename)
+            if key != dest_key:
+                copy = getattr(store, "copy", None)
+                if callable(copy):
+                    copy(key, dest_key)
+                else:
+                    tmp = self._ws.source_in_path(job_id, source_id, filename)
+                    store.get(key, tmp)
+                    store.put(dest_key, tmp)
+            needs_local = self._keep_local_media or not callable(
+                getattr(self._runner, "resume_run", None),
+            )
+            if needs_local:
+                dest = self._ws.source_in_path(job_id, source_id, filename)
+                if not os.path.isfile(dest):
+                    store.get(dest_key, dest)
+            source = JobSource(
+                source_id=source_id, filename=filename, requested=count,
+                source_object_key=dest_key,
+            )
+            sources.append(source)
+        return self._start_job(
+            job_id, sources, count, allow_creative_escalate, quality_mode,
+            generate_captions=generate_captions, prep_mode=prep_mode,
+        )
+
+    def create_job_from_drive_ids(
+        self, items: list[tuple[str, str]], count: int,
+        allow_creative_escalate: bool = True,
+        quality_mode: str = "fast",
+        generate_captions: bool = False,
+        prep_mode: str = "none",
+    ) -> Job:
+        """Create a job from Drive file ids. RunPod downloads; Railway does not.
+
+        items: ``[(filename, drive_file_id), ...]``
+        """
+        job_id = uuid.uuid4().hex[:12]
+        sources = []
+        for filename, drive_file_id in items:
+            source_id = uuid.uuid4().hex[:12]
+            sources.append(JobSource(
+                source_id=source_id, filename=filename, requested=count,
+                source_object_key=input_key(source_id, filename),
+                drive_file_id=str(drive_file_id),
+            ))
+        return self._start_job(
+            job_id, sources, count, allow_creative_escalate, quality_mode,
+            generate_captions=generate_captions, prep_mode=prep_mode,
+        )
+
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
                     generate_captions: bool = False,
@@ -480,12 +618,22 @@ class JobStore:
         quality = normalize_quality_mode(quality_mode)
         if prep == "hq":
             quality = "fast"
-        job = Job(job_id=job_id, count=count, created_utc=_now(), sources=sources,
+        created = _now()
+        job = Job(job_id=job_id, count=count, created_utc=created, sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
                    quality_mode=quality,
                    created_seq=created_seq,
                    generate_captions=bool(generate_captions),
-                   prep_mode=prep)
+                   prep_mode=prep,
+                   telemetry={
+                       "workspace_id": self._workspace_id,
+                       "requested": count,
+                       "submitted_utc": created,
+                       "processing_charge": processing_charge_label(
+                           quality, count, prep_mode=prep,
+                       ),
+                       "delivery_destination": "download",
+                   })
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -574,8 +722,10 @@ class JobStore:
 
         Default is 7 days, no count cap — failed retries in a busy day must not
         boot a good pack. Running jobs are never deleted. hours=0 and keep=0
-        disables. An 8-pack is one job.
+        disables. An 8-pack is one job. Object-storage MP4s expire sooner
+        (VARIANT_OUTPUT_KEEP_HOURS) while job metadata remains.
         """
+        self.prune_expired_outputs()
         keep = self._keep
         hours = self._keep_hours
         if keep <= 0 and hours <= 0:
@@ -598,6 +748,24 @@ class JobStore:
             ids = list(drop)
         for job_id in ids:
             self.delete_job(job_id)
+
+    def prune_expired_outputs(self) -> None:
+        """Delete object-storage MP4s after outputs_expires_utc; keep job.json."""
+        store = self._object_store
+        if store is None:
+            return
+        now = _utc_now()
+        with self._lock:
+            jobs = [j for j in self._jobs.values() if j.state != "running"]
+        for job in jobs:
+            exp = _parse_utc(job.outputs_expires_utc)
+            if exp is None or exp > now:
+                continue
+            if job.telemetry.get("outputs_deleted"):
+                continue
+            self._forget_objects([s.source_id for s in job.sources])
+            job.telemetry = merge_telemetry(job.telemetry, outputs_deleted=True)
+            self._persist(job)
 
     def _persist(self, job: Job) -> None:
         """Write job.json so a Studio restart can restore Gallery + resume a live run."""
@@ -681,25 +849,39 @@ class JobStore:
 
     def _record_usage(self, job: Job) -> None:
         try:
+            job.telemetry = finalize_telemetry(
+                job, now_utc=_now(), workspace_id=self._workspace_id,
+            )
+            job.outputs_expires_utc = outputs_expire_utc(
+                destination=job.delivery_destination or "download",
+            )
+            job.telemetry["outputs_expires_utc"] = job.outputs_expires_utc
             if record_job(self._ws, job):
-                capture_event(
-                    "job_completed",
-                    {
-                        "job_id": job.job_id,
-                        "prep_mode": job.prep_mode,
-                        "quality_mode": job.quality_mode,
-                        "fast_copies": sum(s.delivered for s in job.sources)
-                        if job.quality_mode != "hq" else 0,
-                        "hq_preps": sum(
-                            1 for s in job.sources if s.prep_status == "done"
-                        ) if job.prep_mode == "hq" else (
-                            sum(s.delivered for s in job.sources)
-                            if job.quality_mode == "hq" else 0
-                        ),
-                        "count": job.count,
-                        "source_count": len(job.sources),
-                    },
-                )
+                props = {
+                    "job_id": job.job_id,
+                    "prep_mode": job.prep_mode,
+                    "quality_mode": job.quality_mode,
+                    "fast_copies": sum(s.delivered for s in job.sources)
+                    if job.quality_mode != "hq" else 0,
+                    "hq_preps": sum(
+                        1 for s in job.sources if s.prep_status == "done"
+                    ) if job.prep_mode == "hq" else (
+                        sum(s.delivered for s in job.sources)
+                        if job.quality_mode == "hq" else 0
+                    ),
+                    "count": job.count,
+                    "source_count": len(job.sources),
+                }
+                for key in (
+                    "workspace_id", "runpod_job_id", "runpod_endpoint_id",
+                    "retry_count", "regen_count", "input_bytes", "output_bytes",
+                    "railway_media_bytes", "delivery_destination",
+                    "runpod_cost_usd", "processing_charge",
+                    "submitted_utc", "completed_utc",
+                ):
+                    if job.telemetry.get(key) is not None:
+                        props[key] = job.telemetry[key]
+                capture_event("job_completed", props)
         except (OSError, TypeError, ValueError) as exc:
             print(f"usage {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
 
@@ -734,9 +916,15 @@ class JobStore:
                         ))
                         break
                 if e.state == "looking":
-                    names = [n for n in (e.look_src, e.look_var) if n]
+                    names = [n for n in (e.look_src, e.look_var) if n and is_jpeg_name(n)]
                     if names:
                         self._pull_named_outputs(e.source_id, names)
+                if token.runpod_job_id:
+                    job.telemetry = merge_telemetry(
+                        job.telemetry,
+                        runpod_job_id=token.runpod_job_id,
+                        started_utc=job.telemetry.get("started_utc") or _now(),
+                    )
                 if e.state in ("done", "looking") or token.runpod_job_id:
                     self._persist(job)
 
@@ -747,21 +935,48 @@ class JobStore:
                     self._pull_missing_outputs(source.source_id)
                 if skip_finished and _source_finished(
                     source, ws=self._ws, job_id=job.job_id,
+                    object_store=self._object_store,
                 ):
                     continue
+                endpoint_id = getattr(self._runner, "endpoint_id", None)
+                if endpoint_id:
+                    job.telemetry = merge_telemetry(
+                        job.telemetry, runpod_endpoint_id=endpoint_id,
+                    )
                 in_path = self._ws.source_in_path(job.job_id, source.source_id, source.filename)
-                proxied = maybe_normalize_upload(in_path)
-                new_name = os.path.basename(proxied)
-                if new_name != source.filename:
-                    source.filename = new_name
-                    self._persist(job)
-                in_path = proxied
+                if (
+                    not os.path.isfile(in_path)
+                    and source.source_object_key
+                    and self._object_store is not None
+                    and self._keep_local_media
+                ):
+                    self._object_store.get(source.source_object_key, in_path)
+                if os.path.isfile(in_path):
+                    snap = source_snapshot(in_path)
+                    job.telemetry = merge_telemetry(
+                        job.telemetry,
+                        source=snap,
+                        input_bytes=(job.telemetry.get("input_bytes") or 0) + int(snap.get("bytes") or 0),
+                    )
+                    proxied = maybe_normalize_upload(in_path)
+                    new_name = os.path.basename(proxied)
+                    if new_name != source.filename:
+                        source.filename = new_name
+                        self._persist(job)
+                    in_path = proxied
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
                 if job.prep_mode == "hq":
                     hero = self._ensure_hq_prep(job, source, in_path, token)
                     if hero is None:
                         continue
                     in_path = hero
+                extra: dict = {}
+                if source.drive_file_id:
+                    token_fn = getattr(self, "_drive_token_fn", None)
+                    wants_drive = callable(getattr(self._runner, "resume_run", None))
+                    if callable(token_fn) and wants_drive:
+                        extra["drive_file_id"] = source.drive_file_id
+                        extra["drive_access_token"] = token_fn()
                 resume = getattr(self._runner, "resume_run", None)
                 if skip_finished and callable(resume) and source.runpod_job_id:
                     try:
@@ -776,9 +991,27 @@ class JobStore:
                     except Exception as exc:
                         print(
                             f"job {job.job_id} resume {source.runpod_job_id} failed "
-                            f"({type(exc).__name__}: {exc}); re-running source",
+                            f"({type(exc).__name__}: {exc}); not re-submitting",
                             flush=True,
                         )
+                        job.telemetry = merge_telemetry(
+                            job.telemetry,
+                            retry_count=int(job.telemetry.get("retry_count") or 0) + 1,
+                        )
+                        raise
+                else:
+                    try:
+                        result = self._runner.run(
+                            in_path, count=job.count, out_dir=out_dir,
+                            source_id=source.source_id, on_event=on_event,
+                            allow_creative_escalate=job.allow_creative_escalate,
+                            quality_mode=job.quality_mode,
+                            cancel_token=token,
+                            **extra,
+                        )
+                    except TypeError:
+                        if not extra:
+                            raise
                         result = self._runner.run(
                             in_path, count=job.count, out_dir=out_dir,
                             source_id=source.source_id, on_event=on_event,
@@ -786,14 +1019,6 @@ class JobStore:
                             quality_mode=job.quality_mode,
                             cancel_token=token,
                         )
-                else:
-                    result = self._runner.run(
-                        in_path, count=job.count, out_dir=out_dir,
-                        source_id=source.source_id, on_event=on_event,
-                        allow_creative_escalate=job.allow_creative_escalate,
-                        quality_mode=job.quality_mode,
-                        cancel_token=token,
-                    )
                 source.variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,
@@ -807,9 +1032,31 @@ class JobStore:
                         look_src=getattr(v, "look_src", None),
                         look_var=getattr(v, "look_var", None),
                         caption=_caption_for(source, v.index),
+                        object_key=getattr(v, "object_key", None) or (
+                            output_key(source.source_id, v.filename)
+                            if self._object_store is not None else None
+                        ),
                     )
                     for v in result.variants
                 ]
+                if self._object_store is not None:
+                    out_bytes = 0
+                    size_fn = getattr(self._object_store, "size", None)
+                    for v in source.variants:
+                        if not v.object_key or not callable(size_fn):
+                            continue
+                        try:
+                            n = size_fn(v.object_key)
+                        except Exception:
+                            n = None
+                        if n:
+                            v.nbytes = int(n)
+                            out_bytes += int(n)
+                    if out_bytes:
+                        job.telemetry = merge_telemetry(
+                            job.telemetry,
+                            output_bytes=(job.telemetry.get("output_bytes") or 0) + out_bytes,
+                        )
                 source.runpod_job_id = None
                 self._persist(job)
         except JobCancelled:
@@ -1021,8 +1268,10 @@ class JobStore:
         path = self._ws.variant_path(job_id, source_id, filename)
         if os.path.isfile(path):
             return path
-        self._pull_missing_outputs(source_id)
-        return path if os.path.isfile(path) else None
+        if self._keep_local_media:
+            self._pull_missing_outputs(source_id)
+            return path if os.path.isfile(path) else None
+        return None
 
     def _pull_named_outputs(self, source_id: str, names: list[str]) -> None:
         fetch = getattr(self._runner, "fetch_outputs", None)
@@ -1035,26 +1284,31 @@ class JobStore:
         fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
 
     def _pull_missing_outputs(self, source_id: str) -> None:
-        """Copy variant mp4s and look stills from object storage when disk is missing them."""
+        """Copy look JPEGs (and mp4s only when keep_local_media) from object storage."""
         loc = self._locate(source_id)
         if loc is None:
             return
         _, source = loc
-        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
+        names: list[str] = []
         for v in source.variants:
             for n in (v.look_src, v.look_var):
-                if n:
+                if n and is_jpeg_name(n):
                     names.append(n)
+            if self._keep_local_media and v.status == "ok" and v.filename:
+                names.append(v.filename)
         self._pull_named_outputs(source_id, names)
 
     def _refresh_copy_error(self, job: Job) -> None:
-        """Surface a VA-facing error when GPU metadata is ok but mp4s never landed."""
+        """Surface a VA-facing error when GPU metadata is ok but files never landed."""
         if job.state != "done":
             return
         if job.error and job.error != COPY_FAILED_MSG:
             return
         missing = any(
-            missing_ok_filenames(source, self._ws, job.job_id) for source in job.sources
+            missing_ok_filenames(
+                source, self._ws, job.job_id, object_store=self._object_store,
+            )
+            for source in job.sources
         )
         job.error = COPY_FAILED_MSG if missing else None
 
@@ -1212,7 +1466,8 @@ class JobStore:
         if loc is None:
             return None
         job_id, source = loc
-        self._pull_missing_outputs(source_id)
+        if self._keep_local_media:
+            self._pull_missing_outputs(source_id)
         members: list[tuple[str, str]] = []
         for v in source.variants:
             if v.status != "ok" or not v.filename:

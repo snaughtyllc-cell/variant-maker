@@ -40,7 +40,10 @@ def test_http_client_posts_run_then_streams(monkeypatch):
     out = list(client.stream_run({"input": {"count": 2}}))
     assert posted["run"][0].endswith("/ep/run")
     assert posted["run"][2]["Authorization"] == "Bearer k"
-    assert out[0] == {"type": "progress", "event": {"index": 1, "state": "rendering"}}
+    assert out[0] == {
+        "type": "submitted", "runpod_job_id": "job123", "endpoint_id": "ep",
+    }
+    assert out[1] == {"type": "progress", "event": {"index": 1, "state": "rendering"}}
     assert out[-1] == {"type": "result", "variants": [], "manifest_key": "m"}
 
 

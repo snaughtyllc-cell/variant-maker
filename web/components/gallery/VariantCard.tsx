@@ -1,5 +1,5 @@
 "use client";
-import { VideoThumb } from "../common/VideoThumb";
+import { PosterThumb } from "../common/PosterThumb";
 import { VariantOut } from "@/lib/types";
 import { isFileReady, tileOriginalityColor } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
@@ -94,7 +94,12 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         <span className="gallery-tile__id">v{String(variant.index).padStart(2, "0")}</span>
         <div className="gallery-tile__media">
           {ready ? (
-            <VideoThumb src={variant.file_url} className="gallery-tile__thumb" fill />
+            <PosterThumb
+              src={variant.look_var_url}
+              className="gallery-tile__thumb"
+              fill
+              label={`v${String(variant.index).padStart(2, "0")}`}
+            />
           ) : (
             <div className="gallery-tile__placeholder" style={{ aspectRatio: "9 / 16" }}>
               Not on Studio

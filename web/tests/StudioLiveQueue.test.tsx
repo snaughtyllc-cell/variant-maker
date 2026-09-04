@@ -79,6 +79,7 @@ describe("StudioLiveQueue reserved tracks", () => {
               status: "ok",
               quality,
               file_url: "/api/variants/s1/v01.mp4",
+              look_var_url: "/api/look/s1/look_v01.jpg",
               uniqueness: 0.55,
             },
           ],
@@ -91,8 +92,9 @@ describe("StudioLiveQueue reserved tracks", () => {
     expect(document.querySelector('[data-tile="done"]')).toBeTruthy();
     expect(document.querySelector('[data-tile="live"]')).toBeTruthy();
     expect(document.querySelector('[data-tile="waiting"]')).toBeTruthy();
-    expect(document.querySelector('[data-tile="done"] video')).toBeTruthy();
-    expect(document.querySelector('[data-tile="live"] video')).toBeTruthy();
+    expect(document.querySelector('[data-tile="done"] [data-poster]')).toBeTruthy();
+    expect(document.querySelector('[data-tile="done"] video')).toBeNull();
+    expect(document.querySelector('[data-tile="live"] video')).toBeNull();
     expect(document.querySelector('[data-has-thumb="true"]')).toBeTruthy();
     expect(screen.getByText("rendering")).toBeInTheDocument();
     expect(screen.getByText("55%")).toBeInTheDocument();

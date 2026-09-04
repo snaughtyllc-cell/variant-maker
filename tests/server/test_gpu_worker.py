@@ -180,3 +180,37 @@ def test_hq_worker_stays_serial_even_if_jobs_requested(monkeypatch, tmp_path):
         "quality_mode": "hq", "jobs": 8,
     })
     assert captured["jobs"] == 1
+
+
+def test_deliver_drive_copies_object_keys_to_drive(tmp_path, monkeypatch):
+    store = FakeObjectStore()
+    store.put_bytes("outputs/s1/v01.mp4", b"vid")
+    uploaded = []
+
+    class FakeDrive:
+        def __init__(self, *, access_token=None):
+            assert access_token == "ya29.job"
+
+        def upload(self, local_path, folder_id, name=None):
+            uploaded.append((open(local_path, "rb").read(), folder_id, name))
+            return "drv1"
+
+    monkeypatch.setattr(gpu_worker, "GoogleDrive", FakeDrive, raising=False)
+    import variant_maker.farm.drive as drive_mod
+    monkeypatch.setattr(drive_mod, "GoogleDrive", FakeDrive)
+
+    chunks = list(gpu_worker.deliver_drive(
+        {
+            "action": "deliver_drive",
+            "drive_access_token": "ya29.job",
+            "folder_id": "folder1",
+            "files": [{"key": "outputs/s1/v01.mp4", "name": "v01.mp4"}],
+        },
+        store,
+        work_dir=str(tmp_path / "work"),
+    ))
+    results = [c for c in chunks if c["type"] == "result"]
+    assert results[0]["delivered"][0]["drive_file_id"] == "drv1"
+    assert uploaded[0][0] == b"vid"
+    assert uploaded[0][1] == "folder1"
+

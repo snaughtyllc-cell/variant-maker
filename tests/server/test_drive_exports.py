@@ -58,6 +58,27 @@ def test_build_export_files_uses_caption_as_drive_name(tmp_path):
     assert files[0].filename == "POV: she said #reels.mp4"
 
 
+def test_build_export_files_from_object_store_without_volume_copy(tmp_path):
+    from tests.server.fakes import FakeObjectStore
+
+    ws = Workspace(str(tmp_path))
+    blob = FakeObjectStore()
+    store = JobStore(ws, FakeRunner({}), object_store=blob)
+    blob.put_bytes("outputs/s1/v01.mp4", b"video-bytes")
+    job = Job(job_id="j1", count=1, created_utc="2026-01-01T00:00:00Z", state="done")
+    src = JobSource(source_id="s1", filename="a.mp4", requested=1)
+    src.variants.append(VariantInfo(
+        source_id="s1", index=1, filename="v01.mp4", status="ok",
+        quality={"vmaf": 95}, object_key="outputs/s1/v01.mp4",
+    ))
+    job.sources.append(src)
+    store._jobs["j1"] = job
+    store._source_index["s1"] = ("j1", src)
+    files = build_export_files(store, [VariantRef("s1", 1)])
+    assert files[0].object_key == "outputs/s1/v01.mp4"
+    assert files[0].local_path == ""
+
+
 def test_build_export_files_empty_raises(tmp_path):
     store, _ = _store_with_ok(tmp_path)
     with pytest.raises(ExportError, match="No ok videos"):

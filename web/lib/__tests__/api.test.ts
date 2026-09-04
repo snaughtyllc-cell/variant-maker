@@ -49,14 +49,25 @@ describe("cancelJob", () => {
 });
 
 describe("createJob posts multipart with files + count", () => {
+  function mockStudio(handler: (url: string, init?: RequestInit) => Promise<Response> | Response) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const u = String(url);
+      if (u === "/api/uploads/direct") {
+        return new Response(JSON.stringify({ mode: "local" }), { status: 200 });
+      }
+      return handler(u, init as RequestInit);
+    });
+  }
+
   it("sends FormData to /api/jobs", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchMock = mockStudio(async () =>
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
     const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
     const out = await api.createJob([f], 3);
     expect(out.job_id).toBe("j1");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/jobs");
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    expect(jobCall).toBeTruthy();
+    const [, init] = jobCall!;
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
     const body = (init as RequestInit).body as FormData;
@@ -68,38 +79,72 @@ describe("createJob posts multipart with files + count", () => {
   });
 
   it("sends prep_mode hq when reconstruct-first is on", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchMock = mockStudio(async () =>
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
     const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
     await api.createJob([f], 3, true, "fast", false, "hq");
-    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
     expect(body.get("quality_mode")).toBe("fast");
     expect(body.get("prep_mode")).toBe("hq");
   });
 
   it("sends generate_captions true when requested", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchMock = mockStudio(async () =>
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
     const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
     await api.createJob([f], 3, true, "fast", true);
-    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
     expect(body.get("generate_captions")).toBe("true");
   });
 
   it("sends quality_mode hq when requested", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchMock = mockStudio(async () =>
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
     const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
     await api.createJob([f], 2, true, "hq");
-    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
     expect(body.get("quality_mode")).toBe("hq");
+  });
+
+  it("PUTs to object storage then POSTs /api/jobs/from-object", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = String(url);
+      if (u === "/api/uploads/direct") {
+        return new Response(JSON.stringify({
+          mode: "direct",
+          url: "https://objects.test/put/uploads/up1/a.mp4",
+          key: "uploads/up1/a.mp4",
+          method: "PUT",
+          headers: { "Content-Type": "video/mp4" },
+        }), { status: 200 });
+      }
+      if (u.startsWith("https://objects.test/put/")) {
+        return new Response(null, { status: 200 });
+      }
+      if (u === "/api/jobs/from-object") {
+        return new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 });
+      }
+      return new Response("nope", { status: 500 });
+    });
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    const out = await api.createJob([f], 8);
+    expect(out.job_id).toBe("j1");
+    const put = fetchMock.mock.calls.find((c) => String(c[0]).startsWith("https://objects.test/put/"));
+    expect(put).toBeTruthy();
+    const created = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs/from-object");
+    expect(created).toBeTruthy();
+    const body = JSON.parse(String((created![1] as RequestInit).body));
+    expect(body.items[0].key).toBe("uploads/up1/a.mp4");
+    expect(body.count).toBe(8);
   });
 
   it("retries a dropped chunked upload then starts the job", async () => {
     const f = new File([new Uint8Array(4_000_000)], "a.mp4", { type: "video/mp4" });
     let offset0 = 0;
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-      const u = String(url);
+    const fetchMock = mockStudio(async (u) => {
       if (u === "/api/uploads") {
         return new Response(JSON.stringify({ upload_id: "up1", chunk_hint: 2_000_000 }), { status: 200 });
       }

@@ -1,7 +1,7 @@
 # Slim Fast CPU worker — ffmpeg + libvmaf, no CUDA / Real-ESRGAN.
 # Fast 20-packs encode here (libx264, jobs 4–8). HQ stays on Dockerfile (GPU).
 #
-# Scale to zero: RunPod CPU serverless, min workers 0, idle timeout ~10 min.
+# Scale to zero: RunPod CPU serverless, min workers 0, idle timeout 600s (trial 30–60s).
 # Build context is the repo root:
 #   docker build -f deploy/runpod/Dockerfile.fast -t variant-fast .
 FROM python:3.11-slim-bookworm

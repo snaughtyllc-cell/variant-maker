@@ -8,11 +8,11 @@ export function filterSources(sources: SourceOut[], mode: "all" | "shortfall"): 
 }
 
 export function zipEmptyCopy(): string {
-  return "Those videos never copied back from the GPU. Wait a moment and try Download ZIP again, or Regenerate.";
+  return "Those videos aren't available for download yet. Try again in a moment, or regenerate.";
 }
 
 export function copyMissingCopy(): string {
-  return "GPU finished, but videos didn't copy back to Studio. Retry copy, or Regenerate if that still fails.";
+  return "Processing finished, but the download package isn't ready. Retry, or regenerate if that still fails.";
 }
 
 export function removePackCopy(running: boolean): string {

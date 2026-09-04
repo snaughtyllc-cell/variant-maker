@@ -1,5 +1,6 @@
 "use client";
 
+import { PosterThumb } from "@/components/common/PosterThumb";
 import { SourceOut } from "@/lib/types";
 import { avgOriginalityPct, filesReadyCount, isFileReady, packMetaLabel, packOriginalityColor } from "@/lib/gallery";
 import { formatViews } from "@/lib/instagram";
@@ -24,7 +25,9 @@ function PackRow({
   onSelect: () => void;
 }) {
   const thumbReady = isFileReady(source.variants[0] ?? {});
-  const thumbUrl = thumbReady ? source.variants[0]?.file_url : undefined;
+  const thumbUrl = thumbReady
+    ? source.variants[0]?.look_var_url || source.poster_url
+    : undefined;
   const pct = avgOriginalityPct(source);
   const delivered = filesReadyCount(source);
 
@@ -32,7 +35,7 @@ function PackRow({
     <button type="button" className="gallery-pack-row" data-active={active} onClick={onSelect}>
       <div className="gallery-pack-row__thumb">
         {thumbUrl && (
-          <video src={thumbUrl} muted playsInline preload="metadata" />
+          <PosterThumb src={thumbUrl} className="gallery-pack-row__thumb-img" fill />
         )}
       </div>
       <div className="gallery-pack-row__main">
