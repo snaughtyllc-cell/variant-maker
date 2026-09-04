@@ -84,13 +84,24 @@ def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | Non
 
 
 def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
-    source_key = job_input["source_key"]
+    if str(job_input.get("action") or "") == "deliver_drive":
+        yield from deliver_drive(job_input, store, work_dir=work_dir)
+        return
+    source_key = job_input.get("source_key")
     source_id = job_input["source_id"]
     count = job_input["count"]
-    basename = os.path.basename(source_key)
+    basename = os.path.basename(source_key or job_input.get("filename") or "source.mp4")
 
     in_path = os.path.join(work_dir, "in", basename)
-    store.get(source_key, in_path)
+    if job_input.get("drive_file_id") and job_input.get("drive_access_token"):
+        os.makedirs(os.path.dirname(in_path), exist_ok=True)
+        _download_drive_file(
+            job_input["drive_file_id"], in_path, job_input["drive_access_token"],
+        )
+        if source_key:
+            store.put(source_key, in_path)
+    else:
+        store.get(source_key, in_path)
     out_dir = os.path.join(work_dir, "out")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -174,3 +185,33 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     manifest_key = f"outputs/{source_id}/manifest.json"
     store.put(manifest_key, os.path.join(out_dir, "manifest.json"))
     yield {"type": "result", "variants": variants, "manifest_key": manifest_key}
+
+
+def _download_drive_file(file_id: str, dest: str, access_token: str) -> None:
+    from variant_maker.farm.drive import GoogleDrive
+    GoogleDrive(access_token=access_token).download(file_id, dest)
+
+
+def deliver_drive(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
+    """Upload object-storage keys to Drive using a job-scoped access token."""
+    token = job_input.get("drive_access_token")
+    folder_id = job_input.get("folder_id")
+    files = job_input.get("files") or []
+    if not token or not folder_id:
+        raise ValueError("deliver_drive requires drive_access_token and folder_id")
+    from variant_maker.farm.drive import GoogleDrive
+    drive = GoogleDrive(access_token=str(token))
+    uploaded = []
+    for item in files:
+        key = item.get("key")
+        name = item.get("name") or (os.path.basename(key) if key else "variant.mp4")
+        if not key:
+            continue
+        local = os.path.join(work_dir, "deliver", os.path.basename(str(key)))
+        store.get(str(key), local)
+        drive_id = drive.upload(local, str(folder_id), name=name)
+        uploaded.append({"key": key, "name": name, "drive_file_id": drive_id})
+        yield {"type": "progress", "event": {
+            "index": len(uploaded), "state": "done", "filename": name, "status": "ok",
+        }}
+    yield {"type": "result", "delivered": uploaded, "folder_id": folder_id}

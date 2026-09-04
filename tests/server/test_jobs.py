@@ -327,17 +327,15 @@ def test_job_errors_when_ok_metadata_has_no_files(tmp_path):
     assert source_files_ready(job.sources[0], store._ws, job.job_id) == 0
 
 
-def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
+def test_retry_copy_is_unnecessary_when_object_store_has_files(tmp_path):
     from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
 
     blobstore = FakeObjectStore()
     ws = Workspace(str(tmp_path))
     runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
-    store = JobStore(ws, runner)
+    store = JobStore(ws, runner, object_store=blobstore)
     job_id, source_id = "jobretry01", "srcretry01"
-    out_dir = ws.source_out_dir(job_id, source_id)
-    os.makedirs(out_dir, exist_ok=True)
     staged = tmp_path / "staged.mp4"
     staged.write_bytes(b"RETRY-COPY-BYTES")
     blobstore.put(f"outputs/{source_id}/v01.mp4", str(staged))
@@ -354,15 +352,9 @@ def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
         state="done", error=COPY_FAILED_MSG,
     )
     store._install_hydrated_job(job)
-    # hydrate already pulls — wipe the copy so retry-copy is the path under test
-    os.remove(os.path.join(out_dir, "v01.mp4"))
-    assert source_files_ready(job.sources[0], ws, job_id) == 0
-
-    out = store.retry_copy(source_id)
-    assert out is job.sources[0]
-    assert source_files_ready(job.sources[0], ws, job_id) == 1
+    assert source_files_ready(job.sources[0], ws, job_id, object_store=blobstore) == 1
     assert job.error is None
-    assert store.retry_copy("nope") is None
+    assert not os.path.isfile(ws.variant_path(job_id, source_id, "v01.mp4"))
 
 
 def test_delete_source_drops_pack_from_gallery_and_disk(tmp_path):

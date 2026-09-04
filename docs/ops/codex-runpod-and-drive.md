@@ -14,6 +14,11 @@ magic. Endpoint settings below copy that: FlashBoot on, **idle timeout 10 min**
 (so the next clip does not cold-start), active workers 0 overnight / 1 if you
 want zero wait, `VARIANT_QUALITY_MODE=fast`.
 
+**Idle-timeout trial (Fast CPU endpoint):** after object-storage delivery is
+live, test **30–60 seconds** idle instead of 600s. Confirm cold-start stays
+acceptable for the next VA job. Do not change HQ until that endpoint is
+benchmarked separately. `VARIANT_RUNPOD_MAX_SECONDS=3600` caps a single job.
+
 ## How long a boot actually takes
 
 | Situation | What you feel |

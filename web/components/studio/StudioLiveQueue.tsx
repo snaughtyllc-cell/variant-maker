@@ -9,7 +9,7 @@ import { isPreparingJob } from "@/lib/prepareCopy";
 import { reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import { runHasStarted } from "@/lib/progress";
 import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, packLiveTiles } from "@/lib/studioLiveTiles";
-import { VideoThumb } from "@/components/common/VideoThumb";
+import { PosterThumb } from "@/components/common/PosterThumb";
 import type { SourceProgress } from "@/lib/progress";
 
 interface QueueRow {
@@ -36,7 +36,7 @@ function LivePackGrid({ source, preparing }: { source: SourceProgress; preparing
             data-has-thumb={media ? "true" : undefined}
             data-slot-state={tile.kind === "done" ? undefined : tile.flight?.state ?? "waiting"}
           >
-            {media ? <VideoThumb src={media} className="studio-live-tile__thumb" fill eager /> : null}
+            {media ? <PosterThumb src={media} className="studio-live-tile__thumb" fill /> : null}
             {tile.kind !== "done" && media ? <span className="studio-live-tile__scrim" aria-hidden="true" /> : null}
             <span className="studio-live-tile__v">{label}</span>
             <span
@@ -146,7 +146,7 @@ export function StudioLiveQueue() {
             <div className="studio-live-row" key={row.key}>
               <div className="studio-live-row__thumb">
                 {rowThumb ? (
-                  <video src={rowThumb} muted playsInline preload="metadata" />
+                  <PosterThumb src={rowThumb} className="studio-live-row__thumb-img" fill />
                 ) : null}
               </div>
               <div className="studio-live-row__main">

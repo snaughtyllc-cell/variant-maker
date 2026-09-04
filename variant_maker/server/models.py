@@ -94,12 +94,16 @@ class SourceOut(BaseModel):
     job_state: str | None = None  # "running" | "done" | "cancelled"
     failed: int = 0               # best_effort + corrupt + uniqueness_fail (Diagnostics)
     created_utc: str | None = None
-    files_ready: int = 0          # ok variants whose mp4 is on Studio disk
+    files_ready: int = 0          # ok variants on disk or in object storage
     copy_status: Literal["ok", "copying", "missing"] = "ok"
     job_id: str | None = None
     insights_views: int | None = None
     insights_linked: int = 0
     insights_unknown: int = 0
+    processing_charge: str | None = None
+    delivery_destination: str | None = None
+    expires_utc: str | None = None
+    poster_url: str | None = None
 
 
 class JobSummary(BaseModel):
@@ -141,6 +145,9 @@ class JobDetail(BaseModel):
     quality_mode: str = "fast"
     prep_mode: str = "none"
     prep_status: str | None = None
+    processing_charge: str | None = None
+    delivery_destination: str | None = None
+    outputs_expires_utc: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):
@@ -153,6 +160,20 @@ class JobEventsSnapshot(BaseModel):
 class CreateJobResponse(BaseModel):
     job_id: str
     sources: list[SourceOut] = []
+
+
+class JobFromObjectItem(BaseModel):
+    filename: str
+    key: str
+
+
+class JobFromObjectIn(BaseModel):
+    items: list[JobFromObjectItem]
+    count: int
+    allow_creative_escalate: bool = True
+    quality_mode: str = "fast"
+    generate_captions: bool = False
+    prep_mode: str = "none"
 
 
 class DiagnosticsItem(BaseModel):

@@ -89,6 +89,9 @@ def record_job(
         if when.tzinfo is None:
             when = when.replace(tzinfo=UTC)
         fast_copies, hq_preps = _counts_for(job)
+        tel = getattr(job, "telemetry", None) or {}
+        if not isinstance(tel, dict):
+            tel = {}
         row = {
             "utc": when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "job_id": job.job_id,
@@ -98,6 +101,17 @@ def record_job(
             "prep_mode": job.prep_mode,
             "quality_mode": job.quality_mode,
         }
+        for key in (
+            "workspace_id", "customer_email", "runpod_job_id", "runpod_endpoint_id",
+            "requested", "submitted_utc", "started_utc", "completed_utc",
+            "shutdown_utc", "retry_count", "regen_count", "input_bytes",
+            "output_bytes", "railway_media_bytes", "delivery_destination",
+            "runpod_cost_usd", "processing_charge",
+        ):
+            if key in tel and tel[key] is not None:
+                row[key] = tel[key]
+        if isinstance(tel.get("source"), dict):
+            row["source"] = tel["source"]
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")

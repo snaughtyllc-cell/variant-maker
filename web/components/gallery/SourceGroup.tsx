@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { SourceOut } from "@/lib/types";
-import { regenerate, retryCopy, sourceZipUrl, removeSource } from "@/lib/api";
+import { regenerate, retryCopy, sourceZipUrl, removeSource, getSourceDownloads } from "@/lib/api";
 import {
+  copyLandingCopy,
   copyMissingCopy,
   deliveryComplete,
+  expiresLabel,
   filesReadyCount,
   removePackCopy,
   zipEmptyCopy,
@@ -104,6 +106,7 @@ export function SourceGroup({
         ? `${uniquenessCustomerLabel()} ${avgUniquenessPct}%`
         : `${uniquenessCustomerLabel()} ${avgUniquenessPct}% avg`
       : "";
+  const expiresCopy = expiresLabel(source.expires_utc);
 
   function handleSaveShare() {
     if (stillRunning || shareBusy || shareLock.current || actionShareable.length === 0) return;
@@ -140,24 +143,26 @@ export function SourceGroup({
     if (stillRunning) return;
     setZipMsg(null);
     try {
-      const res = await fetch(sourceZipUrl(source.source_id));
-      if (!res.ok) {
+      const pack = await getSourceDownloads(source.source_id);
+      const zipUrl = pack.zip_url;
+      if (zipUrl) {
+        window.location.assign(zipUrl);
+        return;
+      }
+      const files = pack.files || [];
+      if (files.length === 0) {
         setZipMsg(zipEmptyCopy());
         return;
       }
-      const blob = await res.blob();
-      if (blob.size < 64) {
-        setZipMsg(zipEmptyCopy());
-        return;
+      for (const file of files) {
+        const a = document.createElement("a");
+        a.href = file.url;
+        a.download = file.filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${source.source_id}_variants.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch {
       setZipMsg(zipEmptyCopy());
     }
@@ -183,7 +188,7 @@ export function SourceGroup({
       await retryCopy(source.source_id);
       onRegenerate();
     } catch (e) {
-      console.error("Retry copy failed", e);
+      console.error("Retry delivery failed", e);
     } finally {
       setCopyLoading(false);
     }
@@ -224,13 +229,22 @@ export function SourceGroup({
         >
           {fullDelivery ? "✓ " : ""}
           {copyMissing
-            ? `${filesReady} / ${source.requested} on Studio`
+            ? `${filesReady} / ${source.requested} ready`
             : copyLanding
-              ? `${filesReady} / ${source.requested} copying`
+              ? `${filesReady} / ${source.requested} landing`
               : `${filesReady} / ${source.requested} delivered`}
         </span>
         {postedCopy && <span className="gallery-pack-header__meta">{postedCopy}</span>}
         {viewsCopy && <span className="gallery-pack-header__meta">{viewsCopy}</span>}
+        {source.processing_charge && (
+          <span className="gallery-pack-header__meta">{source.processing_charge}</span>
+        )}
+        {source.delivery_destination === "google_drive" && (
+          <span className="gallery-pack-header__meta">Google Drive</span>
+        )}
+        {expiresCopy && (
+          <span className="gallery-pack-header__meta">{expiresCopy}</span>
+        )}
         <div className="gallery-pack-header__actions">
           {okCount > 0 && (
             <button
@@ -294,12 +308,12 @@ export function SourceGroup({
         <div className="gallery-banner">
           ⚠ {copyMissingCopy()}
           <button type="button" onClick={handleRetryCopy} disabled={copyLoading}>
-            {copyLoading ? "Copying…" : "↻ Retry copy"}
+            {copyLoading ? "Retrying…" : "↻ Retry delivery"}
           </button>
         </div>
       )}
       {copyLanding && !copyMissing && (
-        <div className="gallery-banner">Videos are still landing on Studio…</div>
+        <div className="gallery-banner">{copyLandingCopy()}</div>
       )}
       {hasShortfall && shortfallMsg && (
         <div className="gallery-banner">

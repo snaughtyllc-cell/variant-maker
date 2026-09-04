@@ -62,6 +62,8 @@ class TenantHub:
                 object_store=self._object_store,
                 gallery_keep_jobs=self._gallery_keep_jobs,
                 gallery_keep_hours=self._gallery_keep_hours,
+                workspace_id=workspace_id,
+                drive_token_fn=getattr(self, "_drive_token_fn", None),
             )
             store.hydrate_from_disk()
             built = TenantBundle(

@@ -139,6 +139,7 @@ class VariantResult:
     look_mae: float | None = None
     look_src: str | None = None
     look_var: str | None = None
+    object_key: str | None = None
 
 
 @dataclass
@@ -163,7 +164,7 @@ class LocalRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, **_kwargs) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -268,12 +269,19 @@ class RoutingRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, **kwargs) -> SourceResult:
         return self._pick(quality_mode, count).run(
             source_path, count=count, out_dir=out_dir, source_id=source_id,
             on_event=on_event, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, cancel_token=cancel_token,
+            quality_mode=quality_mode, cancel_token=cancel_token, **kwargs,
         )
+
+    def deliver_drive(self, **kwargs):
+        target = self._fast_remote or self._remote
+        deliver = getattr(target, "deliver_drive", None)
+        if not callable(deliver):
+            raise TypeError("remote runner cannot deliver to Drive")
+        return deliver(**kwargs)
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
         target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)

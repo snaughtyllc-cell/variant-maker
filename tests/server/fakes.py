@@ -25,7 +25,7 @@ class FakeRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = "fast",
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, **_kwargs) -> SourceResult:
         self.last_quality_mode = quality_mode
         self.last_allow_creative_escalate = allow_creative_escalate
         self.calls.append((quality_mode, count, source_path))
@@ -135,13 +135,19 @@ class FakeObjectStore:
 
     def __init__(self) -> None:
         self._data: dict[str, bytes] = {}
+        self.gets: list[str] = []
+        self.presigns: list[str] = []
 
     def put(self, key: str, local_path: str) -> None:
         with open(local_path, "rb") as f:
             self._data[key] = f.read()
 
+    def put_bytes(self, key: str, data: bytes) -> None:
+        self._data[key] = data
+
     def get(self, key: str, local_path: str) -> None:
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        self.gets.append(key)
+        os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(self._data[key])
 
@@ -155,3 +161,27 @@ class FakeObjectStore:
         for k in keys:
             del self._data[k]
         return len(keys)
+
+    def exists(self, key: str) -> bool:
+        return key in self._data
+
+    def size(self, key: str) -> int | None:
+        data = self._data.get(key)
+        return None if data is None else len(data)
+
+    def copy(self, src_key: str, dst_key: str) -> None:
+        self._data[dst_key] = self._data[src_key]
+
+    def presign_get(self, key: str, *, expires: int = 900, filename: str | None = None,
+                    as_attachment: bool = False) -> str:
+        self.presigns.append(key)
+        q = f"exp={int(expires)}"
+        if as_attachment:
+            q += "&dl=1"
+        if filename:
+            q += f"&name={os.path.basename(filename)}"
+        return f"https://objects.test/{key}?{q}"
+
+    def presign_put(self, key: str, *, expires: int = 3600,
+                    content_type: str = "application/octet-stream") -> str:
+        return f"https://objects.test/put/{key}?exp={int(expires)}&ct={content_type}"

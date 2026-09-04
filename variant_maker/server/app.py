@@ -58,6 +58,7 @@ from .drive_oauth import (
     studio_origin_from_redirect_uri,
 )
 from .drive_split import execute_split_export
+from .drive_tokens import mint_access_token
 from .drive_urls import DriveUrlError, parse_folder_id
 from .drop_ledger import (
     ensure_ledger,
@@ -100,7 +101,16 @@ from .jobs import (
     JobStore,
     source_copy_status,
     source_files_ready,
-    variant_on_disk,
+    variant_ready,
+)
+from .media_links import (
+    DOWNLOAD_TTL_SECONDS,
+    MULTIPART_THRESHOLD,
+    UPLOAD_TTL_SECONDS,
+    input_key,
+    output_key,
+    package_zip_key,
+    upload_key,
 )
 from .models import (
     AdminMemberOut,
@@ -142,6 +152,7 @@ from .models import (
     JobDetail,
     JobEventsSnapshot,
     JobFromDriveIn,
+    JobFromObjectIn,
     JobSummary,
     LookPreviewOut,
     PasswordLoginIn,
@@ -281,18 +292,28 @@ def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
 
 
 def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
-                ws: Workspace | None = None) -> SourceOut:
+                ws: Workspace | None = None, object_store=None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
     failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
     job_id = job.job_id if job is not None else None
     files_ready = (
-        source_files_ready(s, ws, job_id) if ws is not None and job_id else s.delivered
+        source_files_ready(s, ws, job_id, object_store=object_store)
+        if ws is not None and job_id else s.delivered
     )
     copy_status = (
-        source_copy_status(s, ws, job_id, job.state if job is not None else None)
+        source_copy_status(
+            s, ws, job_id, job.state if job is not None else None,
+            object_store=object_store,
+        )
         if ws is not None and job_id else "ok"
     )
     pack = pack_analytics(variants)
+    poster = None
+    for v in variants:
+        if getattr(v, "look_var", None):
+            poster = _look_file_url(s.source_id, v.look_var)
+            break
+    tel = (job.telemetry if job is not None else None) or {}
     return SourceOut(
         source_id=s.source_id, filename=s.filename, requested=s.requested,
         delivered=s.delivered, shortfall=s.shortfall,
@@ -300,7 +321,10 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
             _variant_out(
                 s.source_id, v,
                 file_ready=(
-                    variant_on_disk(ws, job_id, s.source_id, v.filename)
+                    variant_ready(
+                        ws, job_id, s.source_id, v.filename,
+                        object_store=object_store, variant=v,
+                    )
                     if ws is not None and job_id else True
                 ),
             )
@@ -318,6 +342,12 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         insights_views=pack["insights_views"],
         insights_linked=int(pack["insights_linked"] or 0),
         insights_unknown=int(pack["insights_unknown"] or 0),
+        processing_charge=tel.get("processing_charge"),
+        delivery_destination=(
+            getattr(job, "delivery_destination", None) if job is not None else None
+        ),
+        expires_utc=getattr(job, "outputs_expires_utc", None) if job is not None else None,
+        poster_url=poster,
     )
 
 
@@ -729,6 +759,35 @@ def create_app(
         cid = str(oauth_env.get(ENV_OAUTH_CLIENT_ID) or auth_env.get(ENV_OAUTH_CLIENT_ID) or "")
         csec = str(oauth_env.get(ENV_OAUTH_CLIENT_SECRET) or auth_env.get(ENV_OAUTH_CLIENT_SECRET) or "")
         return cid, csec
+
+    def _mint_drive_access_token() -> str:
+        """Job-scoped Drive access token — never the refresh token."""
+        cid, csec = _oauth_client_pair()
+        data = _oauth_tokens().load() if _oauth_tokens().exists() else {}
+        return mint_access_token(data, client_id=cid, client_secret=csec)["access_token"]
+
+    fallback_store._drive_token_fn = _mint_drive_access_token
+    if hub is not None:
+        hub._drive_token_fn = _mint_drive_access_token
+        for bundle in getattr(hub, "_bundles", {}).values():
+            bundle.store._drive_token_fn = _mint_drive_access_token
+
+    def _off_volume_mailbox() -> bool:
+        inner = getattr(store, "_inner", None)
+        js = inner() if callable(inner) else store
+        return (
+            getattr(js, "_object_store", None) is not None
+            and not getattr(js, "_keep_local_media", True)
+        )
+
+    def _drive_export_runner() -> ExportRunner:
+        deliver = getattr(store._runner, "deliver_drive", None)
+        return ExportRunner(
+            _drive(), app.state.exports,
+            object_store=getattr(store, "_object_store", None),
+            remote_deliver=deliver if callable(deliver) else None,
+            mint_token=_mint_drive_access_token if callable(deliver) else None,
+        )
 
     def _login_redirect_uri(request: Request) -> str:
         explicit = auth_env.get(ENV_LOGIN_REDIRECT_URI)
@@ -1355,7 +1414,7 @@ def create_app(
             prep_mode=prep_mode,
         )
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/uploads")
@@ -1367,6 +1426,43 @@ def create_app(
         open(path, "wb").close()
         _UPLOAD_META[upload_id] = {"filename": safe, "size": int(size), "received": 0, "path": path}
         return {"upload_id": upload_id, "chunk_hint": 2_000_000}
+
+    @app.post("/api/uploads/direct")
+    def init_direct_upload(
+        filename: str = Form(...),
+        size: int = Form(0),
+        content_type: str = Form("video/mp4"),
+    ) -> dict:
+        """Browser → object storage PUT. Falls back to local chunked upload."""
+        blob = getattr(store, "_object_store", None)
+        safe = os.path.basename(filename) or "video.mp4"
+        presign_put = getattr(blob, "presign_put", None) if blob is not None else None
+        if not callable(presign_put):
+            upload_id = uuid.uuid4().hex[:12]
+            path = store._ws.upload_blob_path(upload_id, safe)
+            open(path, "wb").close()
+            _UPLOAD_META[upload_id] = {
+                "filename": safe, "size": int(size), "received": 0, "path": path,
+            }
+            return {"mode": "local", "upload_id": upload_id, "chunk_hint": 2_000_000}
+        upload_id = uuid.uuid4().hex[:12]
+        key = upload_key(upload_id, safe)
+        _UPLOAD_META[upload_id] = {
+            "filename": safe, "size": int(size), "key": key, "received": int(size),
+            "mode": "direct",
+        }
+        url = presign_put(
+            key, expires=UPLOAD_TTL_SECONDS, content_type=content_type or "video/mp4",
+        )
+        return {
+            "mode": "direct",
+            "upload_id": upload_id,
+            "key": key,
+            "url": url,
+            "method": "PUT",
+            "headers": {"Content-Type": content_type or "video/mp4"},
+            "multipart": int(size or 0) >= MULTIPART_THRESHOLD,
+        }
 
     @app.put("/api/uploads/{upload_id}")
     async def put_upload_chunk(upload_id: str, request: Request, offset: int = 0) -> dict:
@@ -1419,7 +1515,23 @@ def create_app(
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                          for s in job.sources])
+
+    @app.post("/api/jobs/from-object", status_code=201, response_model=CreateJobResponse)
+    def create_job_from_object(body: JobFromObjectIn) -> CreateJobResponse:
+        items = [(it.filename or "video.mp4", it.key) for it in body.items if it.key]
+        if not items:
+            raise HTTPException(status_code=400, detail="items required")
+        job = store.create_job_from_object_keys(
+            items, count=body.count,
+            allow_creative_escalate=body.allow_creative_escalate,
+            quality_mode=body.quality_mode,
+            generate_captions=body.generate_captions,
+            prep_mode=body.prep_mode,
+        )
+        return CreateJobResponse(job_id=job.job_id,
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
@@ -1437,7 +1549,22 @@ def create_app(
         missing = [fid for fid in file_ids if fid not in children]
         if missing:
             raise HTTPException(status_code=400, detail="file is not a video in that folder")
-        stage = tempfile.mkdtemp(prefix="vm_drive_in_", dir=store._ws.root)
+        if _off_volume_mailbox():
+            items = [
+                (os.path.basename(children[fid].name) or "clip.mp4", fid)
+                for fid in file_ids
+            ]
+            job = store.create_job_from_drive_ids(
+                items, count=body.count,
+                allow_creative_escalate=body.allow_creative_escalate,
+                quality_mode=body.quality_mode,
+                generate_captions=body.generate_captions,
+                prep_mode=body.prep_mode,
+            )
+            return CreateJobResponse(job_id=job.job_id,
+                                     sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                              for s in job.sources])
+        stage = tempfile.mkdtemp(prefix="vm_drive_in_")
         paths: list[tuple[str, str]] = []
         try:
             for i, fid in enumerate(file_ids):
@@ -1456,7 +1583,7 @@ def create_app(
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.get("/api/jobs", response_model=list[JobSummary])
@@ -1477,12 +1604,15 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                   for s in job.sources],
                          error=job.error,
                          quality_mode=job.quality_mode,
                          prep_mode=job.prep_mode,
-                         prep_status=job.prep_status)
+                         prep_status=job.prep_status,
+                         processing_charge=(job.telemetry or {}).get("processing_charge"),
+                         delivery_destination=job.delivery_destination,
+                         outputs_expires_utc=job.outputs_expires_utc)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
     def cancel_job(job_id: str) -> JobDetail:
@@ -1491,7 +1621,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
+                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                   for s in job.sources],
                          error=job.error,
                          quality_mode=job.quality_mode,
@@ -1535,7 +1665,7 @@ def create_app(
         out = []
         for job in store.list():
             for s in job.sources:
-                out.append(_source_out(s, ok_only=True, job=job, ws=store._ws))
+                out.append(_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None)))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
         return out
 
@@ -1545,35 +1675,113 @@ def create_app(
                                 status=v.status, quality=v.quality)
                 for v in store.diagnostics()]
 
+    def _objects():
+        return getattr(store, "_object_store", None)
+
+    def _redirect_object(key: str, *, filename: str | None = None,
+                         as_attachment: bool = False):
+        blob = _objects()
+        presign = getattr(blob, "presign_get", None) if blob is not None else None
+        exists = getattr(blob, "exists", None) if blob is not None else None
+        if not callable(presign) or not callable(exists):
+            return None
+        try:
+            if not exists(key):
+                return None
+            url = presign(
+                key, expires=DOWNLOAD_TTL_SECONDS, filename=filename,
+                as_attachment=as_attachment,
+            )
+        except Exception:
+            return None
+        return RedirectResponse(url, status_code=302)
+
     @app.get("/api/look/{source_id}/{filename}")
     def look_still(source_id: str, filename: str):
         """Source vs variant JPEG stills for the look-first visual test."""
         if not str(filename).startswith("look_") or not str(filename).endswith(".jpg"):
             raise HTTPException(status_code=404, detail="look still not found")
         path = store.find_variant(source_id, filename)
-        if path is None:
-            raise HTTPException(status_code=404, detail="look still not found")
-        return FileResponse(path, media_type="image/jpeg")
+        if path is not None:
+            return FileResponse(path, media_type="image/jpeg")
+        redirected = _redirect_object(output_key(source_id, filename), filename=filename)
+        if redirected is not None:
+            return redirected
+        raise HTTPException(status_code=404, detail="look still not found")
 
     @app.get("/api/variants/{source_id}/{filename}")
     def variant_file(source_id: str, filename: str, dl: int = 0):
         path = store.find_variant(source_id, filename)
-        if path is None:
-            raise HTTPException(status_code=404, detail="variant not found")
-        if int(dl or 0):
-            safe = os.path.basename(filename) or "variant.mp4"
-            return FileResponse(
-                path, media_type="video/mp4", filename=safe,
-                content_disposition_type="attachment",
-            )
-        return FileResponse(path, media_type="video/mp4")
+        if path is not None:
+            if int(dl or 0):
+                safe = os.path.basename(filename) or "variant.mp4"
+                return FileResponse(
+                    path, media_type="video/mp4", filename=safe,
+                    content_disposition_type="attachment",
+                )
+            return FileResponse(path, media_type="video/mp4")
+        redirected = _redirect_object(
+            output_key(source_id, filename),
+            filename=os.path.basename(filename) or "variant.mp4",
+            as_attachment=bool(int(dl or 0)),
+        )
+        if redirected is not None:
+            return redirected
+        raise HTTPException(status_code=404, detail="variant not found")
 
     @app.get("/api/sources/{source_id}/source")
     def source_file(source_id: str):
         path = store.source_file(source_id)
-        if path is None:
+        if path is not None:
+            return FileResponse(path, media_type="video/mp4")
+        loc = store._locate(source_id)
+        key = None
+        if loc is not None:
+            _, source = loc
+            key = source.source_object_key or input_key(source_id, source.filename)
+        redirected = _redirect_object(key, filename=source.filename if loc else None) if key else None
+        if redirected is not None:
+            return redirected
+        raise HTTPException(status_code=404, detail="source not found")
+
+    @app.get("/api/sources/{source_id}/downloads")
+    def source_downloads(source_id: str, dl: int = 1):
+        """Signed object-storage links. Browser fetches R2/S3 directly — not Railway."""
+        loc = store._locate(source_id)
+        if loc is None:
             raise HTTPException(status_code=404, detail="source not found")
-        return FileResponse(path, media_type="video/mp4")
+        _job_id, source = loc
+        blob = _objects()
+        presign = getattr(blob, "presign_get", None) if blob is not None else None
+        files = []
+        for v in source.variants:
+            if v.status != "ok" or not v.filename:
+                continue
+            key = v.object_key or output_key(source_id, v.filename)
+            if callable(presign):
+                try:
+                    url = presign(
+                        key, expires=DOWNLOAD_TTL_SECONDS, filename=v.filename,
+                        as_attachment=bool(int(dl or 0)),
+                    )
+                except Exception:
+                    url = f"/api/variants/{source_id}/{quote(v.filename, safe='')}"
+            else:
+                url = f"/api/variants/{source_id}/{quote(v.filename, safe='')}"
+            files.append({"filename": v.filename, "url": url, "index": v.index})
+        zip_url = None
+        zkey = package_zip_key(source_id)
+        exists = getattr(blob, "exists", None) if blob is not None else None
+        if callable(presign) and callable(exists):
+            try:
+                if exists(zkey):
+                    zip_url = presign(
+                        zkey, expires=DOWNLOAD_TTL_SECONDS,
+                        filename=f"{source_id}_variants.zip", as_attachment=True,
+                    )
+            except Exception:
+                zip_url = None
+        return {"source_id": source_id, "files": files, "zip_url": zip_url}
 
     @app.post("/api/sources/{source_id}/regenerate", response_model=SourceOut)
     def regenerate(source_id: str, n: int = Form(...)) -> SourceOut:
@@ -1582,7 +1790,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
-        return _source_out(source, ok_only=True, job=job, ws=store._ws)
+        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
 
     @app.post("/api/sources/{source_id}/retry-copy", response_model=SourceOut)
     def retry_copy(source_id: str) -> SourceOut:
@@ -1591,7 +1799,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
-        return _source_out(source, ok_only=True, job=job, ws=store._ws)
+        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
 
     @app.delete("/api/sources/{source_id}", status_code=204)
     def delete_source(source_id: str) -> None:
@@ -1607,7 +1815,10 @@ def create_app(
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:
-            file_ready = variant_on_disk(store._ws, loc[0], source_id, variant.filename)
+            file_ready = variant_ready(
+                store._ws, loc[0], source_id, variant.filename,
+                object_store=getattr(store, "_object_store", None), variant=variant,
+            )
         return _variant_out(source_id, variant, file_ready=file_ready)
 
     @app.post("/api/variants/{source_id}/{index}/post-url", response_model=VariantOut)
@@ -1623,7 +1834,10 @@ def create_app(
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:
-            file_ready = variant_on_disk(store._ws, loc[0], source_id, variant.filename)
+            file_ready = variant_ready(
+                store._ws, loc[0], source_id, variant.filename,
+                object_store=getattr(store, "_object_store", None), variant=variant,
+            )
         return _variant_out(source_id, variant, file_ready=file_ready)
 
     @app.get("/api/drop-ledger/status", response_model=DropLedgerStatusOut)
@@ -1683,10 +1897,17 @@ def create_app(
     @app.get("/api/sources/{source_id}/zip")
     def source_zip(source_id: str):
         path = store.zip_ok_variants(source_id)
-        if path is None:
-            raise HTTPException(status_code=404, detail="no ok variants for source")
-        return FileResponse(path, media_type="application/zip",
-                            filename=f"{source_id}_variants.zip")
+        if path is not None:
+            return FileResponse(path, media_type="application/zip",
+                                filename=f"{source_id}_variants.zip")
+        redirected = _redirect_object(
+            package_zip_key(source_id),
+            filename=f"{source_id}_variants.zip",
+            as_attachment=True,
+        )
+        if redirected is not None:
+            return redirected
+        raise HTTPException(status_code=404, detail="no ok variants for source")
 
     @app.get("/api/drive/status", response_model=DriveStatusOut)
     def drive_status() -> DriveStatusOut:
@@ -2157,7 +2378,7 @@ def create_app(
         if body.consume_bank:
             app.state.captions.advance(len(files), bank_id=body.caption_bank_id)
         job = app.state.exports.create(destination_id=dest.id, folder_id=dest.folder_id, files=files)
-        ExportRunner(_drive(), app.state.exports).start(job)
+        _drive_export_runner().start(job)
         return _export_job_out(job)
 
     @app.get("/api/drive/exports", response_model=list[DropPackOut])
@@ -2191,7 +2412,7 @@ def create_app(
     def retry_export(export_id: str) -> ExportJobOut:
         _require_drive()
         try:
-            job = ExportRunner(_drive(), app.state.exports).retry_failed(export_id)
+            job = _drive_export_runner().retry_failed(export_id)
         except ExportError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return _export_job_out(job)

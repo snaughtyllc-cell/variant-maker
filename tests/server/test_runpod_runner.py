@@ -45,12 +45,14 @@ def test_runner_uploads_source_streams_events_downloads_variants(tmp_path):
     # progress forwarded as VariantEvents tagged with source_id
     assert all(e.source_id == "srcA" for e in events)
     assert {e.status for e in events if e.state == "done"} == {"ok", "corrupt"}
-    # variants downloaded to local out_dir, statuses preserved (incl. corrupt)
+    # variants stay in object storage — Railway does not copy MP4s locally
     assert isinstance(result, SourceResult)
     assert [v.status for v in result.variants] == ["ok", "corrupt"]
     assert all(isinstance(v, VariantResult) for v in result.variants)
-    for v in result.variants:
-        assert os.path.isfile(v.path) and v.path.startswith(out_dir)
+    assert [v.object_key for v in result.variants] == [
+        "outputs/srcA/v01.mp4", "outputs/srcA/v02.mp4",
+    ]
+    assert store.gets.count("outputs/srcA/v01.mp4") == 0
     assert os.path.isfile(result.manifest_path)
 
 
@@ -156,3 +158,24 @@ def test_runner_accepts_allow_creative_escalate(tmp_path):
         str(src), count=1, out_dir=str(tmp_path / "o"), source_id="s",
         on_event=lambda e: None, allow_creative_escalate=False)
     assert captured["allow_creative_escalate"] is False
+
+
+def test_runner_passes_drive_file_id_without_uploading_source(tmp_path):
+    captured = {}
+
+    class CapturingClient:
+        def stream_run(self, payload, cancel_token=None):
+            captured.update(payload["input"])
+            return iter([{"type": "result", "variants": [], "manifest_key": None}])
+
+    store = FakeObjectStore()
+    RunPodServerlessRunner(store, CapturingClient()).run(
+        "", count=1, out_dir=str(tmp_path / "o"), source_id="s",
+        on_event=lambda e: None,
+        drive_file_id="drv_file",
+        drive_access_token="ya29.job",
+    )
+    assert captured["drive_file_id"] == "drv_file"
+    assert captured["drive_access_token"] == "ya29.job"
+    assert captured["source_key"] == "inputs/s/source.mp4"
+    assert store.list_prefix("inputs/") == []

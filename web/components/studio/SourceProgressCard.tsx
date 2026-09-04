@@ -2,7 +2,7 @@
 import { InFlight, SourceProgress, VariantTile } from "@/lib/progress";
 import { ProgressBar } from "@/components/common/ProgressBar";
 import { Badge } from "@/components/common/Badge";
-import { VideoThumb } from "@/components/common/VideoThumb";
+import { PosterThumb } from "@/components/common/PosterThumb";
 import {
   QualityMode,
   inFlightSlotLabel,
@@ -84,8 +84,8 @@ function DoneThumb({ variant }: { variant: VariantTile }) {
   const isBestEffort = variant.status === "best_effort";
   const uniquenessMiss = variant.status === "uniqueness_fail";
   return (
-    <VideoThumb
-      src={variant.file_url}
+    <PosterThumb
+      src={variant.look_var_url}
       badge={
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
           {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}

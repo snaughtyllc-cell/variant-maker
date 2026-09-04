@@ -67,6 +67,26 @@ export const variantUrl = (sourceId: string, filename: string) =>
 export const sourceUrl = (sourceId: string) => `/api/sources/${sourceId}/source`;
 export const eventsUrl = (jobId: string) => `/api/jobs/${jobId}/events`;
 export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`;
+export const sourceDownloadsUrl = (sourceId: string) => `/api/sources/${sourceId}/downloads`;
+
+export type DirectUploadInit = {
+  mode: "direct" | "local";
+  url?: string;
+  key?: string;
+  upload_id?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  chunk_hint?: number;
+};
+
+export type SourceDownloads = {
+  source_id: string;
+  files: Array<{ filename: string; url: string; index?: number }>;
+  zip_url?: string | null;
+};
+
+export const getSourceDownloads = (sourceId: string) =>
+  fetch(sourceDownloadsUrl(sourceId)).then(json<SourceDownloads>);
 
 export const getHealth = () => fetch("/api/health").then(json<{ status: string; lab?: boolean }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
@@ -127,6 +147,33 @@ async function uploadFileChunked(file: File): Promise<string> {
   return init.upload_id;
 }
 
+async function initDirectUpload(file: File): Promise<DirectUploadInit> {
+  const fd = new FormData();
+  fd.append("filename", file.name);
+  fd.append("size", String(file.size));
+  fd.append("content_type", file.type || "video/mp4");
+  try {
+    const res = await fetch("/api/uploads/direct", { method: "POST", body: fd });
+    if (!res.ok) return { mode: "local" };
+    const body = (await res.json()) as DirectUploadInit;
+    if (body?.mode === "direct" && body.url && body.key) return body;
+    return { mode: "local", ...body };
+  } catch {
+    return { mode: "local" };
+  }
+}
+
+async function putDirectObject(file: File, init: DirectUploadInit): Promise<void> {
+  const res = await fetch(init.url as string, {
+    method: init.method || "PUT",
+    headers: init.headers || { "Content-Type": file.type || "video/mp4" },
+    body: file,
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+}
+
 export async function createJob(
   files: File[],
   count: number,
@@ -136,6 +183,37 @@ export async function createJob(
   prepMode: "none" | "hq" = "none",
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
+  const first = files[0];
+  const direct = first ? await initDirectUpload(first) : { mode: "local" as const };
+  if (direct.mode === "direct") {
+    try {
+      const items: Array<{ filename: string; key: string }> = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const init = i === 0 ? direct : await initDirectUpload(file);
+        if (init.mode !== "direct" || !init.url || !init.key) {
+          throw new Error("direct upload unavailable");
+        }
+        await putDirectObject(file, init);
+        items.push({ filename: file.name, key: init.key });
+      }
+      return fetch("/api/jobs/from-object", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          count,
+          allow_creative_escalate: allowCreativeEscalate,
+          quality_mode: qualityMode,
+          generate_captions: generateCaptions,
+          prep_mode: prepMode,
+        }),
+      }).then(json<CreateJobResponse>);
+    } catch {
+      // CORS or object-store PUT failed — fall through to Railway upload.
+    }
+  }
+
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
     const fd = new FormData();

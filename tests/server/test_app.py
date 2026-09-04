@@ -631,21 +631,19 @@ def test_zip_404_when_ok_variants_are_missing_from_disk(tmp_path):
     assert len(resp.content) != 22
 
 
-def test_zip_and_file_routes_pull_missing_outputs_from_object_store(tmp_path):
-    """GPU finished (job.json has variants) but Railway never copied mp4s — fetch from R2."""
+def test_zip_and_file_routes_redirect_to_object_store(tmp_path):
+    """GPU finished in R2 — Railway issues a signed URL instead of copying MP4s."""
     from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
 
     blobstore = FakeObjectStore()
     ws = Workspace(str(tmp_path))
     runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
-    store = JobStore(ws, runner)
+    store = JobStore(ws, runner, object_store=blobstore)
     client = TestClient(create_app(store))
 
     job_id = "jobpull01"
     source_id = "srcpull01"
-    out_dir = ws.source_out_dir(job_id, source_id)
-    os.makedirs(out_dir, exist_ok=True)
     payload = b"FAKE-MP4-BYTES-NOT-EMPTY"
     staged = tmp_path / "staged.mp4"
     staged.write_bytes(payload)
@@ -657,21 +655,25 @@ def test_zip_and_file_routes_pull_missing_outputs_from_object_store(tmp_path):
             source_id=source_id, filename="clip.mp4", requested=1,
             variants=[VariantInfo(
                 source_id=source_id, index=1, filename="v01.mp4", status="ok",
-                quality={"vmaf": 99.0},
+                quality={"vmaf": 99.0}, object_key=f"outputs/{source_id}/v01.mp4",
             )],
         )],
         state="done",
     )
     store._install_hydrated_job(job)
 
-    file_resp = client.get(f"/api/variants/{source_id}/v01.mp4")
-    assert file_resp.status_code == 200
-    assert file_resp.content == payload
-    zip_resp = client.get(f"/api/sources/{source_id}/zip")
-    assert zip_resp.status_code == 200
-    assert len(zip_resp.content) > 22
-    zf = zipfile.ZipFile(io.BytesIO(zip_resp.content))
-    assert zf.namelist() == ["v01.mp4"]
+    disk = ws.variant_path(job_id, source_id, "v01.mp4")
+    assert not os.path.isfile(disk)
+    file_resp = client.get(f"/api/variants/{source_id}/v01.mp4", follow_redirects=False)
+    assert file_resp.status_code == 302
+    assert "objects.test" in file_resp.headers["location"]
+    assert f"outputs/{source_id}/v01.mp4" in file_resp.headers["location"]
+    assert not os.path.isfile(disk)
+    assert blobstore.gets == []
+
+    links = client.get(f"/api/sources/{source_id}/downloads").json()
+    assert links["files"][0]["filename"] == "v01.mp4"
+    assert "objects.test" in links["files"][0]["url"]
 
 
 class _CountingFetchRunner(FakeRunner):
@@ -712,19 +714,17 @@ def test_gallery_reports_missing_files_without_pulling_object_store(tmp_path):
     assert all(v["file_ready"] is False for v in gallery[0]["variants"])
 
 
-def test_retry_copy_endpoint_pulls_from_object_store(tmp_path):
+def test_retry_copy_endpoint_reports_object_store_ready(tmp_path):
     from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
 
     blobstore = FakeObjectStore()
     ws = Workspace(str(tmp_path))
     runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
-    store = JobStore(ws, runner)
+    store = JobStore(ws, runner, object_store=blobstore)
     client = TestClient(create_app(store))
 
     job_id, source_id = "jobapi01", "srcapi01"
-    out_dir = ws.source_out_dir(job_id, source_id)
-    os.makedirs(out_dir, exist_ok=True)
     payload = b"RETRY-COPY-API"
     staged = tmp_path / "staged.mp4"
     staged.write_bytes(payload)
@@ -742,20 +742,12 @@ def test_retry_copy_endpoint_pulls_from_object_store(tmp_path):
         state="done",
     )
     store._install_hydrated_job(job)
-    os.remove(os.path.join(out_dir, "v01.mp4"))
 
-    missing = client.get("/api/gallery").json()[0]
-    assert missing["copy_status"] == "missing"
-    assert missing["files_ready"] == 0
-
-    resp = client.post(f"/api/sources/{source_id}/retry-copy")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["copy_status"] == "ok"
-    assert body["files_ready"] == 1
-    assert body["variants"][0]["file_ready"] is True
-    assert client.get(f"/api/variants/{source_id}/v01.mp4").content == payload
-    assert client.post("/api/sources/nope/retry-copy").status_code == 404
+    gallery = client.get("/api/gallery").json()[0]
+    assert gallery["copy_status"] == "ok"
+    assert gallery["files_ready"] == 1
+    file_resp = client.get(f"/api/variants/{source_id}/v01.mp4", follow_redirects=False)
+    assert file_resp.status_code == 302
 
 
 def test_delete_source_endpoint_removes_gallery_card(tmp_path):

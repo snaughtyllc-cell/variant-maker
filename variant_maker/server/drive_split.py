@@ -112,7 +112,12 @@ def execute_split_export(
     total_files = sum(len(files) for _, _, files in planned)
     if body.consume_bank:
         caption_store.advance(total_files, bank_id=body.caption_bank_id)
-    runner = ExportRunner(drive, export_store)
+    runner = ExportRunner(
+        drive, export_store,
+        object_store=getattr(job_store, "_object_store", None),
+        remote_deliver=getattr(job_store._runner, "deliver_drive", None),
+        mint_token=getattr(job_store, "_drive_token_fn", None),
+    )
     jobs_out: list[SplitExportJobOut] = []
     for dest, label, files in planned:
         export_job = export_store.create(

@@ -46,8 +46,10 @@ def test_runner_through_worker_contract(monkeypatch, tmp_path):
     # progress flowed runner<-worker, tagged with source_id
     assert [e.state for e in events][:2] == ["rendering", "done"]
     assert all(e.source_id == "s1" for e in events)
-    # variants round-tripped through the store to local files with real content
+    # variants live in object storage; Railway does not copy MP4s onto disk
     assert [v.status for v in result.variants] == ["ok", "ok"]
-    assert open(result.variants[0].path, "rb").read() == b"DATA1"
-    assert open(result.variants[1].path, "rb").read() == b"DATA2"
+    assert result.variants[0].object_key == "outputs/s1/v01.mp4"
+    assert store.exists("outputs/s1/v01.mp4")
+    assert store._data["outputs/s1/v01.mp4"] == b"DATA1"
+    assert not os.path.isfile(result.variants[0].path)
     assert os.path.isfile(result.manifest_path)

@@ -93,7 +93,29 @@ def test_s3_delete_prefix_batches(monkeypatch):
     assert len(calls[1]["Delete"]["Objects"]) == 1
 
 
-def test_object_store_from_env_requires_all_r2(monkeypatch):
+def test_s3_presign_and_exists(monkeypatch):
+    import variant_maker.server.storage as storage
+
+    class FakeClient:
+        def head_object(self, Bucket, Key):
+            if Key == "missing":
+                raise KeyError("404")
+            return {"ContentLength": 12}
+        def generate_presigned_url(self, op, Params, ExpiresIn):
+            return f"https://signed.test/{op}/{Params['Key']}?e={ExpiresIn}"
+        def copy_object(self, **kwargs):
+            return kwargs
+
+    monkeypatch.setattr(storage, "_make_client", lambda **kw: FakeClient())
+    s = storage.S3ObjectStore(
+        endpoint_url="https://r2", bucket="b", access_key="a", secret_key="s",
+    )
+    assert s.exists("outputs/x/v01.mp4") is True
+    assert s.exists("missing") is False
+    assert s.size("outputs/x/v01.mp4") == 12
+    url = s.presign_get("outputs/x/v01.mp4", expires=90, as_attachment=True, filename="v01.mp4")
+    assert "get_object" in url
+    assert s.presign_put("uploads/u/a.mp4").startswith("https://signed.test/put_object")
     import variant_maker.server.storage as storage
 
     monkeypatch.delenv("R2_ENDPOINT", raising=False)

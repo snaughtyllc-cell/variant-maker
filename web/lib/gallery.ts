@@ -8,17 +8,35 @@ export function filterSources(sources: SourceOut[], mode: "all" | "shortfall"): 
 }
 
 export function zipEmptyCopy(): string {
-  return "Those videos never copied back from the GPU. Wait a moment and try Download ZIP again, or Regenerate.";
+  return "Those videos aren't available for download yet. Try again in a moment, or regenerate.";
 }
 
 export function copyMissingCopy(): string {
-  return "GPU finished, but videos didn't copy back to Studio. Retry copy, or Regenerate if that still fails.";
+  return "Processing finished, but the download package isn't ready. Retry delivery, or regenerate if that still fails.";
+}
+
+export function copyLandingCopy(): string {
+  return "Downloads are still landing…";
 }
 
 export function removePackCopy(running: boolean): string {
   return running
-    ? "This pack is still generating. Removing it stops that Generate for everyone on this Studio URL. Files on Studio are deleted."
-    : "Remove this pack from Gallery? Files on Studio are deleted. Drive uploads are not touched.";
+    ? "This pack is still generating. Removing it stops that Generate for everyone on this Studio URL. Job files and download links are removed."
+    : "Remove this pack from Gallery? Job files and download links are removed. Drive uploads are not touched.";
+}
+
+/** "Expires Sep 5, 3:42 PM" — null when the job has no retention clock. */
+export function expiresLabel(iso: string | null | undefined, now: Date = new Date()): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  if (d.getTime() <= now.getTime()) return "Downloads expired";
+  return `Expires ${d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
 }
 
 export function filesReadyCount(source: SourceOut): number {

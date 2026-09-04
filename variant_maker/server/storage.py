@@ -10,6 +10,13 @@ class ObjectStore(Protocol):
     def get(self, key: str, local_path: str) -> None: ...
     def list_prefix(self, prefix: str) -> list[str]: ...
     def delete_prefix(self, prefix: str) -> int: ...
+    def exists(self, key: str) -> bool: ...
+    def size(self, key: str) -> int | None: ...
+    def copy(self, src_key: str, dst_key: str) -> None: ...
+    def presign_get(self, key: str, *, expires: int = 900, filename: str | None = None,
+                    as_attachment: bool = False) -> str: ...
+    def presign_put(self, key: str, *, expires: int = 3600,
+                    content_type: str = "application/octet-stream") -> str: ...
 
 
 _R2_ENV = ("R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY", "R2_SECRET_KEY")
@@ -42,8 +49,81 @@ class S3ObjectStore:
         self._client.upload_file(local_path, self._bucket, key)
 
     def get(self, key: str, local_path: str) -> None:
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
         self._client.download_file(self._bucket, key, local_path)
+
+    def exists(self, key: str) -> bool:
+        try:
+            self._client.head_object(Bucket=self._bucket, Key=key)
+            return True
+        except Exception:
+            return False
+
+    def size(self, key: str) -> int | None:
+        try:
+            head = self._client.head_object(Bucket=self._bucket, Key=key)
+        except Exception:
+            return None
+        try:
+            return int(head.get("ContentLength") or 0)
+        except (TypeError, ValueError):
+            return None
+
+    def copy(self, src_key: str, dst_key: str) -> None:
+        self._client.copy_object(
+            Bucket=self._bucket,
+            CopySource={"Bucket": self._bucket, "Key": src_key},
+            Key=dst_key,
+        )
+
+    def presign_get(
+        self, key: str, *, expires: int = 900, filename: str | None = None,
+        as_attachment: bool = False,
+    ) -> str:
+        params: dict = {"Bucket": self._bucket, "Key": key}
+        if filename or as_attachment:
+            disposition = "attachment" if as_attachment else "inline"
+            if filename:
+                safe = os.path.basename(filename).replace('"', "")
+                disposition = f'{disposition}; filename="{safe}"'
+            params["ResponseContentDisposition"] = disposition
+        return self._client.generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=int(expires),
+        )
+
+    def presign_put(
+        self, key: str, *, expires: int = 3600,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        return self._client.generate_presigned_url(
+            "put_object",
+            Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
+            ExpiresIn=int(expires),
+        )
+
+    def create_multipart(self, key: str, content_type: str = "application/octet-stream") -> str:
+        resp = self._client.create_multipart_upload(
+            Bucket=self._bucket, Key=key, ContentType=content_type,
+        )
+        return str(resp["UploadId"])
+
+    def presign_upload_part(self, key: str, upload_id: str, part_number: int,
+                            expires: int = 3600) -> str:
+        return self._client.generate_presigned_url(
+            "upload_part",
+            Params={
+                "Bucket": self._bucket, "Key": key,
+                "UploadId": upload_id, "PartNumber": int(part_number),
+            },
+            ExpiresIn=int(expires),
+        )
+
+    def complete_multipart(self, key: str, upload_id: str,
+                           parts: list[dict]) -> None:
+        self._client.complete_multipart_upload(
+            Bucket=self._bucket, Key=key, UploadId=upload_id,
+            MultipartUpload={"Parts": parts},
+        )
 
     def list_prefix(self, prefix: str) -> list[str]:
         keys: list[str] = []

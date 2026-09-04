@@ -69,6 +69,10 @@ export interface SourceOut {
   insights_views?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
+  processing_charge?: string | null;
+  delivery_destination?: string | null;
+  expires_utc?: string | null;
+  poster_url?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface QueueItem {
@@ -101,6 +105,9 @@ export interface JobDetail {
   quality_mode?: string;
   prep_mode?: "none" | "hq" | string;
   prep_status?: string | null;
+  processing_charge?: string | null;
+  delivery_destination?: string | null;
+  outputs_expires_utc?: string | null;
 }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }

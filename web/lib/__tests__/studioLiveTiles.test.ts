@@ -24,6 +24,7 @@ const source: SourceProgress = {
       filename: "v01.mp4",
       status: "ok",
       quality,
+      look_var_url: "/api/look/s1/look_v01.jpg",
       file_url: "/api/variants/s1/v01.mp4",
       uniqueness: 0.55,
     },
@@ -41,12 +42,12 @@ describe("packLiveTiles", () => {
     expect(liveTileLabel(tiles[2], true)).toBe("starting");
   });
 
-  it("uses the finished file for done tiles and the source poster while rendering", () => {
+  it("uses JPEG posters for done tiles and never the source MP4", () => {
     const tiles = packLiveTiles(source);
-    expect(liveTilePreviewSrc(source)).toBe("/api/sources/s1/source");
-    expect(liveTileMediaSrc(tiles[0], source)).toMatch(/v01/);
-    expect(liveTileMediaSrc(tiles[1], source)).toBe("/api/sources/s1/source");
-    expect(liveRowThumbSrc(source)).toMatch(/v01/);
-    expect(liveTilePreviewSrc({ ...source, source_id: "prep-1" })).toBeNull();
+    expect(liveTilePreviewSrc(source)).toBe("/api/look/s1/look_v01.jpg");
+    expect(liveTileMediaSrc(tiles[0], source)).toBe("/api/look/s1/look_v01.jpg");
+    expect(liveTileMediaSrc(tiles[1], source)).toBe("/api/look/s1/look_v01.jpg");
+    expect(liveRowThumbSrc(source)).toBe("/api/look/s1/look_v01.jpg");
+    expect(liveTilePreviewSrc({ ...source, variants: [], look_preview: undefined })).toBeNull();
   });
 });

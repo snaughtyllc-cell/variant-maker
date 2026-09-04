@@ -6,6 +6,7 @@ import os
 from collections.abc import Callable
 
 from .events import VariantEvent
+from .media_links import is_jpeg_name, output_key
 from .runner import (
     DEFAULT_PLATFORM,
     DEFAULT_PRESET,
@@ -32,18 +33,33 @@ def _quality_mode() -> str:
 
 
 class RunPodServerlessRunner:
-    def __init__(self, store: ObjectStore, client: RunPodClient) -> None:
+    def __init__(self, store: ObjectStore, client: RunPodClient,
+                 *, keep_local_media: bool = False) -> None:
         self._store = store
         self._client = client
+        self._keep_local_media = keep_local_media
+
+    @property
+    def endpoint_id(self) -> str | None:
+        return getattr(self._client, "endpoint_id", None)
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str | None = None,
-            cancel_token=None) -> SourceResult:
-        basename = os.path.basename(source_path)
+            cancel_token=None,
+            drive_file_id: str | None = None,
+            drive_access_token: str | None = None) -> SourceResult:
+        basename = os.path.basename(source_path) if source_path else "source.mp4"
+        if drive_file_id:
+            basename = os.path.basename(basename) or "source.mp4"
         source_key = f"inputs/{source_id}/{basename}"
-        self._store.put(source_key, source_path)
+        if source_path and os.path.isfile(source_path):
+            self._store.put(source_key, source_path)
+        elif drive_file_id:
+            pass  # worker downloads with a job-scoped access token
+        elif not getattr(self._store, "exists", lambda _k: False)(source_key):
+            raise FileNotFoundError(f"source missing locally and in object storage: {source_key}")
 
         quality_mode = normalize_quality_mode(quality_mode, default=_quality_mode())
         limits = hq_job_limits(quality_mode)
@@ -63,6 +79,10 @@ class RunPodServerlessRunner:
             "rubberband": False,
             "audio_uniqueness": False,
         }}
+        if drive_file_id:
+            payload["input"]["drive_file_id"] = drive_file_id
+            payload["input"]["drive_access_token"] = drive_access_token
+            payload["input"]["filename"] = basename
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),
             out_dir=out_dir, source_id=source_id, on_event=on_event,
@@ -126,6 +146,9 @@ class RunPodServerlessRunner:
                     look_src=e.get("look_src"),
                     look_var=e.get("look_var"),
                 ))
+            elif chunk.get("type") == "submitted":
+                # JobStore persists runpod_job_id from cancel_token; nothing else.
+                continue
             elif chunk.get("type") == "result":
                 variants_meta = chunk.get("variants", [])
                 manifest_key = chunk.get("manifest_key")
@@ -133,7 +156,10 @@ class RunPodServerlessRunner:
         variants = []
         for v in variants_meta:
             local = os.path.join(out_dir, v["filename"])
-            self._store.get(v["key"], local)
+            key = v.get("key") or output_key(source_id, v["filename"])
+            pull = self._keep_local_media or is_jpeg_name(v.get("filename"))
+            if pull:
+                self._store.get(key, local)
             self._fetch_named(source_id, out_dir, v.get("look_src"))
             self._fetch_named(source_id, out_dir, v.get("look_var"))
             variants.append(VariantResult(
@@ -151,19 +177,36 @@ class RunPodServerlessRunner:
                 look_mae=v.get("look_mae"),
                 look_src=v.get("look_src"),
                 look_var=v.get("look_var"),
+                object_key=key,
             ))
         manifest_path = os.path.join(out_dir, "manifest.json")
         if manifest_key:
             self._store.get(manifest_key, manifest_path)
         return SourceResult(variants=variants, manifest_path=manifest_path)
 
+    def deliver_drive(self, *, folder_id: str, access_token: str,
+                      files: list[dict], cancel_token=None) -> dict:
+        payload = {"input": {
+            "action": "deliver_drive",
+            "folder_id": folder_id,
+            "drive_access_token": access_token,
+            "files": files,
+        }}
+        delivered = []
+        for chunk in self._client.stream_run(payload, cancel_token=cancel_token):
+            if chunk.get("type") == "result":
+                delivered = chunk.get("delivered") or []
+        return {"delivered": delivered, "folder_id": folder_id}
+
     def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str]) -> int:
-        """Pull variant files already in object storage (GPU finished, Studio missed the copy)."""
+        """Pull named files from object storage. Studio uses this for JPEG posters."""
         os.makedirs(out_dir, exist_ok=True)
         got = 0
         for raw in filenames:
             name = os.path.basename(raw)
             if not name or name in (".", ".."):
+                continue
+            if not self._keep_local_media and not is_jpeg_name(name):
                 continue
             dest = os.path.join(out_dir, name)
             if os.path.isfile(dest) and os.path.getsize(dest) > 0:
