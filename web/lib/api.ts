@@ -157,7 +157,7 @@ async function initDirectUpload(file: File): Promise<DirectUploadInit> {
     if (!res.ok) return { mode: "local" };
     const body = (await res.json()) as DirectUploadInit;
     if (body?.mode === "direct" && body.url && body.key) return body;
-    return { mode: "local", ...body };
+    return { ...body, mode: "local" };
   } catch {
     return { mode: "local" };
   }
