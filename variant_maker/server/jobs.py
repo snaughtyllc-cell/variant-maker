@@ -15,7 +15,8 @@ from typing import Literal
 from variant_maker.normalize import maybe_normalize_upload
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
-from .caption_ai import captions_for_source
+from .caption_ai import brief_from_filename, briefs_for_sources, captions_for_source
+from .captions import strip_internal_index_lines
 from .events import VariantEvent, event_to_dict
 from .job_metrics import (
     finalize_telemetry,
@@ -159,6 +160,7 @@ class JobSource:
     variants: list[VariantInfo] = field(default_factory=list)
     runpod_job_id: str | None = None
     planned_captions: list[str] = field(default_factory=list)
+    caption_prompt: str = ""
     prep_status: str | None = None
     source_object_key: str | None = None
     drive_file_id: str | None = None
@@ -172,11 +174,16 @@ class JobSource:
         return max(0, self.requested - self.delivered)
 
 
+def _clean_caption(text: str | None) -> str | None:
+    cleaned = strip_internal_index_lines(text or "")
+    return cleaned or None
+
+
 def _caption_for(source: JobSource, index: int) -> str | None:
     caps = source.planned_captions or []
     i = int(index) - 1
     if 0 <= i < len(caps):
-        return caps[i]
+        return caps[i] or None
     return None
 
 
@@ -397,6 +404,7 @@ def _job_to_dict(job: Job) -> dict:
                 "requested": s.requested,
                 "runpod_job_id": s.runpod_job_id,
                 "planned_captions": list(s.planned_captions or []),
+                "caption_prompt": s.caption_prompt or "",
                 "prep_status": s.prep_status,
                 "source_object_key": s.source_object_key,
                 "drive_file_id": s.drive_file_id,
@@ -420,6 +428,7 @@ def _job_from_dict(data: dict) -> Job:
             requested=int(raw.get("requested") or 0),
             runpod_job_id=raw.get("runpod_job_id"),
             planned_captions=[str(c) for c in (raw.get("planned_captions") or []) if str(c).strip()],
+            caption_prompt=str(raw.get("caption_prompt") or ""),
             prep_status=raw.get("prep_status"),
             source_object_key=raw.get("source_object_key") or None,
             drive_file_id=raw.get("drive_file_id") or None,
@@ -500,7 +509,9 @@ class JobStore:
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
                     generate_captions: bool = False,
-                    prep_mode: str = "none") -> Job:
+                    prep_mode: str = "none",
+                    caption_prompt: str = "",
+                    caption_prompts: list[str] | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -511,13 +522,16 @@ class JobStore:
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
+            caption_prompt=caption_prompt, caption_prompts=caption_prompts,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
                                allow_creative_escalate: bool = True,
                                quality_mode: str = "fast",
                                generate_captions: bool = False,
-                               prep_mode: str = "none") -> Job:
+                               prep_mode: str = "none",
+                               caption_prompt: str = "",
+                               caption_prompts: list[str] | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -531,6 +545,7 @@ class JobStore:
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
+            caption_prompt=caption_prompt, caption_prompts=caption_prompts,
         )
 
     def create_job_from_object_keys(
@@ -539,6 +554,8 @@ class JobStore:
         quality_mode: str = "fast",
         generate_captions: bool = False,
         prep_mode: str = "none",
+        caption_prompt: str = "",
+        caption_prompts: list[str] | None = None,
     ) -> Job:
         """Create a job from object-storage keys: [(filename, object_key), ...].
 
@@ -577,6 +594,7 @@ class JobStore:
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
+            caption_prompt=caption_prompt, caption_prompts=caption_prompts,
         )
 
     def create_job_from_drive_ids(
@@ -585,6 +603,8 @@ class JobStore:
         quality_mode: str = "fast",
         generate_captions: bool = False,
         prep_mode: str = "none",
+        caption_prompt: str = "",
+        caption_prompts: list[str] | None = None,
     ) -> Job:
         """Create a job from Drive file ids. RunPod downloads; Railway does not.
 
@@ -602,15 +622,28 @@ class JobStore:
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
+            caption_prompt=caption_prompt, caption_prompts=caption_prompts,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
                     generate_captions: bool = False,
-                    prep_mode: str = "none") -> Job:
+                    prep_mode: str = "none",
+                    caption_prompt: str = "",
+                    caption_prompts: list[str] | None = None) -> Job:
+        briefs = briefs_for_sources(
+            len(sources),
+            caption_prompt=caption_prompt,
+            caption_prompts=caption_prompts,
+        )
+        for source, brief in zip(sources, briefs, strict=True):
+            source.caption_prompt = brief
         if generate_captions:
             for source in sources:
-                source.planned_captions = captions_for_source(source.filename, source.requested)
+                brief = (source.caption_prompt or "").strip()
+                source.planned_captions = captions_for_source(
+                    source.filename, source.requested, prompt=brief or None,
+                )
         with self._lock:
             self._seq += 1
             created_seq = self._seq
@@ -1409,6 +1442,29 @@ class JobStore:
             self._persist(job)
         return variant
 
+    def set_caption(self, source_id: str, index: int, caption: str | None) -> VariantInfo | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        text = _clean_caption(caption)
+        variant.caption = text
+        caps = list(source.planned_captions or [])
+        slot = int(index) - 1
+        if slot >= 0:
+            while len(caps) <= slot:
+                caps.append("")
+            caps[slot] = text or ""
+            source.planned_captions = caps
+        self._rewrite_manifest_fields(job_id, source_id, index, caption=text)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
     def set_ig_insights(
         self,
         source_id: str,
@@ -1442,6 +1498,38 @@ class JobStore:
         if job is not None:
             self._persist(job)
         return variant
+
+    def rewrite_captions(self, source_id: str, prompt: str | None = None) -> JobSource | None:
+        """Replace every copy's caption. Videos stay put."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        brief = (prompt or source.caption_prompt or "").strip()
+        if not brief:
+            for variant in source.variants:
+                cleaned = _clean_caption(variant.caption)
+                if cleaned:
+                    brief = cleaned
+                    break
+        if not brief:
+            brief = brief_from_filename(source.filename)
+        n = max(int(source.requested), len(source.variants), 1)
+        source.caption_prompt = brief
+        source.planned_captions = captions_for_source(
+            source.filename,
+            n,
+            prompt=brief,
+            avoid=list(source.planned_captions or []),
+        )
+        for variant in source.variants:
+            variant.caption = _caption_for(source, variant.index)
+            self._rewrite_manifest_fields(job_id, source_id, variant.index, caption=variant.caption)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            job.generate_captions = True
+            self._persist(job)
+        return source
 
     def _rewrite_manifest_fields(self, job_id: str, source_id: str, index: int,
                                  **fields: object) -> None:

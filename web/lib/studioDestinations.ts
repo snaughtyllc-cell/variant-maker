@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), captions, Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -35,15 +35,6 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     tab: "primary",
     summary:
       "7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
-  },
-  {
-    href: "/analytics",
-    label: "Analytics",
-    short: "Stats",
-    audience: "everyone",
-    tab: "primary",
-    summary:
-      "Instagram Insights on the pack: connected testers, views rollup, ranked originals, generate more of a winner.",
   },
   {
     href: "/drops",
@@ -75,7 +66,16 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Team",
     audience: "owner",
     tab: "extra",
-    summary: "Workspace owner invites VAs into this studio.",
+    summary: "Agency owner invites VAs into this studio. Solo creators cannot invite.",
+  },
+  {
+    href: "/analytics",
+    label: "Analytics",
+    short: "Stats",
+    audience: "owner",
+    tab: "extra",
+    summary:
+      "Owner-only Instagram Insights: ranked originals, Sync views onto packs, Unmatched Reels tab.",
   },
   {
     href: "/admin",
@@ -103,7 +103,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
 /** Phone bottom bar + desktop primary row. */
 export const PRIMARY_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "primary");
 
-/** Team / Admin / Diagnostics — role-gated in TopNav. */
+/** Team / Analytics / Admin / Diagnostics — role-gated in TopNav. */
 export const EXTRA_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "extra");
 
 /** Surfaces that are not top-level tabs but must be in any redesign. */
@@ -127,5 +127,15 @@ export const STUDIO_NESTED_SURFACES = [
     name: "Watch progress",
     opens_from: "/ and /workflows",
     summary: "Live job tiles, cancel, re-attach after reload.",
+  },
+  {
+    name: "Analytics pack sheet",
+    opens_from: "/analytics",
+    summary: "Tap a ranked original for pack totals, trial-reel Insights per @handle, and tracked Reels.",
+  },
+  {
+    name: "Analytics unmatched picker",
+    opens_from: "/analytics",
+    summary: "Unmatched Reels tab. Pick a Gallery pack, then link the Reel you posted. Older pre-Varimo posts stay here.",
   },
 ] as const;

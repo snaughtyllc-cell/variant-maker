@@ -27,7 +27,8 @@ describe("prepare copy", () => {
 
   it("asks for captions on Generate, not a separate bank UI", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
-    expect(captionToggleHint()).toMatch(/gallery/i);
+    expect(captionToggleHint()).toMatch(/thumbnail/i);
+    expect(captionToggleHint()).toMatch(/per source|each clip|source clip/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
   });
 

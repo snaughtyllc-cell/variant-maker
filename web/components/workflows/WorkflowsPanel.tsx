@@ -24,6 +24,9 @@ import {
   workflowNeedTwoFolders,
   workflowOutputHint,
   workflowReconstructHint,
+  workflowFilenameCaptionCardLabel,
+  workflowFilenameCaptionHint,
+  workflowFilenameCaptionLabel,
 } from "@/lib/workflowCopy";
 import { hqPrepToggleLabel } from "@/lib/prepareCopy";
 
@@ -104,6 +107,7 @@ export function WorkflowsPanel() {
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
   const [autoCaption, setAutoCaption] = useState(false);
+  const [captionFromFilename, setCaptionFromFilename] = useState(false);
   const [captionBankId, setCaptionBankId] = useState("");
   const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
@@ -179,6 +183,7 @@ export function WorkflowsPanel() {
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
         caption_bank_id: captionBankId || null,
+        caption_from_filename: captionFromFilename,
       });
       setWorkflows((prev) => [...prev, created]);
       setName("");
@@ -218,10 +223,30 @@ export function WorkflowsPanel() {
   async function handleToggleAutoCaption(wf: Workflow) {
     setActionId(wf.id);
     try {
-      const updated = await updateWorkflow(wf.id, { auto_caption: !wf.auto_caption });
+      const next = !wf.auto_caption;
+      const updated = await updateWorkflow(wf.id, {
+        auto_caption: next,
+        caption_from_filename: next ? false : Boolean(wf.caption_from_filename),
+      });
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle auto-caption", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleToggleFilenameCaption(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const next = !wf.caption_from_filename;
+      const updated = await updateWorkflow(wf.id, {
+        caption_from_filename: next,
+        auto_caption: next ? false : wf.auto_caption,
+      });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to toggle filename captions", err);
     } finally {
       setActionId(null);
     }
@@ -442,7 +467,13 @@ export function WorkflowsPanel() {
                             onChange={() => handleToggleAutoCaption(wf)}
                             label="Auto-caption"
                           />
-                          {banks.length > 0 && (
+                          <Switch
+                            checked={!!wf.caption_from_filename}
+                            disabled={busy}
+                            onChange={() => handleToggleFilenameCaption(wf)}
+                            label={workflowFilenameCaptionCardLabel()}
+                          />
+                          {banks.length > 0 && !wf.caption_from_filename && (
                             <select
                               className="workflow-field workflow-field--compact"
                               value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
@@ -472,12 +503,13 @@ export function WorkflowsPanel() {
                     <div className="flow-card__meta">
                       <span className="flow-card__meta-item">
                         {wf.count} variants · {wf.prep_mode === "hq" ? "reconstruct first" : "fast"} · poll every {Math.round(wf.poll_seconds / 60)} min
+                        {wf.caption_from_filename ? " · filenames as captions" : ""}
                       </span>
                       <span className="flow-card__divider" aria-hidden="true" />
                       <span className="flow-card__meta-item flow-card__meta-item--muted">
                         Last sweep: {formatSummary(wf.last_summary)}
                       </span>
-                      {wf.auto_caption && (
+                      {wf.auto_caption && !wf.caption_from_filename && (
                         <>
                           <span className="flow-card__spacer" />
                           <span className="flow-card__meta-item">{bankLabel(banks, wf.caption_bank_id)}</span>
@@ -654,15 +686,34 @@ export function WorkflowsPanel() {
                 </div>
                 <Switch
                   checked={autoCaption}
-                  disabled={fieldsDisabled}
-                  onChange={() => setAutoCaption((v) => !v)}
+                  disabled={fieldsDisabled || captionFromFilename}
+                  onChange={() => {
+                    setAutoCaption((v) => !v);
+                    if (!autoCaption) setCaptionFromFilename(false);
+                  }}
                   label="Caption bank naming"
+                  visibleLabel={false}
+                />
+              </div>
+              <div className="workflow-toggle-row" title={workflowFilenameCaptionHint()}>
+                <div>
+                  <div className="workflow-toggle-row__title">{workflowFilenameCaptionLabel()}</div>
+                  <div className="workflow-toggle-row__hint">{workflowFilenameCaptionHint()}</div>
+                </div>
+                <Switch
+                  checked={captionFromFilename}
+                  disabled={fieldsDisabled}
+                  onChange={() => {
+                    setCaptionFromFilename((v) => !v);
+                    if (!captionFromFilename) setAutoCaption(false);
+                  }}
+                  label={workflowFilenameCaptionLabel()}
                   visibleLabel={false}
                 />
               </div>
             </div>
 
-            {banks.length > 0 && (
+            {banks.length > 0 && !captionFromFilename && (
               <div className="workflow-step">
                 <label htmlFor="workflow-caption-bank" className="workflow-step__label">
                   Caption folder

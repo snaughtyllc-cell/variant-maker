@@ -66,7 +66,14 @@ export interface SourceOut {
   files_ready?: number;
   copy_status?: "ok" | "copying" | "missing";
   job_id?: string | null;
+  caption_prompt?: string | null;
   insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
+  insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
+  insights_follows?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
   processing_charge?: string | null;
@@ -270,6 +277,7 @@ export interface Workflow {
   last_summary: WorkflowSummary | null;
   auto_caption: boolean;
   caption_bank_id?: string | null;
+  caption_from_filename?: boolean;
 }
 
 export type AuthRole = "owner" | "member";
@@ -364,29 +372,96 @@ export interface InstagramStatus {
   message: string;
 }
 
+export interface InstagramTrackedCopy {
+  index: number;
+  ig_media_id: string;
+  ig_user_id?: string | null;
+  username?: string | null;
+  post_url?: string | null;
+  insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
+  insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
+  insights_follows?: number | null;
+  insights_skip_rate?: number | null;
+  insights_watch_time?: number | null;
+  video_duration?: number | null;
+  hold_kind?: string | null;
+  account_connected?: boolean;
+}
+
 export interface InstagramPackRow {
   source_id: string;
   filename: string;
   insights_views: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
+  insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
+  insights_follows?: number | null;
   insights_linked: number;
   insights_unknown?: number;
+  insights_views_delta?: number | null;
+  insights_likes_delta?: number | null;
+  insights_comments_delta?: number | null;
+  insights_shares_delta?: number | null;
+  insights_saved_delta?: number | null;
+  insights_reach_delta?: number | null;
+  hold_kind?: string | null;
+  tracked?: InstagramTrackedCopy[];
+}
+
+export interface InstagramLane {
+  ig_user_id: string;
+  username?: string;
+  insights_views: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
+  insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
+  insights_follows?: number | null;
+  insights_linked: number;
+  hold_kind?: string | null;
+  account_connected?: boolean;
+}
+
+export interface InstagramSuggestion {
+  kind: string;
+  source_id: string;
+  filename: string;
+  copy: string;
+}
+
+export interface InstagramUnmatched {
+  media_id: string;
+  permalink?: string | null;
+  caption?: string | null;
+  username?: string | null;
+  ig_user_id?: string | null;
 }
 
 export interface InstagramAnalytics {
   insights_views: number | null;
   insights_linked: number;
+  insights_views_delta?: number | null;
   packs?: InstagramPackRow[];
   ranked: InstagramPackRow[];
+  suggestions?: InstagramSuggestion[];
   accounts: InstagramAccount[];
+  lanes?: InstagramLane[];
+  unmatched?: InstagramUnmatched[];
+  insights_fetched_at?: string | null;
 }
 
 export interface InstagramSync {
   matched: number;
   accounts: number;
   media: number;
-  analytics: {
-    insights_views: number | null;
-    insights_linked: number;
-    ranked?: InstagramPackRow[];
-  };
+  unmatched?: InstagramUnmatched[];
+  errors?: string[];
+  analytics: InstagramAnalytics;
 }

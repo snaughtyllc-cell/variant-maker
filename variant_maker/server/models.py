@@ -48,8 +48,30 @@ class PostUrlIn(BaseModel):
     url: str = ""
 
 
+class CaptionIn(BaseModel):
+    caption: str = ""
+
+
+class CaptionRewriteIn(BaseModel):
+    prompt: str = ""
+
+
 class InstagramTokenIn(BaseModel):
     access_token: str
+
+
+class InstagramLinkIn(BaseModel):
+    source_id: str
+    index: int
+    media_id: str
+    ig_user_id: str | None = None
+    permalink: str | None = None
+    username: str | None = None
+
+
+class InstagramUnlinkIn(BaseModel):
+    source_id: str
+    index: int
 
 
 class InstagramAccountOut(BaseModel):
@@ -70,6 +92,8 @@ class InstagramSyncOut(BaseModel):
     matched: int = 0
     accounts: int = 0
     media: int = 0
+    unmatched: list[dict] = []
+    errors: list[str] = []
     analytics: dict = {}
 
 
@@ -97,9 +121,19 @@ class SourceOut(BaseModel):
     files_ready: int = 0          # ok variants on disk or in object storage
     copy_status: Literal["ok", "copying", "missing"] = "ok"
     job_id: str | None = None
+    caption_prompt: str | None = None
     insights_views: int | None = None
+    insights_likes: int | None = None
+    insights_comments: int | None = None
+    insights_shares: int | None = None
+    insights_saved: int | None = None
+    insights_reach: int | None = None
+    insights_follows: int | None = None
     insights_linked: int = 0
     insights_unknown: int = 0
+    hold_kind: str | None = None
+    suggestion_kind: str | None = None
+    suggestion_copy: str | None = None
     processing_charge: str | None = None
     delivery_destination: str | None = None
     expires_utc: str | None = None
@@ -173,6 +207,8 @@ class JobFromObjectIn(BaseModel):
     allow_creative_escalate: bool = True
     quality_mode: str = "fast"
     generate_captions: bool = False
+    caption_prompt: str = ""
+    caption_prompts: list[str] = []
     prep_mode: str = "none"
 
 
@@ -340,6 +376,8 @@ class JobFromDriveIn(BaseModel):
     quality_mode: str = "fast"
     allow_creative_escalate: bool = True
     generate_captions: bool = False
+    caption_prompt: str = ""
+    caption_prompts: list[str] = []
     prep_mode: str = "none"
 
 
@@ -368,6 +406,7 @@ class WorkflowOut(BaseModel):
     last_summary: WorkflowSummaryOut | None = None
     auto_caption: bool = False
     caption_bank_id: str | None = None
+    caption_from_filename: bool = False
 
 
 class WorkflowCreateIn(BaseModel):
@@ -382,6 +421,7 @@ class WorkflowCreateIn(BaseModel):
     poll_seconds: int = 120
     auto_caption: bool = False
     caption_bank_id: str | None = None
+    caption_from_filename: bool = False
 
 
 class WorkflowUpdateIn(BaseModel):
@@ -396,6 +436,7 @@ class WorkflowUpdateIn(BaseModel):
     poll_seconds: int | None = None
     auto_caption: bool | None = None
     caption_bank_id: str | None = None
+    caption_from_filename: bool | None = None
 
 
 class CaptionOut(BaseModel):

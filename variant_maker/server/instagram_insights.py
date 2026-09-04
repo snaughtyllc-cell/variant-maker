@@ -5,7 +5,10 @@ once linked. Unlinked copies are unknown, not zero views.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -54,6 +57,8 @@ class IgMedia:
     id: str
     permalink: str | None = None
     caption: str | None = None
+    username: str | None = None
+    user_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -167,12 +172,12 @@ def parse_insights_payload(body: Mapping[str, Any]) -> dict[str, int]:
     return out
 
 
-def pack_analytics(variants: Iterable[Any]) -> dict[str, int | None]:
+def pack_analytics(variants: Iterable[Any]) -> dict[str, Any]:
     """views is None when nothing is linked — never treat unknown as 0."""
     copies = 0
     linked = 0
-    total = 0
-    has_views = False
+    totals = {"views": 0, "shares": 0, "saved": 0, "follows": 0, "reach": 0, "likes": 0, "comments": 0}
+    has = {key: False for key in totals}
     for variant in variants:
         copies += 1
         snapshot = getattr(variant, "ig_insights", None)
@@ -181,16 +186,26 @@ def pack_analytics(variants: Iterable[Any]) -> dict[str, int | None]:
             media_id = variant.get("ig_media_id")
         else:
             media_id = getattr(variant, "ig_media_id", None)
-        if not media_id and not isinstance(snapshot, dict):
+        if not media_id:
             continue
         linked += 1
-        if isinstance(snapshot, dict) and isinstance(snapshot.get("views"), int):
-            total += snapshot["views"]
-            has_views = True
+        if isinstance(snapshot, dict):
+            for key in totals:
+                raw = snapshot.get(key)
+                if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                    totals[key] += int(raw)
+                    has[key] = True
     return {
-        "insights_views": total if has_views else None,
+        "insights_views": totals["views"] if has["views"] else None,
+        "insights_shares": totals["shares"] if has["shares"] else None,
+        "insights_saved": totals["saved"] if has["saved"] else None,
+        "insights_likes": totals["likes"] if has["likes"] else None,
+        "insights_comments": totals["comments"] if has["comments"] else None,
+        "insights_follows": totals["follows"] if has["follows"] else None,
+        "insights_reach": totals["reach"] if has["reach"] else None,
         "insights_linked": linked,
         "insights_unknown": max(0, copies - linked),
+        "hold_kind": None,
     }
 
 
@@ -217,8 +232,16 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
             "source_id": source_id,
             "filename": filename,
             "insights_views": pack["insights_views"],
+            "insights_likes": pack.get("insights_likes"),
+            "insights_comments": pack.get("insights_comments"),
+            "insights_shares": pack.get("insights_shares"),
+            "insights_saved": pack.get("insights_saved"),
+            "insights_reach": pack.get("insights_reach"),
+            "insights_follows": pack.get("insights_follows"),
             "insights_linked": pack["insights_linked"],
             "insights_unknown": pack["insights_unknown"],
+            "hold_kind": pack.get("hold_kind"),
+            "tracked": tracked_copies(variants),
         })
     ranked = sorted(
         [r for r in rows if r["insights_linked"]],
@@ -296,3 +319,189 @@ def fetch_media_insights(
             return parse_insights_payload(fetch(f"{GRAPH_HOST}/{media_id}/insights?{qs2}"))
         except ValueError:
             return {}
+
+
+def _insight_int(snapshot: Mapping[str, Any], key: str) -> int | None:
+    raw = snapshot.get(key)
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return int(raw)
+    return None
+
+
+def tracked_copies(variants: Iterable[Any]) -> list[dict[str, Any]]:
+    """Linked copies on a pack, highest views first. Unlinked copies stay off this list."""
+    rows: list[dict[str, Any]] = []
+    for variant in variants:
+        if isinstance(variant, dict):
+            index = variant.get("index")
+            media_id = variant.get("ig_media_id")
+            user_id = variant.get("ig_user_id")
+            post_url = variant.get("post_url")
+            snapshot = variant.get("ig_insights")
+        else:
+            index = getattr(variant, "index", None)
+            media_id = getattr(variant, "ig_media_id", None)
+            user_id = getattr(variant, "ig_user_id", None)
+            post_url = getattr(variant, "post_url", None)
+            snapshot = getattr(variant, "ig_insights", None)
+        if not isinstance(index, int) or not media_id:
+            continue
+        insights = snapshot if isinstance(snapshot, dict) else {}
+        username = insights.get("username") if isinstance(insights.get("username"), str) else None
+        rows.append({
+            "index": index,
+            "ig_media_id": str(media_id),
+            "ig_user_id": str(user_id) if isinstance(user_id, str) and user_id else None,
+            "username": username or None,
+            "post_url": post_url if isinstance(post_url, str) and post_url else None,
+            "insights_views": _insight_int(insights, "views"),
+            "insights_likes": _insight_int(insights, "likes"),
+            "insights_comments": _insight_int(insights, "comments"),
+            "insights_shares": _insight_int(insights, "shares"),
+            "insights_saved": _insight_int(insights, "saved"),
+            "insights_reach": _insight_int(insights, "reach"),
+            "insights_follows": _insight_int(insights, "follows"),
+            "account_connected": True,
+        })
+    return sorted(
+        rows,
+        key=lambda r: (r["insights_views"] is None, -(r["insights_views"] or 0), r["index"]),
+    )
+
+
+def stamp_tracked_accounts(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    usernames: Mapping[str, str],
+    connected_ids: Iterable[str],
+) -> None:
+    """Mark copies whose Instagram account is still connected. Mutates `tracked`."""
+    connected = {str(uid) for uid in connected_ids if uid}
+    names = {str(uid): name for uid, name in usernames.items() if uid and name}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tracked = row.get("tracked")
+        if not isinstance(tracked, list):
+            continue
+        for copy in tracked:
+            if not isinstance(copy, dict):
+                continue
+            uid = str(copy.get("ig_user_id") or "")
+            if uid and not copy.get("username"):
+                name = names.get(uid)
+                if name:
+                    copy["username"] = name
+            copy["account_connected"] = bool(uid and uid in connected)
+
+
+def lanes_from_sources(sources: Sequence[Any]) -> list[dict[str, Any]]:
+    buckets: dict[str, list[Any]] = {}
+    for source in sources:
+        variants = source.get("variants") if isinstance(source, dict) else getattr(source, "variants", None)
+        for variant in variants or []:
+            if isinstance(variant, dict):
+                user_id = variant.get("ig_user_id")
+            else:
+                user_id = getattr(variant, "ig_user_id", None)
+            if not isinstance(user_id, str) or not user_id:
+                continue
+            buckets.setdefault(user_id, []).append(variant)
+    rows: list[dict[str, Any]] = []
+    for user_id, variants in buckets.items():
+        pack = pack_analytics(variants)
+        if not pack["insights_linked"]:
+            continue
+        username = None
+        for variant in variants:
+            snapshot = variant.get("ig_insights") if isinstance(variant, dict) else getattr(variant, "ig_insights", None)
+            if isinstance(snapshot, dict) and isinstance(snapshot.get("username"), str) and snapshot["username"]:
+                username = snapshot["username"]
+                break
+        rows.append({
+            "ig_user_id": user_id,
+            "username": username,
+            "insights_views": pack["insights_views"],
+            "insights_likes": pack["insights_likes"],
+            "insights_comments": pack["insights_comments"],
+            "insights_shares": pack["insights_shares"],
+            "insights_saved": pack["insights_saved"],
+            "insights_reach": pack["insights_reach"],
+            "insights_follows": pack["insights_follows"],
+            "insights_linked": pack["insights_linked"],
+            "hold_kind": pack["hold_kind"],
+        })
+    return sorted(
+        rows,
+        key=lambda r: (r["insights_views"] is None, -(r["insights_views"] or 0)),
+    )
+
+
+def unmatched_media(media: Sequence[IgMedia], matches: Sequence[Match]) -> list[IgMedia]:
+    used = {m.media_id for m in matches}
+    return [item for item in media if item.id not in used]
+
+
+def unmatched_payload(media: Sequence[IgMedia], matches: Sequence[Match]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in unmatched_media(media, matches):
+        out.append({
+            "media_id": item.id,
+            "permalink": item.permalink,
+            "caption": item.caption,
+            "username": item.username,
+            "ig_user_id": item.user_id,
+        })
+    return out
+
+
+class InstagramUnmatchedStore:
+    """Last Sync leftover Reels. Older posts stay here until someone Links one."""
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def save(self, rows: Sequence[Mapping[str, Any]]) -> None:
+        payload = [dict(row) for row in rows if str(row.get("media_id") or "")]
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".ig-unmatched-", suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+    def load(self) -> list[dict[str, Any]]:
+        if not os.path.isfile(self._path):
+            return []
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(raw, list):
+            return []
+        out: list[dict[str, Any]] = []
+        for row in raw:
+            if isinstance(row, dict) and str(row.get("media_id") or ""):
+                out.append(row)
+        return out
+
+    def remove(self, media_id: str) -> list[dict[str, Any]]:
+        want = str(media_id or "")
+        rows = [row for row in self.load() if str(row.get("media_id") or "") != want]
+        self.save(rows)
+        return rows
+
+    def drop_linked(self, media_ids: Iterable[str]) -> list[dict[str, Any]]:
+        used = {str(mid) for mid in media_ids if mid}
+        rows = [row for row in self.load() if str(row.get("media_id") or "") not in used]
+        self.save(rows)
+        return rows

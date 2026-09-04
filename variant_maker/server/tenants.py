@@ -58,18 +58,14 @@ def can_manage_instagram(
     admin_email: str | None,
     auth_on: bool,
 ) -> bool:
-    """Any signed-in workspace user can Connect another tester IG.
-
-    Drive is one shared mailbox (admin-only). Instagram is many professional
-    accounts — main / trial / growth / each tester handle.
-    """
+    """Workspace owners and site admins. VAs cannot Connect, Sync, or open Analytics."""
     if not auth_on:
         return True
     if not email:
         return False
     if is_admin_email(email, admin_email):
         return True
-    return role in ("owner", "member")
+    return role == "owner"
 
 
 def auth_required(environ: dict | None = None) -> bool:

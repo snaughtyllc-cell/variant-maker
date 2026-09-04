@@ -773,6 +773,48 @@ def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     assert "Copy 2 of 2" in caps[1]
 
 
+def test_set_caption_strips_copy_n_of_m(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("boil.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    updated = store.set_caption(
+        src.source_id, src.variants[0].index, "POV boil\n\nCopy 1 of 20\n#reels",
+    )
+    assert updated is not None
+    assert updated.caption == "POV boil\n\n#reels"
+    assert "copy 1 of" not in (updated.caption or "").lower()
+
+
+def test_rewrite_captions_replaces_every_copy(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_prompt="POV boil #reels",
+    )
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    rewritten = store.rewrite_captions(src.source_id, "Gym pump #fyp")
+    assert rewritten is not None
+    assert rewritten.caption_prompt == "Gym pump #fyp"
+    caps = [v.caption or "" for v in rewritten.variants]
+    assert all(caps)
+    assert caps[0] != caps[1]
+    joined = "\n".join(caps).lower()
+    assert "gym" in joined or "pump" in joined
+    assert "copy 1 of" not in joined
+
+
+def test_create_job_caption_prompts_are_per_source(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("a.mp4", b"x"), ("b.mp4", b"y")],
+        count=1,
+        generate_captions=True,
+        caption_prompts=["POV boil #reels", "Gym pull up #fyp"],
+    )
+    assert [s.caption_prompt for s in job.sources] == ["POV boil #reels", "Gym pull up #fyp"]
+
+
 def test_hq_prep_runs_hq_once_then_fast_from_prep_file(tmp_path):
     runner = FakeRunner()
     store = JobStore(Workspace(str(tmp_path)), runner)

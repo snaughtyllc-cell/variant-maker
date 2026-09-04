@@ -23,6 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
+from .caption_ai import parse_caption_prompts_field
 from .captions import CaptionError, CaptionStore, split_caption_bank
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
 from .drive_config import (
@@ -76,13 +77,17 @@ from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
 from .instagram_insights import (
     IgMedia,
+    InstagramUnmatchedStore,
     VariantLink,
     fetch_media_insights,
     gallery_analytics,
+    lanes_from_sources,
     list_media as list_ig_media,
     match_media,
     now_utc,
     pack_analytics,
+    stamp_tracked_accounts,
+    unmatched_payload,
 )
 from .instagram_oauth import (
     ENV_APP_ID,
@@ -123,8 +128,10 @@ from .models import (
     CaptionBulkIn,
     CaptionCreateIn,
     CaptionFolderCreateIn,
+    CaptionIn,
     CaptionOut,
     CaptionPreviewOut,
+    CaptionRewriteIn,
     CreateJobResponse,
     DestinationCreateIn,
     DestinationOut,
@@ -147,6 +154,8 @@ from .models import (
     InstagramStatusOut,
     InstagramSyncOut,
     InstagramTokenIn,
+    InstagramLinkIn,
+    InstagramUnlinkIn,
     InviteCreateIn,
     InviteOut,
     JobDetail,
@@ -339,9 +348,17 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         files_ready=files_ready,
         copy_status=copy_status,
         job_id=job_id,
+        caption_prompt=(s.caption_prompt or None),
         insights_views=pack["insights_views"],
+        insights_likes=pack.get("insights_likes") if isinstance(pack.get("insights_likes"), int) else None,
+        insights_comments=pack.get("insights_comments") if isinstance(pack.get("insights_comments"), int) else None,
+        insights_shares=pack.get("insights_shares") if isinstance(pack.get("insights_shares"), int) else None,
+        insights_saved=pack.get("insights_saved") if isinstance(pack.get("insights_saved"), int) else None,
+        insights_reach=pack.get("insights_reach") if isinstance(pack.get("insights_reach"), int) else None,
+        insights_follows=pack.get("insights_follows") if isinstance(pack.get("insights_follows"), int) else None,
         insights_linked=int(pack["insights_linked"] or 0),
         insights_unknown=int(pack["insights_unknown"] or 0),
+        hold_kind=pack.get("hold_kind") if isinstance(pack.get("hold_kind"), str) else None,
         processing_charge=tel.get("processing_charge"),
         delivery_destination=(
             getattr(job, "delivery_destination", None) if job is not None else None
@@ -385,6 +402,7 @@ def _workflow_out(w: Workflow) -> WorkflowOut:
         last_summary=_workflow_summary_out(w.last_summary),
         auto_caption=w.auto_caption,
         caption_bank_id=w.caption_bank_id or None,
+        caption_from_filename=bool(w.caption_from_filename),
     )
 
 
@@ -627,6 +645,79 @@ def create_app(
         if bundle is not None:
             return bundle.instagram_pending
         return fallback_ig_pending
+
+    def _ig_unmatched() -> InstagramUnmatchedStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return InstagramUnmatchedStore(bundle.ws.instagram_unmatched_path())
+        return InstagramUnmatchedStore(fallback_store._ws.instagram_unmatched_path())
+
+    def _linked_ig_media_ids() -> set[str]:
+        ids: set[str] = set()
+        for job in store.list():
+            for source in job.sources:
+                for variant in source.variants:
+                    mid = getattr(variant, "ig_media_id", None)
+                    if isinstance(mid, str) and mid:
+                        ids.add(mid)
+        return ids
+
+    def _steal_ig_media(
+        media_id: str, *, keep_source_id: str, keep_index: int,
+    ) -> dict[str, Any]:
+        stolen: dict[str, Any] = {}
+        for job in store.list():
+            for source in job.sources:
+                for variant in source.variants:
+                    if variant.ig_media_id != media_id:
+                        continue
+                    same = source.source_id == keep_source_id and variant.index == keep_index
+                    if isinstance(variant.ig_insights, dict) and variant.ig_insights:
+                        stolen = dict(variant.ig_insights)
+                    if not same:
+                        store.set_ig_insights(
+                            source.source_id, variant.index,
+                            ig_media_id=None,
+                            ig_user_id=None,
+                            insights=None,
+                        )
+        return stolen
+
+    def _ig_analytics_body() -> dict[str, Any]:
+        sources = [s for job in store.list() for s in job.sources]
+        body = gallery_analytics(sources)
+        created = {
+            s.source_id: job.created_utc
+            for job in store.list()
+            for s in job.sources
+        }
+        for row in list(body.get("packs") or []) + list(body.get("ranked") or []):
+            if isinstance(row, dict):
+                row["created_utc"] = created.get(row.get("source_id"))
+        accounts = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        body["accounts"] = accounts
+        names = {
+            str(acc.get("user_id") or ""): str(acc.get("username") or "")
+            for acc in accounts
+            if isinstance(acc, dict)
+        }
+        connected_ids = [uid for uid in names if uid]
+        stamp_tracked_accounts(
+            list(body.get("packs") or []) + list(body.get("ranked") or []),
+            usernames=names,
+            connected_ids=connected_ids,
+        )
+        lanes: list[dict[str, Any]] = []
+        for lane in lanes_from_sources(sources):
+            uid = str(lane.get("ig_user_id") or "")
+            lanes.append({
+                **lane,
+                "username": names.get(uid) or lane.get("username") or "",
+                "account_connected": bool(uid and uid in names),
+            })
+        body["lanes"] = lanes
+        body["unmatched"] = _ig_unmatched().drop_linked(_linked_ig_media_ids())
+        return body
 
     def _workspace_token_path() -> str:
         return _oauth_tokens().path
@@ -993,6 +1084,8 @@ def create_app(
                     id=mid,
                     permalink=row.get("permalink") if isinstance(row.get("permalink"), str) else None,
                     caption=row.get("caption") if isinstance(row.get("caption"), str) else None,
+                    username=acc.get("username") if isinstance(acc.get("username"), str) else None,
+                    user_id=user_id,
                 ))
         links: list[VariantLink] = []
         for job in store.list():
@@ -1036,11 +1129,14 @@ def create_app(
                 post_url=permalink,
             )
             matched += 1
-        analytics = gallery_analytics([s for job in store.list() for s in job.sources])
+        leftover = unmatched_payload(media_rows, hits)
+        _ig_unmatched().save(leftover)
+        analytics = _ig_analytics_body()
         return {
             "matched": matched,
             "accounts": len(accounts),
             "media": len(media_rows),
+            "unmatched": leftover,
             "analytics": analytics,
         }
 
@@ -1406,12 +1502,16 @@ def create_app(
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
                           generate_captions: bool = Form(False),
+                          caption_prompt: str = Form(""),
+                          caption_prompts: str = Form(""),
                           prep_mode: str = Form("none")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
             prep_mode=prep_mode,
+            caption_prompt=caption_prompt,
+            caption_prompts=parse_caption_prompts_field(caption_prompts),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1494,6 +1594,8 @@ def create_app(
         allow_creative_escalate: bool = Form(True),
         quality_mode: str = Form("fast"),
         generate_captions: bool = Form(False),
+        caption_prompt: str = Form(""),
+        caption_prompts: str = Form(""),
         prep_mode: str = Form("none"),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
@@ -1511,6 +1613,8 @@ def create_app(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
             prep_mode=prep_mode,
+            caption_prompt=caption_prompt,
+            caption_prompts=parse_caption_prompts_field(caption_prompts),
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1529,6 +1633,8 @@ def create_app(
             quality_mode=body.quality_mode,
             generate_captions=body.generate_captions,
             prep_mode=body.prep_mode,
+            caption_prompt=body.caption_prompt,
+            caption_prompts=list(body.caption_prompts or []),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1560,6 +1666,8 @@ def create_app(
                 quality_mode=body.quality_mode,
                 generate_captions=body.generate_captions,
                 prep_mode=body.prep_mode,
+                caption_prompt=body.caption_prompt,
+                caption_prompts=list(body.caption_prompts or []),
             )
             return CreateJobResponse(job_id=job.job_id,
                                      sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1579,6 +1687,8 @@ def create_app(
                 quality_mode=body.quality_mode,
                 generate_captions=body.generate_captions,
                 prep_mode=body.prep_mode,
+                caption_prompt=body.caption_prompt,
+                caption_prompts=list(body.caption_prompts or []),
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1806,6 +1916,15 @@ def create_app(
         if not store.delete_source(source_id):
             raise HTTPException(status_code=404, detail="source not found")
 
+    @app.post("/api/sources/{source_id}/captions", response_model=SourceOut)
+    def rewrite_captions(source_id: str, body: CaptionRewriteIn) -> SourceOut:
+        source = store.rewrite_captions(source_id, body.prompt)
+        if source is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        loc = store._locate(source_id)
+        job = store.get(loc[0]) if loc else None
+        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+
     @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
     def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
         variant = store.set_platform_result(source_id, index, body.result)
@@ -1831,6 +1950,20 @@ def create_app(
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
         _sync_post_url_to_sheet(source_id, index, url)
+        loc = store._locate(source_id)
+        file_ready = True
+        if loc is not None:
+            file_ready = variant_ready(
+                store._ws, loc[0], source_id, variant.filename,
+                object_store=getattr(store, "_object_store", None), variant=variant,
+            )
+        return _variant_out(source_id, variant, file_ready=file_ready)
+
+    @app.post("/api/variants/{source_id}/{index}/caption", response_model=VariantOut)
+    def set_caption(source_id: str, index: int, body: CaptionIn) -> VariantOut:
+        variant = store.set_caption(source_id, index, body.caption)
+        if variant is None:
+            raise HTTPException(status_code=404, detail="variant not found")
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:
@@ -2013,10 +2146,7 @@ def create_app(
 
     @app.get("/api/instagram/analytics")
     def instagram_analytics() -> dict:
-        sources = [s for job in store.list() for s in job.sources]
-        body = gallery_analytics(sources)
-        body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
-        return body
+        return _ig_analytics_body()
 
     @app.get("/api/instagram/oauth/start")
     def instagram_oauth_start(request: Request):
@@ -2099,6 +2229,57 @@ def create_app(
         if not _ig_accounts().list_accounts():
             raise HTTPException(status_code=400, detail="Connect an Instagram tester account first")
         return InstagramSyncOut(**_run_instagram_sync())
+
+    @app.post("/api/instagram/link")
+    def instagram_link(request: Request, body: InstagramLinkIn) -> dict:
+        _require_instagram_manager(request)
+        media_id = (body.media_id or "").strip()
+        if not media_id:
+            raise HTTPException(status_code=400, detail="media_id required")
+        owner = (body.ig_user_id or "").strip() or None
+        stolen = _steal_ig_media(media_id, keep_source_id=body.source_id, keep_index=body.index)
+        incoming: dict[str, Any] = {"fetched_at": now_utc()}
+        handle = (body.username or "").strip().lstrip("@")
+        if handle:
+            incoming["username"] = handle
+        token = None
+        if owner:
+            data = _ig_accounts().load(owner)
+            if data and isinstance(data.get("access_token"), str):
+                token = data["access_token"]
+        if isinstance(token, str):
+            try:
+                counts = app.state.instagram_fetch_insights(media_id, token)
+            except Exception:
+                counts = {}
+            if counts:
+                incoming.update(counts)
+        if stolen:
+            incoming = {**stolen, **incoming}
+        updated = store.set_ig_insights(
+            body.source_id, body.index,
+            ig_media_id=media_id,
+            ig_user_id=owner,
+            insights=incoming,
+            post_url=(body.permalink or "").strip() or None,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variant not found")
+        _ig_unmatched().remove(media_id)
+        return _ig_analytics_body()
+
+    @app.post("/api/instagram/unlink")
+    def instagram_unlink(request: Request, body: InstagramUnlinkIn) -> dict:
+        _require_instagram_manager(request)
+        updated = store.set_ig_insights(
+            body.source_id, body.index,
+            ig_media_id=None,
+            ig_user_id=None,
+            insights=None,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variant not found")
+        return _ig_analytics_body()
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])
     def list_destinations() -> list[DestinationOut]:
@@ -2215,6 +2396,7 @@ def create_app(
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
                 caption_bank_id=body.caption_bank_id or "",
+                caption_from_filename=body.caption_from_filename,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -2242,6 +2424,7 @@ def create_app(
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
                 caption_bank_id=body.caption_bank_id,
+                caption_from_filename=body.caption_from_filename,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

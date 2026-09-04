@@ -8,6 +8,9 @@ import {
   workflowPageBlurb,
   workflowCanCancel,
   workflowReconstructHint,
+  workflowFilenameCaptionCardLabel,
+  workflowFilenameCaptionHint,
+  workflowFilenameCaptionLabel,
 } from "@/lib/workflowCopy";
 
 describe("workflow folder layout copy", () => {
@@ -22,6 +25,10 @@ describe("workflow folder layout copy", () => {
     expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
     expect(workflowAutoCaptionHint()).toMatch(/custom/i);
     expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
+    expect(workflowFilenameCaptionLabel()).toMatch(/filename/i);
+    expect(workflowFilenameCaptionCardLabel()).toMatch(/^filenames as captions$/i);
+    expect(workflowFilenameCaptionHint()).toMatch(/drive name|filename/i);
+    expect(workflowFilenameCaptionHint()).toMatch(/unique/i);
     expect(workflowReconstructHint()).toMatch(/one GPU pass/i);
     expect(workflowReconstructHint()).toMatch(/Fast/i);
     expect(workflowReconstructHint()).toMatch(/not a 20 HQ/i);

@@ -29,10 +29,6 @@ interface VariantSheetProps {
   onSendToDrive?: () => void;
 }
 
-function captionOf(v: { caption?: string | null }): string | null | undefined {
-  return v.caption;
-}
-
 const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
   width: 36,
   height: 36,
@@ -183,7 +179,7 @@ export function VariantSheet({
 
           <div className="variant-sheet__hr" />
 
-          <CaptionBlock caption={captionOf(variant)} />
+          <CaptionBlock sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
 
           <div className="variant-sheet__hr" />
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { AuthMe } from "@/lib/types";
 
@@ -54,10 +54,29 @@ describe("TopNav", () => {
     expect(screen.queryByRole("link", { name: "Flows" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
-    expect(screen.getAllByRole("link", { name: "Stats" })[0]).toHaveAttribute("href", "/analytics");
+    expect(screen.queryByRole("link", { name: "Stats" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",
+    );
+  });
+
+  it("keeps Analytics in More for solo owners, not on the phone tab bar", () => {
+    me.data = { ...BASE, experience: "solo", role: "owner", is_admin: false };
+    render(<TopNav />);
+    expect(screen.queryByRole("link", { name: "Stats" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
+      "href",
+      "/settings/drive",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
+      "href",
+      "/analytics",
     );
   });
 

@@ -174,6 +174,18 @@ async function putDirectObject(file: File, init: DirectUploadInit): Promise<void
   }
 }
 
+function captionFields(generate: boolean, captionPrompt: string | string[]): {
+  caption_prompt: string;
+  caption_prompts: string;
+} {
+  if (!generate) return { caption_prompt: "", caption_prompts: "[]" };
+  const list = Array.isArray(captionPrompt) ? captionPrompt : [captionPrompt];
+  return {
+    caption_prompt: list.length === 1 ? (list[0] ?? "") : "",
+    caption_prompts: JSON.stringify(list),
+  };
+}
+
 export async function createJob(
   files: File[],
   count: number,
@@ -181,8 +193,10 @@ export async function createJob(
   qualityMode: "fast" | "hq" = "fast",
   generateCaptions: boolean = false,
   prepMode: "none" | "hq" = "none",
+  captionPrompt: string | string[] = "",
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
+  const prompts = captionFields(generateCaptions, captionPrompt);
   const first = files[0];
   const direct = first ? await initDirectUpload(first) : { mode: "local" as const };
   if (direct.mode === "direct") {
@@ -207,6 +221,8 @@ export async function createJob(
           quality_mode: qualityMode,
           generate_captions: generateCaptions,
           prep_mode: prepMode,
+          caption_prompt: prompts.caption_prompt,
+          caption_prompts: JSON.parse(prompts.caption_prompts) as string[],
         }),
       }).then(json<CreateJobResponse>);
     } catch {
@@ -221,6 +237,8 @@ export async function createJob(
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
     fd.append("quality_mode", qualityMode);
     fd.append("generate_captions", captions);
+    fd.append("caption_prompt", prompts.caption_prompt);
+    fd.append("caption_prompts", prompts.caption_prompts);
     fd.append("prep_mode", prepMode);
     for (const f of files) fd.append("files", f, f.name);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
@@ -236,6 +254,8 @@ export async function createJob(
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
   fd.append("quality_mode", qualityMode);
   fd.append("generate_captions", captions);
+  fd.append("caption_prompt", prompts.caption_prompt);
+  fd.append("caption_prompts", prompts.caption_prompts);
   fd.append("prep_mode", prepMode);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
@@ -271,6 +291,22 @@ export function setPostUrl(sourceId: string, index: number, url: string): Promis
   }).then(json<VariantOut>);
 }
 
+export function setVariantCaption(sourceId: string, index: number, caption: string): Promise<VariantOut> {
+  return fetch(`/api/variants/${sourceId}/${index}/caption`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caption }),
+  }).then(json<VariantOut>);
+}
+
+export function rewriteSourceCaptions(sourceId: string, prompt: string): Promise<SourceOut> {
+  return fetch(`/api/sources/${sourceId}/captions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  }).then(json<SourceOut>);
+}
+
 export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveStatus>);
 
 export async function disconnectDriveOAuth(): Promise<void> {
@@ -286,6 +322,32 @@ export const getInstagramAnalytics = () =>
 
 export function syncInstagram(): Promise<InstagramSync> {
   return fetch("/api/instagram/sync", { method: "POST" }).then(json<InstagramSync>);
+}
+
+export function unlinkInstagramMedia(body: {
+  source_id: string;
+  index: number;
+}): Promise<InstagramAnalytics> {
+  return fetch("/api/instagram/unlink", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<InstagramAnalytics>);
+}
+
+export function linkInstagramMedia(body: {
+  source_id: string;
+  index: number;
+  media_id: string;
+  ig_user_id?: string | null;
+  permalink?: string | null;
+  username?: string | null;
+}): Promise<InstagramAnalytics> {
+  return fetch("/api/instagram/link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<InstagramAnalytics>);
 }
 
 export function disconnectInstagram(userId: string): Promise<InstagramStatus> {
@@ -426,7 +488,9 @@ export function createJobFromDrive(opts: {
   allowCreativeEscalate?: boolean;
   generateCaptions?: boolean;
   prepMode?: "none" | "hq";
+  captionPrompt?: string | string[];
 }): Promise<CreateJobResponse> {
+  const packed = captionFields(opts.generateCaptions ?? false, opts.captionPrompt ?? "");
   return fetch("/api/jobs/from-drive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -438,6 +502,8 @@ export function createJobFromDrive(opts: {
       allow_creative_escalate: opts.allowCreativeEscalate ?? true,
       generate_captions: opts.generateCaptions ?? false,
       prep_mode: opts.prepMode ?? "none",
+      caption_prompt: packed.caption_prompt,
+      caption_prompts: JSON.parse(packed.caption_prompts) as string[],
     }),
   }).then(json<CreateJobResponse>);
 }
@@ -456,6 +522,7 @@ export function createWorkflow(body: {
   poll_seconds?: number;
   auto_caption?: boolean;
   caption_bank_id?: string | null;
+  caption_from_filename?: boolean;
 }): Promise<Workflow> {
   return fetch("/api/workflows", {
     method: "POST",
@@ -482,6 +549,7 @@ export function updateWorkflow(
     poll_seconds: number;
     auto_caption: boolean;
     caption_bank_id: string | null;
+    caption_from_filename: boolean;
   }>,
 ): Promise<Workflow> {
   return fetch(`/api/workflows/${id}`, {

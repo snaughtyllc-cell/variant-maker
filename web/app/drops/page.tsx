@@ -2,6 +2,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { DropsBoard } from "@/components/drops/DropsBoard";
+import { RequireAgency } from "@/components/nav/RequireAgency";
 
 function DropsContent() {
   const searchParams = useSearchParams();
@@ -10,7 +11,8 @@ function DropsContent() {
 
 export default function DropsPage() {
   return (
-    <main className="drops-page">
+    <RequireAgency>
+      <main className="drops-page">
       <Suspense
         fallback={
           <div
@@ -30,5 +32,6 @@ export default function DropsPage() {
         <DropsContent />
       </Suspense>
     </main>
+    </RequireAgency>
   );
 }

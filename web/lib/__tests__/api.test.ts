@@ -74,6 +74,8 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("count")).toBe("3");
     expect(body.get("quality_mode")).toBe("fast");
     expect(body.get("generate_captions")).toBe("false");
+    expect(body.get("caption_prompt")).toBe("");
+    expect(body.get("caption_prompts")).toBe("[]");
     expect(body.get("prep_mode")).toBe("none");
     expect(body.getAll("files").length).toBe(1);
   });
@@ -97,6 +99,30 @@ describe("createJob posts multipart with files + count", () => {
     const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
     const body = (jobCall![1] as RequestInit).body as FormData;
     expect(body.get("generate_captions")).toBe("true");
+  });
+
+  it("sends one caption_prompts entry per source", async () => {
+    const fetchMock = mockStudio(async () =>
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const a = new File([new Uint8Array([1])], "a.mp4", { type: "video/mp4" });
+    const b = new File([new Uint8Array([2])], "b.mp4", { type: "video/mp4" });
+    await api.createJob([a, b], 3, true, "fast", true, "none", ["POV boil #reels", "Gym pull #fyp"]);
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
+    expect(body.get("caption_prompt")).toBe("");
+    expect(body.get("caption_prompts")).toBe(JSON.stringify(["POV boil #reels", "Gym pull #fyp"]));
+  });
+
+  it("sends a caption_prompt when captions are on", async () => {
+    const fetchMock = mockStudio(async () =>
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", true, "none", "POV boil #reels");
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
+    expect(body.get("generate_captions")).toBe("true");
+    expect(body.get("caption_prompt")).toBe("POV boil #reels");
+    expect(body.get("caption_prompts")).toBe(JSON.stringify(["POV boil #reels"]));
   });
 
   it("sends quality_mode hq when requested", async () => {
@@ -139,6 +165,8 @@ describe("createJob posts multipart with files + count", () => {
     const body = JSON.parse(String((created![1] as RequestInit).body));
     expect(body.items[0].key).toBe("uploads/up1/a.mp4");
     expect(body.count).toBe(8);
+    expect(body.caption_prompt).toBe("");
+    expect(body.caption_prompts).toEqual([]);
   });
 
   it("retries a dropped chunked upload then starts the job", async () => {
@@ -170,6 +198,8 @@ describe("createJob posts multipart with files + count", () => {
     expect(fromUploads).toBeTruthy();
     const fromBody = (fromUploads![1] as RequestInit).body as FormData;
     expect(fromBody.get("generate_captions")).toBe("false");
+    expect(fromBody.get("caption_prompt")).toBe("");
+    expect(fromBody.get("caption_prompts")).toBe("[]");
   });
 });
 
@@ -182,6 +212,43 @@ describe("regenerate posts form n", () => {
     expect(url).toBe("/api/sources/s1/regenerate");
     const body = (init as RequestInit).body as FormData;
     expect(body.get("n")).toBe("2");
+  });
+});
+
+describe("setVariantCaption", () => {
+  it("POSTs the edited caption", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        index: 1, filename: "v01.mp4", status: "ok", quality: {},
+        file_url: "/api/variants/s1/v01.mp4",
+        caption: "Wait — the boil hits different\n#reels",
+      }), { status: 200 }),
+    );
+    const out = await api.setVariantCaption("s1", 1, "Wait — the boil hits different\n#reels");
+    expect(out.caption).toMatch(/hits different/);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/variants/s1/1/caption");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      caption: "Wait — the boil hits different\n#reels",
+    });
+  });
+});
+
+describe("rewriteSourceCaptions", () => {
+  it("POSTs a seed to rewrite every copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        source_id: "s1", filename: "a.mp4", requested: 2, delivered: 2, shortfall: 0,
+        variants: [], caption_prompt: "Gym pump #fyp",
+      }), { status: 200 }),
+    );
+    const out = await api.rewriteSourceCaptions("s1", "Gym pump #fyp");
+    expect(out.caption_prompt).toBe("Gym pump #fyp");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/sources/s1/captions");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ prompt: "Gym pump #fyp" });
   });
 });
 
@@ -351,6 +418,8 @@ describe("createJobFromDrive", () => {
       allow_creative_escalate: false,
       generate_captions: false,
       prep_mode: "none",
+      caption_prompt: "",
+      caption_prompts: [],
     });
   });
 
@@ -372,6 +441,8 @@ describe("createJobFromDrive", () => {
       allow_creative_escalate: true,
       generate_captions: false,
       prep_mode: "hq",
+      caption_prompt: "",
+      caption_prompts: [],
     });
   });
 
@@ -384,6 +455,7 @@ describe("createJobFromDrive", () => {
       fileIds: ["f1"],
       count: 3,
       generateCaptions: true,
+      captionPrompt: "POV boil #reels",
     });
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
       destination_id: "dst_1",
@@ -393,6 +465,32 @@ describe("createJobFromDrive", () => {
       allow_creative_escalate: true,
       generate_captions: true,
       prep_mode: "none",
+      caption_prompt: "POV boil #reels",
+      caption_prompts: ["POV boil #reels"],
+    });
+  });
+
+  it("sends one caption_prompts entry per Drive source", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1", "f2"],
+      count: 8,
+      generateCaptions: true,
+      captionPrompt: ["POV boil #reels", "Gym pull #fyp"],
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1", "f2"],
+      count: 8,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: true,
+      prep_mode: "none",
+      caption_prompt: "",
+      caption_prompts: ["POV boil #reels", "Gym pull #fyp"],
     });
   });
 });
@@ -792,6 +890,56 @@ describe("Instagram API", () => {
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       access_token: "pasted-long-token",
+    });
+  });
+
+  it("linkInstagramMedia POSTs the unmatched Reel onto a Gallery copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: 50,
+        insights_linked: 1,
+        ranked: [],
+        suggestions: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    const out = await api.linkInstagramMedia({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+    expect(out.insights_linked).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/link");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+  });
+
+  it("unlinkInstagramMedia POSTs the Gallery copy to drop", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: 0,
+        insights_linked: 0,
+        ranked: [],
+        suggestions: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    await api.unlinkInstagramMedia({ source_id: "s1", index: 7 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/unlink");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      source_id: "s1",
+      index: 7,
     });
   });
 });

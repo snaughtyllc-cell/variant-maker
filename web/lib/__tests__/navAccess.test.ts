@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { canManageDriveOAuth, canManageInstagram, showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import {
+  canManageDriveOAuth,
+  canManageInstagram,
+  showAnalyticsNav,
+  showDiagnosticsNav,
+  showTeamNav,
+  visiblePrimaryTabs,
+} from "@/lib/navAccess";
 import { PRIMARY_TABS } from "@/lib/studioDestinations";
 
 describe("showDiagnosticsNav", () => {
@@ -31,32 +38,52 @@ describe("canManageDriveOAuth", () => {
 });
 
 describe("showTeamNav", () => {
-  it("shows for owners and site admin", () => {
-    expect(showTeamNav({ role: "owner", is_admin: false })).toBe(true);
-    expect(showTeamNav({ role: "member", is_admin: true })).toBe(true);
+  it("shows for agency owners and site admin", () => {
+    expect(showTeamNav({ role: "owner", is_admin: false, experience: "agency" })).toBe(true);
+    expect(showTeamNav({ role: "member", is_admin: true, experience: "solo" })).toBe(true);
   });
 
   it("hides for members", () => {
-    expect(showTeamNav({ role: "member", is_admin: false })).toBe(false);
+    expect(showTeamNav({ role: "member", is_admin: false, experience: "agency" })).toBe(false);
+  });
+
+  it("hides Team for solo creators even when they own the workspace", () => {
+    expect(
+      showTeamNav({
+        role: "owner",
+        is_admin: false,
+        experience: "solo",
+        auth_required: true,
+      }),
+    ).toBe(false);
   });
 });
 
-describe("canManageInstagram", () => {
-  it("lets any signed-in operator Connect another tester", () => {
-    expect(canManageInstagram({ auth_required: true, email: "va@x.com" })).toBe(true);
+describe("showAnalyticsNav", () => {
+  it("shows for workspace owners including solo", () => {
+    expect(
+      showAnalyticsNav({ role: "owner", is_admin: false, auth_required: true }),
+    ).toBe(true);
   });
 
-  it("hides Connect when login is required and nobody is signed in", () => {
-    expect(canManageInstagram({ auth_required: true, email: null })).toBe(false);
+  it("hides for VAs", () => {
+    expect(
+      showAnalyticsNav({ role: "member", is_admin: false, auth_required: true }),
+    ).toBe(false);
   });
 
-  it("allows Connect when login is off", () => {
-    expect(canManageInstagram({ auth_required: false, email: null })).toBe(true);
+  it("shows for site admin and when login is off", () => {
+    expect(
+      showAnalyticsNav({ role: "member", is_admin: true, auth_required: true }),
+    ).toBe(true);
+    expect(
+      showAnalyticsNav({ role: null, is_admin: false, auth_required: false }),
+    ).toBe(true);
   });
 });
 
 describe("visiblePrimaryTabs", () => {
-  it("keeps every operator tab for agency, admin, and auth off", () => {
+  it("keeps all five operator tabs for agency, admin, and auth off", () => {
     const labels = PRIMARY_TABS.map((d) => d.label);
     expect(
       visiblePrimaryTabs({
@@ -88,6 +115,6 @@ describe("visiblePrimaryTabs", () => {
         is_admin: false,
         auth_required: true,
       }).map((d) => d.href),
-    ).toEqual(["/", "/gallery", "/analytics", "/settings/drive"]);
+    ).toEqual(["/", "/gallery", "/settings/drive"]);
   });
 });

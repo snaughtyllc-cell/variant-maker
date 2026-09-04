@@ -29,19 +29,22 @@ describe("studioDestinations", () => {
     expect(hrefs).toEqual(pages);
   });
 
-  it("keeps the phone/desktop primary row at the operator tabs", () => {
+  it("keeps the phone/desktop primary row at the five operator tabs", () => {
     expect(PRIMARY_TABS.map((d) => d.label)).toEqual([
       "Studio",
       "Gallery",
-      "Analytics",
       "Drops",
       "Workflows",
       "Drive",
     ]);
-    expect(PRIMARY_TABS.find((d) => d.href === "/analytics")?.short).toBe("Stats");
   });
 
-  it("does not hide Team, Admin, or Diagnostics from the catalog", () => {
-    expect(EXTRA_TABS.map((d) => d.label)).toEqual(["Team", "Admin", "Diagnostics"]);
+  it("does not hide Team, Analytics, Admin, or Diagnostics from the catalog", () => {
+    expect(EXTRA_TABS.map((d) => d.label)).toEqual([
+      "Team",
+      "Analytics",
+      "Admin",
+      "Diagnostics",
+    ]);
   });
 });

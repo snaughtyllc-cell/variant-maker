@@ -6,6 +6,7 @@ import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePicke
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
+import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/StudioCaptionsBox";
 import { StudioLiveQueue } from "@/components/studio/StudioLiveQueue";
 import { accepts, readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
@@ -14,12 +15,7 @@ import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
-import {
-  captionToggleHint,
-  captionToggleLabel,
-  hqPrepToggleHint,
-  hqPrepToggleLabel,
-} from "@/lib/prepareCopy";
+import { hqPrepToggleHint, hqPrepToggleLabel } from "@/lib/prepareCopy";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -41,7 +37,9 @@ export default function StudioPage() {
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [hqPrep, setHqPrep] = useState(false);
-  const [generateCaptions, setGenerateCaptions] = useState(true);
+  const [generateCaptions, setGenerateCaptions] = useState(false);
+  const [fileCaptions, setFileCaptions] = useState<string[]>([]);
+  const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -58,6 +56,15 @@ export default function StudioPage() {
       : "No clips yet";
 
   const prepMode = hqPrep ? "hq" : "none";
+  const captionSources: CaptionSource[] = [
+    ...files.map((file, i) => ({ key: `file-${i}-${file.name}`, name: file.name, file })),
+    ...drivePicks.map((pick) => ({
+      key: `drive-${pick.id}`,
+      name: pick.name,
+      thumbUrl: pick.thumbUrl,
+    })),
+  ];
+  const captionPrompts = [...fileCaptions, ...driveCaptions];
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -71,6 +78,7 @@ export default function StudioPage() {
       readDurations(combined).then(setDurations);
       return combined;
     });
+    setFileCaptions((prev) => [...prev, ...incoming.map(() => "")]);
   }, []);
 
   function openPicker() {
@@ -96,22 +104,47 @@ export default function StudioPage() {
       readDurations(next).then(setDurations);
       return next;
     });
+    setFileCaptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   function handleRemoveDrivePick(index: number) {
     setDrivePicks((prev) => prev.filter((_, i) => i !== index));
+    setDriveCaptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   function handleDriveConfirm(picks: DrivePick[]) {
     if (picks.length === 0) return;
     const destId = picks[0].destinationId;
     setDrivePicks((prev) => {
-      if (prev.length === 0 || prev[0].destinationId !== destId) return picks;
+      if (prev.length === 0 || prev[0].destinationId !== destId) {
+        setDriveCaptions(picks.map(() => ""));
+        return picks;
+      }
       const byId = new Map(prev.map((p) => [p.id, p]));
+      const captionsById = new Map(prev.map((p, i) => [p.id, driveCaptions[i] ?? ""]));
       for (const p of picks) byId.set(p.id, p);
-      return Array.from(byId.values());
+      const next = Array.from(byId.values());
+      setDriveCaptions(next.map((p) => captionsById.get(p.id) ?? ""));
+      return next;
     });
     setError(null);
+  }
+
+  function handleCaptionChange(index: number, value: string) {
+    if (index < files.length) {
+      setFileCaptions((prev) => {
+        const next = [...prev];
+        next[index] = value;
+        return next;
+      });
+      return;
+    }
+    const driveIndex = index - files.length;
+    setDriveCaptions((prev) => {
+      const next = [...prev];
+      next[driveIndex] = value;
+      return next;
+    });
   }
 
   async function handleGenerate() {
@@ -142,8 +175,9 @@ export default function StudioPage() {
               allowCreativeEscalate,
               generateCaptions,
               prepMode,
+              captionPrompt: driveCaptions,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, prepMode);
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, prepMode, fileCaptions);
       start(resp, "fast", prepMode);
     } catch (e) {
       clear();
@@ -251,20 +285,13 @@ export default function StudioPage() {
             <section className="studio-section studio-section--options">
               <p className="studio-eyebrow">03 · Options</p>
               <div className="studio-options">
-                <label className="studio-option-row studio-caption-toggle">
-                  <div>
-                    <div className="studio-option-row__label">{captionToggleLabel()}</div>
-                    <div className="studio-option-row__hint">{captionToggleHint()}</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={generateCaptions}
-                    onChange={(e) => setGenerateCaptions(e.target.checked)}
-                  />
-                  <span className="studio-switch" data-on={generateCaptions} aria-hidden="true">
-                    <span className="studio-switch__thumb" />
-                  </span>
-                </label>
+                <StudioCaptionsBox
+                  generateCaptions={generateCaptions}
+                  onGenerateCaptionsChange={setGenerateCaptions}
+                  sources={captionSources}
+                  prompts={captionPrompts}
+                  onPromptChange={handleCaptionChange}
+                />
 
                 <label
                   className="studio-option-row studio-caption-toggle"

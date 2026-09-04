@@ -11,6 +11,9 @@ from variant_maker.server.instagram_insights import (
     pack_analytics,
     parse_insights_payload,
     permalink_key,
+    stamp_tracked_accounts,
+    tracked_copies,
+    unmatched_media,
 )
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.workspace import Workspace
@@ -74,7 +77,8 @@ def test_pack_analytics_unknown_is_not_zero():
 
 def test_gallery_analytics_ranks_the_winning_source():
     class V:
-        def __init__(self, media, views):
+        def __init__(self, media, views, index=1):
+            self.index = index
             self.ig_media_id = media
             self.ig_insights = {"views": views}
 
@@ -85,12 +89,70 @@ def test_gallery_analytics_ranks_the_winning_source():
             self.variants = variants
 
     body = gallery_analytics([
-        S("quiet", "quiet.mp4", [V("a", 10)]),
-        S("winner", "winner.mp4", [V("b", 900), V("c", 100)]),
+        S("quiet", "quiet.mp4", [V("a", 10, index=1)]),
+        S("winner", "winner.mp4", [V("b", 900, index=1), V("c", 100, index=2)]),
     ])
     assert body["insights_views"] == 1010
     assert body["ranked"][0]["source_id"] == "winner"
     assert body["ranked"][0]["insights_views"] == 1000
+    assert [row["index"] for row in body["ranked"][0]["tracked"]] == [1, 2]
+
+
+def test_tracked_copies_list_linked_variants_highest_views_first():
+    class V:
+        def __init__(self, index, media, views, user=None, username=None, post_url=None):
+            self.index = index
+            self.ig_media_id = media
+            self.ig_user_id = user
+            self.post_url = post_url
+            self.ig_insights = {"views": views, "shares": 1, "follows": 2, "likes": 8}
+            if username:
+                self.ig_insights["username"] = username
+
+    copies = tracked_copies([
+        V(1, "m-low", 40, user="jeff", username="jeff.main"),
+        V(3, None, 0),
+        V(2, "m-high", 900, user="mckenzie", username="mckenzie.trial",
+          post_url="https://instagram.com/reel/Aaa/"),
+    ])
+    assert [row["index"] for row in copies] == [2, 1]
+    assert copies[0]["insights_views"] == 900
+    assert copies[0]["insights_likes"] == 8
+    assert copies[0]["username"] == "mckenzie.trial"
+    assert copies[0]["post_url"].endswith("/Aaa/")
+    assert copies[1]["ig_user_id"] == "jeff"
+
+
+def test_stamp_tracked_marks_disconnected_handles():
+    rows = [{
+        "tracked": [
+            {"index": 2, "ig_user_id": "mckenzie", "username": "mckenzie.trial"},
+            {"index": 1, "ig_user_id": "jeff", "username": None},
+        ],
+    }]
+    stamp_tracked_accounts(
+        rows,
+        usernames={"jeff": "jeff.main"},
+        connected_ids=["jeff"],
+    )
+    by_idx = {row["index"]: row for row in rows[0]["tracked"]}
+    assert by_idx[2]["account_connected"] is False
+    assert by_idx[2]["username"] == "mckenzie.trial"
+    assert by_idx[1]["account_connected"] is True
+    assert by_idx[1]["username"] == "jeff.main"
+
+
+def test_unmatched_media_are_not_guessed():
+    variants = [
+        VariantLink("s1", 1, post_url="https://instagram.com/reel/Aaa/", caption="hook"),
+    ]
+    media = [
+        IgMedia("m1", permalink="https://www.instagram.com/reel/Aaa/", caption="hook"),
+        IgMedia("m2", permalink="https://www.instagram.com/reel/Orphan/", caption="other line"),
+    ]
+    hits = match_media(variants, media)
+    leftover = unmatched_media(media, hits)
+    assert [m.id for m in leftover] == ["m2"]
 
 
 def test_parse_insights_reads_total_value_and_values():

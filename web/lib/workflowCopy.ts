@@ -39,6 +39,21 @@ export function workflowReconstructHint(): string {
   );
 }
 
+export function workflowFilenameCaptionHint(): string {
+  return (
+    "Each inbox clip's Drive name is the seed. Claude writes a unique take per copy — " +
+    "mixed vibes in one folder work. Caption folder is ignored while this is on."
+  );
+}
+
+export function workflowFilenameCaptionLabel(): string {
+  return "Use Drive filenames as captions";
+}
+
+export function workflowFilenameCaptionCardLabel(): string {
+  return "Filenames as captions";
+}
+
 export function workflowFoldersClash(
   inbox: { id: string; folder_id: string },
   output: { id: string; folder_id: string },

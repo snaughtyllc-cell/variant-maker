@@ -3,8 +3,11 @@ import json
 from variant_maker.server.caption_ai import (
     ANTHROPIC_CAPTION_MODEL,
     anthropic_caption_model,
+    brief_from_filename,
+    briefs_for_sources,
     captions_for_source,
     local_caption,
+    parse_caption_prompts_field,
     source_stem,
 )
 
@@ -86,3 +89,34 @@ def test_anthropic_request_uses_resolved_model(monkeypatch):
     )
     assert captured["body"]["model"] == "claude-haiku-4-5-20251001"
     assert len(out) == 2
+
+
+def test_parse_caption_prompts_json_array():
+    assert parse_caption_prompts_field('["a","b"]') == ["a", "b"]
+    assert parse_caption_prompts_field("") == []
+    assert parse_caption_prompts_field("just one") == ["just one"]
+
+
+def test_briefs_for_sources_are_per_source():
+    assert briefs_for_sources(2, caption_prompts=["POV boil", "Gym pull"]) == ["POV boil", "Gym pull"]
+    assert briefs_for_sources(2, caption_prompt="shared") == ["shared", "shared"]
+    assert briefs_for_sources(2, caption_prompt="shared", caption_prompts=["only first", ""]) == [
+        "only first",
+        "",
+    ]
+
+
+def test_brief_from_filename_keeps_hook_drops_hashtags():
+    seed = brief_from_filename("POV she said wait for it #reels #fyp.mp4")
+    assert "wait for it" in seed.lower()
+    assert "#" not in seed
+    assert ".mp4" not in seed
+
+
+def test_captions_for_source_with_prompt_skips_copy_n_of_m():
+    out = captions_for_source("boil.mp4", 2, prompt="POV the boil hits different", environ={})
+    assert len(out) == 2
+    assert out[0] != out[1]
+    joined = "\n".join(out).lower()
+    assert "copy 1 of" not in joined
+    assert "boil" in joined

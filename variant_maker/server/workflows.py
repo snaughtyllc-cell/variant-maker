@@ -37,6 +37,7 @@ class Workflow:
     last_summary: dict | None = None
     auto_caption: bool = False
     caption_bank_id: str = ""
+    caption_from_filename: bool = False
 
 
 def _validate(
@@ -96,6 +97,7 @@ class WorkflowStore:
         poll_seconds: int = DEFAULT_POLL_SECONDS,
         auto_caption: bool = False,
         caption_bank_id: str = "",
+        caption_from_filename: bool = False,
     ) -> Workflow:
         name, inbox, output, count, quality, poll_seconds = _validate(
             name=name,
@@ -117,8 +119,9 @@ class WorkflowStore:
             allow_creative_escalate=bool(allow_creative_escalate),
             enabled=bool(enabled),
             poll_seconds=poll_seconds,
-            auto_caption=bool(auto_caption),
-            caption_bank_id=(caption_bank_id or "").strip(),
+            auto_caption=bool(auto_caption) and not bool(caption_from_filename),
+            caption_bank_id="" if caption_from_filename else (caption_bank_id or "").strip(),
+            caption_from_filename=bool(caption_from_filename),
         )
         items.append(wf)
         self._save(items)
@@ -142,6 +145,7 @@ class WorkflowStore:
         touch_sweep: bool = False,
         auto_caption: bool | None = None,
         caption_bank_id: str | None = None,
+        caption_from_filename: bool | None = None,
     ) -> Workflow | None:
         items = self._load()
         for i, w in enumerate(items):
@@ -170,9 +174,17 @@ class WorkflowStore:
                 poll_seconds=poll,
                 last_sweep_at=last_sweep_at if touch_sweep else w.last_sweep_at,
                 last_summary=last_summary if touch_sweep else w.last_summary,
-                auto_caption=w.auto_caption if auto_caption is None else bool(auto_caption),
+                auto_caption=(
+                    False if caption_from_filename is True
+                    else (w.auto_caption if auto_caption is None else bool(auto_caption))
+                ),
                 caption_bank_id=(
-                    w.caption_bank_id if caption_bank_id is None else str(caption_bank_id or "").strip()
+                    "" if caption_from_filename is True else (
+                        w.caption_bank_id if caption_bank_id is None else str(caption_bank_id or "").strip()
+                    )
+                ),
+                caption_from_filename=(
+                    w.caption_from_filename if caption_from_filename is None else bool(caption_from_filename)
                 ),
             )
             items[i] = updated
@@ -212,6 +224,7 @@ class WorkflowStore:
                 last_summary=item.get("last_summary") if isinstance(item.get("last_summary"), dict) else None,
                 auto_caption=bool(item.get("auto_caption") or False),
                 caption_bank_id=str(item.get("caption_bank_id") or ""),
+                caption_from_filename=bool(item.get("caption_from_filename") or False),
             ))
         return out
 

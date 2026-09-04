@@ -39,6 +39,7 @@ import { postedCountCopy } from "@/lib/postUrl";
 import { packViewsCopy } from "@/lib/instagram";
 import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { SavePreparePanel } from "./SavePreparePanel";
+import { PackOptions } from "./PackOptions";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -340,6 +341,8 @@ export function SourceGroup({
           </div>
         </div>
       </div>
+
+      <PackOptions source={source} disabled={stillRunning} onRewritten={onRegenerate} />
 
       {source.variants.length === 0 ? (
         <div className="gallery-empty">
