@@ -109,9 +109,11 @@ from .jobs import (
     source_files_ready,
     variant_ready,
 )
-from .login_limit import clear as clear_login_failures
-from .login_limit import locked as login_locked
-from .login_limit import note_failure as note_login_failure
+from .login_limit import (
+    clear as clear_login_failures,
+    locked as login_locked,
+    note_failure as note_login_failure,
+)
 from .media_links import (
     DOWNLOAD_TTL_SECONDS,
     MULTIPART_THRESHOLD,

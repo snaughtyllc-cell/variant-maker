@@ -42,9 +42,7 @@ def is_direct_upload_key(key: str) -> bool:
     upload_id, name = parts[1], parts[2]
     if not upload_id or upload_id != os.path.basename(upload_id) or upload_id in (".", ".."):
         return False
-    if not name or name != os.path.basename(name) or name in (".", ".."):
-        return False
-    return True
+    return bool(name) and name == os.path.basename(name) and name not in (".", "..")
 
 
 def package_zip_key(source_id: str) -> str:
