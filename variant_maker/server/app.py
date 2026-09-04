@@ -101,7 +101,6 @@ from .jobs import (
     JobStore,
     source_copy_status,
     source_files_ready,
-    variant_on_disk,
     variant_ready,
 )
 from .media_links import (

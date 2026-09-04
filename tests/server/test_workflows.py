@@ -306,7 +306,7 @@ def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path
         if os.path.isfile(path):
             os.remove(path)
 
-    with pytest.raises(RuntimeError, match="didn't copy"):
+    with pytest.raises(RuntimeError, match="download package isn't ready"):
         _export_source(
             drive, store, job, source,
             stem="ghost", sha="abcd1234", output_folder_id=out_dest["folder_id"],
