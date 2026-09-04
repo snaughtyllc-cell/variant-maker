@@ -1,6 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { FileList } from "@/components/studio/FileList";
 import { StudioCaptionsBox } from "@/components/studio/StudioCaptionsBox";
 import { captionNeedSourcesCopy, captionPromptLabelForSource } from "@/lib/prepareCopy";
 
@@ -13,14 +12,19 @@ beforeAll(() => {
   }
 });
 
-describe("FileList thumbs", () => {
-  it("renders a video thumb per dropped file, not a color tile", () => {
-    const files = [
-      new File(["a"], "xyz123.mp4", { type: "video/mp4" }),
-      new File(["b"], "abc999.mp4", { type: "video/mp4" }),
-    ];
+describe("StudioCaptionsBox thumbs", () => {
+  it("renders a video thumb per source, not a color tile", () => {
     const { container } = render(
-      <FileList files={files} durations={[12, 8]} onRemove={() => {}} />,
+      <StudioCaptionsBox
+        generateCaptions
+        onGenerateCaptionsChange={() => {}}
+        sources={[
+          { key: "a", name: "xyz123.mp4", file: new File(["a"], "xyz123.mp4", { type: "video/mp4" }) },
+          { key: "b", name: "abc999.mp4", file: new File(["b"], "abc999.mp4", { type: "video/mp4" }) },
+        ]}
+        prompts={["", ""]}
+        onPromptChange={() => {}}
+      />,
     );
     expect(container.querySelectorAll("video")).toHaveLength(2);
     expect(screen.getByText("xyz123.mp4")).toBeInTheDocument();
