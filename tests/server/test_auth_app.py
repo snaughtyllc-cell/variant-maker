@@ -220,6 +220,44 @@ def test_admin_week_usage_after_fast_and_hq_prep(tmp_path):
     assert home["week_fast"] == 5  # 2 + 3 Fast copies
     assert home["week_hq"] == 1    # one reconstruct
     assert home["week_packs"] == 2
+    jeff_row = next(m for m in home["members"] if m["email"] == ADMIN)
+    assert jeff_row["week_fast"] == 5
+    assert jeff_row["week_hq"] == 1
+    assert jeff_row["week_packs"] == 2
+
+
+def test_week_usage_is_attributed_to_the_signed_in_operator(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    inv = jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    assert inv.status_code == 201
+    _login(va, "va")
+    jeff_job = jeff.post(
+        "/api/jobs",
+        files=[("files", ("jeff.mp4", b"j", "video/mp4"))],
+        data={"count": "3"},
+    )
+    assert jeff_job.status_code == 201
+    _tenant_wait(jeff, jeff_job.json()["job_id"])
+    va_job = va.post(
+        "/api/jobs",
+        files=[("files", ("va.mp4", b"v", "video/mp4"))],
+        data={"count": "2"},
+    )
+    assert va_job.status_code == 201
+    _tenant_wait(va, va_job.json()["job_id"])
+    spaces = jeff.get("/api/admin/workspaces").json()
+    home = next(s for s in spaces if s["id"] == jeff.get("/api/auth/me").json()["workspace_id"])
+    by_email = {m["email"]: m for m in home["members"]}
+    assert by_email[ADMIN]["week_fast"] == 3 and by_email[ADMIN]["week_packs"] == 1
+    assert by_email["va@x.com"]["week_fast"] == 2 and by_email["va@x.com"]["week_packs"] == 1
+    team = jeff.get("/api/workspace/team").json()
+    team_by = {m["email"]: m for m in team["members"]}
+    assert team_by[ADMIN]["week_fast"] == 3
+    assert team_by["va@x.com"]["week_fast"] == 2
+    assert va.get("/api/workspace/team").status_code == 403
 
 
 def test_new_workspace_invite_isolates_galleries(tmp_path):

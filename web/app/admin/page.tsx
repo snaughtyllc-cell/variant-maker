@@ -13,6 +13,7 @@ import {
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
 import { ShieldCheck } from "lucide-react";
+import { memberWeekCopy } from "@/lib/usage";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -216,6 +217,9 @@ export default function AdminPage() {
                                 <div style={{ color: "var(--color-muted)", fontSize: 11 }}>
                                   {m.role}
                                   {isYou ? " · you" : ""}
+                                </div>
+                                <div style={{ color: "var(--color-muted2)", fontSize: 11 }}>
+                                  {memberWeekCopy(m)}
                                 </div>
                               </div>
                               {!isYou && (

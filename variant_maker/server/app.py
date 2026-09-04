@@ -209,7 +209,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
-from .usage import week_rollup
+from .usage import user_week_rollup, week_rollup
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
@@ -935,19 +935,38 @@ def create_app(
             raise HTTPException(status_code=403, detail="owner only")
         return user
 
+    def _actor_email(request: Request) -> str | None:
+        user = getattr(request.state, "user", None)
+        raw = getattr(user, "email", None) if user is not None else None
+        email = str(raw or "").strip().lower()
+        return email or None
+
+    def _week_by_email(workspace_id: str) -> dict[str, Any]:
+        if hub is None:
+            return {}
+        bundle = hub.bundle(workspace_id)
+        return {row.email: row for row in user_week_rollup(bundle.ws)}
+
+    def _member_out(user, week_by_email: dict[str, Any] | None = None) -> AdminMemberOut:
+        week = (week_by_email or {}).get(str(user.email or "").strip().lower())
+        return AdminMemberOut(
+            email=user.email, name=user.name, role=user.role,
+            week_fast=int(getattr(week, "fast_copies", 0) or 0),
+            week_hq=int(getattr(week, "hq_preps", 0) or 0),
+            week_packs=int(getattr(week, "packs", 0) or 0),
+        )
+
     def _team_out(home_id: str) -> TeamOut:
         assert tenants is not None
         ws = tenants.get_workspace(home_id)
         users = [u for u in tenants.list_users() if u.workspace_id == home_id]
         members = sorted(users, key=lambda u: (0 if u.role == "owner" else 1, u.email))
         invites = [i for i in tenants.list_invites() if i.workspace_id == home_id]
+        week_by_email = _week_by_email(home_id)
         return TeamOut(
             workspace_id=home_id,
             workspace_name=ws.name if ws else None,
-            members=[
-                AdminMemberOut(email=u.email, name=u.name, role=u.role)
-                for u in members
-            ],
+            members=[_member_out(u, week_by_email) for u in members],
             invites=[
                 InviteOut(
                     id=i.id, email=i.email, kind=i.kind,
@@ -970,15 +989,13 @@ def create_app(
         last_job_utc = ordered[0].created_utc if ordered else None
         last_error = next((j.error for j in ordered if j.error), None)
         members = sorted(users, key=lambda u: (0 if u.role == "owner" else 1, u.email))
+        week_by_email = _week_by_email(ws.id)
         return AdminWorkspaceOut(
             id=ws.id,
             name=ws.name,
             owner_email=owner,
             member_count=len(users),
-            members=[
-                AdminMemberOut(email=u.email, name=u.name, role=u.role)
-                for u in members
-            ],
+            members=[_member_out(u, week_by_email) for u in members],
             running=int(q.get("running") or 0),
             fast=int(q.get("fast") or 0),
             hq=int(q.get("hq") or 0),
@@ -1522,7 +1539,7 @@ def create_app(
         return resp
 
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
-    async def create_job(files: list[UploadFile], count: int = Form(...),
+    async def create_job(request: Request, files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
                           generate_captions: bool = Form(False),
@@ -1536,6 +1553,7 @@ def create_app(
             prep_mode=prep_mode,
             caption_prompt=caption_prompt,
             caption_prompts=parse_caption_prompts_field(caption_prompts),
+            actor_email=_actor_email(request),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1613,6 +1631,7 @@ def create_app(
 
     @app.post("/api/jobs/from-uploads", status_code=201, response_model=CreateJobResponse)
     def create_job_from_uploads(
+        request: Request,
         upload_ids: str = Form(...),
         count: int = Form(...),
         allow_creative_escalate: bool = Form(True),
@@ -1639,6 +1658,7 @@ def create_app(
             prep_mode=prep_mode,
             caption_prompt=caption_prompt,
             caption_prompts=parse_caption_prompts_field(caption_prompts),
+            actor_email=_actor_email(request),
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1647,7 +1667,7 @@ def create_app(
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-object", status_code=201, response_model=CreateJobResponse)
-    def create_job_from_object(body: JobFromObjectIn) -> CreateJobResponse:
+    def create_job_from_object(request: Request, body: JobFromObjectIn) -> CreateJobResponse:
         items = [(it.filename or "video.mp4", it.key) for it in body.items if it.key]
         if not items:
             raise HTTPException(status_code=400, detail="items required")
@@ -1659,13 +1679,14 @@ def create_app(
             prep_mode=body.prep_mode,
             caption_prompt=body.caption_prompt,
             caption_prompts=list(body.caption_prompts or []),
+            actor_email=_actor_email(request),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
-    def create_job_from_drive(body: JobFromDriveIn) -> CreateJobResponse:
+    def create_job_from_drive(request: Request, body: JobFromDriveIn) -> CreateJobResponse:
         _require_drive()
         dest = app.state.destinations.get(body.destination_id)
         if dest is None:
@@ -1692,6 +1713,7 @@ def create_app(
                 prep_mode=body.prep_mode,
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
+                actor_email=_actor_email(request),
             )
             return CreateJobResponse(job_id=job.job_id,
                                      sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1713,6 +1735,7 @@ def create_app(
                 prep_mode=body.prep_mode,
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
+                actor_email=_actor_email(request),
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)

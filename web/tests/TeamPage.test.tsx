@@ -50,8 +50,8 @@ const team: Team = {
   workspace_id: "ws_ops",
   workspace_name: "Ops studio",
   members: [
-    { email: "ops@example.com", name: "Ops", role: "owner" },
-    { email: "va@example.com", name: "VA", role: "member" },
+    { email: "ops@example.com", name: "Ops", role: "owner", week_fast: 4, week_hq: 1, week_packs: 1 },
+    { email: "va@example.com", name: "VA", role: "member", week_fast: 0, week_hq: 0, week_packs: 0 },
   ],
   invites: [
     {
@@ -85,6 +85,8 @@ describe("Team page", () => {
   it("lists members and pending join invites for the owner", async () => {
     render(<TeamPage />);
     expect(await screen.findByText("va@example.com")).toBeInTheDocument();
+    expect(screen.getByText("This week: 4 Fast · 1 HQ · 1 pack")).toBeInTheDocument();
+    expect(screen.getByText("This week: no packs")).toBeInTheDocument();
     expect(screen.getByText("helper@example.com")).toBeInTheDocument();
     expect(screen.getByText(/join this workspace/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Invite kind")).not.toBeInTheDocument();

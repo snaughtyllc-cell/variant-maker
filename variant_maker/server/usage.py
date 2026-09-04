@@ -22,6 +22,17 @@ class WeekRollup:
     packs: int = 0
 
 
+UNATTRIBUTED_EMAIL = "unattributed"
+
+
+@dataclass(frozen=True)
+class UserWeek:
+    email: str
+    fast_copies: int = 0
+    hq_preps: int = 0
+    packs: int = 0
+
+
 def usage_path(ws: Workspace) -> str:
     return os.path.join(ws.root, USAGE_FILENAME)
 
@@ -150,3 +161,50 @@ def week_rollup(ws: Workspace, *, now: datetime | None = None) -> WeekRollup:
         hq += int(row.get("hq_preps") or 0)
         packs += int(row.get("packs") or 1)
     return WeekRollup(fast_copies=fast, hq_preps=hq, packs=packs)
+
+
+def _actor_email(row: dict[str, Any]) -> str:
+    raw = str(row.get("customer_email") or "").strip().lower()
+    return raw or UNATTRIBUTED_EMAIL
+
+
+def user_week_rollup(ws: Workspace, *, now: datetime | None = None) -> list[UserWeek]:
+    """Last-7-day Fast/HQ/packs grouped by the operator who submitted the job."""
+    path = usage_path(ws)
+    if not os.path.isfile(path):
+        return []
+    when = now or datetime.now(UTC)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    when = when.astimezone(UTC)
+    start = when - _WEEK
+    grouped: dict[str, list[int]] = {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        ts = _parse_utc(str(row.get("utc") or ""))
+        if ts is None or ts < start:
+            continue
+        email = _actor_email(row)
+        bucket = grouped.setdefault(email, [0, 0, 0])
+        bucket[0] += int(row.get("fast_copies") or 0)
+        bucket[1] += int(row.get("hq_preps") or 0)
+        bucket[2] += int(row.get("packs") or 1)
+    rows = [
+        UserWeek(email=email, fast_copies=fast, hq_preps=hq, packs=packs)
+        for email, (fast, hq, packs) in grouped.items()
+    ]
+    rows.sort(key=lambda row: (row.email == UNATTRIBUTED_EMAIL, row.email))
+    return rows

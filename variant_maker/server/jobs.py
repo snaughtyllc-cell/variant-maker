@@ -511,7 +511,8 @@ class JobStore:
                     generate_captions: bool = False,
                     prep_mode: str = "none",
                     caption_prompt: str = "",
-                    caption_prompts: list[str] | None = None) -> Job:
+                    caption_prompts: list[str] | None = None,
+                    actor_email: str | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -523,6 +524,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
+            actor_email=actor_email,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
@@ -531,7 +533,8 @@ class JobStore:
                                generate_captions: bool = False,
                                prep_mode: str = "none",
                                caption_prompt: str = "",
-                               caption_prompts: list[str] | None = None) -> Job:
+                               caption_prompts: list[str] | None = None,
+                               actor_email: str | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -546,6 +549,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
+            actor_email=actor_email,
         )
 
     def create_job_from_object_keys(
@@ -556,6 +560,7 @@ class JobStore:
         prep_mode: str = "none",
         caption_prompt: str = "",
         caption_prompts: list[str] | None = None,
+        actor_email: str | None = None,
     ) -> Job:
         """Create a job from object-storage keys: [(filename, object_key), ...].
 
@@ -595,6 +600,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
+            actor_email=actor_email,
         )
 
     def create_job_from_drive_ids(
@@ -605,6 +611,7 @@ class JobStore:
         prep_mode: str = "none",
         caption_prompt: str = "",
         caption_prompts: list[str] | None = None,
+        actor_email: str | None = None,
     ) -> Job:
         """Create a job from Drive file ids. RunPod downloads; Railway does not.
 
@@ -623,6 +630,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
+            actor_email=actor_email,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
@@ -630,7 +638,8 @@ class JobStore:
                     generate_captions: bool = False,
                     prep_mode: str = "none",
                     caption_prompt: str = "",
-                    caption_prompts: list[str] | None = None) -> Job:
+                    caption_prompts: list[str] | None = None,
+                    actor_email: str | None = None) -> Job:
         briefs = briefs_for_sources(
             len(sources),
             caption_prompt=caption_prompt,
@@ -652,21 +661,25 @@ class JobStore:
         if prep == "hq":
             quality = "fast"
         created = _now()
+        telemetry = {
+            "workspace_id": self._workspace_id,
+            "requested": count,
+            "submitted_utc": created,
+            "processing_charge": processing_charge_label(
+                quality, count, prep_mode=prep,
+            ),
+            "delivery_destination": "download",
+        }
+        email = (actor_email or "").strip().lower()
+        if email:
+            telemetry["customer_email"] = email
         job = Job(job_id=job_id, count=count, created_utc=created, sources=sources,
                    allow_creative_escalate=allow_creative_escalate,
                    quality_mode=quality,
                    created_seq=created_seq,
                    generate_captions=bool(generate_captions),
                    prep_mode=prep,
-                   telemetry={
-                       "workspace_id": self._workspace_id,
-                       "requested": count,
-                       "submitted_utc": created,
-                       "processing_charge": processing_charge_label(
-                           quality, count, prep_mode=prep,
-                       ),
-                       "delivery_destination": "download",
-                   })
+                   telemetry=telemetry)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -906,7 +919,7 @@ class JobStore:
                     "source_count": len(job.sources),
                 }
                 for key in (
-                    "workspace_id", "runpod_job_id", "runpod_endpoint_id",
+                    "workspace_id", "customer_email", "runpod_job_id", "runpod_endpoint_id",
                     "retry_count", "regen_count", "input_bytes", "output_bytes",
                     "railway_media_bytes", "delivery_destination",
                     "runpod_cost_usd", "processing_charge",
@@ -914,7 +927,12 @@ class JobStore:
                 ):
                     if job.telemetry.get(key) is not None:
                         props[key] = job.telemetry[key]
-                capture_event("job_completed", props)
+                actor = job.telemetry.get("customer_email") or job.telemetry.get("workspace_id")
+                capture_event(
+                    "job_completed",
+                    props,
+                    distinct_id=str(actor or "studio"),
+                )
         except (OSError, TypeError, ValueError) as exc:
             print(f"usage {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
 

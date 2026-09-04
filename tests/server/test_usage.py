@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
-from variant_maker.server.usage import USAGE_FILENAME, record_job, week_rollup
+from variant_maker.server.usage import (
+    USAGE_FILENAME,
+    record_job,
+    user_week_rollup,
+    week_rollup,
+)
 from variant_maker.server.workspace import Workspace
 
 
@@ -128,6 +133,23 @@ def test_hq_prep_failure_does_not_count_a_prep(tmp_path):
     assert r.hq_preps == 0
     assert r.fast_copies == 0
     assert r.packs == 1
+
+
+def test_user_week_rollup_splits_copies_by_customer_email(tmp_path):
+    ws, jeff = _job(tmp_path, job_id="jeff-pack", delivered=4, requested=4)
+    jeff.telemetry = {"customer_email": "jeff@x.com"}
+    record_job(ws, jeff)
+    ws, va = _job(tmp_path, job_id="va-pack", delivered=2, requested=2)
+    va.telemetry = {"customer_email": "va@x.com"}
+    record_job(ws, va)
+    ws, anon = _job(tmp_path, job_id="anon-pack", delivered=1, requested=1)
+    record_job(ws, anon)
+    rows = {row.email: row for row in user_week_rollup(ws)}
+    assert rows["jeff@x.com"].fast_copies == 4 and rows["jeff@x.com"].packs == 1
+    assert rows["va@x.com"].fast_copies == 2 and rows["va@x.com"].packs == 1
+    assert rows["unattributed"].fast_copies == 1 and rows["unattributed"].packs == 1
+    total = week_rollup(ws)
+    assert total.fast_copies == 7 and total.packs == 3
 
 
 def test_week_window_is_seven_days_inclusive(tmp_path):

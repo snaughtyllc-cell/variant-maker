@@ -58,8 +58,8 @@ const workspaces: AdminWorkspace[] = [
     owner_email: "maya@example.com",
     member_count: 2,
     members: [
-      { email: "maya@example.com", name: "Maya", role: "owner" },
-      { email: "va@example.com", name: "VA", role: "member" },
+      { email: "maya@example.com", name: "Maya", role: "owner", week_fast: 12, week_hq: 1, week_packs: 2 },
+      { email: "va@example.com", name: "VA", role: "member", week_fast: 0, week_hq: 0, week_packs: 0 },
     ],
     running: 1,
     fast: 1,
@@ -99,6 +99,7 @@ describe("Admin page", () => {
     expect(screen.getByText("Week HQ")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getAllByText("maya@example.com").length).toBeGreaterThan(0);
+    expect(screen.getByText("This week: 12 Fast · 1 HQ · 2 packs")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() => {
       expect(setAdminView).toHaveBeenCalledWith("ws_va");

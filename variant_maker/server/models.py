@@ -528,6 +528,9 @@ class AdminMemberOut(BaseModel):
     email: str
     name: str
     role: Literal["owner", "member"]
+    week_fast: int = 0
+    week_hq: int = 0
+    week_packs: int = 0
 
 
 class AdminWorkspaceOut(BaseModel):

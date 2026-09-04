@@ -11,7 +11,11 @@ do not fail a render.
 | `POSTHOG_HOST` | Railway Studio | Default `https://us.i.posthog.com` |
 
 Event: `job_completed` with `job_id`, `prep_mode`, `quality_mode`,
-`fast_copies`, `hq_preps`.
+`fast_copies`, `hq_preps`. `distinct_id` is the signed-in operator email
+when Studio auth is on, else the workspace id.
+
+Each finished job also stores `customer_email` on the `usage.jsonl` row.
+Admin and Team show Fast / HQ / packs **per member** for the last 7 days.
 
 Do not put keys on the Fast worker image. Lab Studio first; live after Jeff
 signs the week readout.

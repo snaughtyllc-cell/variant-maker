@@ -312,6 +312,9 @@ export interface AdminMember {
   email: string;
   name: string;
   role: AuthRole;
+  week_fast?: number;
+  week_hq?: number;
+  week_packs?: number;
 }
 
 export interface Team {
