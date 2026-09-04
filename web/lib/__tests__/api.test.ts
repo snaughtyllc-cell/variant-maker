@@ -109,6 +109,25 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("quality_mode")).toBe("hq");
   });
 
+  it("falls back to /api/jobs when direct upload is missing url/key", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = String(url);
+      if (u === "/api/uploads/direct") {
+        return new Response(JSON.stringify({ mode: "direct", upload_id: "up1" }), { status: 200 });
+      }
+      if (u === "/api/jobs") {
+        return new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 });
+      }
+      return new Response("nope", { status: 500 });
+    });
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    const out = await api.createJob([f], 3);
+    expect(out.job_id).toBe("j1");
+    expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/jobs/from-object")).toBe(false);
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    expect(jobCall).toBeTruthy();
+  });
+
   it("PUTs to object storage then POSTs /api/jobs/from-object", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const u = String(url);
