@@ -76,6 +76,9 @@ export interface SourceOut {
   insights_follows?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
+  hold_kind?: string | null;
+  suggestion_kind?: string | null;
+  suggestion_copy?: string | null;
   processing_charge?: string | null;
   delivery_destination?: string | null;
   expires_utc?: string | null;

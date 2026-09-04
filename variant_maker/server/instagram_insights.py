@@ -12,6 +12,7 @@ import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from statistics import median
 from typing import Any
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -452,6 +453,84 @@ def unmatched_payload(media: Sequence[IgMedia], matches: Sequence[Match]) -> lis
             "username": item.username,
             "ig_user_id": item.user_id,
         })
+    return out
+
+
+def _parse_utc(value: str | None) -> datetime | None:
+    if not value or not str(value).strip():
+        return None
+    raw = str(value).strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+WINNER_MIN_VIEWS = 10_000
+WINNER_MULT = 3.0
+QUIET_MAX_VIEWS = 1_000
+QUIET_MIN_LINKED = 3
+QUIET_MIN_AGE_HOURS = 24
+WINNER_COPY = "This original is carrying the week. Generate 20 more of this original."
+WEAK_HOLD_COPY = (
+    "Viewers bounce early on these copies (skip or short watch). "
+    "Try a new original — this looks like the video, not the variant."
+)
+HELD_NO_PUSH_COPY = (
+    "Hold looks fine, but these copies are not getting push versus the rest of this account. "
+    "Insights cannot see policy."
+)
+
+
+def pack_suggestions(
+    packs: Sequence[Mapping[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Winner / weak-hold / held-no-push. Never writes flagged. Fresh posts wait."""
+    moment = now or datetime.now(UTC)
+    linked = [p for p in packs if int(p.get("insights_linked") or 0) > 0]
+    scored = [p for p in linked if isinstance(p.get("insights_views"), int)]
+    out: list[dict[str, Any]] = []
+
+    def row(kind: str, pack: Mapping[str, Any], copy: str) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "source_id": pack.get("source_id"),
+            "filename": pack.get("filename"),
+            "copy": copy,
+        }
+
+    account_has_push = any(int(p.get("insights_views") or 0) > QUIET_MAX_VIEWS for p in scored)
+
+    for pack in scored:
+        views = int(pack["insights_views"])
+        others = [int(p["insights_views"]) for p in scored if p is not pack]
+        if others and views >= WINNER_MIN_VIEWS and views >= WINNER_MULT * median(others):
+            out.append(row("winner", pack, WINNER_COPY))
+
+    for pack in scored:
+        views = int(pack["insights_views"])
+        linked_n = int(pack.get("insights_linked") or 0)
+        created = _parse_utc(pack.get("created_utc") if isinstance(pack.get("created_utc"), str) else None)
+        age_ok = created is not None and (moment - created).total_seconds() >= QUIET_MIN_AGE_HOURS * 3600
+        quiet_floor = (
+            account_has_push
+            and linked_n >= QUIET_MIN_LINKED
+            and age_ok
+            and views <= QUIET_MAX_VIEWS
+        )
+        hold = pack.get("hold_kind") if isinstance(pack.get("hold_kind"), str) else None
+        if quiet_floor and hold == "weak_hold":
+            out.append(row("weak_hold", pack, WEAK_HOLD_COPY))
+        elif quiet_floor:
+            out.append(row("held_no_push", pack, HELD_NO_PUSH_COPY))
+
     return out
 
 

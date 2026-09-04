@@ -86,6 +86,7 @@ from .instagram_insights import (
     match_media,
     now_utc,
     pack_analytics,
+    pack_suggestions,
     stamp_tracked_accounts,
     unmatched_payload,
 )
@@ -366,6 +367,28 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         expires_utc=getattr(job, "outputs_expires_utc", None) if job is not None else None,
         poster_url=poster,
     )
+
+
+def _stamp_source_suggestions(sources: list[SourceOut]) -> list[SourceOut]:
+    packs = [
+        {
+            "source_id": s.source_id,
+            "filename": s.filename,
+            "insights_views": s.insights_views,
+            "insights_linked": s.insights_linked,
+            "hold_kind": s.hold_kind,
+            "created_utc": s.created_utc,
+        }
+        for s in sources
+    ]
+    by_id = {row["source_id"]: row for row in pack_suggestions(packs)}
+    for source in sources:
+        hit = by_id.get(source.source_id)
+        if not hit:
+            continue
+        source.suggestion_kind = str(hit.get("kind") or "") or None
+        source.suggestion_copy = str(hit.get("copy") or "") or None
+    return sources
 
 
 def _destination_out(d: Destination) -> DestinationOut:
@@ -694,6 +717,7 @@ def create_app(
         for row in list(body.get("packs") or []) + list(body.get("ranked") or []):
             if isinstance(row, dict):
                 row["created_utc"] = created.get(row.get("source_id"))
+        body["suggestions"] = pack_suggestions(body.get("packs") or [])
         accounts = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
         body["accounts"] = accounts
         names = {
@@ -1777,7 +1801,7 @@ def create_app(
             for s in job.sources:
                 out.append(_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None)))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
-        return out
+        return _stamp_source_suggestions(out)
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:

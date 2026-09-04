@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -222,6 +223,45 @@ def test_sync_matches_unique_caption_onto_gallery_copy(tmp_path):
     assert variant["ig_insights"]["views"] == 1234
     assert gallery[0]["insights_views"] == 1234
     assert gallery[0]["insights_linked"] == 1
+
+
+def test_analytics_and_gallery_stamp_winner_and_quiet(tmp_path):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("winner.mp4", b"x"), ("quiet.mp4", b"y")], count=3)
+    store.wait(job.job_id, timeout=5)
+    job = store.get(job.job_id)
+    job.created_utc = "2026-08-01T00:00:00Z"
+    winner, quiet = job.sources
+    for variant in winner.variants:
+        store.set_ig_insights(
+            winner.source_id, variant.index,
+            ig_media_id=f"w{variant.index}",
+            ig_user_id="178",
+            insights={"views": 40_000, "fetched_at": "2026-08-30T00:00:00Z"},
+        )
+    for variant in quiet.variants:
+        store.set_ig_insights(
+            quiet.source_id, variant.index,
+            ig_media_id=f"q{variant.index}",
+            ig_user_id="178",
+            insights={"views": 10, "fetched_at": "2026-08-30T00:00:00Z"},
+        )
+    job = store.get(job.job_id)
+    job.created_utc = (
+        datetime.now(UTC).replace(microsecond=0) - timedelta(hours=48)
+    ).isoformat().replace("+00:00", "Z")
+    store._persist(job)
+    client = TestClient(create_app(store, sa_json_path=""))
+    body = client.get("/api/instagram/analytics").json()
+    kinds = {row["kind"]: row["source_id"] for row in body["suggestions"]}
+    assert kinds["winner"] == winner.source_id
+    assert kinds["held_no_push"] == quiet.source_id
+    gallery = {row["filename"]: row for row in client.get("/api/gallery").json()}
+    assert gallery["winner.mp4"]["suggestion_kind"] == "winner"
+    assert "Generate 20 more" in gallery["winner.mp4"]["suggestion_copy"]
+    assert gallery["quiet.mp4"]["suggestion_kind"] == "held_no_push"
+    assert "flagged" not in gallery["quiet.mp4"]["suggestion_copy"].lower()
 
 
 def test_analytics_get_returns_insights_without_leaking_token(tmp_path):
