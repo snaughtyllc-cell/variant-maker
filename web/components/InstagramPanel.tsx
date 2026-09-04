@@ -36,6 +36,7 @@ export function InstagramPanel() {
   }
 
   useEffect(() => {
+    if (!canManage) return;
     const q = new URLSearchParams(window.location.search);
     if (q.get("ig") === "error") {
       setBanner(igOauthErrorMessage(q.get("reason")));
@@ -43,7 +44,9 @@ export function InstagramPanel() {
       setBanner("Instagram tester connected. Sync on Analytics to pull views onto packs.");
     }
     void refresh();
-  }, []);
+  }, [canManage]);
+
+  if (!canManage) return null;
 
   async function handleDisconnect(userId: string, username: string) {
     if (!window.confirm(`Disconnect ${handleLabel(username)}? Other testers stay connected.`)) {

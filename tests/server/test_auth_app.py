@@ -653,10 +653,36 @@ def test_password_login_locks_after_repeated_failures(tmp_path):
     reset()
     app, _ = _auth_app(tmp_path)
     client = TestClient(app)
+    assert _password_login(client, ADMIN, "secret12").status_code == 200
+    client.post("/api/auth/logout")
     for _ in range(MAX_FAILURES):
-        denied = _password_login(client, "hammer@x.com", "secret12")
+        denied = _password_login(client, ADMIN, "wrong-pass")
         assert denied.status_code == 401
-    locked = _password_login(client, "hammer@x.com", "secret12")
+    locked = _password_login(client, ADMIN, "wrong-pass")
     assert locked.status_code == 429
     reset()
+
+
+def test_uninvited_password_guesses_do_not_lock_the_address(tmp_path):
+    from variant_maker.server.login_limit import MAX_FAILURES, reset
+    reset()
+    app, _ = _auth_app(tmp_path)
+    client = TestClient(app)
+    for _ in range(MAX_FAILURES + 2):
+        denied = _password_login(client, "hammer@x.com", "secret12")
+        assert denied.status_code == 401
+    reset()
+
+
+def test_va_cannot_read_instagram_analytics(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    va = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "va@x.com", "kind": "join"})
+    _login(va, "va")
+    assert jeff.get("/api/instagram/analytics").status_code == 200
+    assert jeff.get("/api/instagram/status").status_code == 200
+    assert va.get("/api/instagram/analytics").status_code == 403
+    assert va.get("/api/instagram/status").status_code == 403
 

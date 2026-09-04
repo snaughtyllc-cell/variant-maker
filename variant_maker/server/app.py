@@ -1009,6 +1009,11 @@ def create_app(
         email = str(getattr(owner, "email", None) or "").strip().lower()
         return email or None
 
+    def _login_bucket(request: Request, email: str) -> str:
+        # Peer host only — spoofed X-Forwarded-For must not lock a victim IP.
+        peer = request.client.host if request.client is not None else "unknown"
+        return f"{email}|{peer or 'unknown'}"
+
     def _week_by_email(workspace_id: str) -> dict[str, Any]:
         if hub is None:
             return {}
@@ -1147,6 +1152,16 @@ def create_app(
         return resolve_ig_redirect_uri(
             ig_env,
             request_base=public_request_base(request.headers, fallback),
+        )
+
+    def _can_see_instagram_insights(request: Request) -> bool:
+        if not auth_on:
+            return True
+        user = getattr(request.state, "user", None)
+        if user is None:
+            return False
+        return can_manage_instagram(
+            email=user.email, role=user.role, admin_email=admin_email, auth_on=True,
         )
 
     def _require_instagram_manager(request: Request):
@@ -1371,7 +1386,7 @@ def create_app(
         password = body.password or ""
         if not email:
             raise HTTPException(status_code=400, detail="email is required")
-        if login_locked(email):
+        if login_locked(_login_bucket(request, email)):
             raise HTTPException(
                 status_code=429,
                 detail="Too many sign-in attempts. Wait a few minutes and try again.",
@@ -1384,7 +1399,7 @@ def create_app(
         existing = tenants.get_user(email)
         if existing is not None and existing.password_hash:
             if not verify_password(password, existing.password_hash):
-                note_login_failure(email)
+                note_login_failure(_login_bucket(request, email))
                 raise HTTPException(status_code=401, detail="Email or password is wrong.")
             user = existing
         else:
@@ -1402,14 +1417,13 @@ def create_app(
                 data_dir=data_dir,
             )
             if user is None:
-                note_login_failure(email)
                 raise HTTPException(
                     status_code=401,
                     detail="This email isn't invited. Ask the operator to add you.",
                 )
             tenants.set_password(user.email, hash_password(password))
             user = tenants.get_user(user.email) or user
-        clear_login_failures(email)
+        clear_login_failures(_login_bucket(request, email))
         _set_session_cookie(response, request, user)
         return _auth_me_out(user)
 
@@ -1905,13 +1919,15 @@ def create_app(
         return EventSourceResponse(gen())
 
     @app.get("/api/gallery", response_model=list[SourceOut])
-    def gallery() -> list[SourceOut]:
+    def gallery(request: Request) -> list[SourceOut]:
         out = []
         for job in store.list():
             for s in job.sources:
                 out.append(_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None)))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
-        return _stamp_source_suggestions(out)
+        if _can_see_instagram_insights(request):
+            return _stamp_source_suggestions(out)
+        return out
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:
@@ -2275,11 +2291,13 @@ def create_app(
         return {"ok": True}
 
     @app.get("/api/instagram/status", response_model=InstagramStatusOut)
-    def instagram_status() -> InstagramStatusOut:
+    def instagram_status(request: Request) -> InstagramStatusOut:
+        _require_instagram_manager(request)
         return InstagramStatusOut(**ig_status_payload(_ig_accounts(), ig_env))
 
     @app.get("/api/instagram/analytics")
-    def instagram_analytics() -> dict:
+    def instagram_analytics(request: Request) -> dict:
+        _require_instagram_manager(request)
         return _ig_analytics_body()
 
     @app.get("/api/instagram/oauth/start")
