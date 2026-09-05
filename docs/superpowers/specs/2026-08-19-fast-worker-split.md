@@ -36,8 +36,10 @@ Generate). Overnight **$0**.
 
 ### 0. Ops (no code)
 
-FlashBoot on, idle timeout **600s**, min workers 0. Morning 3-variant primer.
-This is still the free cold-start habit.
+FlashBoot on, min workers 0, max workers 2. Idle timeout **120s** is the Wave 2
+experiment (600s remains the production baseline until that trial is measured).
+Do **not** add a morning primer until FlashBoot + idle alone are scored. Spec:
+`docs/superpowers/specs/2026-09-05-fast-idle-scale-zero.md`.
 
 ### 1. Shipped — Fast `jobs` in the payload
 
