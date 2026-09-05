@@ -117,12 +117,14 @@ def record_job(
             "requested", "submitted_utc", "started_utc", "completed_utc",
             "shutdown_utc", "retry_count", "regen_count", "input_bytes",
             "output_bytes", "railway_media_bytes", "delivery_destination",
-            "runpod_cost_usd", "processing_charge",
+            "runpod_cost_usd", "processing_charge", "first_render_utc",
         ):
             if key in tel and tel[key] is not None:
                 row[key] = tel[key]
         if isinstance(tel.get("source"), dict):
             row["source"] = tel["source"]
+        if isinstance(tel.get("hunt"), dict):
+            row["hunt"] = tel["hunt"]
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")

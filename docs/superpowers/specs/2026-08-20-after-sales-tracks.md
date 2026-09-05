@@ -60,12 +60,12 @@ This is how we take a third agency without one giant shared queue.
 **one or two files**, not on Drive workflows. Workflow pull → generate → send
 can stay slow.
 
-**First:** measure. Warm vs cold Fast start, time-to-first-variant, time for
-count=1 vs count=8 vs count=20. Optional: Jeff sends a Telegram-spoofer
-sample so we can probe resolution/filters/whether it skipped VMAF — **probe,
-don’t clone**.
+**First:** measure. Spec: `docs/superpowers/specs/2026-09-05-pack-critical-path.md`.
+Time the **full 20-pack including rejected uniqueness candidates**, not only
+the encode that shipped. Cold vs warm of the same clips. Pack latency and
+billed $ per completed pack. SSIM 24/24 stays.
 
-**Then, in order:**
+**Then, in order (only after a hunt report names the bottleneck):**
 
 1. Ops: FlashBoot, idle timeout ~10 min, morning 1–3 Fast primer so the CPU
    is warm. No code if that closes the gap.

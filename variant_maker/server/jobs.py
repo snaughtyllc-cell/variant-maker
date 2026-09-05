@@ -926,7 +926,8 @@ class JobStore:
                     "retry_count", "regen_count", "input_bytes", "output_bytes",
                     "railway_media_bytes", "delivery_destination",
                     "runpod_cost_usd", "processing_charge",
-                    "submitted_utc", "completed_utc",
+                    "submitted_utc", "started_utc", "completed_utc",
+                    "first_render_utc", "hunt",
                 ):
                     if job.telemetry.get(key) is not None:
                         props[key] = job.telemetry[key]
@@ -969,6 +970,11 @@ class JobStore:
                             caption=_caption_for(source, e.index),
                         ))
                         break
+                if e.state == "rendering" and not (job.telemetry or {}).get("first_render_utc"):
+                    job.telemetry = merge_telemetry(
+                        job.telemetry, first_render_utc=_now(),
+                    )
+                    self._persist(job)
                 if e.state == "looking":
                     names = [n for n in (e.look_src, e.look_var) if n and is_jpeg_name(n)]
                     if names:
