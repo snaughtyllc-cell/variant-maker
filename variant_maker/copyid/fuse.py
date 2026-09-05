@@ -13,9 +13,7 @@ def head_excluded_from_fuse(name: str, head: dict | None) -> bool:
         return True
     if head.get("diagnostic") is True:
         return True
-    if head.get("policy") == AUDIO_POLICY_ORIGINAL_BED:
-        return True
-    return False
+    return head.get("policy") == AUDIO_POLICY_ORIGINAL_BED
 
 
 def fuse_heads(

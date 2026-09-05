@@ -41,12 +41,12 @@ def score_heads(
         from .chromaprint import score_audio
         heads["audio"] = score_audio(src_path, variant_path)
     else:
-        from .chromaprint import AUDIO_METRIC, AUDIO_POLICY_ORIGINAL_BED as bed
+        from .chromaprint import AUDIO_METRIC
         heads["audio"] = {
             "uniqueness": None, "sim": None, "status": "unknown",
             "available": False, "metric": AUDIO_METRIC,
-            "score_state": "disabled", "policy": bed, "diagnostic": True,
-            "reason": "disabled",
+            "score_state": "disabled", "policy": AUDIO_POLICY_ORIGINAL_BED,
+            "diagnostic": True, "reason": "disabled",
         }
     backend = visual_backend
     if backend is None:
