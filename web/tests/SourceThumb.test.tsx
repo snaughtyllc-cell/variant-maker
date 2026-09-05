@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { FileList } from "@/components/studio/FileList";
+import { SourceThumb } from "@/components/studio/SourceThumb";
 
 vi.mock("@/lib/videoPoster", () => ({
   captureVideoPoster: vi.fn(async () => "data:image/jpeg;base64,poster"),
@@ -15,13 +15,13 @@ beforeAll(() => {
   }
 });
 
-describe("FileList thumbs", () => {
-  it("shows a still poster for each local source", async () => {
+describe("SourceThumb", () => {
+  it("shows a still poster for a local upload, not a blank video", async () => {
     const file = new File(["x"], "gym.mp4", { type: "video/mp4" });
-    render(<FileList files={[file]} durations={[12]} onRemove={() => {}} />);
-    expect(screen.getByText("gym.mp4")).toBeInTheDocument();
+    render(<SourceThumb file={file} label="gym.mp4" />);
     const img = await screen.findByRole("img", { name: "gym.mp4 thumbnail" });
     expect(img.tagName).toBe("IMG");
-    expect(document.querySelector(".studio-clip-card video")).toBeNull();
+    expect(img).toHaveAttribute("src", "data:image/jpeg;base64,poster");
+    expect(document.querySelector("video")).toBeNull();
   });
 });

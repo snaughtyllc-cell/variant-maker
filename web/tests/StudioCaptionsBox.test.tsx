@@ -3,6 +3,10 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { StudioCaptionsBox } from "@/components/studio/StudioCaptionsBox";
 import { captionNeedSourcesCopy, captionPromptLabelForSource } from "@/lib/prepareCopy";
 
+vi.mock("@/lib/videoPoster", () => ({
+  captureVideoPoster: vi.fn(async () => "data:image/jpeg;base64,poster"),
+}));
+
 beforeAll(() => {
   if (!URL.createObjectURL) {
     URL.createObjectURL = vi.fn(() => "blob:file-thumb");
@@ -13,7 +17,7 @@ beforeAll(() => {
 });
 
 describe("StudioCaptionsBox thumbs", () => {
-  it("renders a video thumb per source, not a color tile", () => {
+  it("renders a still poster per source, not a blank video", async () => {
     const { container } = render(
       <StudioCaptionsBox
         generateCaptions
@@ -26,8 +30,8 @@ describe("StudioCaptionsBox thumbs", () => {
         onPromptChange={() => {}}
       />,
     );
-    expect(container.querySelectorAll("video")).toHaveLength(2);
-    expect(screen.getByLabelText("xyz123.mp4 thumbnail")).toBeInTheDocument();
+    expect(await screen.findAllByRole("img", { name: /thumbnail$/ })).toHaveLength(2);
+    expect(container.querySelectorAll("video")).toHaveLength(0);
     expect(screen.getByText("xyz123.mp4")).toBeInTheDocument();
     expect(container.querySelector(".studio-caption-sources")).toBeTruthy();
   });

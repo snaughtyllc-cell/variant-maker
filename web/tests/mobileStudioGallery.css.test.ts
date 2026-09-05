@@ -64,7 +64,8 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(mobile).toMatch(/\.studio-caption-sources\s*\{[^}]*scroll-snap-type:\s*x mandatory/s);
     expect(mobile).toMatch(/\.studio-caption-source\s*\{[^}]*flex:\s*0 0 100%/s);
     expect(mobile).toMatch(/\.studio-caption-source\s*\{[^}]*flex-direction:\s*column/s);
-    expect(mobile).toMatch(/\.studio-source-thumb video\s*\{[^}]*object-fit:\s*cover/s);
+    expect(css).toMatch(/\.studio-source-thumb img,\s*\.studio-source-thumb video\s*\{[^}]*object-fit:\s*cover/s);
+    expect(mobile).toMatch(/\.studio-clip-card__thumb\s*\{[^}]*width:\s*84px/s);
   });
 
   it("lets Studio scroll as one page with Live Queue in the flow", () => {
