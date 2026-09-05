@@ -31,3 +31,39 @@ def test_unknown_color_becomes_none():
     info = _parse_ffprobe(data, "x.mp4", "h")
     assert info.color.primaries is None
     assert info.has_audio is False
+
+
+def test_iphone_4k_rotate_tag_uses_portrait_display_size():
+    """Coded 3840×2160 + rotate 90 is what the phone showed as 9:16."""
+    data = {
+        "streams": [{
+            "codec_type": "video", "width": 3840, "height": 2160,
+            "avg_frame_rate": "60000/1001",
+            "tags": {"rotate": "90"},
+        }],
+        "format": {"duration": "16.5"},
+    }
+    info = _parse_ffprobe(data, "IMG_0683.MOV", "h")
+    assert info.width == 2160 and info.height == 3840
+
+
+def test_iphone_displaymatrix_negative_90_swaps():
+    data = {
+        "streams": [{
+            "codec_type": "video", "width": 3840, "height": 2160,
+            "side_data_list": [{"side_data_type": "Display Matrix", "rotation": -90.0}],
+        }],
+        "format": {},
+    }
+    info = _parse_ffprobe(data, "x.mov", "h")
+    assert info.width == 2160 and info.height == 3840
+
+
+def test_true_landscape_4k_does_not_swap():
+    data = {
+        "streams": [{"codec_type": "video", "width": 3840, "height": 2160}],
+        "format": {},
+    }
+    info = _parse_ffprobe(data, "x.mp4", "h")
+    assert info.width == 3840 and info.height == 2160
+

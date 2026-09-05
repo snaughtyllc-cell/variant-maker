@@ -1,0 +1,33 @@
+# Slim Fast CPU worker — ffmpeg + libvmaf, no CUDA / Real-ESRGAN.
+# Fast 20-packs encode here (libx264, jobs 4–8). HQ stays on Dockerfile (GPU).
+#
+# Scale to zero: RunPod CPU serverless, min workers 0, idle timeout 600s (trial 30–60s).
+# Build context is the repo root:
+#   docker build -f deploy/runpod/Dockerfile.fast -t variant-fast .
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates wget xz-utils libchromaprint-tools \
+    && rm -rf /var/lib/apt/lists/* \
+    && fpcalc -version
+
+# Same static ffmpeg+libvmaf as Studio / GPU image (BtbN GPL).
+RUN cd /tmp && wget -q -O ffmpeg.tar.xz \
+      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
+    tar xf ffmpeg.tar.xz && \
+    cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg \
+       ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ && \
+    rm -rf /tmp/ffmpeg* && \
+    test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
+RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband || echo "WARN: no rubberband filter"
+
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir "/app[serverless]" runpod
+
+# Control-plane handler (not the Drive-farm handler). No CMD override needed.
+CMD ["python", "-u", "/app/deploy/runpod/cp_handler.py"]

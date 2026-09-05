@@ -21,16 +21,40 @@ from . import __version__
 @click.option("-o", "--out", default="./output", show_default=True, type=click.Path())
 @click.option("--quality-floor", default=90.0, show_default=True, help="VMAF floor")
 @click.option("--max-regen", default=3, show_default=True)
-@click.option("--rotate", default="never", type=click.Choice(["never", "safe"]), show_default=True)
+@click.option("--rotate", default="safe", type=click.Choice(["never", "safe"]), show_default=True)
 @click.option("--flip", default="never", type=click.Choice(["never", "always"]), show_default=True)
+@click.option(
+    "--us-metadata", is_flag=True,
+    help="strip source tags, then write Apple / US location / creation_time",
+)
 @click.option("--jobs", default=1, show_default=True)
 @click.option("--dry-run", is_flag=True, help="print plan + commands, render nothing")
+@click.option(
+    "--look-first", is_flag=True,
+    help="one medium encode + source/variant stills; look gate, no uniqueness hunt",
+)
+@click.option(
+    "--auto-tune/--no-auto-tune", default=None,
+    help="bisect strength to the uniqueness target (default: on for Fast, off for HQ)",
+)
+@click.option(
+    "--copyid", default=None,
+    type=click.Choice(["off", "record", "gate"]),
+    help="off=SSIM only (default); record=log visual/audio heads; gate=fuse min uniqueness. "
+         "Env VARIANT_MAKER_COPYID when omitted.",
+)
 @click.option("-v", "--verbose", is_flag=True)
 @click.version_option(version=__version__)
 def main(**config):
     """Generate N look-good variants of INPUT plus a manifest."""
     from . import pipeline
-    pipeline.run(config)
+    m = pipeline.run(config)
+    if config.get("look_first") and m.variants:
+        v = m.variants[0]
+        click.echo(
+            f"look {v.look_status} mae={v.look_mae} max={getattr(v, 'look_mae_max', None)} "
+            f"stills={v.look_src or '-'} {v.look_var or '-'}"
+        )
 
 
 if __name__ == "__main__":

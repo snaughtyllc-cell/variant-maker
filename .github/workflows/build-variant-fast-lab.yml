@@ -1,0 +1,53 @@
+name: Build varimo Fast CPU worker (lab)
+
+# Lab GitHub (snaughtyllc-cell/variant-maker) only.
+# Experiment image only. Does not overwrite variant-fast:latest (live).
+on:
+  push:
+    branches:
+      - cursor/fast-shot-probe-c975
+      - cursor/fast-chroma-cloud-c975
+      - cursor/fast-cloud-less-grain-c975
+      - cursor/fast-chroma-softer-c975
+      - cursor/fast-720-luma-dust-c975
+      - cursor/caption-safe-crop-c975
+      - cursor/ig-720-fast-20-c975
+      - cursor/aqmtp-uniqueness-c975
+      - cursor/keyframe-crop-drift-cdb6
+      - cursor/compete-smart-repurpose-cdb6
+      - cursor/crop-drift-live-cdb6
+      - cursor/copyid-lab-record-cdb6
+      - cursor/lab-backlog-6cba
+    paths:
+      - deploy/runpod/Dockerfile.fast
+      - deploy/runpod/cp_handler.py
+      - variant_maker/*.py
+      - variant_maker/copyid/**
+      - variant_maker/server/**
+      - pyproject.toml
+      - .github/workflows/build-variant-fast-lab.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Fast CPU lab tag
+        run: |
+          docker build -f deploy/runpod/Dockerfile.fast \
+            -t ghcr.io/snaughtyllc-cell/variant-fast:lab .
+          docker push ghcr.io/snaughtyllc-cell/variant-fast:lab
