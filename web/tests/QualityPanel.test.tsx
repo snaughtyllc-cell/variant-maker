@@ -44,13 +44,19 @@ describe("QualityPanel", () => {
         uniquenessStatus="ok"
         heads={{
           visual: { available: true, uniqueness: 0.22 },
-          audio: { available: true, uniqueness: 0.05 },
+          audio: {
+            available: true,
+            uniqueness: 0.05,
+            diagnostic: true,
+            policy: "original_bed",
+          },
         }}
       />,
     );
     expect(screen.getByText("Pixel · scored")).toBeInTheDocument();
     expect(screen.getByText("Visual copy-id · 22%")).toBeInTheDocument();
-    expect(screen.getByText("Audio · 5%")).toBeInTheDocument();
+    expect(screen.getByText("Audio · diagnostic")).toBeInTheDocument();
+    expect(screen.queryByText("Audio · 5%")).not.toBeInTheDocument();
     expect(screen.queryByText("Visual copy-id · not scored")).not.toBeInTheDocument();
   });
 

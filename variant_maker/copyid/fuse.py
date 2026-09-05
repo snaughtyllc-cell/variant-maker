@@ -2,6 +2,20 @@
 from __future__ import annotations
 
 FUSED_METRIC = "fused_v1"
+AUDIO_POLICY_ORIGINAL_BED = "original_bed"
+
+
+def head_excluded_from_fuse(name: str, head: dict | None) -> bool:
+    """Audio on the original bed is diagnostic — never a ship/fail signal."""
+    if not head:
+        return True
+    if name == "audio":
+        return True
+    if head.get("diagnostic") is True:
+        return True
+    if head.get("policy") == AUDIO_POLICY_ORIGINAL_BED:
+        return True
+    return False
 
 
 def fuse_heads(
@@ -12,11 +26,14 @@ def fuse_heads(
     """Combine per-head scores.
 
     Heads with ``available=False`` or ``uniqueness is None`` are omitted.
+    Audio / ``original_bed`` / ``diagnostic`` heads are recorded, never fused.
     All omitted → unknown. Never invents a high score.
     """
     present: list[tuple[str, float]] = []
     for name, head in heads.items():
         if not head:
+            continue
+        if head_excluded_from_fuse(name, head):
             continue
         if head.get("available") is False:
             continue

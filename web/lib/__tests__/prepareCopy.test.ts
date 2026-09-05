@@ -56,6 +56,27 @@ describe("prepare copy", () => {
     ]);
   });
 
+  it("labels original-bed audio as diagnostic, not a uniqueness percent", () => {
+    const chips = uniquenessCoverageChips(0.41, {
+      visual: { available: true, uniqueness: 0.22 },
+      audio: {
+        available: true,
+        uniqueness: 0.05,
+        sim: 0.95,
+        diagnostic: true,
+        policy: "original_bed",
+        score_state: "measured",
+      },
+    });
+    expect(chips.map((c) => c.text)).toEqual([
+      "Pixel · scored",
+      "Visual copy-id · 22%",
+      "Audio · diagnostic",
+    ]);
+    expect(chips[2].title).toMatch(/original bed/i);
+    expect(chips[2].title).toMatch(/does not block/i);
+  });
+
   it("explains the real ~38% pass line, not a 65% verified band", () => {
     expect(uniquenessPassPct()).toBe(38);
     expect(uniquenessPassHint()).toBe("38% = pass vs the source");

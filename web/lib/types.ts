@@ -7,6 +7,9 @@ export interface QualityHead {
   backend?: string | null;
   n_frames?: number | null;
   metric?: string | null;
+  diagnostic?: boolean;
+  policy?: string | null;
+  score_state?: "measured" | "disabled" | "unavailable" | "error" | null;
 }
 export interface Quality {
   vmaf: number; histogram_ok: boolean; regen_count: number; passed: boolean;

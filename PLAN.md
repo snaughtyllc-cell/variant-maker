@@ -130,9 +130,10 @@ Status legend: ✅ done & verified · 🔨 to build
 ## Phase 17 — Copy-detection uniqueness heads  🔨
 - Spec: `docs/superpowers/specs/2026-08-28-copyid-uniqueness.md`. Lab: `docs/ops/copyid-lab.md`.
 - Second uniqueness stack next to `ssim_bits_v1`: SSCD (or DINOv2) Chamfer over N frames,
-  Chromaprint audio, min-fuse. Lazy like Real-ESRGAN — no torch on `import variant_maker`.
-- CLI `--copyid off|record|gate` (default **off** so Fast 20 / identical audio do not
-  suddenly fail). Lab: `VARIANT_MAKER_COPYID=gate`.
+  Chromaprint audio (diagnostic on the original bed). Lazy like Real-ESRGAN — no torch
+  on `import variant_maker`.
+- CLI `--copyid off|record|gate` (default **off**). Lab: `VARIANT_MAKER_COPYID=record`.
+  `gate` min-fuses SSIM + visual only — never Chromaprint. Live stays `off`.
 - Peer check stays SSIM bits. `below_floor` stays SSIM-bits-only.
 - Tests: pure math + fake visual always-on; `@pytest.mark.lab` for real weights.
 

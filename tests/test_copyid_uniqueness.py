@@ -4,7 +4,8 @@ import subprocess
 import tempfile
 
 from variant_maker import uniqueness
-from variant_maker.copyid import normalize_mode
+from variant_maker.copyid import normalize_mode, score_heads
+from variant_maker.copyid.backends import FakeBackend
 
 
 def _tiny_mp4(path, *, color="black"):
@@ -26,6 +27,22 @@ def test_normalize_mode():
     assert normalize_mode(True) == "gate"
     assert normalize_mode(False) == "off"
     assert normalize_mode("AUTO") == "gate"
+
+
+def test_score_heads_audio_disabled_is_not_a_low_match():
+    heads = score_heads(
+        "/nope/a.mp4", "/nope/b.mp4",
+        audio=False, visual_backend=FakeBackend(available_flag=False),
+    )
+    audio = heads["audio"]
+    assert audio["available"] is False
+    assert audio["uniqueness"] is None
+    assert audio["score_state"] == "disabled"
+    assert audio["policy"] == "original_bed"
+    assert audio["diagnostic"] is True
+    visual = heads["visual"]
+    assert visual["available"] is False
+    assert visual["score_state"] == "unavailable"
 
 
 def test_copyid_off_ignores_extra_heads_for_metric(monkeypatch):
@@ -60,6 +77,30 @@ def test_copyid_record_keeps_ssim_gate():
         assert r["uniqueness"] >= uniqueness.DEFAULT_TARGET
         assert r["heads"]["visual"]["sim"] == 0.99
         assert r["heads"]["ssim"]["bits"] == r["bits"]
+
+
+def test_copyid_gate_does_not_fuse_original_bed_audio():
+    """High Chromaprint match on the same bed must not fail gate or trigger regen."""
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.mp4")
+        b = os.path.join(d, "b.mp4")
+        _tiny_mp4(a, color="white")
+        _tiny_mp4(b, color="black")
+        audio = {
+            "uniqueness": 0.01, "available": True, "sim": 0.99,
+            "status": "ok", "policy": "original_bed", "diagnostic": True,
+            "score_state": "measured",
+        }
+        r = uniqueness.score_uniqueness(
+            a, b, target=uniqueness.DEFAULT_TARGET, copyid="gate",
+            extra_heads={"audio": audio},
+        )
+        assert r["uniqueness_metric"] == "ssim_bits_v1"
+        assert r["uniqueness_status"] == "ok"
+        assert r["uniqueness"] >= uniqueness.DEFAULT_TARGET
+        assert r["heads"]["audio"]["sim"] == 0.99
+        assert r["heads"]["audio"]["policy"] == "original_bed"
+        assert "audio" not in r.get("fused_from", [])
 
 
 def test_copyid_gate_min_with_copy_like_visual():

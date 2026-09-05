@@ -40,7 +40,8 @@ from . import __version__
 @click.option(
     "--copyid", default=None,
     type=click.Choice(["off", "record", "gate"]),
-    help="off=SSIM only (default); record=log visual/audio heads; gate=fuse min uniqueness. "
+    help="off=SSIM only (default); record=log visual/audio heads; "
+         "gate=fuse SSIM+visual (audio stays diagnostic on the original bed). "
          "Env VARIANT_MAKER_COPYID when omitted.",
 )
 @click.option("-v", "--verbose", is_flag=True)

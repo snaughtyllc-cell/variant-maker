@@ -887,6 +887,7 @@ def test_pipeline_forwards_copyid_gate(monkeypatch, tmp_path):
     manifest = pipeline.run(_cfg(tmp_path, copyid="gate", uniq_strengths=[1.0]))
     assert seen["kw"].get("copyid") == "gate"
     assert manifest.run.get("copyid") == "gate"
+    assert manifest.run.get("audio_policy") == "original_bed"
 
 
 def test_pipeline_records_heads_on_quality(monkeypatch, tmp_path):

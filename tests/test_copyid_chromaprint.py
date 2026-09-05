@@ -51,6 +51,9 @@ def test_score_audio_unavailable_without_fpcalc(monkeypatch):
     assert r["uniqueness"] is None
     assert r["metric"] == AUDIO_METRIC
     assert r["reason"] == "no_fpcalc"
+    assert r["score_state"] == "unavailable"
+    assert r["policy"] == "original_bed"
+    assert r["diagnostic"] is True
 
 
 def test_score_audio_reason_missing_file(monkeypatch, tmp_path):
@@ -58,6 +61,8 @@ def test_score_audio_reason_missing_file(monkeypatch, tmp_path):
     r = score_audio(str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4"))
     assert r["available"] is False
     assert r["reason"] == "missing_file"
+    assert r["score_state"] == "unavailable"
+    assert r["uniqueness"] is None
 
 
 def test_score_audio_falls_back_to_ffmpeg_wav(monkeypatch, tmp_path):
@@ -81,6 +86,9 @@ def test_score_audio_falls_back_to_ffmpeg_wav(monkeypatch, tmp_path):
     assert r["available"] is True
     assert r["sim"] == 1.0
     assert r["via"] == "ffmpeg_wav"
+    assert r["score_state"] == "measured"
+    assert r["policy"] == "original_bed"
+    assert r["diagnostic"] is True
 
 
 def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
@@ -98,6 +106,8 @@ def test_score_audio_reason_error_when_both_paths_fail(monkeypatch, tmp_path):
     r = score_audio(str(a), str(b))
     assert r["available"] is False
     assert r["reason"] == "error"
+    assert r["score_state"] == "error"
+    assert r["uniqueness"] is None
 
 
 @pytest.mark.skipif(not shutil.which("fpcalc"), reason="fpcalc not on PATH")
