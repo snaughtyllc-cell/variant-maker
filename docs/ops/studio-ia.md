@@ -33,7 +33,7 @@ describe v1 only. Do not treat them as the current product.
 Solo owners see **Studio · Gallery · Analytics** on the phone bar; Drive
 is under More. Solo members see **Studio · Gallery**, with Drive in More.
 
-Phone (`< 640px`) shows **Studio · Gallery · Analytics (Stats) · Flows**.
+Phone (`< 640px`) shows **Studio · Gallery · Analytics · Flows**.
 **Drive** and **Drops** sit under the top-right **More** control, with Team /
 Admin / Diagnostics. Desktop SideNav keeps the full operator row
 (Studio / Gallery / Drops / Workflows / Drive).
@@ -47,7 +47,7 @@ row + progress card.
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast, Reconstruct-first (HQ) switch default off, Advanced, live queue. |
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
-| Analytics | `/analytics` | owner / site admin | yes (label **Stats**) | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
+| Analytics | `/analytics` | owner / site admin | yes | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drops | `/drops` | everyone | More | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |

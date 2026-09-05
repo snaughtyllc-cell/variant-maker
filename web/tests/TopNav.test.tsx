@@ -70,7 +70,7 @@ describe("TopNav", () => {
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
-    expect(screen.getAllByRole("link", { name: "Stats" })[0]).toHaveAttribute("href", "/analytics");
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute("href", "/analytics");
     expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More" }));
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
@@ -79,7 +79,7 @@ describe("TopNav", () => {
     );
   });
 
-  it("keeps agency phone bar at Studio, Gallery, Stats, Flows with Drive and Drops in More", () => {
+  it("keeps agency phone bar at Studio, Gallery, Analytics, Flows with Drive and Drops in More", () => {
     render(<TopNav />);
     const bar = document.querySelector(".vf-mobile-tabs") as HTMLElement;
     expect([...bar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual([

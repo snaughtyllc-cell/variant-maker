@@ -71,7 +71,6 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
   {
     href: "/analytics",
     label: "Analytics",
-    short: "Stats",
     audience: "owner",
     tab: "extra",
     summary:

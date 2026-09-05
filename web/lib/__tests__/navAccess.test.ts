@@ -143,7 +143,7 @@ describe("visiblePhoneBarTabs", () => {
     expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/drops", "/settings/drive"]);
   });
 
-  it("keeps solo owners at Studio, Gallery, Stats with Drive under More", () => {
+  it("keeps solo owners at Studio, Gallery, Analytics with Drive under More", () => {
     const me = { experience: "solo", is_admin: false, auth_required: true, role: "owner" };
     expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/", "/gallery", "/analytics"]);
     expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/settings/drive"]);
