@@ -1,4 +1,11 @@
-"""Object-storage key layout, signed-link TTLs, and output retention."""
+"""Object-storage key layout, signed-link TTLs, and output retention.
+
+Legacy keys are ``inputs/{source_id}/`` and ``outputs/{source_id}/``.
+``source_id`` is a label, not authorization. New writes use
+``job_isolation.namespaced_*`` (tenant + job + attempt). Resolve a legacy
+object only through an authorized job record, then copy it into the
+namespaced prefix before a new attempt reads it.
+"""
 from __future__ import annotations
 
 import os

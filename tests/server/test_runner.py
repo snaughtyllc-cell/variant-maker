@@ -215,6 +215,44 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
     assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
 
 
+def test_routing_runner_overflow_slot_uses_second_fast_remote():
+    from variant_maker.server.fast_occupancy import Reservation
+    from variant_maker.server.runner import RoutingRunner, SourceResult
+
+    class Fake:
+        def __init__(self, name):
+            self.name = name
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="")
+
+    local, gpu, fast, overflow = Fake("local"), Fake("gpu"), Fake("fast"), Fake("overflow")
+    router = RoutingRunner(
+        local, gpu, fast_remote=fast, overflow_fast=overflow, max_local_fast=3,
+    )
+    slot0 = Reservation(
+        tenant_id="a", job_id="j0", kind="fast", slot=0,
+        attempt_id="att0", fence="f0", endpoint_id="ep-a",
+    )
+    slot1 = Reservation(
+        tenant_id="b", job_id="j1", kind="fast", slot=1,
+        attempt_id="att1", fence="f1", endpoint_id="ep-b",
+    )
+    router.run(
+        "s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None,
+        quality_mode="fast", reservation=slot0,
+    )
+    router.run(
+        "s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None,
+        quality_mode="fast", reservation=slot1,
+    )
+    assert len(fast.calls) == 1
+    assert len(overflow.calls) == 1
+    assert not gpu.calls
+
+
 def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):
     from variant_maker.server.runner import encode_jobs_for_worker
 

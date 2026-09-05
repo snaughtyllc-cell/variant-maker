@@ -16,7 +16,7 @@ and billing wait until a real queue or a real invoice pain shows up.
 | **A Team** | A new-workspace owner invites their VA on `/team` without Jeff. Shipped on Studio PR. |
 | **B Drop Ledger 12a** | Drive page has Ensure / Sync / open sheet. Gallery can mark Flagged. Unlabeled = pass. |
 | **C Onboarding** | Short ops page: Connect Drive, Team, Fast vs HQ, workflow vs one-off. |
-| **D Hybrid runners** | Still parked until the trigger below. Not part of “sales slice done.” |
+| **D Hybrid runners** | Occupancy router shipped in Lab (two Fast slots, one pack per studio). Dashboard max workers / idle timeout are ops. |
 
 Sell on that. Then upgrade capacity. Do not wait for Stripe or a bigger GPU
 to take the first outside operator.
@@ -40,17 +40,18 @@ to take the first outside operator.
 **Trigger:** A second workspace is waiting on Fast while another is mid-job.
 Until then one Fast CPU endpoint is enough.
 
-**Build:** Occupancy routing. If workspace A holds a live Fast job, boot a
-**second serverless Fast CPU** for workspace B. If only one studio is busy,
-they keep the single worker (no extra spend). Same idea later for a second
-HQ GPU — not in this wave.
+**Build (Lab):** Occupancy router — two scale-to-zero Fast CPU slots, one
+complete pack per worker, one live pack per studio. Atomic reservations in
+`fast_occupancy.py`; TenantHub + JobStore wait/queue; slot 1 uses
+`RUNPOD_FAST_ENDPOINT_ID_2` when set. Idle journal
+(`fast_occupancy.json`) survives a Railway restart. Cancel follows
+`(tenant_id, job_id)`, not “the current Fast worker.”
 
-**Not:** dedicated card per customer, always-on GPU, serializing Fast into
-one line, uniqueness changes.
+Dashboard still sets max workers **2** and the idle timeout (Wave 2). HQ
+occupancy and reconstruct-first slot split stay out.
 
-**Files (when unparked):** `runpod_runner.py`, `runner.py`, Fast endpoint env,
-`docs/ops/railway-studio.md`. Spec notes already live on the workspaces doc
-(`Later — hybrid runners`) and sales-tracks Track D.
+**Not:** dedicated card per customer, always-on GPU, uniqueness changes,
+splitting one 20-pack across machines.
 
 This is how we take a third agency without one giant shared queue.
 
@@ -60,22 +61,29 @@ This is how we take a third agency without one giant shared queue.
 **one or two files**, not on Drive workflows. Workflow pull → generate → send
 can stay slow.
 
-**First:** measure. Warm vs cold Fast start, time-to-first-variant, time for
-count=1 vs count=8 vs count=20. Optional: Jeff sends a Telegram-spoofer
-sample so we can probe resolution/filters/whether it skipped VMAF — **probe,
-don’t clone**.
+**Spec:** `2026-09-05-fast-idle-scale-zero.md`.
+
+**First:** measure. Warm vs cold Fast start, time-to-first-output for
+count=1 vs count=2 vs count=20, billed worker-minutes (real vs idle). Optional:
+Jeff sends a Telegram-spoofer sample so we can probe resolution/filters/whether
+it skipped VMAF — **probe, don’t clone**.
 
 **Then, in order:**
 
-1. Ops: FlashBoot, idle timeout ~10 min, morning 1–3 Fast primer so the CPU
-   is warm. No code if that closes the gap.
-2. Code only if still slow: more Fast parallelism on the existing worker,
-   or a **business-hours warm Fast CPU** (cost trade, still not a 4090).
-3. Still later: always-on Fast CPU if the primer + hybrid still leave a
-   cold-start hole. Always-on **GPU** stays off.
+1. Ops on the Fast CPU endpoint: **min=0, max=2**, FlashBoot on where
+   supported, **120s idle timeout** as the first experiment (today’s 600s is
+   the baseline). No primer and no keep-alive until those numbers exist.
+2. Primer only if the first interactive request still suffers **and** arrival
+   is predictable. One synthetic item, system job, no Drive publish. Real
+   work always supersedes it. Do not ship the primer in the same change as
+   the idle policy.
+3. Code only if still slow: more Fast parallelism on the existing worker,
+   or a **bounded business-hours warm Fast CPU** (cost trade, still not a
+   4090). Always-on **GPU** stays off. HQ occupancy is a later wave — skip
+   it while Fast is the queue.
 
 **Not:** turning escalate off, uniqueness 55%, HQ for the daily 1–2 clip,
-Railway 20-packs.
+Railway 20-packs, reconstruct-first slot tricks, a second GPU.
 
 ## Wave 3 — HQ capacity when Fast is no longer the queue
 

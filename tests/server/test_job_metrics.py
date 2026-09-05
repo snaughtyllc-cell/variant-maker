@@ -143,3 +143,39 @@ def test_record_job_persists_telemetry_on_usage_row(tmp_path):
     assert row["runpod_cost_usd"] == 0.02
     assert row["regen_count"] == 1
     assert row["railway_media_bytes"] == 0
+
+
+def test_record_job_persists_start_class_and_billed_split(tmp_path):
+    ws = Workspace(str(tmp_path))
+    source = JobSource(
+        source_id="s1", filename="a.mp4", requested=1,
+        variants=[VariantInfo("s1", 1, "v01.mp4", "ok", {"vmaf": 95})],
+    )
+    job = Job(
+        job_id="jstart",
+        count=1,
+        created_utc="2026-09-05T12:00:00Z",
+        sources=[source],
+        state="done",
+        quality_mode="fast",
+        telemetry={
+            "workspace_id": "ws_lab",
+            "start_class": {
+                "classification": "cold",
+                "worker_id": "w1",
+                "boot_id": "b1",
+                "flashboot": None,
+            },
+            "startup": {"router_queue_s": 0.2, "provider_queue_s": 4.1, "image_pull_s": None},
+            "billed": {"real_work_s": 90, "primer_work_s": 0, "idle_retention_s": 120, "total_s": 210},
+            "first_output_utc": "2026-09-05T12:00:18Z",
+        },
+    )
+    assert record_job(ws, job, now=datetime(2026, 9, 5, 12, tzinfo=UTC)) is True
+    import json
+    with open(usage_path(ws), encoding="utf-8") as f:
+        row = json.loads(f.read())
+    assert row["start_class"]["classification"] == "cold"
+    assert row["startup"]["image_pull_s"] is None
+    assert row["billed"]["idle_retention_s"] == 120
+    assert row["first_output_utc"] == "2026-09-05T12:00:18Z"
