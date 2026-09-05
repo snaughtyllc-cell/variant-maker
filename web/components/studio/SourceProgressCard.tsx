@@ -88,7 +88,11 @@ function DoneThumb({ variant }: { variant: VariantTile }) {
       src={variant.look_var_url}
       badge={
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-          {vmafRounded != null && <Badge color={badgeColor}>{vmafRounded}</Badge>}
+          {vmafRounded != null && (
+            <span title="Proxy encode quality">
+              <Badge color={badgeColor}>{vmafRounded}</Badge>
+            </span>
+          )}
           {uniquenessPct != null && (
             <Badge color={uniquenessMiss ? "red" : variant.escalated ? "cyan" : "muted"}>{uniquenessPct}%</Badge>
           )}

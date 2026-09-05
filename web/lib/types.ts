@@ -13,6 +13,14 @@ export interface Quality {
   spatial_vmaf: number | null; spatial_ok: boolean | null;
   bits?: number | null;
   heads?: Record<string, QualityHead> | null;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_mae_max?: number | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_review_t?: number | null;
+  look_crop?: { crop_keep?: number | null; crop_x_frac?: number | null; crop_y_frac?: number | null } | null;
+  vmaf_scope?: string | null;
 }
 export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
@@ -26,8 +34,14 @@ export interface VariantOut {
   file_ready?: boolean;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_approved_sha256?: string | null;
+  look_review_t?: number | null;
+  look_deliverable?: boolean;
   caption?: string | null;
   ig_media_id?: string | null;
   ig_user_id?: string | null;
@@ -51,8 +65,10 @@ export interface LookPreviewOut {
   index: number;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_review_t?: number | null;
 }
 export interface SourceOut {
   source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
@@ -134,10 +150,14 @@ export interface VariantEvent {
   platform_result?: PlatformResult | null;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src?: string | null;
   look_var?: string | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_review_t?: number | null;
 }
 export const VMAF_FLOOR = 90;
 

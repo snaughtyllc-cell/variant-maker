@@ -118,8 +118,14 @@ def passes_guard(
     # so crop/speed fingerprints don't pollute the wash-out check.
     hist_ok = histogram_sanity(src_path, quality_render_path, tol)
     score = vmaf(src_path, quality_render_path)
-    # VMAF is authoritative for "looks fine"; hist only vetoes catastrophic wash-out.
-    return {"vmaf": score, "histogram_ok": hist_ok, "passed": bool(hist_ok and score >= floor)}
+    # VMAF is proxy encode quality on the stripped pair. It cannot certify
+    # effects excluded from its input. Look MAE on the actual file is the blotch backstop.
+    return {
+        "vmaf": score,
+        "histogram_ok": hist_ok,
+        "passed": bool(hist_ok and score >= floor),
+        "vmaf_scope": "proxy_encode_quality",
+    }
 
 
 def _dimensions(path: str) -> tuple[int, int]:

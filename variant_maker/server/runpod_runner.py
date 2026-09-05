@@ -143,8 +143,12 @@ class RunPodServerlessRunner:
                     platform_result=e.get("platform_result"),
                     look_status=e.get("look_status"),
                     look_mae=e.get("look_mae"),
+                    look_mae_max=e.get("look_mae_max"),
                     look_src=e.get("look_src"),
                     look_var=e.get("look_var"),
+                    look_frames=e.get("look_frames"),
+                    look_artifact_sha256=e.get("look_artifact_sha256"),
+                    look_review_t=e.get("look_review_t"),
                 ))
             elif chunk.get("type") == "submitted":
                 # JobStore persists runpod_job_id from cancel_token; nothing else.
@@ -175,8 +179,12 @@ class RunPodServerlessRunner:
                 platform_result=v.get("platform_result"),
                 look_status=v.get("look_status"),
                 look_mae=v.get("look_mae"),
+                look_mae_max=v.get("look_mae_max"),
                 look_src=v.get("look_src"),
                 look_var=v.get("look_var"),
+                look_frames=list(v.get("look_frames") or []),
+                look_artifact_sha256=v.get("look_artifact_sha256"),
+                look_review_t=v.get("look_review_t"),
                 object_key=key,
             ))
         manifest_path = os.path.join(out_dir, "manifest.json")

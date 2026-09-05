@@ -28,8 +28,12 @@ class VariantEvent:
     platform_result: str | None = None
     look_status: str | None = None
     look_mae: float | None = None
+    look_mae_max: float | None = None
     look_src: str | None = None
     look_var: str | None = None
+    look_frames: list | None = None
+    look_artifact_sha256: str | None = None
+    look_review_t: float | None = None
 
 
 def event_to_dict(e: VariantEvent) -> dict:

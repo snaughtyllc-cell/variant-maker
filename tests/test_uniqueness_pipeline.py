@@ -49,8 +49,14 @@ def _stub_common(monkeypatch):
     monkeypatch.setattr(
         pipeline.look, "score_look",
         lambda src_path, variant_path: {
-            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_status": "no_coarse_luma_alarm", "look_metric": "coarse_luma_v1",
             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+            "look_frames": [
+                {"frac": 0.25, "t_src": 0.25, "t_var": 0.25, "mae": 8.0},
+                {"frac": 0.50, "t_src": 0.5, "t_var": 0.5, "mae": 10.0},
+                {"frac": 0.75, "t_src": 0.75, "t_var": 0.75, "mae": 9.0},
+            ],
+            "look_artifact_sha256": "stubsha",
         },
     )
     monkeypatch.setattr(pipeline.look, "write_look_stills", lambda *a, **k: {
@@ -128,7 +134,7 @@ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline.look, "score_look",
         lambda src_path, variant_path: {
-            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_status": "review_required", "look_metric": "coarse_luma_v1",
             "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
         },
     )
@@ -143,7 +149,7 @@ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     record = manifest.variants[0]
     assert record.escalated is False
     assert record.preset_used == "medium"
-    assert record.look_status == "fail"
+    assert record.look_status == "review_required"
     assert record.uniqueness_status == "below_floor"
     assert record.status == "uniqueness_fail"
 
@@ -153,12 +159,16 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     _stub_common(monkeypatch)
     looks = iter([
         {
-            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_status": "no_coarse_luma_alarm", "look_metric": "coarse_luma_v1",
             "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
         },
         {
-            "look_status": "fail", "look_metric": "coarse_luma_v1",
+            "look_status": "review_required", "look_metric": "coarse_luma_v1",
             "look_mae": 40.0, "look_mae_max": 51.0, "look_target": 38.0,
+        },
+        {
+            "look_status": "no_coarse_luma_alarm", "look_metric": "coarse_luma_v1",
+            "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
         },
     ])
     monkeypatch.setattr(
@@ -176,10 +186,12 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     record = manifest.variants[0]
     assert record.escalated is False
     assert record.preset_used == "medium"
-    assert record.look_status == "ok"
+    assert record.look_status == "no_coarse_luma_alarm"
     assert record.uniqueness_status == "below_target"
     assert record.status == "ok"
     assert record.uniqueness == 20 / 64
+    assert record.look_mae_max == 22.0
+    assert record.quality.get("vmaf_scope") == "proxy_encode_quality"
 
 
 def test_stays_below_target_when_escalate_disabled(monkeypatch, tmp_path):
@@ -303,7 +315,7 @@ def test_look_first_one_encode_no_escalate(monkeypatch, tmp_path):
     record = manifest.variants[0]
     assert record.escalated is False
     assert record.preset_used == "medium"
-    assert record.look_status == "ok"
+    assert record.look_status == "no_coarse_luma_alarm"
     assert seen == ["medium"]
 
 
@@ -442,7 +454,7 @@ def test_mae_runs_after_uniqueness_returns(monkeypatch, tmp_path):
         assert uniq_done.is_set()
         order.append("mae")
         return {
-            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_status": "no_coarse_luma_alarm", "look_metric": "coarse_luma_v1",
             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
         }
 

@@ -12,6 +12,7 @@ vi.mock("@/lib/api", () => ({
   setPlatformResult: vi.fn().mockResolvedValue({}),
   setPostUrl: vi.fn().mockResolvedValue({}),
   setVariantCaption: vi.fn().mockResolvedValue({}),
+  approveLookEncode: vi.fn().mockResolvedValue({}),
 }));
 
 function variant(over: Partial<VariantOut> = {}): VariantOut {
@@ -110,6 +111,48 @@ describe("VariantSheet layout", () => {
     expect(screen.queryByText("Passed upload")).not.toBeInTheDocument();
     expect(screen.queryByText("Flagged")).not.toBeInTheDocument();
     expect(screen.queryByText("Look")).not.toBeInTheDocument();
+  });
+
+  it("shows a review trigger for MAE over 38, not a looks-bad verdict", async () => {
+    render(
+      <VariantSheet
+        sourceId="s1"
+        sourceName="boil"
+        variants={[
+          variant({
+            look_status: "review_required",
+            look_mae: 44,
+            look_mae_max: 51,
+            look_review_t: 2,
+            look_frames: [
+              { frac: 0.25, t_var: 1, mae: 12 },
+              { frac: 0.5, t_var: 2, mae: 51 },
+              { frac: 0.75, t_var: 3, mae: 20 },
+            ],
+            quality: {
+              vmaf: 98,
+              histogram_ok: true,
+              regen_count: 0,
+              passed: true,
+              spatial_vmaf: null,
+              spatial_ok: true,
+              vmaf_scope: "proxy_encode_quality",
+              look_crop: { crop_keep: 0.86, crop_x_frac: 0.5, crop_y_frac: 0.2 },
+            },
+          }),
+        ]}
+        index={0}
+        onClose={() => {}}
+        onNav={() => {}}
+        onRegenerate={() => {}}
+      />,
+    );
+    expect(screen.getByText("Review this encode")).toBeInTheDocument();
+    expect(screen.getByText(/not a verdict that it looks bad/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /play flagged moment/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /approve this encode/i })).toBeInTheDocument();
+    expect(screen.queryByText("Look fail")).not.toBeInTheDocument();
+    expect(screen.getByText(uniquenessCustomerLabel())).toBeInTheDocument();
   });
 });
 

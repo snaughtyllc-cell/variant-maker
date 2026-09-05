@@ -13,6 +13,10 @@ vi.mock("@/lib/api", () => ({
     zip_url: "https://objects.test/zip",
   })),
   removeSource: vi.fn(),
+  setVariantCaption: vi.fn().mockResolvedValue({}),
+  setPlatformResult: vi.fn().mockResolvedValue({}),
+  setPostUrl: vi.fn().mockResolvedValue({}),
+  approveLookEncode: vi.fn().mockResolvedValue({}),
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";

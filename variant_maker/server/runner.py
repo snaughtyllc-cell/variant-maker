@@ -137,8 +137,12 @@ class VariantResult:
     platform_result: str | None = None
     look_status: str | None = None
     look_mae: float | None = None
+    look_mae_max: float | None = None
     look_src: str | None = None
     look_var: str | None = None
+    look_frames: list | None = None
+    look_artifact_sha256: str | None = None
+    look_review_t: float | None = None
     object_key: str | None = None
 
 
@@ -185,8 +189,12 @@ class LocalRunner:
                 platform_result=kw.get("platform_result"),
                 look_status=kw.get("look_status"),
                 look_mae=kw.get("look_mae"),
+                look_mae_max=kw.get("look_mae_max"),
                 look_src=kw.get("look_src"),
                 look_var=kw.get("look_var"),
+                look_frames=kw.get("look_frames"),
+                look_artifact_sha256=kw.get("look_artifact_sha256"),
+                look_review_t=kw.get("look_review_t"),
             ))
 
         quality_mode = normalize_quality_mode(quality_mode)
@@ -226,8 +234,12 @@ class LocalRunner:
                 platform_result=getattr(v, "platform_result", None),
                 look_status=getattr(v, "look_status", None),
                 look_mae=getattr(v, "look_mae", None),
+                look_mae_max=getattr(v, "look_mae_max", None),
                 look_src=getattr(v, "look_src", None),
                 look_var=getattr(v, "look_var", None),
+                look_frames=list(getattr(v, "look_frames", None) or []),
+                look_artifact_sha256=getattr(v, "look_artifact_sha256", None),
+                look_review_t=getattr(v, "look_review_t", None),
             )
             for v in manifest.variants
         ]

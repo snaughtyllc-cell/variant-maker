@@ -279,14 +279,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
 
         def _emit_looking() -> None:
-            emit(
-                "looking", index=i, filename=fname,
-                look_status=look_info.get("look_status"),
-                look_mae=look_info.get("look_mae"),
-                look_mae_max=look_info.get("look_mae_max"),
-                look_src=look_info.get("look_src"),
-                look_var=look_info.get("look_var"),
-            )
+            emit("looking", index=i, filename=fname, **look.event_fields(look_info))
 
         def _write_look_stills() -> dict:
             try:
@@ -332,9 +325,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             }
 
         def _restore_medium_if_look_fail(snap: dict) -> None:
-            """Escalate is uniqueness-only. Look fail keeps the medium encode."""
+            """Escalate is uniqueness-only. review_required keeps the medium encode."""
             nonlocal look_info, u, r, preset_used, escalated
-            if look_info.get("look_status") != "fail":
+            if not look.blocks_unattended_escalate(look_info.get("look_status")):
                 if os.path.isfile(snap["path"]):
                     os.remove(snap["path"])
                 return
@@ -344,7 +337,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
             r = snap["r"]
             preset_used = snap["preset_used"]
             escalated = False
-            look_info = {**look_info, **_write_look_stills()}
+            look_info = {
+                **look_info,
+                **look.score_look(src.path, path),
+                **_write_look_stills(),
+            }
             _emit_looking()
 
         def _peer_bits(variant_path: str) -> int | None:
@@ -404,6 +401,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         look_info: dict = {
             "look_status": "unknown", "look_mae": None, "look_mae_max": None,
             "look_src": None, "look_var": None,
+            "look_frames": [], "look_artifact_sha256": None,
         }
         prev_effective = None
         if auto_tune:
@@ -483,7 +481,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             )
             if (
                 not cleared and allow_creative_escalate
-                and look_info.get("look_status") != "fail"
+                and not look.blocks_unattended_escalate(look_info.get("look_status"))
             ):
                 snap = _snapshot_medium()
                 emit("escalating", index=i)
@@ -509,7 +507,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             else:
                 if (
                     allow_creative_escalate
-                    and look_info.get("look_status") != "fail"
+                    and not look.blocks_unattended_escalate(look_info.get("look_status"))
                 ):
                     snap = _snapshot_medium()
                     emit("escalating", index=i)
@@ -553,15 +551,25 @@ def run(config: dict, *, on_event=None) -> Manifest:
         else:
             status = "best_effort"
 
+        look_fields = look.event_fields(look_info, duration_s=info.duration_s)
         quality_info = {
             "vmaf": round(r["vmaf"], 2), "histogram_ok": r["histogram_ok"],
             "regen_count": r["regen_count"], "passed": r["passed"],
             "spatial_vmaf": spatial_vmaf, "spatial_ok": spatial_ok,
             "bits": u.get("bits"),
             "min_bits_vs_peers": u.get("min_bits_vs_peers"),
-            "look_status": look_info.get("look_status"),
-            "look_mae": look_info.get("look_mae"),
-            "look_mae_max": look_info.get("look_mae_max"),
+            "look_status": look_fields.get("look_status"),
+            "look_mae": look_fields.get("look_mae"),
+            "look_mae_max": look_fields.get("look_mae_max"),
+            "look_frames": look_fields.get("look_frames") or [],
+            "look_artifact_sha256": look_fields.get("look_artifact_sha256"),
+            "look_review_t": look_fields.get("look_review_t"),
+            "look_crop": {
+                "crop_keep": ((r.get("params") or {}).get("video") or {}).get("crop_keep"),
+                "crop_x_frac": ((r.get("params") or {}).get("video") or {}).get("crop_x_frac"),
+                "crop_y_frac": ((r.get("params") or {}).get("video") or {}).get("crop_y_frac"),
+            },
+            "vmaf_scope": "proxy_encode_quality",
             "heads": u.get("heads"),
         }
         # Accept into the peer set only when we ship a usable file.
@@ -574,10 +582,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
             uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
             escalated=escalated, preset_used=preset_used, strength_final=last_strength,
-            look_status=look_info.get("look_status"),
-            look_mae=look_info.get("look_mae"),
-            look_src=look_info.get("look_src"),
-            look_var=look_info.get("look_var"),
+            **look_fields,
         )
 
         return VariantRecord(
@@ -589,10 +594,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             uniqueness=u["uniqueness"], uniqueness_status=u["uniqueness_status"],
             uniqueness_metric=u["uniqueness_metric"], uniqueness_target=u["uniqueness_target"],
             preset_used=preset_used, strength_final=last_strength, escalated=escalated,
-            look_status=look_info.get("look_status"),
-            look_mae=look_info.get("look_mae"),
-            look_src=look_info.get("look_src"),
-            look_var=look_info.get("look_var"),
+            **look_fields,
         )
 
     indices = range(1, count + 1)
