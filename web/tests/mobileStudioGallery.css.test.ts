@@ -61,8 +61,10 @@ describe("mobile Studio + Gallery CSS contract", () => {
   });
 
   it("shows pack Insights under the phone pack tiles", () => {
-    expect(css).toMatch(/\.gallery-pack-live\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(/\.gallery-main\s*\{[^}]*flex-direction:\s*column/s);
+    expect(css).toMatch(/\.gallery-pack-live\s*\{[^}]*display:\s*flex/s);
     expect(mobile).toMatch(/\.gallery-pack-live\s*\{[^}]*display:\s*flex/s);
+    expect(mobile).toMatch(/\.gallery-pack-live\s*\{[^}]*flex-shrink:\s*0/s);
   });
 
   it("gives the phone variant review its own close chrome and a bounded player", () => {

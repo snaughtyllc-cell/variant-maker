@@ -93,6 +93,15 @@ describe("Gallery variant sheet open", () => {
     pushState.mockRestore();
   });
 
+  it("puts pack Insights directly under the pack tiles", () => {
+    render(<GalleryContent />);
+    const packs = screen.getByRole("complementary", { name: /packs/i });
+    const strip = screen.getByRole("region", { name: /pack insights/i });
+    expect(packs.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/sample insights/i)).toBeInTheDocument();
+    expect(strip.parentElement).toHaveClass("gallery-main");
+  });
+
   it("offers Select all and Save to phone without a variant count on Select all", () => {
     render(<GalleryContent />);
     const toolbar = screen.getByRole("region", { name: /gallery controls/i });

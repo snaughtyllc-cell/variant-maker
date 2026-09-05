@@ -40,7 +40,6 @@ import { packViewsCopy } from "@/lib/instagram";
 import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { SavePreparePanel } from "./SavePreparePanel";
 import { PackOptions } from "./PackOptions";
-import { PackLiveStrip } from "./PackLiveStrip";
 import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
@@ -221,7 +220,6 @@ export function SourceGroup({
 
   return (
     <div className="gallery-pack-panel">
-      <PackLiveStrip source={source} />
       <div className="gallery-pack-header">
         <span className="gallery-pack-header__name" title={source.filename}>
           {source.filename}

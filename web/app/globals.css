@@ -450,6 +450,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 /* Two-pane body: PACKS list (left) + one grid pane (right) — not an
    accordion of every pack's tiles stacked in a single endless scroll. */
 .gallery-body { display: flex; flex: 1; min-height: 0; }
+.gallery-main { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
 
 .gallery-packs { background: var(--color-panel); border-right: 1px solid var(--color-line); display: flex; flex-direction: column; flex-shrink: 0; gap: 12px; overflow: auto; padding: 18px 16px; width: 300px; }
 .gallery-packs__head { align-items: baseline; display: flex; justify-content: space-between; }
@@ -506,14 +507,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 .gallery-pack-panel { display: flex; flex-direction: column; min-width: 0; }
 .gallery-pack-live {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 10px;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 12px;
   background: #fff;
-  border: 1px solid var(--color-line);
-  border-radius: 14px;
+  border-bottom: 1px solid var(--color-line);
 }
 .gallery-pack-live__head { align-items: baseline; display: flex; justify-content: space-between; gap: 8px; }
 .gallery-pack-live__label {
@@ -1395,6 +1395,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
+  .gallery-main { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .gallery-body--review { overflow: hidden; }
   .gallery-body--review .gallery-packs { display: none; }
   .gallery-packs { align-items: center; border-bottom: 1px solid var(--color-line); border-right: 0; flex-direction: row; flex-shrink: 0; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 8px 12px; width: 100%; }
@@ -1404,7 +1405,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .gallery-pack-row__thumb { height: 62px; width: 44px; }
   .gallery-pack-row__main { display: none; }
   .gallery-pack-header, .gallery-summary-row { display: none; }
-  .gallery-pack-live { display: flex; }
+  .gallery-pack-live {
+    display: flex;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 10px 12px 12px;
+  }
   .gallery-grid-pane { flex: 0 0 auto; overflow: visible; padding: 10px 12px 120px; }
   .gallery-grid-pane--review { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0; }
   .gallery-review { min-height: 0; overflow: hidden; }

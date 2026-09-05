@@ -41,6 +41,7 @@ import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { GalleryFloatingToolbar } from "@/components/gallery/GalleryFloatingToolbar";
 import { PackList } from "@/components/gallery/PackList";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { PackLiveStrip } from "@/components/gallery/PackLiveStrip";
 import { VariantSheet } from "@/components/variant/VariantSheet";
 import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 
@@ -292,6 +293,9 @@ export function GalleryContent() {
           loading={isLoading}
         />
 
+        <div className="gallery-main">
+        {activePack && !(sheetSource && pos >= 0) && <PackLiveStrip source={activePack} />}
+
         <section className={sheetSource && pos >= 0 ? "gallery-grid-pane gallery-grid-pane--review" : "gallery-grid-pane"}>
           {isLoading && <div className="gallery-loading">Loading gallery…</div>}
 
@@ -354,6 +358,7 @@ export function GalleryContent() {
             />
           )}
         </section>
+        </div>
       </div>
 
       {/* Send to Drive modal — only opened when the toolbar button is enabled */}

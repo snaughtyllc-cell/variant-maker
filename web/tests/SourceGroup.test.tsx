@@ -247,31 +247,6 @@ describe("SourceGroup insights", () => {
     );
     expect(screen.getByText("1.2k views · 1 of 2 linked")).toBeInTheDocument();
   });
-
-  it("shows a sample Insights strip so the phone layout is visible without live Reels", () => {
-    render(<SourceGroup source={source()} {...props} />);
-    const strip = screen.getByRole("region", { name: /pack insights/i });
-    expect(strip).toHaveAttribute("data-preview", "true");
-    expect(screen.getByText(/sample insights/i)).toBeInTheDocument();
-    expect(screen.getByText("25k")).toBeInTheDocument();
-    expect(screen.getByText("views")).toBeInTheDocument();
-  });
-
-  it("uses live Insights in the strip when Reels are linked", () => {
-    render(
-      <SourceGroup
-        source={source({
-          insights_views: 1234,
-          insights_likes: 40,
-          insights_linked: 1,
-        })}
-        {...props}
-      />,
-    );
-    expect(screen.getByText("Live Insights")).toBeInTheDocument();
-    expect(screen.getByText("1.2k")).toBeInTheDocument();
-    expect(screen.queryByText(/sample insights/i)).not.toBeInTheDocument();
-  });
 });
 
 describe("SourceGroup job record", () => {
