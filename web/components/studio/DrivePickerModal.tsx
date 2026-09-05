@@ -9,6 +9,8 @@ export interface DrivePick {
   destinationId: string;
   id: string;
   name: string;
+  /** Drive list has no still; caption tiles fall back to a label placeholder. */
+  thumbUrl?: string;
 }
 
 interface DrivePickerModalProps {

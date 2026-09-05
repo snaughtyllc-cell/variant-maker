@@ -21,15 +21,18 @@ import type {
   SourceOut,
 } from "@/lib/types";
 
-type MetricSource = {
+type CountMetrics = {
   insights_views?: number | null;
-  insights_views_delta?: number | null;
   insights_reach?: number | null;
   insights_likes?: number | null;
   insights_comments?: number | null;
   insights_shares?: number | null;
   insights_saved?: number | null;
   insights_follows?: number | null;
+};
+
+type MetricSource = CountMetrics & {
+  insights_views_delta?: number | null;
 };
 
 type Lane = MetricSource & {
@@ -131,7 +134,7 @@ function packLanes(
   });
 }
 
-function aggregate(copies: InstagramTrackedCopy[], key: keyof MetricSource): number | null {
+function aggregate(copies: InstagramTrackedCopy[], key: keyof CountMetrics): number | null {
   let total = 0;
   let seen = false;
   for (const copy of copies) {
