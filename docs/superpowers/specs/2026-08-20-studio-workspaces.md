@@ -29,6 +29,11 @@ JSON at `{DATA_DIR}/auth/tenants.json`. Videos stay files:
 `{DATA_DIR}/tenants/{workspace_id}/` — same layout as today’s Workspace
 (`jobs/`, `drive/`, `uploads/`, …).
 
+Object storage is **not** isolated by `source_id` alone. New writes use
+`tenants/{workspace_id}/jobs/{job_id}/…` (attempt-scoped outputs). Spec:
+`docs/superpowers/specs/2026-09-05-job-isolation.md`. Legacy
+`inputs/{source_id}/` keys resolve only through an authorized job record.
+
 On first admin login, if `jobs/` or `drive/` still sit at DATA_DIR root, move
 them into that admin workspace (one-time).
 
