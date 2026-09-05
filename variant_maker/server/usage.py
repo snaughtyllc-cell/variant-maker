@@ -118,6 +118,7 @@ def record_job(
             "shutdown_utc", "retry_count", "regen_count", "input_bytes",
             "output_bytes", "railway_media_bytes", "delivery_destination",
             "runpod_cost_usd", "processing_charge",
+            "start_class", "startup", "billed", "first_output_utc",
         ):
             if key in tel and tel[key] is not None:
                 row[key] = tel[key]

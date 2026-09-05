@@ -60,22 +60,29 @@ This is how we take a third agency without one giant shared queue.
 **one or two files**, not on Drive workflows. Workflow pull → generate → send
 can stay slow.
 
-**First:** measure. Warm vs cold Fast start, time-to-first-variant, time for
-count=1 vs count=8 vs count=20. Optional: Jeff sends a Telegram-spoofer
-sample so we can probe resolution/filters/whether it skipped VMAF — **probe,
-don’t clone**.
+**Spec:** `2026-09-05-fast-idle-scale-zero.md`.
+
+**First:** measure. Warm vs cold Fast start, time-to-first-output for
+count=1 vs count=2 vs count=20, billed worker-minutes (real vs idle). Optional:
+Jeff sends a Telegram-spoofer sample so we can probe resolution/filters/whether
+it skipped VMAF — **probe, don’t clone**.
 
 **Then, in order:**
 
-1. Ops: FlashBoot, idle timeout ~10 min, morning 1–3 Fast primer so the CPU
-   is warm. No code if that closes the gap.
-2. Code only if still slow: more Fast parallelism on the existing worker,
-   or a **business-hours warm Fast CPU** (cost trade, still not a 4090).
-3. Still later: always-on Fast CPU if the primer + hybrid still leave a
-   cold-start hole. Always-on **GPU** stays off.
+1. Ops on the Fast CPU endpoint: **min=0, max=2**, FlashBoot on where
+   supported, **120s idle timeout** as the first experiment (today’s 600s is
+   the baseline). No primer and no keep-alive until those numbers exist.
+2. Primer only if the first interactive request still suffers **and** arrival
+   is predictable. One synthetic item, system job, no Drive publish. Real
+   work always supersedes it. Do not ship the primer in the same change as
+   the idle policy.
+3. Code only if still slow: more Fast parallelism on the existing worker,
+   or a **bounded business-hours warm Fast CPU** (cost trade, still not a
+   4090). Always-on **GPU** stays off. HQ occupancy is a later wave — skip
+   it while Fast is the queue.
 
 **Not:** turning escalate off, uniqueness 55%, HQ for the daily 1–2 clip,
-Railway 20-packs.
+Railway 20-packs, reconstruct-first slot tricks, a second GPU.
 
 ## Wave 3 — HQ capacity when Fast is no longer the queue
 
