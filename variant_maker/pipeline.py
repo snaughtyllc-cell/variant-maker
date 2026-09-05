@@ -10,9 +10,10 @@ import random
 import shutil
 import subprocess
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import autotune, look, quality, uniqueness
+from . import autotune, hunt_timing, look, quality, uniqueness
 from .copyid import normalize_mode
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
@@ -187,7 +188,16 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
         "copyid": copyid_mode,
+        "encode_jobs": jobs,
+        "worker_id": hunt_timing.worker_id(),
     }
+    pack_t0 = time.monotonic()
+    rusage_t0 = None
+    try:
+        import resource as _resource
+        rusage_t0 = _resource.getrusage(_resource.RUSAGE_SELF)
+    except (ImportError, OSError, ValueError):
+        _resource = None
 
     def _prep(i: int):
         vseed = derive_seed(master_seed, i)
@@ -230,6 +240,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
         vseed, fname, path = _prep(i)
         attempt_no = -1  # bumped to 0 on first render, +1 on each re-roll
         last_strength = clamp_strength(uniq_strengths[0] if uniq_strengths else 1.0)
+        hunt = hunt_timing.new_accumulator()
+        autotune_iters = None
 
         def attempt(strength: float, use_preset, *, gate_quality: bool = True) -> dict:
             nonlocal attempt_no, last_strength
@@ -251,11 +263,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
             _apply_variant_policy(params, vseed, use_preset, shot_kind, rotate_off, config)
             if hq:
                 params = disable_fast_pixel_ops(params)
+            t_enc = time.monotonic()
             if hq:
                 _, cmd, nops = neural.upscale_clip(src, params, path, platform=platform)
             else:
                 _, cmd = render_variant(src, params, platform, path)
                 nops = []
+            hunt_timing.add_encode(hunt, time.monotonic() - t_enc)
             if not gate_quality:
                 # Uniqueness miss will discard this encode. Do not pay VMAF on it.
                 return {
@@ -266,7 +280,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             qr = path + ".qr.mp4"
             quality.quality_render(src, params, qr)
             emit("checking", index=i)
+            t_q = time.monotonic()
             g = quality.passes_guard(src.path, path, qr, floor=floor)
+            hunt_timing.add_quality(hunt, time.monotonic() - t_q)
             for tmp in (qr, qr + ".vmaf.json"):
                 if os.path.exists(tmp):
                     os.remove(tmp)
@@ -297,10 +313,15 @@ def run(config: dict, *, on_event=None) -> Manifest:
         def _score_uniqueness_now() -> dict:
             # Extra kwargs only when enabled so existing test fakes stay valid.
             extra = {"copyid": copyid_mode} if copyid_mode != "off" else {}
+            t_u = time.monotonic()
             scored = uniqueness.score_uniqueness(
                 src.path, path, target=uniqueness_target, **extra,
             )
-            return _apply_peer_status(scored, _peer_bits(path))
+            hunt_timing.add_uniqueness(hunt, time.monotonic() - t_u)
+            t_p = time.monotonic()
+            scored = _apply_peer_status(scored, _peer_bits(path))
+            hunt_timing.add_peer(hunt, time.monotonic() - t_p)
+            return scored
 
         def _look_then_uniqueness() -> dict:
             """Stills on the card first. Uniqueness work starts immediately.
@@ -411,7 +432,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 qr = path + ".qr.mp4"
                 quality.quality_render(src, params, qr)
                 emit("checking", index=i)
+                t_q = time.monotonic()
                 g = quality.passes_guard(src.path, path, qr, floor=floor)
+                hunt_timing.add_quality(hunt, time.monotonic() - t_q)
                 for tmp in (qr, qr + ".vmaf.json"):
                     if os.path.exists(tmp):
                         os.remove(tmp)
@@ -431,12 +454,18 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     and u_try["uniqueness"] >= uniqueness_target
                     and peer_ok
                 )
+                if not uniq_ok:
+                    hunt_timing.mark_reject(
+                        hunt, "peer_ssim" if not peer_ok else "source_ssim",
+                    )
                 if uniq_ok:
                     g = _quality_on_current(r_try["params"])
                     if not g["passed"]:
                         r_try = regen(preset, strength)
                     else:
                         r_try = {**r_try, **g, "regen_count": 0}
+                    if not r_try.get("passed"):
+                        hunt_timing.mark_reject(hunt, "quality")
                 # Quality `passed` is VMAF/histogram only. Peer miss is too-similar
                 # (search stronger), not too-strong (search milder).
                 quality_run = r_try.get("vmaf") is not None
@@ -453,6 +482,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 _tune_attempt, target=uniqueness_target, stop_on_clear=True,
                 max_iters=FAST_TUNE_MAX_ITERS,
             )
+            autotune_iters = tuned.get("autotune_iters")
             r = {
                 "params": tuned["params"],
                 "cmd": tuned["cmd"],
@@ -506,6 +536,16 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 u = _look_then_uniqueness()
                 if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
                     break
+                if not _gate_ok(u, u.get("min_bits_vs_peers")):
+                    peer_min = u.get("min_bits_vs_peers")
+                    hunt_timing.mark_reject(
+                        hunt,
+                        "peer_ssim"
+                        if peer_gate and peer_min is not None and peer_min < min_bits_vs_peers
+                        else "source_ssim",
+                    )
+                elif not r["passed"]:
+                    hunt_timing.mark_reject(hunt, "quality")
             else:
                 if (
                     allow_creative_escalate
@@ -524,7 +564,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
             qr = path + ".qr.mp4"
             quality.quality_render(src, r["params"], qr)
             emit("checking", index=i)
+            t_q = time.monotonic()
             g = quality.passes_guard(src.path, path, qr, floor=floor)
+            hunt_timing.add_quality(hunt, time.monotonic() - t_q)
             for tmp in (qr, qr + ".vmaf.json"):
                 if os.path.exists(tmp):
                     os.remove(tmp)
@@ -563,6 +605,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
             "heads": u.get("heads"),
+            "hunt": hunt_timing.slot_from_acc(
+                hunt, index=i, status=status, elapsed_s=time.monotonic() - pack_t0,
+                escalated=escalated, autotune_iters=autotune_iters,
+            ),
         }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
@@ -602,6 +648,29 @@ def run(config: dict, *, on_event=None) -> Manifest:
     else:
         records = [_render_one(i) for i in indices]
     records.sort(key=lambda r: r.index)
+    cpu_s = None
+    maxrss_kb = None
+    if rusage_t0 is not None and _resource is not None:
+        try:
+            ru = _resource.getrusage(_resource.RUSAGE_SELF)
+            cpu_s = (ru.ru_utime + ru.ru_stime) - (rusage_t0.ru_utime + rusage_t0.ru_stime)
+            maxrss_kb = int(ru.ru_maxrss)
+        except (OSError, ValueError, AttributeError):
+            cpu_s = None
+            maxrss_kb = None
+    slots = [
+        v.quality["hunt"]
+        for v in records
+        if isinstance(v.quality, dict) and isinstance(v.quality.get("hunt"), dict)
+    ]
+    run_meta["hunt"] = hunt_timing.summarize_pack(
+        slots,
+        wall_s=time.monotonic() - pack_t0,
+        cpu_s=cpu_s,
+        maxrss_kb=maxrss_kb,
+        jobs=jobs,
+        worker_id=run_meta.get("worker_id"),
+    )
 
     manifest = Manifest(source=src.to_dict(), run=run_meta, variants=records)
     manifest.write(os.path.join(out_dir, "manifest.json"))

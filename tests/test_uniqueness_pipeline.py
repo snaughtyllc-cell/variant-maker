@@ -528,6 +528,8 @@ def test_peer_bits_fail_forces_another_attempt(monkeypatch, tmp_path):
     # Two peer comparisons for v2 (failed then passed); v1 had none.
     assert peer_calls["n"] == 2
     assert v2.strength_final == 1.4
+    assert v2.quality["hunt"]["candidates"] == 2
+    assert "peer_ssim" in v2.quality["hunt"]["reject_reasons"]
 
 
 def test_auto_tune_peer_fail_escalates_instead_of_bisecting(monkeypatch, tmp_path):
@@ -619,8 +621,14 @@ def test_discarded_uniqueness_miss_skips_quality_render(monkeypatch, tmp_path):
     )
     cfg = _cfg(tmp_path, allow_creative_escalate=True)
     del cfg["auto_tune"]
-    pipeline.run(cfg)
+    manifest = pipeline.run(cfg)
     assert n["qr"] == 1
+    hunt = manifest.variants[0].quality["hunt"]
+    assert hunt["candidates"] >= 2
+    assert "source_ssim" in hunt["reject_reasons"]
+    pack = manifest.run["hunt"]
+    assert pack["rejected_candidates"] >= 1
+    assert pack["candidates"] >= pack["accepted"]
 
 
 def test_hq_strips_fast_pixel_ops(monkeypatch, tmp_path):

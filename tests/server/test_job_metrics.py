@@ -101,6 +101,64 @@ def test_telemetry_to_dict_is_json_safe():
     assert data["delivery_destination"] == "download"
 
 
+def test_finalize_telemetry_includes_hunt_with_rejected_candidates():
+    from variant_maker.server.job_metrics import finalize_telemetry
+
+    source = JobSource(
+        source_id="s1", filename="a.mp4", requested=2,
+        variants=[
+            VariantInfo(
+                "s1", 1, "v01.mp4", "ok",
+                {
+                    "vmaf": 95, "regen_count": 0,
+                    "hunt": {
+                        "index": 1, "status": "ok", "candidates": 1,
+                        "encode_s": 8.0, "uniqueness_s": 2.0, "quality_s": 1.0,
+                        "peer_s": 0.0, "rejected_encode_s": 0.0,
+                        "reject_reasons": [], "accepted_on_candidate": 1,
+                        "elapsed_s": 12.0, "escalated": False,
+                    },
+                },
+            ),
+            VariantInfo(
+                "s1", 2, "v02.mp4", "ok",
+                {
+                    "vmaf": 94, "regen_count": 0,
+                    "hunt": {
+                        "index": 2, "status": "ok", "candidates": 3,
+                        "encode_s": 24.0, "uniqueness_s": 9.0, "quality_s": 1.0,
+                        "peer_s": 4.0, "rejected_encode_s": 16.0,
+                        "reject_reasons": ["peer_ssim", "peer_ssim"],
+                        "accepted_on_candidate": 3, "elapsed_s": 40.0,
+                        "escalated": True,
+                    },
+                },
+            ),
+        ],
+    )
+    job = Job(
+        job_id="jhunt",
+        count=2,
+        created_utc="2026-09-05T12:00:00Z",
+        sources=[source],
+        state="done",
+        quality_mode="fast",
+        telemetry={
+            "submitted_utc": "2026-09-05T12:00:00Z",
+            "started_utc": "2026-09-05T12:00:03Z",
+            "first_render_utc": "2026-09-05T12:00:05Z",
+        },
+    )
+    tel = finalize_telemetry(job, now_utc="2026-09-05T12:01:00Z")
+    hunt = tel["hunt"]
+    assert hunt["candidates"] == 4
+    assert hunt["rejected_candidates"] == 2
+    assert hunt["attempts_per_accepted"] == 2.0
+    assert hunt["startup_s"] == 5.0
+    assert hunt["signature"] == "hunt_bound"
+    assert tel["first_render_utc"] == "2026-09-05T12:00:05Z"
+
+
 def test_record_job_persists_telemetry_on_usage_row(tmp_path):
     ws = Workspace(str(tmp_path))
     source = JobSource(

@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from variant_maker.hunt_timing import summarize_pack
+
 FAST_USD_PER_HOUR = 0.58
 HQ_USD_PER_HOUR = 1.50  # 4090-class estimate; override via env
 FAST_USD_ENV = "VARIANT_RUNPOD_FAST_USD_PER_HOUR"
@@ -27,6 +29,8 @@ class JobTelemetry:
     requested: int = 0
     submitted_utc: str | None = None
     started_utc: str | None = None
+    first_render_utc: str | None = None
+    hunt: dict[str, Any] | None = None
     completed_utc: str | None = None
     shutdown_utc: str | None = None
     retry_count: int = 0
@@ -176,6 +180,50 @@ def source_snapshot(
     return snap
 
 
+def hunt_slots_from_variants(variants: list[Any]) -> list[dict[str, Any]]:
+    slots: list[dict[str, Any]] = []
+    for v in variants:
+        quality = getattr(v, "quality", None)
+        if not isinstance(quality, dict):
+            continue
+        hunt = quality.get("hunt")
+        if isinstance(hunt, dict):
+            slots.append(hunt)
+    return slots
+
+
+def attach_pack_hunt(
+    tel: dict[str, Any],
+    variants: list[Any],
+    *,
+    now_utc: str,
+    jobs: int | None = None,
+) -> dict[str, Any]:
+    """Fold rejected-candidate hunt into job telemetry. Does not change uniqueness."""
+    slots = hunt_slots_from_variants(variants)
+    if not slots:
+        return tel
+    submitted = tel.get("submitted_utc")
+    first_render = tel.get("first_render_utc") or tel.get("started_utc")
+    startup_s = billed_seconds(submitted, first_render)
+    wall_s = billed_seconds(submitted, now_utc)
+    worker_wall = max((float(s.get("elapsed_s") or 0.0) for s in slots), default=0.0)
+    upload_s = None
+    if wall_s is not None and startup_s is not None:
+        leftover = wall_s - startup_s - worker_wall
+        if leftover >= 5.0:
+            upload_s = leftover
+    tel["hunt"] = summarize_pack(
+        slots,
+        wall_s=wall_s if wall_s is not None else worker_wall,
+        startup_s=startup_s,
+        upload_s=upload_s,
+        jobs=jobs if jobs is not None else tel.get("encode_jobs"),
+        worker_id=tel.get("worker_id"),
+    )
+    return tel
+
+
 def _default_probe(path: str):
     from variant_maker.probe import probe
     return probe(path, hash_content=False)
@@ -208,4 +256,4 @@ def finalize_telemetry(
         tel["runpod_cost_usd"] = estimate_runpod_cost(
             billed_seconds=seconds, quality_mode=job.quality_mode,
         )
-    return tel
+    return attach_pack_hunt(tel, variants, now_utc=now_utc)
