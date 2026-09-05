@@ -20,6 +20,9 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(dock).toMatch(/position:\s*fixed/);
     expect(dock).toMatch(/bottom:\s*var\(--tab-h\)/);
     expect(dock).not.toMatch(/position:\s*static/);
+    expect(dock).toMatch(/background:\s*transparent/);
+    expect(dock).not.toMatch(/background:\s*var\(--color-panel\)/);
+    expect(dock).not.toMatch(/border-top:/);
     expect(mobile).toMatch(new RegExp(`--generate-dock-h:\\s*${STUDIO_GENERATE_DOCK_H_PX}px`));
     expect(rule(mobile, ".studio-live")).toMatch(/padding-bottom:\s*calc\(\s*var\(--generate-dock-h\)/);
   });
