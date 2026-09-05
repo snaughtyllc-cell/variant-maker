@@ -7,16 +7,53 @@ export function isPreparingJob(jobId: string | null | undefined): boolean {
   return jobId === PREPARING_JOB_ID;
 }
 
+export function formatWaitClock(elapsedSec: number): string {
+  const s = Math.max(0, Math.floor(elapsedSec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${s}s`;
+}
+
 export function preparingHeadline(): string {
   return "Preparing generation";
 }
 
-export function preparingSubcopy(): string {
-  return "Request received. The processing environment can take 20–30 seconds to start — tiles update as soon as encoding begins.";
+export function preparingSubcopy(elapsedSec = 0): string {
+  return (
+    `${formatWaitClock(elapsedSec)} elapsed. Uploading the clip, then waking the Fast worker. ` +
+    "First pack after idle can take 1–2 minutes — that wait is the worker starting, not a hang."
+  );
+}
+
+export function wakingHeadline(): string {
+  return "Waking Fast worker";
+}
+
+export function wakingSubcopy(elapsedSec = 0, waitPhase?: string | null): string {
+  const clock = formatWaitClock(elapsedSec);
+  if (waitPhase === "queued") {
+    return (
+      `${clock} elapsed. Fast worker is in the cold-start queue. ` +
+      "First pack after idle often takes 1–2 minutes. Tiles update when encoding starts."
+    );
+  }
+  if (waitPhase === "booting") {
+    return (
+      `${clock} elapsed. Fast worker is booting. Encoding starts as soon as it is up.`
+    );
+  }
+  return (
+    `${clock} elapsed. The Fast worker scales to zero when idle. ` +
+    "First pack often takes 1–2 minutes. Tiles update when encoding starts."
+  );
 }
 
 export function preparingSlotLabel(): string {
   return "starting";
+}
+
+export function wakingSlotLabel(): string {
+  return "waking";
 }
 
 export function captionToggleLabel(): string {

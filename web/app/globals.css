@@ -273,6 +273,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-live__title--sub { padding-bottom: 12px; }
 .studio-live__count { color: #7e979d; font-family: var(--font-space-grotesk), monospace; font-size: 11px; }
 .studio-live__failed { color: #f0a8a4; font-size: 12px; line-height: 1.45; margin: 0 0 14px; }
+.studio-live__wait { color: #7e979d; font-size: 12px; line-height: 1.45; margin: 0 0 14px; }
 .studio-live__rows { display: flex; flex: 0 0 auto; flex-direction: column; gap: 14px; max-height: 148px; min-height: 94px; overflow-x: hidden; overflow-y: auto; }
 .studio-live__finished { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 .studio-live-row { align-items: center; display: flex; gap: 12px; }

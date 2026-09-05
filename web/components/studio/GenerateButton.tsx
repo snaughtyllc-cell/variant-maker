@@ -11,6 +11,8 @@ interface GenerateButtonProps {
   complete?: boolean;
   onCancel?: () => void;
   cancelling?: boolean;
+  title?: string;
+  detail?: string;
 }
 
 export function GenerateButton({
@@ -23,17 +25,21 @@ export function GenerateButton({
   complete,
   onCancel,
   cancelling,
+  title,
+  detail,
 }: GenerateButtonProps) {
   const isDisabled = disabled || busy || fileCount === 0;
   const inProgress = Boolean(busy || (jobId && !complete));
-  const label = busy || (jobId && !complete)
-    ? "Generating…"
-    : complete
-      ? "Generate another"
-      : "Generate";
-  const support = complete && !inProgress
-    ? "Starts a new pack from the clips on this page"
-    : generatePackLabel(fileCount, perVideo);
+  const label = title
+    ?? (busy || (jobId && !complete)
+      ? "Generating…"
+      : complete
+        ? "Generate another"
+        : "Generate");
+  const support = detail
+    ?? (complete && !inProgress
+      ? "Starts a new pack from the clips on this page"
+      : generatePackLabel(fileCount, perVideo));
 
   return (
     <>

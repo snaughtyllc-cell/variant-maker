@@ -179,3 +179,37 @@ def test_runner_passes_drive_file_id_without_uploading_source(tmp_path):
     assert captured["drive_access_token"] == "ya29.job"
     assert captured["source_key"] == "inputs/s/source.mp4"
     assert store.list_prefix("inputs/") == []
+
+
+def test_runner_skips_put_when_source_already_in_object_storage(tmp_path):
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"SRC")
+    store.put_bytes("inputs/srcA/in.mp4", b"ALREADY")
+    chunks = [{"type": "result", "variants": [], "manifest_key": None}]
+    RunPodServerlessRunner(store, FakeRunPodClient(chunks)).run(
+        str(src), count=1, out_dir=str(tmp_path / "out"), source_id="srcA",
+        on_event=lambda e: None,
+        source_object_key="inputs/srcA/in.mp4",
+    )
+    assert store.puts == []
+    assert store._data["inputs/srcA/in.mp4"] == b"ALREADY"
+
+
+def test_runner_forwards_worker_queue_status_as_wait_events(tmp_path):
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    chunks = [
+        {"type": "status", "status": "IN_QUEUE"},
+        {"type": "status", "status": "IN_PROGRESS"},
+        {"type": "progress", "event": {"index": 1, "state": "rendering", "attempt": 0}},
+        {"type": "result", "variants": [], "manifest_key": None},
+    ]
+    events: list[VariantEvent] = []
+    RunPodServerlessRunner(store, FakeRunPodClient(chunks)).run(
+        str(src), count=1, out_dir=str(tmp_path / "out"), source_id="srcA",
+        on_event=events.append,
+    )
+    waits = [e for e in events if e.state == "wait"]
+    assert [e.status for e in waits] == ["IN_QUEUE", "IN_PROGRESS"]

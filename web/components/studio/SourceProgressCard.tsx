@@ -10,13 +10,14 @@ import {
   type InFlightVerb,
 } from "@/lib/hqWaitCopy";
 import { ESCALATED_TITLE } from "@/lib/format";
-import { preparingSlotLabel } from "@/lib/prepareCopy";
+import { preparingSlotLabel, wakingSlotLabel } from "@/lib/prepareCopy";
 
 interface SourceProgressCardProps {
   source: SourceProgress;
   qualityMode?: QualityMode;
   complete?: boolean;
   preparing?: boolean;
+  waking?: boolean;
 }
 
 function LiveText({ children, live }: { children: string; live: boolean }) {
@@ -32,18 +33,22 @@ function SlotTile({
   flight,
   qualityMode,
   preparing,
+  waking,
 }: {
   index: number;
   flight?: InFlight;
   qualityMode: QualityMode;
   preparing?: boolean;
+  waking?: boolean;
 }) {
   const state: InFlightVerb = (flight?.state as InFlightVerb | undefined) ?? "waiting";
-  const live = !!flight;
+  const live = !!flight || Boolean(preparing || waking);
   const label =
-    preparing && !flight
-      ? preparingSlotLabel()
-      : inFlightSlotLabel(state, qualityMode, flight?.attempt, flight?.max_attempts);
+    !flight && waking
+      ? wakingSlotLabel()
+      : preparing && !flight
+        ? preparingSlotLabel()
+        : inFlightSlotLabel(state, qualityMode, flight?.attempt, flight?.max_attempts);
   const idx = String(index).padStart(2, "0");
   return (
     <div
@@ -114,6 +119,7 @@ export function SourceProgressCard({
   qualityMode = "fast",
   complete = false,
   preparing = false,
+  waking = false,
 }: SourceProgressCardProps) {
   const { filename, requested, delivered, done, inFlight, variants } = source;
   const fromMap = source.inFlights || {};
@@ -222,6 +228,7 @@ export function SourceProgressCard({
                     flight={inFlights[index]}
                     qualityMode={qualityMode}
                     preparing={preparing}
+                    waking={waking}
                   />
                 );
               })}

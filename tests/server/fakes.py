@@ -136,9 +136,11 @@ class FakeObjectStore:
     def __init__(self) -> None:
         self._data: dict[str, bytes] = {}
         self.gets: list[str] = []
+        self.puts: list[str] = []
         self.presigns: list[str] = []
 
     def put(self, key: str, local_path: str) -> None:
+        self.puts.append(key)
         with open(local_path, "rb") as f:
             self._data[key] = f.read()
 

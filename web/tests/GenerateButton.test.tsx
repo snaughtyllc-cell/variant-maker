@@ -64,4 +64,20 @@ describe("GenerateButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel pack/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("shows upload copy instead of a frozen Generating label", () => {
+    render(
+      <GenerateButton
+        fileCount={1}
+        perVideo={20}
+        onClick={vi.fn()}
+        busy
+        disabled
+        title="Uploading…"
+        detail="Uploading 1 of 1 · 40%"
+      />,
+    );
+    expect(screen.getByText("Uploading…")).toBeInTheDocument();
+    expect(screen.getByText("Uploading 1 of 1 · 40%")).toBeInTheDocument();
+  });
 });

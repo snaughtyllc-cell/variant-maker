@@ -1909,7 +1909,8 @@ def create_app(
                          prep_status=job.prep_status,
                          processing_charge=(job.telemetry or {}).get("processing_charge"),
                          delivery_destination=job.delivery_destination,
-                         outputs_expires_utc=job.outputs_expires_utc)
+                         outputs_expires_utc=job.outputs_expires_utc,
+                         wait_phase=(job.telemetry or {}).get("wait_phase"))
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
     def cancel_job(request: Request, job_id: str) -> JobDetail:
@@ -1923,7 +1924,8 @@ def create_app(
                          error=job.error,
                          quality_mode=job.quality_mode,
                          prep_mode=job.prep_mode,
-                         prep_status=job.prep_status)
+                         prep_status=job.prep_status,
+                         wait_phase=(job.telemetry or {}).get("wait_phase"))
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:

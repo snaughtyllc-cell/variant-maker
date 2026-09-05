@@ -6,6 +6,16 @@ import time
 from typing import Iterator, Protocol
 
 
+def wait_phase_for_status(status: str | None) -> str | None:
+    """Map a RunPod poll status to the Studio wait label. None = encoding or unknown."""
+    name = str(status or "").strip().upper()
+    if name == "IN_QUEUE":
+        return "queued"
+    if name == "IN_PROGRESS":
+        return "booting"
+    return None
+
+
 class RunPodClient(Protocol):
     def stream_run(self, payload: dict, cancel_token=None) -> Iterator[dict]: ...
 
@@ -65,6 +75,7 @@ class HttpRunPodClient:
         from .cancel import JobCancelled
 
         started = time.monotonic()
+        last_status = None
         if cancel_token is not None:
             cancel_token.bind_runpod(job_id, self._base, self._headers)
             if cancel_token.is_set():
@@ -83,9 +94,17 @@ class HttpRunPodClient:
             r = http.get(f"{self._base}/stream/{job_id}", headers=self._headers)
             r.raise_for_status()
             body = r.json()
-            for item in body.get("stream", []):
+            stream = body.get("stream") or []
+            for item in stream:
                 yield item["output"]
             status = body.get("status")
+            if not stream and wait_phase_for_status(status) and status != last_status:
+                last_status = status
+                yield {
+                    "type": "status",
+                    "status": status,
+                    "elapsed_s": time.monotonic() - started,
+                }
             if status in ("COMPLETED", "FAILED", "CANCELLED"):
                 if status == "CANCELLED":
                     raise JobCancelled()

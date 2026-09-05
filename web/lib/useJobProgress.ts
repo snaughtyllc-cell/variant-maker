@@ -91,6 +91,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
     };
     next = reduceEvent(cleared, { state: "job-done" });
   }
+  next = { ...next, waitPhase: detail.wait_phase ?? null };
   return next;
 }
 

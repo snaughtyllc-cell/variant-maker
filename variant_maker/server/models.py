@@ -194,6 +194,7 @@ class JobDetail(BaseModel):
     processing_charge: str | None = None
     delivery_destination: str | None = None
     outputs_expires_utc: str | None = None
+    wait_phase: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):

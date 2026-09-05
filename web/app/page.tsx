@@ -16,7 +16,10 @@ import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
 import { studioCaptionSources } from "@/lib/studioCaptionSources";
-import { hqPrepToggleHint, hqPrepToggleLabel, isPreparingJob } from "@/lib/prepareCopy";
+import { hqPrepToggleHint, hqPrepToggleLabel, isPreparingJob, preparingSubcopy, wakingSubcopy } from "@/lib/prepareCopy";
+import { uploadBusyTitle, uploadProgressCopy } from "@/lib/jobUpload";
+import { runHasStarted } from "@/lib/progress";
+import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -27,7 +30,7 @@ function formatSize(bytes: number): string {
 }
 
 export default function StudioPage() {
-  const { start, beginPrepare, clear, jobId, complete } = useRun();
+  const { start, beginPrepare, clear, jobId, complete, setUpload, upload, waitStartedAt, progress } = useRun();
   const { data: me } = useAuthMe();
   const agency = isAgencyExperience(me);
   const [files, setFiles] = useState<File[]>([]);
@@ -51,6 +54,9 @@ export default function StudioPage() {
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
   const jobRunning = Boolean(jobId && !complete);
+  const preparing = isPreparingJob(jobId);
+  const waking = jobRunning && !preparing && !runHasStarted(progress);
+  const elapsed = useElapsedSeconds(busy || jobRunning, waitStartedAt);
   const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
   const sizeLabel = formatSize(totalBytes);
   const sourceMeta =
@@ -187,8 +193,9 @@ export default function StudioPage() {
               generateCaptions: sendGenerateCaptions,
               prepMode,
               captionPrompt: sendDriveCaptions,
+              onProgress: setUpload,
             })
-          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions);
+          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload);
       if (cancelRequestedRef.current) {
         try {
           await cancelJob(resp.job_id);
@@ -400,6 +407,19 @@ export default function StudioPage() {
               complete={complete}
               onCancel={jobRunning || busy ? handleCancelPack : undefined}
               cancelling={cancelling}
+              title={
+                uploadBusyTitle(upload)
+                ?? (preparing ? "Starting…" : waking ? "Waking…" : undefined)
+              }
+              detail={
+                upload
+                  ? uploadProgressCopy(upload)
+                  : preparing
+                    ? preparingSubcopy(elapsed)
+                    : waking
+                      ? wakingSubcopy(elapsed, progress.waitPhase)
+                      : undefined
+              }
             />
           </div>
         </div>

@@ -169,6 +169,26 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.caption_prompts).toEqual([]);
   });
 
+  it("reports byte progress before the job exists so Studio is not frozen on starting", async () => {
+    const seen: Array<{ phase: string; loaded: number }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = String(url);
+      if (u === "/api/uploads/direct") {
+        return new Response(JSON.stringify({ mode: "local" }), { status: 200 });
+      }
+      if (u === "/api/jobs") {
+        return new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 });
+      }
+      return new Response("nope", { status: 500 });
+    });
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", false, "none", "", (p) => {
+      seen.push({ phase: p.phase, loaded: p.loaded });
+    });
+    expect(seen[0]).toEqual({ phase: "direct", loaded: 0 });
+    expect(seen.some((p) => p.phase === "create")).toBe(true);
+  });
+
   it("retries a dropped chunked upload then starts the job", async () => {
     const f = new File([new Uint8Array(4_000_000)], "a.mp4", { type: "video/mp4" });
     let offset0 = 0;

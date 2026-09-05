@@ -6,6 +6,7 @@ import { useJobProgress } from "./useJobProgress";
 import { RunProgress } from "./progress";
 import { PrepMode, QualityMode } from "./hqWaitCopy";
 import { isPreparingJob, PREPARING_JOB_ID } from "./prepareCopy";
+import type { JobUploadProgress } from "./jobUpload";
 
 type RunSource = { source_id: string; filename: string; requested: number };
 
@@ -30,6 +31,9 @@ interface RunCtx {
   beginPrepare: (sources: RunSource[]) => void;
   start: (resp: CreateJobResponse, qualityMode?: QualityMode, prepMode?: PrepMode) => void;
   clear: () => void;
+  upload: JobUploadProgress | null;
+  setUpload: (p: JobUploadProgress | null) => void;
+  waitStartedAt: number | null;
 }
 
 const Ctx = createContext<RunCtx | null>(null);
@@ -39,6 +43,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [sources, setSources] = useState<RunSource[]>([]);
   const [qualityMode, setQualityMode] = useState<QualityMode>("fast");
   const [prepMode, setPrepMode] = useState<PrepMode>("none");
+  const [upload, setUpload] = useState<JobUploadProgress | null>(null);
+  const [waitStartedAt, setWaitStartedAt] = useState<number | null>(null);
   const hydratedRef = useRef(false);
 
   // Hydrate jobId from sessionStorage on mount; if sources are empty, fetch job detail once
@@ -51,6 +57,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setJobId(saved);
+    setWaitStartedAt(Date.now());
     setQualityMode(readStoredQuality());
     setPrepMode(readStoredPrep());
     // sources will be empty after a hard reload — fetch once to seed them
@@ -82,6 +89,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   function beginPrepare(srcs: RunSource[]) {
     setSources(srcs);
     setJobId(PREPARING_JOB_ID);
+    setUpload(null);
+    setWaitStartedAt(Date.now());
   }
 
   function start(
@@ -102,6 +111,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setJobId(id);
     setQualityMode("fast");
     setPrepMode(nextPrep);
+    setUpload(null);
   }
 
   function clear() {
@@ -112,10 +122,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setSources([]);
     setQualityMode("fast");
     setPrepMode("none");
+    setUpload(null);
+    setWaitStartedAt(null);
   }
 
   return (
-    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, prepMode, beginPrepare, start, clear }}>
+    <Ctx.Provider value={{ jobId, sources, progress, complete, qualityMode, prepMode, beginPrepare, start, clear, upload, setUpload, waitStartedAt }}>
       {children}
     </Ctx.Provider>
   );

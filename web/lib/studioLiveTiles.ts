@@ -31,13 +31,21 @@ export function packLiveTiles(source: SourceProgress): LiveTile[] {
   return tiles;
 }
 
-export function liveTileLabel(tile: LiveTile, preparing = false): string {
+export function liveTileLabel(
+  tile: LiveTile,
+  preparing = false,
+  upload?: { phase?: string } | null,
+  waking = false,
+): string {
   if (tile.kind === "done") {
     const pct = tile.variant?.uniqueness != null ? Math.round(tile.variant.uniqueness * 100) : null;
     return pct != null ? `${pct}%` : "ready";
   }
   if (tile.kind === "live") return tile.flight?.state ?? "render";
-  return preparing ? "starting" : "queued";
+  if (preparing && upload && upload.phase !== "create") return "uploading";
+  if (preparing) return "starting";
+  if (waking) return "waking";
+  return "queued";
 }
 
 /** Source poster while copies are still rendering. Prep ids have no file yet. */

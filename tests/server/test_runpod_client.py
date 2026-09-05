@@ -47,6 +47,43 @@ def test_http_client_posts_run_then_streams(monkeypatch):
     assert out[-1] == {"type": "result", "variants": [], "manifest_key": "m"}
 
 
+def test_http_client_yields_queue_status_before_first_frame(monkeypatch):
+    import variant_maker.server.runpod_client as rc
+
+    polls = []
+
+    class FakeResp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def post(self, url, json, headers):
+            return FakeResp({"id": "job123"})
+        def get(self, url, headers):
+            polls.append(url)
+            if len(polls) == 1:
+                return FakeResp({"status": "IN_QUEUE", "stream": []})
+            if len(polls) == 2:
+                return FakeResp({"status": "IN_PROGRESS", "stream": []})
+            return FakeResp({
+                "status": "COMPLETED",
+                "stream": [{"output": {"type": "result", "variants": [], "manifest_key": "m"}}],
+            })
+
+    monkeypatch.setattr(rc, "_http", lambda: FakeHttp())
+    client = rc.HttpRunPodClient(endpoint_id="ep", api_key="k", poll_interval=0)
+    out = list(client.stream_run({"input": {}}))
+    assert out[1]["type"] == "status"
+    assert out[1]["status"] == "IN_QUEUE"
+    assert out[2]["type"] == "status"
+    assert out[2]["status"] == "IN_PROGRESS"
+    assert rc.wait_phase_for_status("IN_QUEUE") == "queued"
+    assert rc.wait_phase_for_status("IN_PROGRESS") == "booting"
+
+
 def test_http_client_resume_polls_without_new_run(monkeypatch):
     import variant_maker.server.runpod_client as rc
 

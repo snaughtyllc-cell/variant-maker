@@ -5,9 +5,15 @@ import { cancelJob } from "@/lib/api";
 import { useQueue } from "@/lib/useQueue";
 import { useRun } from "@/lib/runStore";
 import { displayClipName, jobCanCancel } from "@/lib/queue";
-import { isPreparingJob } from "@/lib/prepareCopy";
+import {
+  isPreparingJob,
+  preparingSubcopy,
+  wakingSubcopy,
+} from "@/lib/prepareCopy";
+import { uploadProgressCopy } from "@/lib/jobUpload";
 import { reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import { runHasStarted } from "@/lib/progress";
+import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
 import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, packLiveTiles } from "@/lib/studioLiveTiles";
 import { PosterThumb } from "@/components/common/PosterThumb";
 import type { SourceProgress } from "@/lib/progress";
@@ -20,7 +26,17 @@ interface QueueRow {
   cancelId?: string;
 }
 
-function LivePackGrid({ source, preparing }: { source: SourceProgress; preparing: boolean }) {
+function LivePackGrid({
+  source,
+  preparing,
+  upload,
+  waking,
+}: {
+  source: SourceProgress;
+  preparing: boolean;
+  upload?: { phase?: string } | null;
+  waking?: boolean;
+}) {
   const tiles = packLiveTiles(source);
   return (
     <div className="studio-live__grid" data-testid={`live-grid-${source.source_id}`}>
@@ -43,12 +59,12 @@ function LivePackGrid({ source, preparing }: { source: SourceProgress; preparing
               className={
                 tile.kind === "done"
                   ? "studio-live-tile__pct"
-                  : live
+                  : live || preparing || waking
                     ? "studio-live-tile__status vf-live-shimmer"
                     : "studio-live-tile__status"
               }
             >
-              {liveTileLabel(tile, preparing)}
+              {liveTileLabel(tile, preparing, upload, waking)}
             </span>
           </div>
         );
@@ -65,7 +81,7 @@ function LivePackGrid({ source, preparing }: { source: SourceProgress; preparing
  */
 export function StudioLiveQueue() {
   const { data: queue, mutate } = useQueue();
-  const { jobId, progress, complete, prepMode } = useRun();
+  const { jobId, progress, complete, prepMode, upload, waitStartedAt } = useRun();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const runSources = Object.values(progress.bySource);
@@ -105,6 +121,16 @@ export function StudioLiveQueue() {
   const rows = [...runRows, ...queueRows];
 
   const preparing = isPreparingJob(jobId);
+  const started = runHasStarted(progress);
+  const waking = Boolean(jobId) && !complete && !progress.failed && !started && !preparing && prepMode !== "hq";
+  const waitActive = preparing || waking;
+  const elapsed = useElapsedSeconds(waitActive, waitStartedAt);
+  const uploadLine = preparing && upload ? uploadProgressCopy(upload) : "";
+  const waitLine = preparing
+    ? (uploadLine || preparingSubcopy(elapsed))
+    : waking
+      ? wakingSubcopy(elapsed, progress.waitPhase)
+      : "";
   const showLiveGrids = runSources.some((s) => s.requested > 0);
   const previewSource =
     runSources.find((s) => s.source_id && !s.source_id.startsWith("prep-")) ?? runSources[0];
@@ -135,6 +161,11 @@ export function StudioLiveQueue() {
       {progress.failed && !complete && (
         <p className="studio-live__failed">{progress.failed}</p>
       )}
+      {waitLine ? (
+        <p className="studio-live__wait" data-testid="live-queue-wait">
+          {waitLine}
+        </p>
+      ) : null}
       {prepMode === "hq" && Boolean(jobId) && !complete && !isPreparingJob(jobId) && !runHasStarted(progress) && (
         <p className="studio-live__failed" data-testid="hq-reconstruct-copy">
           {reconstructFirstHeadline()} {reconstructFirstSubcopy()}
@@ -188,7 +219,13 @@ export function StudioLiveQueue() {
 
         {showLiveGrids ? (
           runSources.map((source) => (
-            <LivePackGrid key={source.source_id} source={source} preparing={preparing} />
+            <LivePackGrid
+              key={source.source_id}
+              source={source}
+              preparing={preparing}
+              upload={upload}
+              waking={waking}
+            />
           ))
         ) : (
           <p className="studio-live__empty studio-live__empty--sub">

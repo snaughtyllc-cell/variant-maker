@@ -252,6 +252,19 @@ def test_get_job_exposes_in_flight_from_event_log(tmp_path):
     }]
 
 
+def test_get_job_exposes_wait_phase_during_fast_cold_start(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "1"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    job.telemetry["wait_phase"] = "queued"
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert detail["wait_phase"] == "queued"
+
+
 def test_get_job_exposes_parallel_in_flights(tmp_path):
     from variant_maker.server.events import VariantEvent
 

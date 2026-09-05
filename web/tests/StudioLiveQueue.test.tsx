@@ -13,11 +13,22 @@ const run: {
   complete: boolean;
   progress: RunProgress;
   prepMode?: "none" | "hq";
+  upload: null | {
+    phase: string;
+    fileIndex: number;
+    fileCount: number;
+    filename: string;
+    loaded: number;
+    total: number;
+  };
+  waitStartedAt: number | null;
 } = {
   jobId: null,
   complete: false,
   progress: initRun([]),
   prepMode: "none",
+  upload: null,
+  waitStartedAt: null,
 };
 
 vi.mock("@/lib/useQueue", () => ({
@@ -50,6 +61,8 @@ describe("StudioLiveQueue reserved tracks", () => {
     run.complete = false;
     run.progress = initRun([]);
     run.prepMode = "none";
+    run.upload = null;
+    run.waitStartedAt = null;
     queue.data = { running: 0, fast: 0, hq: 0, jobs: [] };
   });
 
@@ -139,5 +152,36 @@ describe("StudioLiveQueue reserved tracks", () => {
     run.progress = initRun([{ source_id: "s1", filename: "clip.mp4", requested: 3 }]);
     render(<StudioLiveQueue />);
     expect(screen.getByRole("button", { name: /cancel pack/i })).toBeInTheDocument();
+  });
+
+  it("shows upload percent instead of a frozen starting label", () => {
+    run.jobId = "preparing";
+    run.waitStartedAt = Date.now();
+    run.progress = initRun([{ source_id: "prep-0", filename: "C2033.mp4", requested: 2 }]);
+    run.upload = {
+      phase: "direct",
+      fileIndex: 0,
+      fileCount: 1,
+      filename: "C2033.mp4",
+      loaded: 50 * 1024 * 1024,
+      total: 100 * 1024 * 1024,
+    };
+    render(<StudioLiveQueue />);
+    expect(screen.getByTestId("live-queue-wait").textContent).toMatch(/Uploading 1 of 1/);
+    expect(screen.getByTestId("live-queue-wait").textContent).toMatch(/50%/);
+    expect(screen.getAllByText("uploading")).toHaveLength(2);
+  });
+
+  it("names a Fast cold start with a moving elapsed clock", () => {
+    run.jobId = "j1";
+    run.waitStartedAt = Date.now() - 8000;
+    run.progress = {
+      ...initRun([{ source_id: "s1", filename: "clip.mp4", requested: 2 }]),
+      waitPhase: "queued",
+    };
+    render(<StudioLiveQueue />);
+    expect(screen.getByTestId("live-queue-wait").textContent).toMatch(/8s elapsed/);
+    expect(screen.getByTestId("live-queue-wait").textContent).toMatch(/cold-start queue/i);
+    expect(screen.getAllByText("waking")).toHaveLength(2);
   });
 });

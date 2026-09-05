@@ -31,6 +31,7 @@ import {
   VariantOut,
   Workflow,
 } from "./types";
+import type { JobUploadProgress } from "./jobUpload";
 
 /**
  * FastAPI error bodies are `{"detail": string | Array<{msg: string, ...}>}`.
@@ -129,7 +130,10 @@ async function putChunk(url: string, body: ArrayBuffer): Promise<void> {
   throw new Error(last);
 }
 
-async function uploadFileChunked(file: File): Promise<string> {
+async function uploadFileChunked(
+  file: File,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<string> {
   const initFd = new FormData();
   initFd.append("filename", file.name);
   initFd.append("size", String(file.size));
@@ -143,6 +147,7 @@ async function uploadFileChunked(file: File): Promise<string> {
     const buf = await blob.arrayBuffer();
     await putChunk(`/api/uploads/${init.upload_id}?offset=${offset}`, buf);
     offset += blob.size;
+    onBytes?.(Math.min(offset, file.size), file.size);
   }
   return init.upload_id;
 }
@@ -163,15 +168,44 @@ async function initDirectUpload(file: File): Promise<DirectUploadInit> {
   }
 }
 
-async function putDirectObject(file: File, init: DirectUploadInit): Promise<void> {
-  const res = await fetch(init.url as string, {
-    method: init.method || "PUT",
-    headers: init.headers || { "Content-Type": file.type || "video/mp4" },
-    body: file,
-  });
+async function putDirectObject(
+  file: File,
+  init: DirectUploadInit,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<void> {
+  const url = init.url as string;
+  const method = init.method || "PUT";
+  const headers = init.headers || { "Content-Type": file.type || "video/mp4" };
+  onBytes?.(0, file.size);
+  const useXhr = typeof XMLHttpRequest === "function" && !import.meta.env?.VITEST;
+  if (useXhr) {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url);
+      for (const [key, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(key, value);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onBytes?.(event.loaded, event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onBytes?.(file.size, file.size);
+          resolve();
+          return;
+        }
+        reject(new Error(`Upload failed (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Upload dropped — hit Generate again."));
+      xhr.send(file);
+    });
+    return;
+  }
+  const res = await fetch(url, { method, headers, body: file });
   if (!res.ok) {
     throw new Error(await errorMessage(res));
   }
+  onBytes?.(file.size, file.size);
 }
 
 function captionFields(generate: boolean, captionPrompt: string | string[]): {
@@ -194,10 +228,28 @@ export async function createJob(
   generateCaptions: boolean = false,
   prepMode: "none" | "hq" = "none",
   captionPrompt: string | string[] = "",
+  onProgress?: (p: JobUploadProgress) => void,
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
   const prompts = captionFields(generateCaptions, captionPrompt);
+  const report = (
+    phase: JobUploadProgress["phase"],
+    fileIndex: number,
+    file: File | null,
+    loaded: number,
+    total: number,
+  ) => {
+    onProgress?.({
+      phase,
+      fileIndex,
+      fileCount: files.length,
+      filename: file?.name ?? "",
+      loaded,
+      total,
+    });
+  };
   const first = files[0];
+  if (first) report("direct", 0, first, 0, first.size || 1);
   const direct = first ? await initDirectUpload(first) : { mode: "local" as const };
   if (direct.mode === "direct") {
     try {
@@ -208,9 +260,10 @@ export async function createJob(
         if (init.mode !== "direct" || !init.url || !init.key) {
           throw new Error("direct upload unavailable");
         }
-        await putDirectObject(file, init);
+        await putDirectObject(file, init, (loaded, total) => report("direct", i, file, loaded, total));
         items.push({ filename: file.name, key: init.key });
       }
+      report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
       return fetch("/api/jobs/from-object", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -232,6 +285,7 @@ export async function createJob(
 
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
+    report("chunk", 0, files[0] ?? null, 0, files.reduce((sum, f) => sum + f.size, 0) || 1);
     const fd = new FormData();
     fd.append("count", String(count));
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
@@ -241,13 +295,16 @@ export async function createJob(
     fd.append("caption_prompts", prompts.caption_prompts);
     fd.append("prep_mode", prepMode);
     for (const f of files) fd.append("files", f, f.name);
+    report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
 
   const uploadIds: string[] = [];
-  for (const f of files) {
-    uploadIds.push(await uploadFileChunked(f));
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    uploadIds.push(await uploadFileChunked(f, (loaded, total) => report("chunk", i, f, loaded, total)));
   }
+  report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
   const fd = new FormData();
   fd.append("upload_ids", uploadIds.join(","));
   fd.append("count", String(count));
@@ -501,7 +558,16 @@ export function createJobFromDrive(opts: {
   generateCaptions?: boolean;
   prepMode?: "none" | "hq";
   captionPrompt?: string | string[];
+  onProgress?: (p: JobUploadProgress) => void;
 }): Promise<CreateJobResponse> {
+  opts.onProgress?.({
+    phase: "create",
+    fileIndex: 0,
+    fileCount: opts.fileIds.length,
+    filename: "",
+    loaded: 1,
+    total: 1,
+  });
   const packed = captionFields(opts.generateCaptions ?? false, opts.captionPrompt ?? "");
   return fetch("/api/jobs/from-drive", {
     method: "POST",

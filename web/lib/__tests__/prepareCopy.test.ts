@@ -13,6 +13,9 @@ import {
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
+  wakingHeadline,
+  wakingSlotLabel,
+  wakingSubcopy,
   uniquenessCoverageChips,
   uniquenessCoverageSubcopy,
   uniquenessCustomerLabel,
@@ -25,8 +28,12 @@ describe("prepare copy", () => {
     expect(isPreparingJob(PREPARING_JOB_ID)).toBe(true);
     expect(isPreparingJob("abc")).toBe(false);
     expect(preparingHeadline()).toMatch(/preparing generation/i);
-    expect(preparingSubcopy()).toMatch(/20–30 seconds/i);
-    expect(preparingSubcopy()).toMatch(/request received/i);
+    expect(preparingSubcopy(0)).toMatch(/1–2 minutes/i);
+    expect(preparingSubcopy(0)).toMatch(/elapsed/i);
+    expect(preparingSubcopy(75)).toMatch(/1:15/);
+    expect(wakingHeadline()).toMatch(/waking fast worker/i);
+    expect(wakingSubcopy(8, "queued")).toMatch(/cold-start queue/i);
+    expect(wakingSlotLabel()).toBe("waking");
   });
 
   it("asks for captions on Generate, not a separate bank UI", () => {

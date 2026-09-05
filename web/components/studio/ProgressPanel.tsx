@@ -8,11 +8,14 @@ import {
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
+  wakingHeadline,
+  wakingSubcopy,
 } from "@/lib/prepareCopy";
+import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete, clear, qualityMode, prepMode } = useRun();
+  const { jobId, progress, complete, clear, qualityMode, prepMode, waitStartedAt } = useRun();
   const [cancelling, setCancelling] = useState(false);
 
   async function handleCancel() {
@@ -85,12 +88,16 @@ export function ProgressPanel() {
   const preparing = isPreparingJob(jobId);
   const started = runHasStarted(progress);
   const early = !complete && !progress.failed && (preparing || !started);
+  const waking = Boolean(early && !preparing && prepMode !== "hq");
+  const elapsed = useElapsedSeconds(early, waitStartedAt);
   const reconstructing = Boolean(prepMode === "hq" && !started && !complete && !preparing && !progress.failed);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
   const cancelled = Boolean(failed && /cancelled/i.test(failed));
   const headline = reconstructing
     ? reconstructFirstHeadline()
+    : waking
+    ? wakingHeadline()
     : early
     ? preparingHeadline()
     : failed
@@ -104,8 +111,10 @@ export function ProgressPanel() {
         : "Generating…";
   const sub = reconstructing
     ? reconstructFirstSubcopy()
+    : waking
+    ? wakingSubcopy(elapsed, progress.waitPhase)
     : early
-    ? preparingSubcopy()
+    ? preparingSubcopy(elapsed)
     : failed
       ? failed
       : complete
@@ -198,7 +207,7 @@ export function ProgressPanel() {
                 flexShrink: 0,
               }}
             />
-            {early ? "starting" : complete ? "done" : "live"}
+            {early ? (waking ? "waking" : "starting") : complete ? "done" : "live"}
           </span>
         </div>
       </div>
@@ -212,6 +221,7 @@ export function ProgressPanel() {
             qualityMode={qualityMode}
             complete={complete}
             preparing={early}
+            waking={waking}
           />
         ))}
       </div>

@@ -1088,6 +1088,20 @@ class JobStore:
                 job.state = "running"
                 self._persist(job)
             def on_event(e: VariantEvent) -> None:
+                if e.state == "wait":
+                    phase = "queued" if str(e.status or "").upper() == "IN_QUEUE" else "booting"
+                    if job.telemetry.get("wait_phase") != phase:
+                        job.telemetry = merge_telemetry(job.telemetry, wait_phase=phase)
+                        self._persist(job)
+                    return
+                if e.state in (
+                    "rendering", "checking", "looking", "rerolling",
+                    "uniqueness", "escalating", "done",
+                ) and job.telemetry.get("wait_phase"):
+                    tel = dict(job.telemetry)
+                    tel.pop("wait_phase", None)
+                    job.telemetry = tel
+                    self._persist(job)
                 job.events.append(e)
                 if token.runpod_job_id:
                     for source in job.sources:

@@ -60,11 +60,14 @@ class RunPodServerlessRunner:
         if drive_file_id:
             basename = os.path.basename(basename) or "source.mp4"
         source_key = source_object_key or f"inputs/{source_id}/{basename}"
+        exists_fn = getattr(self._store, "exists", None)
+        already = callable(exists_fn) and bool(exists_fn(source_key))
         if source_path and os.path.isfile(source_path):
-            self._store.put(source_key, source_path)
+            if not already:
+                self._store.put(source_key, source_path)
         elif drive_file_id:
             pass  # worker downloads with a job-scoped access token
-        elif not getattr(self._store, "exists", lambda _k: False)(source_key):
+        elif not already:
             raise FileNotFoundError(f"source missing locally and in object storage: {source_key}")
 
         quality_mode = normalize_quality_mode(quality_mode, default=_quality_mode())
@@ -182,6 +185,11 @@ class RunPodServerlessRunner:
             elif chunk.get("type") == "submitted":
                 # JobStore persists runpod_job_id from cancel_token; nothing else.
                 continue
+            elif chunk.get("type") == "status":
+                on_event(VariantEvent(
+                    source_id=source_id, index=0, state="wait",
+                    status=str(chunk.get("status") or "") or None,
+                ))
             elif chunk.get("type") == "result":
                 variants_meta = chunk.get("variants", [])
                 manifest_key = chunk.get("manifest_key")

@@ -40,6 +40,8 @@ describe("packLiveTiles", () => {
     expect(liveTileLabel(tiles[1])).toBe("rendering");
     expect(liveTileLabel(tiles[2])).toBe("queued");
     expect(liveTileLabel(tiles[2], true)).toBe("starting");
+    expect(liveTileLabel(tiles[2], true, { phase: "direct" })).toBe("uploading");
+    expect(liveTileLabel(tiles[2], false, null, true)).toBe("waking");
   });
 
   it("uses JPEG posters for done tiles and never the source MP4", () => {
