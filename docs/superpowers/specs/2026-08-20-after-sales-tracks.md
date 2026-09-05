@@ -16,7 +16,7 @@ and billing wait until a real queue or a real invoice pain shows up.
 | **A Team** | A new-workspace owner invites their VA on `/team` without Jeff. Shipped on Studio PR. |
 | **B Drop Ledger 12a** | Drive page has Ensure / Sync / open sheet. Gallery can mark Flagged. Unlabeled = pass. |
 | **C Onboarding** | Short ops page: Connect Drive, Team, Fast vs HQ, workflow vs one-off. |
-| **D Hybrid runners** | Still parked until the trigger below. Not part of “sales slice done.” |
+| **D Hybrid runners** | Occupancy router shipped in Lab (two Fast slots, one pack per studio). Dashboard max workers / idle timeout are ops. |
 
 Sell on that. Then upgrade capacity. Do not wait for Stripe or a bigger GPU
 to take the first outside operator.
@@ -40,17 +40,18 @@ to take the first outside operator.
 **Trigger:** A second workspace is waiting on Fast while another is mid-job.
 Until then one Fast CPU endpoint is enough.
 
-**Build:** Occupancy routing. If workspace A holds a live Fast job, boot a
-**second serverless Fast CPU** for workspace B. If only one studio is busy,
-they keep the single worker (no extra spend). Same idea later for a second
-HQ GPU — not in this wave.
+**Build (Lab):** Occupancy router — two scale-to-zero Fast CPU slots, one
+complete pack per worker, one live pack per studio. Atomic reservations in
+`fast_occupancy.py`; TenantHub + JobStore wait/queue; slot 1 uses
+`RUNPOD_FAST_ENDPOINT_ID_2` when set. Idle journal
+(`fast_occupancy.json`) survives a Railway restart. Cancel follows
+`(tenant_id, job_id)`, not “the current Fast worker.”
 
-**Not:** dedicated card per customer, always-on GPU, serializing Fast into
-one line, uniqueness changes.
+Dashboard still sets max workers **2** and the idle timeout (Wave 2). HQ
+occupancy and reconstruct-first slot split stay out.
 
-**Files (when unparked):** `runpod_runner.py`, `runner.py`, Fast endpoint env,
-`docs/ops/railway-studio.md`. Spec notes already live on the workspaces doc
-(`Later — hybrid runners`) and sales-tracks Track D.
+**Not:** dedicated card per customer, always-on GPU, uniqueness changes,
+splitting one 20-pack across machines.
 
 This is how we take a third agency without one giant shared queue.
 

@@ -96,6 +96,7 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
    ```
    export RUNPOD_ENDPOINT_ID=<hq-id> RUNPOD_API_KEY=<key>
    export RUNPOD_FAST_ENDPOINT_ID=<fast-cpu-id>   # optional until the CPU endpoint exists
+   # export RUNPOD_FAST_ENDPOINT_ID_2=<overflow-id>  # optional; omit → both slots share FAST
    export R2_ENDPOINT=<url> R2_BUCKET=<bucket> R2_ACCESS_KEY=<ak> R2_SECRET_KEY=<sk>
    export VARIANT_RUNNER=runpod
    variant-server --runner runpod

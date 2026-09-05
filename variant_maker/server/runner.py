@@ -244,24 +244,31 @@ class RoutingRunner:
         remote: Runner,
         *,
         fast_remote: Runner | None = None,
+        overflow_fast: Runner | None = None,
         max_local_fast: int = DEFAULT_FAST_LOCAL_MAX,
     ) -> None:
         self._local = local
         self._remote = remote
         self._fast_remote = fast_remote
+        self._overflow_fast = overflow_fast
         self._max_local_fast = max_local_fast
 
-    def _pick(self, quality_mode: str | None, count: int) -> Runner:
+    def _pick(self, quality_mode: str | None, count: int, reservation=None) -> Runner:
         if normalize_quality_mode(quality_mode) == "fast" and self._fast_remote is not None:
+            slot = getattr(reservation, "slot", None)
+            if slot == 1 and self._overflow_fast is not None:
+                return self._overflow_fast
             return self._fast_remote
         if should_run_fast_local(quality_mode, count, self._max_local_fast):
             return self._local
         return self._remote
 
-    def _cloud(self, quality_mode: str | None, count: int) -> Runner:
+    def _cloud(self, quality_mode: str | None, count: int, reservation=None) -> Runner:
         """Resume/fetch never use Studio CPU — those jobs have a RunPod id."""
-        picked = self._pick(quality_mode, count)
+        picked = self._pick(quality_mode, count, reservation=reservation)
         if picked is self._local:
+            if getattr(reservation, "slot", None) == 1 and self._overflow_fast is not None:
+                return self._overflow_fast
             return self._fast_remote or self._remote
         return picked
 
@@ -269,8 +276,8 @@ class RoutingRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None, **kwargs) -> SourceResult:
-        return self._pick(quality_mode, count).run(
+            cancel_token=None, reservation=None, **kwargs) -> SourceResult:
+        return self._pick(quality_mode, count, reservation=reservation).run(
             source_path, count=count, out_dir=out_dir, source_id=source_id,
             on_event=on_event, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, cancel_token=cancel_token, **kwargs,
@@ -284,14 +291,18 @@ class RoutingRunner:
         return deliver(**kwargs)
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
-        target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)
+        target = self._cloud(
+            kwargs.get("quality_mode"),
+            kwargs.get("count") or 1,
+            reservation=kwargs.get("reservation"),
+        )
         resume = getattr(target, "resume_run", None)
         if not callable(resume):
             raise TypeError("remote runner cannot resume a cloud job")
         return resume(*args, **kwargs)
 
     def fetch_outputs(self, *args, **kwargs):
-        for target in (self._fast_remote, self._remote):
+        for target in (self._fast_remote, self._overflow_fast, self._remote):
             if target is None:
                 continue
             fetch = getattr(target, "fetch_outputs", None)

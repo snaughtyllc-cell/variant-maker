@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from .app import create_app
 from .drive_config import ENV_SA_JSON
+from .fast_occupancy import FAST_ENDPOINT_ENV, FAST_OVERFLOW_ENV
 from .jobs import JobStore
 from .runner import LocalRunner, RoutingRunner, Runner, fast_local_max_from_env
 from .runpod_client import HttpRunPodClient
@@ -18,7 +19,6 @@ from .workspace import Workspace
 
 _RUNPOD_ENV = ("RUNPOD_ENDPOINT_ID", "RUNPOD_API_KEY", "R2_ENDPOINT", "R2_BUCKET",
                "R2_ACCESS_KEY", "R2_SECRET_KEY")
-FAST_ENDPOINT_ENV = "RUNPOD_FAST_ENDPOINT_ID"
 
 
 def resolve_runner(kind: str | None) -> str:
@@ -52,15 +52,23 @@ def make_runner(kind: str, object_store: S3ObjectStore | None = None) -> Runner:
         )
         fast_id = _fast_endpoint_id()
         fast = None
+        overflow = None
         if fast_id:
             fast = RunPodServerlessRunner(
                 store,
                 HttpRunPodClient(endpoint_id=fast_id, api_key=api_key),
             )
+            overflow_id = (os.environ.get(FAST_OVERFLOW_ENV) or "").strip()
+            if overflow_id and overflow_id != fast_id:
+                overflow = RunPodServerlessRunner(
+                    store,
+                    HttpRunPodClient(endpoint_id=overflow_id, api_key=api_key),
+                )
         return RoutingRunner(
             LocalRunner(),
             gpu,
             fast_remote=fast,
+            overflow_fast=overflow,
             max_local_fast=fast_local_max_from_env(),
         )
     raise SystemExit(f"unknown runner: {kind!r}")

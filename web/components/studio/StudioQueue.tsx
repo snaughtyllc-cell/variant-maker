@@ -1,6 +1,6 @@
 "use client";
 import type { QueueSnapshot } from "@/lib/types";
-import { queueHeadline, queueRowLabel, queueWaitCopy } from "@/lib/queue";
+import { queueHeadline, queueRowLabel, queueWaitCopy, jobIsLive } from "@/lib/queue";
 
 export function StudioQueueCard({
   queue,
@@ -62,7 +62,7 @@ export function StudioQueueCard({
                   {queueRowLabel(job)}
                   {mine ? " · you" : ""}
                 </span>
-                {onCancel && job.state === "running" && (
+                {onCancel && jobIsLive(job.state) && job.state !== "cancel_requested" && (
                   <button
                     type="button"
                     onClick={() => onCancel(job.job_id)}

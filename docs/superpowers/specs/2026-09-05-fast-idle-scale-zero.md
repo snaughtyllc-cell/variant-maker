@@ -1,7 +1,7 @@
 # Fast idle / scale-to-zero (Wave 2 ops)
 
 **Date:** 2026-09-05  
-**Status:** Encode — dashboard settings + in-process rules. Primer is **off** until measured.  
+**Status:** Encode — dashboard settings + in-process rules. Primer is **off** until measured. Occupancy journal is wired on TenantHub (`{DATA_DIR}/fast_occupancy.json`).  
 **Product name:** VaryForge  
 **Depends on:** occupancy router (`docs/superpowers/specs/2026-08-20-after-sales-tracks.md` Wave 1). This slice does **not** ship a primer job, reconstruct-first, or a second HQ GPU.
 

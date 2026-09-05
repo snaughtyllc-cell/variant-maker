@@ -1,6 +1,9 @@
 """Per-job cancel: Studio stop + optional RunPod /cancel/{id}.
 
 One token per Studio job so two concurrent packs do not cancel each other.
+Cancel follows the assigned ``(tenant_id, job_id)`` — never “the current
+Fast worker.” Occupancy lives on ``reservation``; this token only stops
+that job’s process group / RunPod id.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ class CancelToken:
         self.runpod_job_id: str | None = None
         self._base: str | None = None
         self._headers: dict | None = None
+        self.reservation = None
 
     def is_set(self) -> bool:
         return self._ev.is_set()

@@ -12,6 +12,7 @@ import {
   zipEmptyCopy,
 } from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
+import { jobIsLive } from "@/lib/queue";
 import {
   okVariantKeys,
   packActionSelected,
@@ -76,7 +77,7 @@ export function SourceGroup({
   const hasShortfall = source.shortfall > 0;
   const filesReady = filesReadyCount(source);
   const fullDelivery = deliveryComplete(source);
-  const stillRunning = source.job_state === "running" || !!source.in_flight;
+  const stillRunning = jobIsLive(source.job_state) || !!source.in_flight;
   const shareable = readyShareableVariants(source.variants);
   const actionSelected = packActionSelected(source, selected);
   const actionShareable = selectedShareableVariants([source], actionSelected);

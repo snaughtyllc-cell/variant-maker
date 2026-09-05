@@ -75,6 +75,58 @@ def test_process_job_streams_progress_then_uploads_and_results(monkeypatch, tmp_
     assert res["variants"][0]["key"] == "outputs/s1/v01.mp4"
 
 
+def test_process_job_honors_namespaced_output_prefix(monkeypatch, tmp_path):
+    store = FakeObjectStore()
+    src = tmp_path / "src.mp4"
+    src.write_bytes(b"SRC")
+    store.put("tenants/ws_a/jobs/job1/inputs/s1/src.mp4", str(src))
+
+    class FakeRecord:
+        def __init__(self, index, filename, status, quality):
+            self.index, self.filename, self.status, self.quality = index, filename, status, quality
+            self.look_src = None
+            self.look_var = None
+
+    class FakeManifest:
+        def __init__(self, variants):
+            self.variants = variants
+
+    def fake_run(config, *, on_event=None):
+        out = config["out"]
+        fname = "v01.mp4"
+        on_event("rendering", index=1, attempt=0)
+        look_src = "look_v01_src.jpg"
+        look_var = "look_v01.jpg"
+        open(os.path.join(out, look_src), "w").close()
+        open(os.path.join(out, look_var), "w").close()
+        rec = FakeRecord(1, fname, "ok", {"vmaf": 95.0})
+        rec.look_src = look_src
+        rec.look_var = look_var
+        on_event("looking", index=1, look_src=look_src, look_var=look_var)
+        on_event("done", index=1, status="ok", quality={"vmaf": 95.0}, filename=fname)
+        open(os.path.join(out, fname), "w").close()
+        open(os.path.join(out, "manifest.json"), "w").close()
+        return FakeManifest([rec])
+
+    monkeypatch.setattr(gpu_worker.pipeline, "run", fake_run)
+    prefix = "tenants/ws_a/jobs/job1/attempts/att1/outputs/s1"
+    chunks = list(gpu_worker.process_job(
+        {
+            "source_key": "tenants/ws_a/jobs/job1/inputs/s1/src.mp4",
+            "source_id": "s1",
+            "count": 1,
+            "output_prefix": prefix,
+        },
+        store,
+        work_dir=str(tmp_path / "work"),
+    ))
+    results = [c for c in chunks if c["type"] == "result"]
+    assert results[0]["manifest_key"] == f"{prefix}/manifest.json"
+    assert results[0]["variants"][0]["key"] == f"{prefix}/v01.mp4"
+    assert f"{prefix}/v01.mp4" in store.list_prefix(prefix + "/")
+    assert f"{prefix}/look_v01.jpg" in store.list_prefix(prefix + "/")
+
+
 def _capture_jobs(monkeypatch, tmp_path, job_input):
     store = FakeObjectStore()
     src = tmp_path / "src.mp4"

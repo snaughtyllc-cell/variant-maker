@@ -18,6 +18,14 @@ from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .caption_ai import brief_from_filename, briefs_for_sources, captions_for_source
 from .captions import strip_internal_index_lines
 from .events import VariantEvent, event_to_dict
+from .fast_occupancy import FastOccupancy, Reservation
+from .job_isolation import (
+    IsolationError,
+    attempt_output_key,
+    cancel_outcome,
+    job_prefix,
+    namespaced_input_key,
+)
 from .job_metrics import (
     finalize_telemetry,
     merge_telemetry,
@@ -32,6 +40,14 @@ from .workspace import Workspace
 
 PREP_HQ_FILENAME = "prep_hq.mp4"
 PREP_MODES = ("none", "hq")
+IN_FLIGHT_STATES = frozenset({
+    "queued", "reserved", "starting", "running", "uploading", "cancel_requested",
+})
+TERMINAL_SUCCESS = frozenset({"done", "completed"})
+
+
+def job_is_in_flight(state: str | None) -> bool:
+    return str(state or "") in IN_FLIGHT_STATES
 
 
 def normalize_prep_mode(value: str | None, *, default: str = "none") -> str:
@@ -119,7 +135,7 @@ def source_copy_status(source: JobSource, ws: Workspace, job_id: str,
     """ok = files on disk or object storage; copying = job still running; missing = GPU done, files not here."""
     if not missing_ok_filenames(source, ws, job_id, object_store=object_store):
         return "ok"
-    if job_state == "running":
+    if job_is_in_flight(job_state):
         return "copying"
     return "missing"
 
@@ -205,6 +221,9 @@ class Job:
     telemetry: dict = field(default_factory=dict)
     outputs_expires_utc: str | None = None
     delivery_destination: str = "download"
+    tenant_id: str | None = None
+    attempt_id: str | None = None
+    fence: str | None = None
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -296,7 +315,7 @@ def queue_occupies_hq(job: Job) -> bool:
 
 def queue_snapshot(jobs: list[Job]) -> dict:
     """Live generating packs on a shared Studio URL. Filenames only — no video."""
-    running = [j for j in jobs if j.state == "running"]
+    running = [j for j in jobs if job_is_in_flight(j.state)]
     running.sort(key=lambda j: (j.created_utc or "", j.job_id))
     items = []
     for i, job in enumerate(running, start=1):
@@ -397,6 +416,9 @@ def _job_to_dict(job: Job) -> dict:
         "telemetry": dict(job.telemetry or {}),
         "outputs_expires_utc": job.outputs_expires_utc,
         "delivery_destination": job.delivery_destination,
+        "tenant_id": job.tenant_id,
+        "attempt_id": job.attempt_id,
+        "fence": job.fence,
         "sources": [
             {
                 "source_id": s.source_id,
@@ -462,6 +484,9 @@ def _job_from_dict(data: dict) -> Job:
         telemetry=data.get("telemetry") if isinstance(data.get("telemetry"), dict) else {},
         outputs_expires_utc=data.get("outputs_expires_utc"),
         delivery_destination=str(data.get("delivery_destination") or "download"),
+        tenant_id=data.get("tenant_id"),
+        attempt_id=data.get("attempt_id"),
+        fence=data.get("fence"),
     )
 
 
@@ -481,12 +506,16 @@ class JobStore:
                  gallery_keep_hours: float | None = None,
                  keep_local_media: bool | None = None,
                  workspace_id: str | None = None,
-                 drive_token_fn=None) -> None:
+                 drive_token_fn=None,
+                 occupancy: FastOccupancy | None = None,
+                 occupancy_journal=None) -> None:
         self._ws = workspace
         self._runner = runner
         self._object_store = object_store
         self._workspace_id = workspace_id
         self._drive_token_fn = drive_token_fn
+        self._occupancy = occupancy
+        self._occupancy_journal = occupancy_journal
         # Object storage is the mailbox. Railway disk is only for local-dev /
         # FakeRunner and for tiny look JPEG posters.
         if keep_local_media is None:
@@ -505,6 +534,85 @@ class JobStore:
         self._source_index: dict[str, tuple[str, JobSource]] = {}
         self._cancel: dict[str, CancelToken] = {}
 
+    def _tenant_id(self) -> str:
+        return str(self._workspace_id or "").strip() or "local"
+
+    def _tenant_input_key(self, job_id: str, source_id: str, filename: str) -> str | None:
+        if not self._workspace_id:
+            return None
+        return self._store_input_key(job_id, source_id, filename)
+
+    def _store_input_key(self, job_id: str, source_id: str, filename: str) -> str:
+        tenant = self._workspace_id
+        if tenant:
+            try:
+                return namespaced_input_key(tenant, job_id, source_id, filename)
+            except IsolationError:
+                pass
+        return input_key(source_id, filename)
+
+    def _store_output_key(self, job: Job, source_id: str, filename: str) -> str:
+        tenant = job.tenant_id or self._workspace_id
+        attempt = job.attempt_id
+        if tenant and attempt:
+            try:
+                return attempt_output_key(tenant, job.job_id, attempt, source_id, filename)
+            except IsolationError:
+                pass
+        return output_key(source_id, filename)
+
+    def _output_prefix(self, job: Job, source_id: str) -> str | None:
+        tenant = job.tenant_id or self._workspace_id
+        attempt = job.attempt_id
+        if not tenant or not attempt:
+            return None
+        try:
+            return f"{job_prefix(tenant, job.job_id)}/attempts/{attempt}/outputs/{source_id}"
+        except IsolationError:
+            return None
+
+    def _await_occupancy(self, job: Job, token: CancelToken) -> Reservation | None:
+        occ = self._occupancy
+        if occ is None:
+            return None
+        need_fast = job.quality_mode == "fast"
+        while True:
+            if token.is_set():
+                raise JobCancelled()
+            res = occ.try_begin(self._tenant_id(), job.job_id, need_fast_slot=need_fast)
+            if res is not None:
+                token.reservation = res
+                job.tenant_id = res.tenant_id
+                job.attempt_id = res.attempt_id
+                job.fence = res.fence
+                job.state = "reserved"
+                job.telemetry = merge_telemetry(job.telemetry, occupancy=res.to_dict())
+                journal = self._occupancy_journal
+                if journal is not None and res.slot is not None:
+                    journal.occupy(
+                        res.slot,
+                        tenant_id=res.tenant_id,
+                        job_id=res.job_id,
+                        attempt_id=res.attempt_id,
+                        fence=res.fence,
+                        kind=res.kind,
+                    )
+                self._persist(job)
+                return res
+            occ.wait(0.25)
+
+    def _release_occupancy(self, job: Job, token: CancelToken, reservation: Reservation | None) -> None:
+        occ = self._occupancy
+        if occ is None:
+            return
+        res = reservation or getattr(token, "reservation", None)
+        if res is None:
+            return
+        journal = self._occupancy_journal
+        if journal is not None and res.slot is not None:
+            journal.release(res.slot, fence=res.fence)
+        occ.release(res)
+
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
@@ -521,7 +629,10 @@ class JobStore:
             if safe_name in (".", ".."):
                 safe_name = "video.mp4"
             self._ws.save_upload(job_id, source_id, safe_name, data)
-            source = JobSource(source_id=source_id, filename=safe_name, requested=count)
+            source = JobSource(
+                source_id=source_id, filename=safe_name, requested=count,
+                source_object_key=self._tenant_input_key(job_id, source_id, safe_name),
+            )
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
@@ -546,7 +657,10 @@ class JobStore:
             dest = self._ws.source_in_path(job_id, source_id, filename)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             os.replace(abs_path, dest)
-            source = JobSource(source_id=source_id, filename=filename, requested=count)
+            source = JobSource(
+                source_id=source_id, filename=filename, requested=count,
+                source_object_key=self._tenant_input_key(job_id, source_id, filename),
+            )
             sources.append(source)
         return self._start_job(
             job_id, sources, count, allow_creative_escalate, quality_mode,
@@ -567,8 +681,9 @@ class JobStore:
     ) -> Job:
         """Create a job from object-storage keys: [(filename, object_key), ...].
 
-        Copies each upload key to ``inputs/{source_id}/`` without reading bytes
-        through Railway when the store supports ``copy``. Local runners still
+        Copies each upload key to the job input prefix (namespaced when the
+        store has a workspace_id, else ``inputs/{source_id}/``) without reading
+        bytes through Railway when the store supports ``copy``. Local runners still
         download once so FakeRunner/ffmpeg have a path.
         """
         store = self._object_store
@@ -578,7 +693,7 @@ class JobStore:
         sources = []
         for filename, key in items:
             source_id = uuid.uuid4().hex[:12]
-            dest_key = input_key(source_id, filename)
+            dest_key = self._store_input_key(job_id, source_id, filename)
             if key != dest_key:
                 copy = getattr(store, "copy", None)
                 if callable(copy):
@@ -626,7 +741,7 @@ class JobStore:
             source_id = uuid.uuid4().hex[:12]
             sources.append(JobSource(
                 source_id=source_id, filename=filename, requested=count,
-                source_object_key=input_key(source_id, filename),
+                source_object_key=self._store_input_key(job_id, source_id, filename),
                 drive_file_id=str(drive_file_id),
             ))
         return self._start_job(
@@ -682,7 +797,9 @@ class JobStore:
                    created_seq=created_seq,
                    generate_captions=bool(generate_captions),
                    prep_mode=prep,
-                   telemetry=telemetry)
+                   telemetry=telemetry,
+                   tenant_id=self._workspace_id,
+                   state="queued" if self._occupancy is not None else "running")
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -695,14 +812,17 @@ class JobStore:
         return job
 
     def cancel(self, job_id: str) -> Job | None:
-        """Stop a running job. Finished jobs are returned unchanged (204-style no-op)."""
+        """Stop a live job. Completed jobs are unchanged (already-completed)."""
         job = self.get(job_id)
         if job is None:
             return None
+        if cancel_outcome(job.state) == "already_completed":
+            return job
         token = self._cancel.get(job_id)
         if token is not None:
             token.cancel()
-        if job.state == "running":
+        if job_is_in_flight(job.state) or job.state == "running":
+            job.state = "cancel_requested"
             job.error = USER_CANCEL_MSG
             self._persist(job)
         return job
@@ -714,7 +834,7 @@ class JobStore:
             return False
         job_id, _source = loc
         job = self._jobs.get(job_id)
-        if job is not None and job.state == "running":
+        if job is not None and job_is_in_flight(job.state):
             self.cancel(job_id)
         self._ws.remove_source(job_id, source_id)
         with self._lock:
@@ -732,7 +852,7 @@ class JobStore:
         job = self.get(job_id)
         if job is None:
             return False
-        if job.state == "running":
+        if job_is_in_flight(job.state):
             self.cancel(job_id)
         source_ids = [s.source_id for s in job.sources]
         with self._lock:
@@ -781,7 +901,7 @@ class JobStore:
             return
         now = _utc_now()
         with self._lock:
-            finished = [j for j in self._jobs.values() if j.state != "running"]
+            finished = [j for j in self._jobs.values() if not job_is_in_flight(j.state)]
             drop: set[str] = set()
             if hours > 0:
                 cutoff = now - _dt.timedelta(hours=hours)
@@ -805,7 +925,7 @@ class JobStore:
             return
         now = _utc_now()
         with self._lock:
-            jobs = [j for j in self._jobs.values() if j.state != "running"]
+            jobs = [j for j in self._jobs.values() if not job_is_in_flight(j.state)]
         for job in jobs:
             exp = _parse_utc(job.outputs_expires_utc)
             if exp is None or exp > now:
@@ -940,7 +1060,12 @@ class JobStore:
             print(f"usage {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
 
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
+        reservation = None
         try:
+            reservation = self._await_occupancy(job, token)
+            if self._occupancy is not None and job.state not in TERMINAL_SUCCESS:
+                job.state = "running"
+                self._persist(job)
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
                 if token.runpod_job_id:
@@ -979,6 +1104,18 @@ class JobStore:
                         runpod_job_id=token.runpod_job_id,
                         started_utc=job.telemetry.get("started_utc") or _now(),
                     )
+                    res = reservation or getattr(token, "reservation", None)
+                    journal = self._occupancy_journal
+                    if journal is not None and res is not None and res.slot is not None:
+                        journal.occupy(
+                            res.slot,
+                            tenant_id=res.tenant_id,
+                            job_id=res.job_id,
+                            attempt_id=res.attempt_id,
+                            fence=res.fence,
+                            kind=res.kind,
+                            provider_job_id=token.runpod_job_id,
+                        )
                 if e.state in ("done", "looking") or token.runpod_job_id:
                     self._persist(job)
 
@@ -1025,23 +1162,46 @@ class JobStore:
                         continue
                     in_path = hero
                 extra: dict = {}
+                if source.source_object_key:
+                    extra["source_object_key"] = source.source_object_key
                 if source.drive_file_id:
                     token_fn = getattr(self, "_drive_token_fn", None)
                     wants_drive = callable(getattr(self._runner, "resume_run", None))
                     if callable(token_fn) and wants_drive:
                         extra["drive_file_id"] = source.drive_file_id
                         extra["drive_access_token"] = token_fn()
+                if token.reservation is not None:
+                    extra["reservation"] = token.reservation
+                prefix = self._output_prefix(job, source.source_id)
+                if prefix:
+                    extra["output_prefix"] = prefix
+                    extra["tenant_id"] = job.tenant_id
+                    extra["job_id"] = job.job_id
+                    extra["attempt_id"] = job.attempt_id
                 resume = getattr(self._runner, "resume_run", None)
                 if skip_finished and callable(resume) and source.runpod_job_id:
                     try:
-                        result = resume(
-                            in_path, count=job.count, out_dir=out_dir,
-                            source_id=source.source_id, on_event=on_event,
-                            allow_creative_escalate=job.allow_creative_escalate,
-                            quality_mode=job.quality_mode,
-                            cancel_token=token,
-                            runpod_job_id=source.runpod_job_id,
-                        )
+                        try:
+                            result = resume(
+                                in_path, count=job.count, out_dir=out_dir,
+                                source_id=source.source_id, on_event=on_event,
+                                allow_creative_escalate=job.allow_creative_escalate,
+                                quality_mode=job.quality_mode,
+                                cancel_token=token,
+                                runpod_job_id=source.runpod_job_id,
+                                **extra,
+                            )
+                        except TypeError:
+                            if not extra:
+                                raise
+                            result = resume(
+                                in_path, count=job.count, out_dir=out_dir,
+                                source_id=source.source_id, on_event=on_event,
+                                allow_creative_escalate=job.allow_creative_escalate,
+                                quality_mode=job.quality_mode,
+                                cancel_token=token,
+                                runpod_job_id=source.runpod_job_id,
+                            )
                     except Exception as exc:
                         print(
                             f"job {job.job_id} resume {source.runpod_job_id} failed "
@@ -1087,7 +1247,7 @@ class JobStore:
                         look_var=getattr(v, "look_var", None),
                         caption=_caption_for(source, v.index),
                         object_key=getattr(v, "object_key", None) or (
-                            output_key(source.source_id, v.filename)
+                            self._store_output_key(job, source.source_id, v.filename)
                             if self._object_store is not None else None
                         ),
                     )
@@ -1126,9 +1286,19 @@ class JobStore:
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
                 capture_exception(exc)
         finally:
+            self._release_occupancy(job, token, reservation)
             if job.job_id not in self._jobs:
                 return
-            job.state = "cancelled" if token.is_set() else "done"
+            res = reservation or getattr(token, "reservation", None)
+            if res is not None and job.fence and res.fence != job.fence:
+                return
+            if job.state in TERMINAL_SUCCESS:
+                terminal = job.state
+            elif token.is_set() or job.state == "cancel_requested":
+                terminal = "cancelled"
+            else:
+                terminal = "done"
+            job.state = terminal
             if job.state == "done":
                 for source in job.sources:
                     self._pull_missing_outputs(source.source_id)
@@ -1155,9 +1325,13 @@ class JobStore:
 
     def _install_hydrated_job(self, job: Job) -> None:
         token = CancelToken()
-        resume = job.state == "running"
+        if job.state == "cancel_requested":
+            job.state = "cancelled"
+            resume = False
+        else:
+            resume = job_is_in_flight(job.state)
         if resume:
-            job.state = "running"
+            job.state = "queued" if self._occupancy is not None else "running"
         with self._lock:
             self._jobs[job.job_id] = job
             self._seq = max(self._seq, int(job.created_seq or 0))
@@ -1334,8 +1508,17 @@ class JobStore:
         loc = self._locate(source_id)
         if loc is None:
             return
-        job_id, _ = loc
-        fetch(source_id, self._ws.source_out_dir(job_id, source_id), names)
+        job_id, source = loc
+        job = self._jobs.get(job_id)
+        prefix = self._output_prefix(job, source.source_id) if job is not None else None
+        dest = self._ws.source_out_dir(job_id, source_id)
+        try:
+            if prefix:
+                fetch(source_id, dest, names, output_prefix=prefix)
+            else:
+                fetch(source_id, dest, names)
+        except TypeError:
+            fetch(source_id, dest, names)
 
     def _pull_missing_outputs(self, source_id: str) -> None:
         """Copy look JPEGs (and mp4s only when keep_local_media) from object storage."""

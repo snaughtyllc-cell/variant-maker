@@ -49,11 +49,17 @@ class RunPodServerlessRunner:
             quality_mode: str | None = None,
             cancel_token=None,
             drive_file_id: str | None = None,
-            drive_access_token: str | None = None) -> SourceResult:
+            drive_access_token: str | None = None,
+            source_object_key: str | None = None,
+            output_prefix: str | None = None,
+            tenant_id: str | None = None,
+            job_id: str | None = None,
+            attempt_id: str | None = None,
+            **_kwargs) -> SourceResult:
         basename = os.path.basename(source_path) if source_path else "source.mp4"
         if drive_file_id:
             basename = os.path.basename(basename) or "source.mp4"
-        source_key = f"inputs/{source_id}/{basename}"
+        source_key = source_object_key or f"inputs/{source_id}/{basename}"
         if source_path and os.path.isfile(source_path):
             self._store.put(source_key, source_path)
         elif drive_file_id:
@@ -79,6 +85,12 @@ class RunPodServerlessRunner:
             "rubberband": False,
             "audio_uniqueness": False,
         }}
+        if output_prefix:
+            payload["input"]["output_prefix"] = output_prefix
+        if tenant_id:
+            payload["input"]["tenant_id"] = tenant_id
+            payload["input"]["job_id"] = job_id
+            payload["input"]["attempt_id"] = attempt_id
         if drive_file_id:
             payload["input"]["drive_file_id"] = drive_file_id
             payload["input"]["drive_access_token"] = drive_access_token
@@ -86,13 +98,15 @@ class RunPodServerlessRunner:
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),
             out_dir=out_dir, source_id=source_id, on_event=on_event,
+            output_prefix=output_prefix,
         )
 
     def resume_run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
                    on_event: Callable[[VariantEvent], None],
                    allow_creative_escalate: bool = True,
                    quality_mode: str | None = None,
-                   cancel_token=None, runpod_job_id: str) -> SourceResult:
+                   cancel_token=None, runpod_job_id: str,
+                   output_prefix: str | None = None, **_kwargs) -> SourceResult:
         """Reconnect to an in-flight RunPod job after Studio restart (no new /run)."""
         del source_path, count, allow_creative_escalate, quality_mode
         resume = getattr(self._client, "stream_resume", None)
@@ -101,9 +115,11 @@ class RunPodServerlessRunner:
         return self._consume_stream(
             resume(runpod_job_id, cancel_token=cancel_token),
             out_dir=out_dir, source_id=source_id, on_event=on_event,
+            output_prefix=output_prefix,
         )
 
-    def _fetch_named(self, source_id: str, out_dir: str, name: str | None) -> None:
+    def _fetch_named(self, source_id: str, out_dir: str, name: str | None,
+                     output_prefix: str | None = None) -> None:
         if not name:
             return
         base = os.path.basename(str(name))
@@ -112,13 +128,20 @@ class RunPodServerlessRunner:
         dest = os.path.join(out_dir, base)
         if os.path.isfile(dest) and os.path.getsize(dest) > 0:
             return
-        try:
-            self._store.get(f"outputs/{source_id}/{base}", dest)
-        except Exception:
-            return
+        keys = []
+        if output_prefix:
+            keys.append(f"{output_prefix.rstrip('/')}/{base}")
+        keys.append(f"outputs/{source_id}/{base}")
+        for key in keys:
+            try:
+                self._store.get(key, dest)
+                return
+            except Exception:
+                continue
 
     def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
-                        on_event: Callable[[VariantEvent], None]) -> SourceResult:
+                        on_event: Callable[[VariantEvent], None],
+                        output_prefix: str | None = None) -> SourceResult:
         os.makedirs(out_dir, exist_ok=True)
         variants_meta: list[dict] = []
         manifest_key = None
@@ -126,8 +149,14 @@ class RunPodServerlessRunner:
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 if e.get("state") == "looking":
-                    self._fetch_named(source_id, out_dir, e.get("look_src"))
-                    self._fetch_named(source_id, out_dir, e.get("look_var"))
+                    self._fetch_named(
+                        source_id, out_dir, e.get("look_src"),
+                        output_prefix=output_prefix,
+                    )
+                    self._fetch_named(
+                        source_id, out_dir, e.get("look_var"),
+                        output_prefix=output_prefix,
+                    )
                 on_event(VariantEvent(
                     source_id=source_id, index=e["index"], state=e["state"],
                     attempt=e.get("attempt", 0), max_attempts=e.get("max_attempts", 0),
@@ -160,8 +189,12 @@ class RunPodServerlessRunner:
             pull = self._keep_local_media or is_jpeg_name(v.get("filename"))
             if pull:
                 self._store.get(key, local)
-            self._fetch_named(source_id, out_dir, v.get("look_src"))
-            self._fetch_named(source_id, out_dir, v.get("look_var"))
+            self._fetch_named(
+                source_id, out_dir, v.get("look_src"), output_prefix=output_prefix,
+            )
+            self._fetch_named(
+                source_id, out_dir, v.get("look_var"), output_prefix=output_prefix,
+            )
             variants.append(VariantResult(
                 index=v["index"], filename=v["filename"],
                 status=v["status"], quality=v["quality"], path=local,
@@ -198,7 +231,8 @@ class RunPodServerlessRunner:
                 delivered = chunk.get("delivered") or []
         return {"delivered": delivered, "folder_id": folder_id}
 
-    def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str]) -> int:
+    def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str],
+                      output_prefix: str | None = None) -> int:
         """Pull named files from object storage. Studio uses this for JPEG posters."""
         os.makedirs(out_dir, exist_ok=True)
         got = 0
@@ -212,10 +246,16 @@ class RunPodServerlessRunner:
             if os.path.isfile(dest) and os.path.getsize(dest) > 0:
                 got += 1
                 continue
-            try:
-                self._store.get(f"outputs/{source_id}/{name}", dest)
-            except Exception:
-                continue
+            keys = []
+            if output_prefix:
+                keys.append(f"{output_prefix.rstrip('/')}/{name}")
+            keys.append(f"outputs/{source_id}/{name}")
+            for key in keys:
+                try:
+                    self._store.get(key, dest)
+                    break
+                except Exception:
+                    continue
             if os.path.isfile(dest) and os.path.getsize(dest) > 0:
                 got += 1
         return got

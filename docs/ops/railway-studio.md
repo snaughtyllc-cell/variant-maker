@@ -106,6 +106,8 @@ RunPod **CPU** serverless endpoint from that image:
 
 Set `RUNPOD_FAST_ENDPOINT_ID` on Railway to that endpoint id. Until it is set,
 Fast 20s still use the GPU endpoint. HQ always uses `RUNPOD_ENDPOINT_ID`.
+Optional `RUNPOD_FAST_ENDPOINT_ID_2` is the overflow Fast worker (slot 1). When
+unset, both occupancy slots share the primary Fast endpoint (max workers ≥ 2).
 
 Control-plane HQ defaults stay on the GPU worker (`quality_mode=hq`). Uniqueness
 gate + one creative escalate are forwarded in the job payload.

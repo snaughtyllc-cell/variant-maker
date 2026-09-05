@@ -1,7 +1,10 @@
 # Per-job isolation (files, object prefixes, Drive, publication)
 
 **Date:** 2026-09-05  
-**Status:** Encode — layout + publication rules in-process. Live keys are still the legacy `inputs/{source_id}/` shape until a cutover copies objects into the new namespace.  
+**Status:** Cutover for **new** jobs on a workspace — namespaced
+`tenants/{tenant}/jobs/{job}/…` keys, attempt scratch, occupancy fence. Legacy
+`inputs/{source_id}/` and `outputs/{source_id}/` stay readable. Drive **input**
+tokens on workers are unchanged until the control plane stages inputs first.  
 **Product name:** VaryForge  
 **Not this slice:** reconstruct-first, HQ GPU occupancy, uniqueness/VMAF changes, SQLite cutover, always-on workers.
 

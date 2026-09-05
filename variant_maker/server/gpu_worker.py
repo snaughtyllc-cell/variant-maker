@@ -72,7 +72,7 @@ def resolve_copyid(job_input: dict) -> str:
     return normalize_mode(os.environ.get("VARIANT_MAKER_COPYID"))
 
 
-def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | None) -> None:
+def _put_named(store: ObjectStore, prefix: str, out_dir: str, name: str | None) -> None:
     if not name:
         return
     base = os.path.basename(str(name))
@@ -80,7 +80,7 @@ def _put_named(store: ObjectStore, source_id: str, out_dir: str, name: str | Non
         return
     path = os.path.join(out_dir, base)
     if os.path.isfile(path):
-        store.put(f"outputs/{source_id}/{base}", path)
+        store.put(f"{prefix}/{base}", path)
 
 
 def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
@@ -104,6 +104,7 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         store.get(source_key, in_path)
     out_dir = os.path.join(work_dir, "out")
     os.makedirs(out_dir, exist_ok=True)
+    output_prefix = str(job_input.get("output_prefix") or f"outputs/{source_id}").rstrip("/")
 
     quality_mode = job_input.get("quality_mode", "hq")
     auto_tune = job_input.get("auto_tune")
@@ -136,8 +137,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
 
     def emit(state: str, **kw) -> None:
         if state == "looking":
-            _put_named(store, source_id, out_dir, kw.get("look_src"))
-            _put_named(store, source_id, out_dir, kw.get("look_var"))
+            _put_named(store, output_prefix, out_dir, kw.get("look_src"))
+            _put_named(store, output_prefix, out_dir, kw.get("look_var"))
         q.put(_progress_chunk(state, kw))
 
     def work() -> None:
@@ -162,10 +163,10 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     manifest = holder["manifest"]
     variants = []
     for v in manifest.variants:
-        key = f"outputs/{source_id}/{v.filename}"
+        key = f"{output_prefix}/{v.filename}"
         store.put(key, os.path.join(out_dir, v.filename))
-        _put_named(store, source_id, out_dir, getattr(v, "look_src", None))
-        _put_named(store, source_id, out_dir, getattr(v, "look_var", None))
+        _put_named(store, output_prefix, out_dir, getattr(v, "look_src", None))
+        _put_named(store, output_prefix, out_dir, getattr(v, "look_var", None))
         variants.append({
             "index": v.index, "filename": v.filename,
             "status": v.status, "quality": v.quality, "key": key,
@@ -182,7 +183,7 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
             "look_src": getattr(v, "look_src", None),
             "look_var": getattr(v, "look_var", None),
         })
-    manifest_key = f"outputs/{source_id}/manifest.json"
+    manifest_key = f"{output_prefix}/manifest.json"
     store.put(manifest_key, os.path.join(out_dir, "manifest.json"))
     yield {"type": "result", "variants": variants, "manifest_key": manifest_key}
 
