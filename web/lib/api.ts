@@ -177,7 +177,8 @@ async function putDirectObject(
   const method = init.method || "PUT";
   const headers = init.headers || { "Content-Type": file.type || "video/mp4" };
   onBytes?.(0, file.size);
-  const useXhr = typeof XMLHttpRequest === "function" && !import.meta.env?.VITEST;
+  // Vitest mocks fetch, not XHR. Use process.env.VITEST — Next has no ImportMeta.env.
+  const useXhr = typeof XMLHttpRequest === "function" && !process.env.VITEST;
   if (useXhr) {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

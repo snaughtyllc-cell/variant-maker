@@ -136,6 +136,7 @@ describe("createJob posts multipart with files + count", () => {
   });
 
   it("PUTs to object storage then POSTs /api/jobs/from-object", async () => {
+    const xhrOpen = vi.spyOn(XMLHttpRequest.prototype, "open");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const u = String(url);
       if (u === "/api/uploads/direct") {
@@ -167,6 +168,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.count).toBe(8);
     expect(body.caption_prompt).toBe("");
     expect(body.caption_prompts).toEqual([]);
+    expect(xhrOpen).not.toHaveBeenCalled();
   });
 
   it("reports byte progress before the job exists so Studio is not frozen on starting", async () => {
