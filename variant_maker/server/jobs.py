@@ -161,8 +161,13 @@ class VariantInfo:
     ig_insights: dict | None = None
     look_status: str | None = None
     look_mae: float | None = None
+    look_mae_max: float | None = None
     look_src: str | None = None
     look_var: str | None = None
+    look_frames: list = field(default_factory=list)
+    look_artifact_sha256: str | None = None
+    look_approved_sha256: str | None = None
+    look_review_t: float | None = None
     caption: str | None = None
     object_key: str | None = None
     nbytes: int | None = None
@@ -299,7 +304,12 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "ig_media_id": v.ig_media_id, "ig_user_id": v.ig_user_id,
         "ig_insights": v.ig_insights,
         "look_status": v.look_status, "look_mae": v.look_mae,
+        "look_mae_max": v.look_mae_max,
         "look_src": v.look_src, "look_var": v.look_var,
+        "look_frames": list(v.look_frames or []),
+        "look_artifact_sha256": v.look_artifact_sha256,
+        "look_approved_sha256": v.look_approved_sha256,
+        "look_review_t": v.look_review_t,
         "caption": v.caption,
         "object_key": v.object_key,
         "nbytes": v.nbytes,
@@ -367,8 +377,13 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         ig_insights=data.get("ig_insights") if isinstance(data.get("ig_insights"), dict) else None,
         look_status=data.get("look_status"),
         look_mae=data.get("look_mae"),
+        look_mae_max=data.get("look_mae_max") if data.get("look_mae_max") is not None else quality.get("look_mae_max"),
         look_src=data.get("look_src"),
         look_var=data.get("look_var"),
+        look_frames=list(data.get("look_frames") or quality.get("look_frames") or []),
+        look_artifact_sha256=data.get("look_artifact_sha256") or quality.get("look_artifact_sha256"),
+        look_approved_sha256=data.get("look_approved_sha256"),
+        look_review_t=data.get("look_review_t") if data.get("look_review_t") is not None else quality.get("look_review_t"),
         caption=data.get("caption") or None,
         object_key=data.get("object_key") or None,
         nbytes=data.get("nbytes"),
@@ -395,8 +410,12 @@ def _event_from_dict(data: dict) -> VariantEvent:
         platform_result=data.get("platform_result"),
         look_status=data.get("look_status"),
         look_mae=data.get("look_mae"),
+        look_mae_max=data.get("look_mae_max"),
         look_src=data.get("look_src"),
         look_var=data.get("look_var"),
+        look_frames=list(data.get("look_frames") or []),
+        look_artifact_sha256=data.get("look_artifact_sha256"),
+        look_review_t=data.get("look_review_t"),
     )
 
 
@@ -1092,7 +1111,11 @@ class JobStore:
                             preset_used=e.preset_used, strength_final=e.strength_final,
                             escalated=e.escalated, platform_result=e.platform_result,
                             look_status=e.look_status, look_mae=e.look_mae,
+                            look_mae_max=getattr(e, "look_mae_max", None),
                             look_src=e.look_src, look_var=e.look_var,
+                            look_frames=list(getattr(e, "look_frames", None) or []),
+                            look_artifact_sha256=getattr(e, "look_artifact_sha256", None),
+                            look_review_t=getattr(e, "look_review_t", None),
                             caption=_caption_for(source, e.index),
                         ))
                         break
@@ -1245,8 +1268,13 @@ class JobStore:
                         escalated=v.escalated, platform_result=v.platform_result,
                         look_status=getattr(v, "look_status", None),
                         look_mae=getattr(v, "look_mae", None),
+                        look_mae_max=getattr(v, "look_mae_max", None),
                         look_src=getattr(v, "look_src", None),
                         look_var=getattr(v, "look_var", None),
+                        look_frames=list(getattr(v, "look_frames", None) or []),
+                        look_artifact_sha256=getattr(v, "look_artifact_sha256", None),
+                        look_approved_sha256=getattr(v, "look_approved_sha256", None),
+                        look_review_t=getattr(v, "look_review_t", None),
                         caption=_caption_for(source, v.index),
                         object_key=getattr(v, "object_key", None) or (
                             self._store_output_key(job, source.source_id, v.filename)
@@ -1436,8 +1464,13 @@ class JobStore:
                         ig_insights=v.get("ig_insights") if isinstance(v.get("ig_insights"), dict) else None,
                         look_status=v.get("look_status") or quality.get("look_status"),
                         look_mae=v.get("look_mae") if v.get("look_mae") is not None else quality.get("look_mae"),
+                        look_mae_max=v.get("look_mae_max") if v.get("look_mae_max") is not None else quality.get("look_mae_max"),
                         look_src=v.get("look_src"),
                         look_var=v.get("look_var"),
+                        look_frames=list(v.get("look_frames") or quality.get("look_frames") or []),
+                        look_artifact_sha256=v.get("look_artifact_sha256") or quality.get("look_artifact_sha256"),
+                        look_approved_sha256=v.get("look_approved_sha256"),
+                        look_review_t=v.get("look_review_t") if v.get("look_review_t") is not None else quality.get("look_review_t"),
                         caption=v.get("caption") or None,
                     ))
                 sources.append(source)
@@ -1610,8 +1643,12 @@ class JobStore:
                 escalated=v.escalated, platform_result=v.platform_result,
                 look_status=getattr(v, "look_status", None),
                 look_mae=getattr(v, "look_mae", None),
+                look_mae_max=getattr(v, "look_mae_max", None),
                 look_src=getattr(v, "look_src", None),
                 look_var=getattr(v, "look_var", None),
+                look_frames=list(getattr(v, "look_frames", None) or []),
+                look_artifact_sha256=getattr(v, "look_artifact_sha256", None),
+                look_review_t=getattr(v, "look_review_t", None),
                 caption=_caption_for(source, start + v.index),
             ))
         return source
@@ -1643,6 +1680,51 @@ class JobStore:
             return None
         variant.post_url = url
         self._rewrite_manifest_fields(job_id, source_id, index, post_url=url)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
+    def set_look_approval(
+        self, source_id: str, index: int, *, approved: bool = True,
+    ) -> VariantInfo | None:
+        """Bind operator look approval to the current encode checksum.
+
+        Replacing the file invalidates approval because the stored sha no longer
+        matches. A missing/unreadable file cannot be look-approved.
+        """
+        from variant_maker.probe import sha256_file
+
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        if not approved:
+            variant.look_approved_sha256 = None
+            self._rewrite_manifest_fields(job_id, source_id, index, look_approved_sha256=None)
+            job = self._jobs.get(job_id)
+            if job is not None:
+                self._persist(job)
+            return variant
+        sha = variant.look_artifact_sha256 or (variant.quality or {}).get("look_artifact_sha256")
+        path = self.find_variant(source_id, variant.filename)
+        if path:
+            sha = sha256_file(path)
+            variant.look_artifact_sha256 = sha
+            quality = dict(variant.quality or {})
+            quality["look_artifact_sha256"] = sha
+            variant.quality = quality
+        if not sha:
+            raise ValueError("look artifact missing")
+        variant.look_approved_sha256 = sha
+        self._rewrite_manifest_fields(
+            job_id, source_id, index,
+            look_approved_sha256=sha,
+            look_artifact_sha256=sha,
+        )
         job = self._jobs.get(job_id)
         if job is not None:
             self._persist(job)

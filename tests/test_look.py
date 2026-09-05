@@ -55,16 +55,18 @@ def test_look_unknown_on_missing_file(tmp_path):
 def test_identity_look_ok(tmp_path):
     src = _clip(str(tmp_path / "src.mp4"))
     scored = look.score_look(src, src)
-    assert scored["look_status"] == "ok"
+    assert scored["look_status"] == look.STATUS_NO_ALARM
     assert scored["look_mae"] == 0
     assert scored["look_mae_max"] == 0
+    assert scored["look_frames"]
+    assert scored["look_artifact_sha256"]
 
 
 def test_gross_luma_blotch_fails_look(tmp_path):
     src = _clip(str(tmp_path / "src.mp4"))
     blotch = _overlay_blotch(src, str(tmp_path / "blotch.mp4"))
     scored = look.score_look(src, blotch)
-    assert scored["look_status"] == "fail"
+    assert scored["look_status"] == look.STATUS_REVIEW_REQUIRED
     assert scored["look_mae_max"] > look.LOOK_LUMA_MAX
 
 
@@ -80,7 +82,7 @@ def test_reencode_without_shade_passes_look(tmp_path):
         capture_output=True,
     )
     scored = look.score_look(src, dest)
-    assert scored["look_status"] == "ok"
+    assert scored["look_status"] == look.STATUS_NO_ALARM
     assert scored["look_mae_max"] <= look.LOOK_LUMA_MAX
 
 
@@ -91,8 +93,8 @@ def test_lookaqmtp_real_pack_fails_look():
     medium = "/tmp/vf-first-pass/03_ig720_aqmtp_th_first.mp4"
     if not all(os.path.isfile(p) for p in (src, lava, medium)):
         pytest.skip("lookaqmtp clips not on this machine")
-    assert look.score_look(src, lava)["look_status"] == "fail"
-    assert look.score_look(src, medium)["look_status"] == "ok"
+    assert look.score_look(src, lava)["look_status"] == look.STATUS_REVIEW_REQUIRED
+    assert look.score_look(src, medium)["look_status"] == look.STATUS_NO_ALARM
 
 
 def test_stills_and_mae_are_not_the_uniqueness_wait(tmp_path):

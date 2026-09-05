@@ -64,7 +64,29 @@ Platform flags after a drop stay in Phase 12
 
 ## Engine backstop
 
-`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames, fail if **> 38**. Stills land on the Generate card as soon as the first encode exists; two JPEGs overlap uniqueness SSIM so Generate wait stays uniqueness-bound. MAE is a blotch backstop **after** uniqueness (do not run it beside 8-wide SSIM — that contended Fast CPU). Crop on a signed talking-head can trip MAE even when the stills look fine; Jeff’s eye on the stills is the oracle, not the red/green. Look fail still blocks escalate. `look_mae` in the UI is the **mean**; the gate uses **max** (`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status fail.
+`variant_maker/look.py` (`coarse_luma_v1`): 16×28 luma MAE, max of 3 frames.
+Threshold stays **38**. MAE **> 38** is `review_required` — a review trigger, not
+“looks bad.” Unattended operation still blocks escalate and keeps the medium
+encode. An operator can approve a visually acceptable crop **without raising
+38**; approval is bound to the file sha256. MAE **≤ 38** is
+`no_coarse_luma_alarm`, not “realistic-looking.” Missing/unreadable files are
+`unknown` (uniqueness stays independent; do not mark look-approved or
+deliverable). Spec: `docs/superpowers/specs/2026-09-05-look-quality-gate.md`.
+
+Stills land on the Generate card as soon as the first encode exists; two JPEGs
+overlap uniqueness SSIM so Generate wait stays uniqueness-bound. MAE runs
+**after** uniqueness on **the file that would ship** (including the medium
+fallback). Do not run MAE beside 8-wide SSIM — that contended Fast CPU.
+Log the three frame MAEs, timestamps, crop configuration, and stills. Change
+38 only if labeled crops vs rejected overlays separate cleanly.
+
+Stripped-proxy VMAF is **proxy encode quality**. It cannot certify effects
+excluded from its input (`lookaqmtp` lava scored 97–99 on a proxy that stripped
+the overlay). Three stills are the oracle **for those stills**, not the whole
+video — play around the worst MAE sample for flicker / pulsing light / moving
+blotch. `look_mae` in the UI is the **mean**; the gate uses **max**
+(`look_mae_max`). Copy 1 of `lookshadeoff` is why: mean 36, max 77, status
+`review_required`.
 
 **19 bits / ~30%** is the *post-hunt* ship floor, not a first-pass shortcut: hunt 24 (medium, then one escalate). After that, 19–23 still ship. Under 19 is `uniqueness_fail` (not Drive-ready). TikFusion’s published floor is ~18 / ~28%. Live Fast is `c497505` (`sha256:3d24473a…`, handheld crop + compete, **no `VF_LAB`**). Prior live `d0a7bc5` (`sha256:a5b703fa…`). Prior live `f05d803` (`sha256:00564ea3…`). Writeup: `docs/ops/live-pin-c497505-2026-08-29.md`.
 

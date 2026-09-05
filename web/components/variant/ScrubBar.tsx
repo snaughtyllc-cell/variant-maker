@@ -10,9 +10,13 @@ interface ScrubBarProps {
    * All refs are play/pause/seeked together.
    */
   videos: Array<React.RefObject<HTMLVideoElement | null>>;
+  /** Seek + play around this timestamp when cueNonce changes. */
+  cueTime?: number | null;
+  cueNonce?: number;
+  cuePad?: number;
 }
 
-export function ScrubBar({ videos }: ScrubBarProps) {
+export function ScrubBar({ videos, cueTime = null, cueNonce = 0, cuePad = 0.75 }: ScrubBarProps) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -65,6 +69,19 @@ export function ScrubBar({ videos }: ScrubBarProps) {
       setPlaying(true);
     }
   }, [playing, videos, startRaf, stopRaf]);
+
+  useEffect(() => {
+    if (!cueNonce || cueTime == null) return;
+    const start = Math.max(0, Number(cueTime) - Math.max(0, cuePad));
+    videos.forEach((r) => {
+      const v = r.current;
+      if (!v) return;
+      v.currentTime = clampTime(start, v.duration || Number(cueTime) + cuePad);
+      v.play().catch(() => {});
+    });
+    startRaf();
+    setPlaying(true);
+  }, [cueNonce, cueTime, cuePad, videos, startRaf]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

@@ -498,6 +498,44 @@ def test_set_post_url_survives_hydrate(tmp_path):
     assert restored.platform_result is None
 
 
+def test_look_approval_binds_to_checksum_and_survives_hydrate(tmp_path):
+    from variant_maker.look import approval_valid, look_is_deliverable
+    from variant_maker.probe import sha256_file
+
+    store = _store(tmp_path)
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    variant = src.variants[0]
+    variant.look_status = "review_required"
+    path = store.find_variant(src.source_id, variant.filename)
+    assert path
+    updated = store.set_look_approval(src.source_id, variant.index, approved=True)
+    assert updated is not None
+    sha = sha256_file(path)
+    assert updated.look_approved_sha256 == sha
+    assert updated.look_artifact_sha256 == sha
+    assert look_is_deliverable(
+        "review_required",
+        artifact_sha=updated.look_artifact_sha256,
+        approved_sha=updated.look_approved_sha256,
+    )
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("replaced-encode")
+    new_sha = sha256_file(path)
+    assert new_sha != sha
+    assert not approval_valid(new_sha, updated.look_approved_sha256)
+
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    restored = store2.get(job.job_id).sources[0].variants[0]
+    assert restored.look_approved_sha256 == sha
+
+    cleared = store2.set_look_approval(src.source_id, variant.index, approved=False)
+    assert cleared is not None
+    assert cleared.look_approved_sha256 is None
+
+
 def test_gallery_keep_boots_oldest_finished_job(tmp_path):
     store = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,

@@ -52,7 +52,7 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline.look, "score_look",
         lambda *a, **k: {
-            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_status": "no_coarse_luma_alarm", "look_metric": "coarse_luma_v1",
             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
         },
     )
@@ -113,5 +113,5 @@ def test_run_emits_events_in_order(monkeypatch, tmp_path):
         assert kw.get("uniqueness") == 0.5
         assert kw.get("uniqueness_status") == "ok"
         assert kw.get("uniqueness_metric") == "ssim_bits_v1"
-        assert kw.get("look_status") == "ok"
+        assert kw.get("look_status") == "no_coarse_luma_alarm"
         assert kw.get("look_src") == "look_v01_src.jpg"

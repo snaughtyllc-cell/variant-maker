@@ -40,8 +40,12 @@ def _progress_chunk(state: str, kw: dict) -> dict:
         "platform_result": kw.get("platform_result"),
         "look_status": kw.get("look_status"),
         "look_mae": kw.get("look_mae"),
+        "look_mae_max": kw.get("look_mae_max"),
         "look_src": kw.get("look_src"),
         "look_var": kw.get("look_var"),
+        "look_frames": kw.get("look_frames"),
+        "look_artifact_sha256": kw.get("look_artifact_sha256"),
+        "look_review_t": kw.get("look_review_t"),
     }}
 
 
@@ -180,8 +184,12 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
             "platform_result": getattr(v, "platform_result", None),
             "look_status": getattr(v, "look_status", None),
             "look_mae": getattr(v, "look_mae", None),
+            "look_mae_max": getattr(v, "look_mae_max", None),
             "look_src": getattr(v, "look_src", None),
             "look_var": getattr(v, "look_var", None),
+            "look_frames": list(getattr(v, "look_frames", None) or []),
+            "look_artifact_sha256": getattr(v, "look_artifact_sha256", None),
+            "look_review_t": getattr(v, "look_review_t", None),
         })
     manifest_key = f"{output_prefix}/manifest.json"
     store.put(manifest_key, os.path.join(out_dir, "manifest.json"))

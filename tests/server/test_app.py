@@ -314,7 +314,8 @@ def test_get_job_exposes_look_preview_from_looking_event(tmp_path):
     preview = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["look_preview"]
     assert preview["look_src_url"] == f"/api/look/{sid}/look_v01_src.jpg"
     assert preview["look_var_url"] == f"/api/look/{sid}/look_v01.jpg"
-    assert preview["look_status"] == "ok"
+    assert preview["look_status"] == "no_coarse_luma_alarm"
+    job.state = "running"
     job.state = "running"
     job.events.append(VariantEvent(
         source_id=sid, index=1, state="uniqueness",
@@ -339,6 +340,33 @@ def test_look_stills_served_and_non_jpg_rejected(tmp_path):
     assert resp.headers["content-type"].startswith("image/jpeg")
     blocked = client.get(f"/api/look/{sid}/{v.filename}")
     assert blocked.status_code == 404
+
+
+def test_look_approval_endpoint_binds_checksum(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None
+    sid = job.sources[0].source_id
+    variant = job.sources[0].variants[0]
+    variant.look_status = "review_required"
+    store._persist(job)
+    gallery = client.get("/api/gallery").json()
+    row = gallery[0]["variants"][0]
+    assert row["look_status"] == "review_required"
+    assert row["look_deliverable"] is False
+    resp = client.post(f"/api/variants/{sid}/{variant.index}/look-approval", json={"approved": True})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["look_approved_sha256"]
+    assert body["look_artifact_sha256"] == body["look_approved_sha256"]
+    assert body["look_deliverable"] is True
+    assert body["look_status"] == "review_required"
 
 
 def test_gallery_groups_sources_ok_only(tmp_path):

@@ -171,6 +171,7 @@ from .models import (
     JobFromDriveIn,
     JobFromObjectIn,
     JobSummary,
+    LookApprovalIn,
     LookPreviewOut,
     PasswordLoginIn,
     PasswordSetIn,
@@ -237,6 +238,22 @@ def _look_file_url(source_id: str, name: str | None) -> str | None:
 
 
 def _variant_out(source_id: str, v, *, include_insights: bool, file_ready: bool = True) -> VariantOut:
+    from variant_maker import look as look_mod
+
+    quality = v.quality if isinstance(getattr(v, "quality", None), dict) else {}
+    look_status = look_mod.normalize_look_status(getattr(v, "look_status", None))
+    artifact = (
+        getattr(v, "look_artifact_sha256", None)
+        or quality.get("look_artifact_sha256")
+    )
+    approved = getattr(v, "look_approved_sha256", None)
+    frames = list(getattr(v, "look_frames", None) or quality.get("look_frames") or [])
+    mae_max = getattr(v, "look_mae_max", None)
+    if mae_max is None:
+        mae_max = quality.get("look_mae_max")
+    review_t = getattr(v, "look_review_t", None)
+    if review_t is None:
+        review_t = quality.get("look_review_t")
     return VariantOut(
         index=v.index, filename=v.filename, status=v.status, quality=v.quality,
         file_url=f"/api/variants/{source_id}/{quote(v.filename, safe='')}",
@@ -246,10 +263,18 @@ def _variant_out(source_id: str, v, *, include_insights: bool, file_ready: bool 
         escalated=v.escalated, platform_result=v.platform_result,
         post_url=v.post_url,
         file_ready=file_ready,
-        look_status=v.look_status,
+        look_status=look_status,
         look_mae=v.look_mae,
+        look_mae_max=mae_max,
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
+        look_frames=frames,
+        look_artifact_sha256=artifact,
+        look_approved_sha256=approved,
+        look_review_t=review_t,
+        look_deliverable=look_mod.look_is_deliverable(
+            look_status, artifact_sha=artifact, approved_sha=approved,
+        ),
         caption=getattr(v, "caption", None),
         ig_media_id=getattr(v, "ig_media_id", None) if include_insights else None,
         ig_user_id=getattr(v, "ig_user_id", None) if include_insights else None,
@@ -294,6 +319,8 @@ def _in_flight(job: Job | None, source_id: str) -> InFlightOut | None:
 
 
 def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
+    from variant_maker import look as look_mod
+
     if job is None:
         return None
     for e in reversed(job.events):
@@ -302,10 +329,12 @@ def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
         if e.state == "looking" and (e.look_src or e.look_var):
             return LookPreviewOut(
                 index=e.index,
-                look_status=e.look_status,
+                look_status=look_mod.normalize_look_status(e.look_status),
                 look_mae=e.look_mae,
+                look_mae_max=getattr(e, "look_mae_max", None),
                 look_src_url=_look_file_url(source_id, e.look_src),
                 look_var_url=_look_file_url(source_id, e.look_var),
+                look_review_t=getattr(e, "look_review_t", None),
             )
     return None
 
@@ -2114,6 +2143,23 @@ def create_app(
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
         _sync_post_url_to_sheet(source_id, index, url)
+        loc = store._locate(source_id)
+        file_ready = True
+        if loc is not None:
+            file_ready = variant_ready(
+                store._ws, loc[0], source_id, variant.filename,
+                object_store=getattr(store, "_object_store", None), variant=variant,
+            )
+        return _variant_out(source_id, variant, include_insights=_can_see_instagram_insights(request), file_ready=file_ready)
+
+    @app.post("/api/variants/{source_id}/{index}/look-approval", response_model=VariantOut)
+    def set_look_approval(request: Request, source_id: str, index: int, body: LookApprovalIn) -> VariantOut:
+        try:
+            variant = store.set_look_approval(source_id, index, approved=body.approved)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if variant is None:
+            raise HTTPException(status_code=404, detail="variant not found")
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:

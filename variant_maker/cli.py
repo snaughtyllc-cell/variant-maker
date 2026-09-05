@@ -52,7 +52,7 @@ def main(**config):
     if config.get("look_first") and m.variants:
         v = m.variants[0]
         click.echo(
-            f"look {v.look_status} mae={v.look_mae} "
+            f"look {v.look_status} mae={v.look_mae} max={getattr(v, 'look_mae_max', None)} "
             f"stills={v.look_src or '-'} {v.look_var or '-'}"
         )
 

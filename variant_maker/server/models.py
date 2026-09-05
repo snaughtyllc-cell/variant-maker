@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VariantOut(BaseModel):
@@ -24,8 +24,14 @@ class VariantOut(BaseModel):
     file_ready: bool = True
     look_status: str | None = None
     look_mae: float | None = None
+    look_mae_max: float | None = None
     look_src_url: str | None = None
     look_var_url: str | None = None
+    look_frames: list = Field(default_factory=list)
+    look_artifact_sha256: str | None = None
+    look_approved_sha256: str | None = None
+    look_review_t: float | None = None
+    look_deliverable: bool = False
     caption: str | None = None
     ig_media_id: str | None = None
     ig_user_id: str | None = None
@@ -36,8 +42,14 @@ class LookPreviewOut(BaseModel):
     index: int
     look_status: str | None = None
     look_mae: float | None = None
+    look_mae_max: float | None = None
     look_src_url: str | None = None
     look_var_url: str | None = None
+    look_review_t: float | None = None
+
+
+class LookApprovalIn(BaseModel):
+    approved: bool = True
 
 
 class PlatformResultIn(BaseModel):

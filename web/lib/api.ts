@@ -291,6 +291,18 @@ export function setPostUrl(sourceId: string, index: number, url: string): Promis
   }).then(json<VariantOut>);
 }
 
+export function approveLookEncode(
+  sourceId: string,
+  index: number,
+  approved = true,
+): Promise<VariantOut> {
+  return fetch(`/api/variants/${sourceId}/${index}/look-approval`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved }),
+  }).then(json<VariantOut>);
+}
+
 export function setVariantCaption(sourceId: string, index: number, caption: string): Promise<VariantOut> {
   return fetch(`/api/variants/${sourceId}/${index}/caption`, {
     method: "POST",
