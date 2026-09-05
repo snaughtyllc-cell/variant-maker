@@ -25,6 +25,7 @@ export function SourceThumb({
   }, [file]);
 
   const videoSrc = blobUrl || src || "";
+  const thumbLabel = label ? `${label} thumbnail` : "Source thumbnail";
 
   return (
     <div className="studio-source-thumb">
@@ -37,10 +38,12 @@ export function SourceThumb({
           playsInline
           onLoadedMetadata={() => paintVideoFrame(videoRef.current)}
           onLoadedData={() => paintVideoFrame(videoRef.current)}
-          aria-label={label ? `${label} thumbnail` : "Source thumbnail"}
+          aria-label={thumbLabel}
         />
       ) : (
-        <div className="studio-source-thumb__ph">{label || ""}</div>
+        <div className="studio-source-thumb__ph" role="img" aria-label={thumbLabel}>
+          {label || ""}
+        </div>
       )}
     </div>
   );

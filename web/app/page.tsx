@@ -15,6 +15,7 @@ import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
+import { studioCaptionSources } from "@/lib/studioCaptionSources";
 import { hqPrepToggleHint, hqPrepToggleLabel } from "@/lib/prepareCopy";
 
 function formatSize(bytes: number): string {
@@ -56,14 +57,7 @@ export default function StudioPage() {
       : "No clips yet";
 
   const prepMode = hqPrep ? "hq" : "none";
-  const captionSources: CaptionSource[] = [
-    ...files.map((file, i) => ({ key: `file-${i}-${file.name}`, name: file.name, file })),
-    ...drivePicks.map((pick) => ({
-      key: `drive-${pick.id}`,
-      name: pick.name,
-      thumbUrl: pick.thumbUrl,
-    })),
-  ];
+  const captionSources: CaptionSource[] = studioCaptionSources(files, drivePicks);
   const captionPrompts = [...fileCaptions, ...driveCaptions];
 
   const handleFiles = useCallback(async (incoming: File[]) => {

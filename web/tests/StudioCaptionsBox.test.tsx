@@ -65,4 +65,19 @@ describe("StudioCaptionsBox per source", () => {
     );
     expect(screen.getByText(captionNeedSourcesCopy())).toBeInTheDocument();
   });
+
+  it("renders a Drive pick without a local file or thumb URL", () => {
+    const { container } = render(
+      <StudioCaptionsBox
+        generateCaptions
+        onGenerateCaptionsChange={() => {}}
+        sources={[{ key: "drive-file1", name: "gym.mp4" }]}
+        prompts={[""]}
+        onPromptChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("gym.mp4")).toBeInTheDocument();
+    expect(container.querySelector("video")).toBeNull();
+    expect(screen.getByLabelText("S1 thumbnail")).toHaveTextContent("S1");
+  });
 });
