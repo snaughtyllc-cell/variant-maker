@@ -16,14 +16,17 @@ A second uniqueness stack that looks more like platform **copy detection** than 
 | **Audio** | Chromaprint near-duplicate ID | codec, loudnorm, mild EQ |
 | **SSIM bits** (existing) | Cheap pixel difference | none of the above, by design |
 
-Fuse with **min uniqueness** (any head that still says “copy” keeps the dial conservative). This is a **local tuning dial**, not a platform verdict. No “undetectable” copy. `platform_result` stays the oracle.
+Fuse with **min uniqueness of SSIM + visual** (audio on the original bed is
+diagnostic and is never in the min). This is a **local tuning dial**, not a
+platform verdict. No “undetectable” copy. `platform_result` stays the oracle.
 
 ## What this is not
 
 - Not a “would Instagram catch this” predictor (Phase 12 still skipped).
 - Not CLIP (semantic, wrong geometry).
 - Not overlay / shade as a uniqueness cheat (`look.py` already rejects blotchy overlays).
-- Not changing Fast 20 defaults on day one. Identical audio would fail a fused gate overnight.
+- Not changing Fast 20 defaults on day one. Identical audio is expected and
+  must not fail a pack.
 
 ## Modes (`copyid` / `VARIANT_MAKER_COPYID`)
 
@@ -31,10 +34,20 @@ Fuse with **min uniqueness** (any head that still says “copy” keeps the dial
 |---|---|---|
 | **`off`** (default) | no | SSIM only — today’s Fast |
 | **`record`** | yes, write `heads` on the variant | SSIM still gates |
-| **`gate`** | yes | fused min uniqueness gates + autotune / escalate |
+| **`gate`** | yes | fused min of SSIM + visual; audio diagnostic |
 
 Lab Fast: `VARIANT_MAKER_COPYID=record`. Live Fast stays `off` until a
 labeled pack says the fused dial is safe. Do not set `gate` on live.
+
+**Ship rule (original bed):** picture variants keep the source soundtrack.
+Chromaprint is expected to match. A high audio sim must not block shipment,
+autotune, escalate, or retries. `gate` min-fuses **SSIM + visual only**.
+Audio stays on the variant as `quality.heads.audio` with
+`policy: original_bed`, `diagnostic: true`, and `score_state` of
+`measured` | `disabled` | `unavailable` | `error`. A missing score is
+never a low match (`uniqueness` stays `null`). Sync / presence / decode
+stay the existing audio pipeline checks — Chromaprint does not replace them.
+Manifest `run.audio_policy` is `original_bed`.
 
 ## Architecture
 
@@ -48,8 +61,9 @@ score_uniqueness(src, variant)
                      else DINOv2-small if transformers+weights cached
                      else skip
   record: uniqueness stays SSIM; heads attached
-  gate:   uniqueness = min(available head uniqueness)
+  gate:   uniqueness = min(ssim, visual) when visual is available
           uniqueness_metric = fused_v1
+          audio is never in the min (original_bed diagnostic)
           below_floor stays SSIM-bits-only (19-bit ship floor)
 ```
 
@@ -71,20 +85,23 @@ Tier 1 with no PyTorch, no `fpcalc`, no `models/` is unchanged. Lazy import, sam
 
 - External `fpcalc` (`fpcalc -raw -length 120`). No AcoustID network.
 - Offset-aware Hamming on raw uint32 hashes (`max_offset=120`).
-- `audio_uniq = 1 - match`. Missing binary / no audio → omit head, never fake a score.
+- `audio_uniq = 1 - match` is **logged**, not gated. Missing binary / no audio /
+  decode error → `score_state` `unavailable` or `error`, uniqueness `null`.
+  Disabled on purpose → `disabled`. Never fake a 0% fail.
 - Pitch/rubberband already exists as a **transform** (Phase 13). This head **measures** leftover audio identity.
 - CLAP is lab-later, not the v1 gate.
 
 ## Fusion
 
 ```
-present = heads with a computed uniqueness
+present = heads with a computed uniqueness except diagnostic / original_bed / audio
 fused   = min(present)
 ```
 
 - SSIM `below_floor` (bits < 19) is **not** overridden by a noisy embedding.
 - Metric failure on one head omits that head. All heads failed → `unknown` (same as today: do not infinite-escalate).
 - Peer check stays **SSIM bits** in v1 (cheap). Visual peer Chamfer is lab-later.
+- Weights on disk (`sscd_disc_mixup.torchscript.pt`) are an **availability** check, not an enablement switch. `copyid` stays `off` until env/CLI says `record` or `gate`.
 
 ## Manifest / API (additive)
 
@@ -93,12 +110,20 @@ fused   = min(present)
 ```json
 {
   "ssim":   {"uniqueness": 0.41, "bits": 26, "status": "ok", "available": true},
-  "visual": {"uniqueness": 0.22, "sim": 0.58, "n_frames": 8, "backend": "sscd_disc_mixup", "status": "below_target", "available": true},
-  "audio":  {"uniqueness": 0.05, "sim": 0.95, "status": "below_target", "available": true}
+  "visual": {"uniqueness": 0.22, "sim": 0.58, "n_frames": 8, "backend": "sscd_disc_mixup", "status": "below_target", "available": true, "score_state": "measured"},
+  "audio":  {"uniqueness": 0.05, "sim": 0.95, "status": "ok", "available": true, "policy": "original_bed", "diagnostic": true, "score_state": "measured"}
 }
 ```
 
-Top-level `uniqueness` / `uniqueness_status` / `uniqueness_metric` keep their meaning. UI can show head chips from `quality.heads` without a schema break.
+Top-level `uniqueness` / `uniqueness_status` / `uniqueness_metric` keep their meaning. UI can show head chips from `quality.heads` without a schema break. Original-bed audio chips read **diagnostic**, not a uniqueness percent.
+
+## Later — SSCD off the Fast worker
+
+Do **not** put PyTorch / SSCD on the slim Fast CPU image. Weights existing still do not turn copyid on.
+
+When visual scoring is validated: run an SSCD-class scorer **asynchronously on a separate lab box after the pack is Drive-ready**. Trigger from the pack manifest (immutable artifact ids / checksums + source id). Write a separate report keyed by pack, artifact, model version, and frame-sampling config. Retry scoring without re-encoding or changing delivery status.
+
+Until then visual stays `available: false` / `score_state: unavailable` on Fast. SSCD remains diagnostic until sampling, aggregation, and thresholds are signed against Jeff stills + labeled packs. Live stays `copyid=off`.
 
 ## Tests vs lab
 

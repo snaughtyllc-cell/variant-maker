@@ -61,6 +61,9 @@ interface QualityHead {
   backend?: string | null;
   n_frames?: number | null;
   metric?: string | null;
+  diagnostic?: boolean;
+  policy?: string | null;
+  score_state?: "measured" | "disabled" | "unavailable" | "error" | null;
 }
 interface Quality {
   /* existing fields */
@@ -69,7 +72,9 @@ interface Quality {
 ```
 
 Today’s API omits `heads`. Chips still render. Pixel reads top-level
-`uniqueness`, not `heads.ssim`.
+`uniqueness`, not `heads.ssim`. Original-bed audio (`diagnostic` /
+`policy: original_bed`) shows **Audio · diagnostic**, not a uniqueness
+percent — a high Chromaprint match does not block shipment.
 
 ## Invariants
 

@@ -25,10 +25,11 @@ SSIM bits match the Generate card. Visual skipped (no torch/SSCD).
 | AQMTp | 1 / 2 | **18 / 17** `below_floor` | 0.81 / 0.87 | 0.19 / 0.13 (~12/8 bits) |
 | bring-me-down | 1 / 2 | **43 / 45** `ok` | 0.84 / 0.79 | 0.16 / 0.21 (~10/13 bits) |
 
-**If this had been `gate`, every copy fails.** Same soundtrack → Chromaprint
-still matches. SSIM can be 33/45 while audio uniq sits under the 19-bit
-floor. That is why lab is `record` only. Do not turn `gate` on until we
-decide what “different enough audio” means — not this week, not on live.
+**If this had been old `gate` (min of SSIM+visual+audio), every copy fails.**
+Same soundtrack → Chromaprint still matches. SSIM can be 33/45 while audio
+uniq sits under the 19-bit floor. **Ship rule now:** audio is diagnostic
+(`policy: original_bed`). `gate` does not fuse it. Still do not turn `gate`
+on live — visual thresholds are unsigned. Stay `record` on lab.
 
 Lab Fast `xar25v77v3j27u` image 2026-08-30: digest `sha256:e5173d9a…` /
 `3caeb44` / `VF_LAB=1` / `VARIANT_MAKER_COPYID=record` / max 1. Prior
@@ -74,8 +75,9 @@ export VARIANT_MAKER_SSCD_PATH=models/sscd/sscd_disc_mixup.torchscript.pt
 variant-maker in.mp4 -n 2 --preset medium --copyid gate -o /tmp/copyid-out
 ```
 
-`record` scores heads but **SSIM still drives** the ladder (safe on Fast 20).  
-`gate` drives autotune/escalate from `min(ssim, visual, audio)`.
+`record` scores heads but **SSIM still drives** the ladder (safe on Fast 20).
+`gate` drives autotune/escalate from `min(ssim, visual)` only. Original-bed
+audio is never in that min.
 
 ## Weights
 
