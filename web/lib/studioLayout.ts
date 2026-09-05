@@ -1,7 +1,7 @@
 /** Desktop live/progress rail — fixed column, slightly roomier than 400. */
 export const STUDIO_LIVE_RAIL_PX = 460;
-/** Phone Generate dock: 60px CTA + 10/16 padding + a little breathing room. */
-export const STUDIO_GENERATE_DOCK_H_PX = 92;
+/** Phone Generate dock: 60px CTA + bottom inset, no panel slab. */
+export const STUDIO_GENERATE_DOCK_H_PX = 72;
 
 export function studioShellClass(_hasJob?: boolean): string {
   return "studio-shell";

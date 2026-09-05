@@ -16,14 +16,22 @@ function rule(block: string, selector: string): string {
 
 describe("mobile Studio + Gallery CSS contract", () => {
   it("pins Generate above the tab bar and leaves room for Just Finished above it", () => {
+    expect(css).toMatch(/\.studio-generate-bar \{[^}]*position:\s*static/s);
+    expect(css).not.toMatch(/\.studio-generate-bar \{[^}]*background:\s*var\(--color-panel\)/s);
+    expect(css).toMatch(/\.studio-generate-bar--dock \{[^}]*background:\s*transparent/s);
     const dock = rule(mobile, ".studio-generate-bar.studio-generate-bar--dock");
     expect(dock).toMatch(/position:\s*fixed/);
     expect(dock).toMatch(/bottom:\s*var\(--tab-h\)/);
+    expect(dock).toMatch(/left:\s*16px/);
+    expect(dock).toMatch(/right:\s*16px/);
     expect(dock).not.toMatch(/position:\s*static/);
     expect(dock).toMatch(/background:\s*transparent/);
     expect(dock).not.toMatch(/background:\s*var\(--color-panel\)/);
     expect(dock).not.toMatch(/border-top:/);
     expect(rule(mobile, ".studio-generate-bar")).toMatch(/background:\s*transparent/);
+    expect(rule(mobile, ".studio-generate-bar--dock .studio-generate-bar__inner")).toMatch(
+      /background:\s*transparent/,
+    );
     expect(mobile).toMatch(new RegExp(`--generate-dock-h:\\s*${STUDIO_GENERATE_DOCK_H_PX}px`));
     expect(rule(mobile, ".studio-live")).toMatch(/padding-bottom:\s*calc\(\s*var\(--generate-dock-h\)/);
   });
