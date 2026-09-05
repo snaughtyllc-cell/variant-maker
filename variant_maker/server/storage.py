@@ -16,7 +16,8 @@ class ObjectStore(Protocol):
     def presign_get(self, key: str, *, expires: int = 900, filename: str | None = None,
                     as_attachment: bool = False) -> str: ...
     def presign_put(self, key: str, *, expires: int = 3600,
-                    content_type: str = "application/octet-stream") -> str: ...
+                    content_type: str = "application/octet-stream",
+                    content_length: int | None = None) -> str: ...
 
 
 _R2_ENV = ("R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY", "R2_SECRET_KEY")
@@ -94,10 +95,14 @@ class S3ObjectStore:
     def presign_put(
         self, key: str, *, expires: int = 3600,
         content_type: str = "application/octet-stream",
+        content_length: int | None = None,
     ) -> str:
+        params = {"Bucket": self._bucket, "Key": key, "ContentType": content_type}
+        if content_length is not None:
+            params["ContentLength"] = int(content_length)
         return self._client.generate_presigned_url(
             "put_object",
-            Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
+            Params=params,
             ExpiresIn=int(expires),
         )
 

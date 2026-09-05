@@ -221,9 +221,10 @@ def test_put_upload_client_disconnect_is_400(tmp_path, monkeypatch):
     uid = init.json()["upload_id"]
 
     async def boom(self):
+        yield b"partial"
         raise ClientDisconnect()
 
-    monkeypatch.setattr(Request, "body", boom)
+    monkeypatch.setattr(Request, "stream", boom)
     resp = client.put(f"/api/uploads/{uid}?offset=0", content=b"not-enough")
     assert resp.status_code == 400
     assert "Generate" in resp.json()["detail"]

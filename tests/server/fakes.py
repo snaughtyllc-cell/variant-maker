@@ -183,5 +183,6 @@ class FakeObjectStore:
         return f"https://objects.test/{key}?{q}"
 
     def presign_put(self, key: str, *, expires: int = 3600,
-                    content_type: str = "application/octet-stream") -> str:
+                    content_type: str = "application/octet-stream",
+                    content_length: int | None = None) -> str:
         return f"https://objects.test/put/{key}?exp={int(expires)}&ct={content_type}"

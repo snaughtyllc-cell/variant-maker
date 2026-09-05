@@ -88,5 +88,6 @@ def main() -> None:
 
     import uvicorn
     uvicorn.run(build_app(args.data_dir, resolve_runner(args.runner)),
-                host=args.host, port=args.port)
+                # Login throttling requires the TCP peer, never a rewritten XFF address.
+                host=args.host, port=args.port, proxy_headers=False)
     sys.exit(0)

@@ -14,6 +14,7 @@ from datetime import UTC
 from typing import Any
 from urllib.parse import quote
 
+import anyio
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from sse_starlette.sse import EventSourceResponse
@@ -235,7 +236,7 @@ def _look_file_url(source_id: str, name: str | None) -> str | None:
     return f"/api/look/{source_id}/{quote(name, safe='')}"
 
 
-def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
+def _variant_out(source_id: str, v, *, include_insights: bool, file_ready: bool = True) -> VariantOut:
     return VariantOut(
         index=v.index, filename=v.filename, status=v.status, quality=v.quality,
         file_url=f"/api/variants/{source_id}/{quote(v.filename, safe='')}",
@@ -250,9 +251,9 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
         caption=getattr(v, "caption", None),
-        ig_media_id=getattr(v, "ig_media_id", None),
-        ig_user_id=getattr(v, "ig_user_id", None),
-        ig_insights=getattr(v, "ig_insights", None),
+        ig_media_id=getattr(v, "ig_media_id", None) if include_insights else None,
+        ig_user_id=getattr(v, "ig_user_id", None) if include_insights else None,
+        ig_insights=getattr(v, "ig_insights", None) if include_insights else None,
     )
 
 
@@ -309,7 +310,7 @@ def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
     return None
 
 
-def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
+def _source_out(s: JobSource, *, ok_only: bool, include_insights: bool, job: Job | None = None,
                 ws: Workspace | None = None, object_store=None) -> SourceOut:
     variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
     failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
@@ -325,7 +326,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         )
         if ws is not None and job_id else "ok"
     )
-    pack = pack_analytics(variants)
+    pack = pack_analytics(variants if include_insights else [])
     poster = None
     for v in variants:
         if getattr(v, "look_var", None):
@@ -337,7 +338,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         delivered=s.delivered, shortfall=s.shortfall,
         variants=[
             _variant_out(
-                s.source_id, v,
+                s.source_id, v, include_insights=include_insights,
                 file_ready=(
                     variant_ready(
                         ws, job_id, s.source_id, v.filename,
@@ -922,6 +923,12 @@ def create_app(
         meta = _get_own_upload(upload_id)
         if meta is None or meta.get("key") != key:
             raise HTTPException(status_code=404, detail="upload not found")
+        blob = getattr(store, "_object_store", None)
+        actual_size = blob.size(key) if blob is not None else None
+        if actual_size is None:
+            raise HTTPException(status_code=400, detail="upload is not ready")
+        if actual_size > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="file too large")
         return upload_id
 
     def _oauth_client_pair() -> tuple[str, str]:
@@ -1650,7 +1657,7 @@ def create_app(
             actor_email=_actor_email(request),
         )
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                 sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/uploads")
@@ -1693,6 +1700,7 @@ def create_app(
         })
         url = presign_put(
             key, expires=UPLOAD_TTL_SECONDS, content_type=content_type or "video/mp4",
+            content_length=int(size),
         )
         return {
             "mode": "direct",
@@ -1709,24 +1717,26 @@ def create_app(
         meta = _get_own_upload(upload_id)
         if meta is None or "path" not in meta:
             raise HTTPException(status_code=404, detail="upload not found")
+        limit = min(int(meta["size"]), _MAX_UPLOAD_BYTES)
+        if offset < 0 or offset > limit:
+            raise HTTPException(status_code=413, detail="file too large")
+        # Check each ASGI chunk before writing; never buffer an entire PUT in RAM.
         try:
-            data = await request.body()
+            async with await anyio.open_file(meta["path"], "r+b") as f:
+                await f.seek(offset)
+                position = offset
+                async for data in request.stream():
+                    if position + len(data) > limit:
+                        raise HTTPException(status_code=413, detail="file too large")
+                    await f.write(data)
+                    position += len(data)
+                received = await f.seek(0, os.SEEK_END)
+                meta["received"] = max(meta["received"], received)
         except ClientDisconnect as exc:
             raise HTTPException(
                 status_code=400,
                 detail="Upload dropped — hit Generate again.",
             ) from exc
-        if int(offset) < 0 or int(offset) + len(data) > _MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="file too large")
-        path = meta["path"]
-        with open(path, "r+b") as f:
-            f.seek(int(offset))
-            f.write(data)
-            received = f.tell()
-            # if writing past EOF with holes, size is max
-            f.seek(0, os.SEEK_END)
-            received = max(received, f.tell())
-        meta["received"] = max(meta["received"], received)
         return {"received": meta["received"]}
 
     @app.post("/api/jobs/from-uploads", status_code=201, response_model=CreateJobResponse)
@@ -1762,7 +1772,7 @@ def create_app(
         )
         _pop_own_uploads(ids)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                 sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-object", status_code=201, response_model=CreateJobResponse)
@@ -1783,7 +1793,7 @@ def create_app(
         )
         _pop_own_uploads(claimed)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                 sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.post("/api/jobs/from-drive", status_code=201, response_model=CreateJobResponse)
@@ -1817,7 +1827,7 @@ def create_app(
                 actor_email=_actor_email(request),
             )
             return CreateJobResponse(job_id=job.job_id,
-                                     sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                     sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                               for s in job.sources])
         stage = tempfile.mkdtemp(prefix="vm_drive_in_")
         paths: list[tuple[str, str]] = []
@@ -1841,7 +1851,7 @@ def create_app(
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
-                                 sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                                 sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
 
     @app.get("/api/jobs", response_model=list[JobSummary])
@@ -1856,13 +1866,13 @@ def create_app(
         return QueueOut(**store.queue())
 
     @app.get("/api/jobs/{job_id}", response_model=JobDetail)
-    def get_job(job_id: str) -> JobDetail:
+    def get_job(request: Request, job_id: str) -> JobDetail:
         job = store.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                         sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                   for s in job.sources],
                          error=job.error,
                          quality_mode=job.quality_mode,
@@ -1873,13 +1883,13 @@ def create_app(
                          outputs_expires_utc=job.outputs_expires_utc)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
-    def cancel_job(job_id: str) -> JobDetail:
+    def cancel_job(request: Request, job_id: str) -> JobDetail:
         job = store.cancel(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
         return JobDetail(job_id=job.job_id, count=job.count, created_utc=job.created_utc,
                          state=job.state,
-                         sources=[_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+                         sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                   for s in job.sources],
                          error=job.error,
                          quality_mode=job.quality_mode,
@@ -1923,7 +1933,7 @@ def create_app(
         out = []
         for job in store.list():
             for s in job.sources:
-                out.append(_source_out(s, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None)))
+                out.append(_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None)))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
         if _can_see_instagram_insights(request):
             return _stamp_source_suggestions(out)
@@ -1961,6 +1971,8 @@ def create_app(
         """Source vs variant JPEG stills for the look-first visual test."""
         if not str(filename).startswith("look_") or not str(filename).endswith(".jpg"):
             raise HTTPException(status_code=404, detail="look still not found")
+        if store._locate(source_id) is None:
+            raise HTTPException(status_code=404, detail="source not found")
         path = store.find_variant(source_id, filename)
         if path is not None:
             return FileResponse(path, media_type="image/jpeg")
@@ -1971,6 +1983,8 @@ def create_app(
 
     @app.get("/api/variants/{source_id}/{filename}")
     def variant_file(source_id: str, filename: str, dl: int = 0):
+        if store._locate(source_id) is None:
+            raise HTTPException(status_code=404, detail="source not found")
         path = store.find_variant(source_id, filename)
         if path is not None:
             if int(dl or 0):
@@ -2044,22 +2058,22 @@ def create_app(
         return {"source_id": source_id, "files": files, "zip_url": zip_url}
 
     @app.post("/api/sources/{source_id}/regenerate", response_model=SourceOut)
-    def regenerate(source_id: str, n: int = Form(...)) -> SourceOut:
+    def regenerate(request: Request, source_id: str, n: int = Form(...)) -> SourceOut:
         source = store.regenerate(source_id, n)
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
-        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+        return _source_out(source, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
 
     @app.post("/api/sources/{source_id}/retry-copy", response_model=SourceOut)
-    def retry_copy(source_id: str) -> SourceOut:
+    def retry_copy(request: Request, source_id: str) -> SourceOut:
         source = store.retry_copy(source_id)
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
-        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+        return _source_out(source, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
 
     @app.delete("/api/sources/{source_id}", status_code=204)
     def delete_source(source_id: str) -> None:
@@ -2067,16 +2081,16 @@ def create_app(
             raise HTTPException(status_code=404, detail="source not found")
 
     @app.post("/api/sources/{source_id}/captions", response_model=SourceOut)
-    def rewrite_captions(source_id: str, body: CaptionRewriteIn) -> SourceOut:
+    def rewrite_captions(request: Request, source_id: str, body: CaptionRewriteIn) -> SourceOut:
         source = store.rewrite_captions(source_id, body.prompt)
         if source is None:
             raise HTTPException(status_code=404, detail="source not found")
         loc = store._locate(source_id)
         job = store.get(loc[0]) if loc else None
-        return _source_out(source, ok_only=True, job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
+        return _source_out(source, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
 
     @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
-    def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
+    def set_platform_result(request: Request, source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
         variant = store.set_platform_result(source_id, index, body.result)
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
@@ -2088,10 +2102,10 @@ def create_app(
                 store._ws, loc[0], source_id, variant.filename,
                 object_store=getattr(store, "_object_store", None), variant=variant,
             )
-        return _variant_out(source_id, variant, file_ready=file_ready)
+        return _variant_out(source_id, variant, include_insights=_can_see_instagram_insights(request), file_ready=file_ready)
 
     @app.post("/api/variants/{source_id}/{index}/post-url", response_model=VariantOut)
-    def set_post_url(source_id: str, index: int, body: PostUrlIn) -> VariantOut:
+    def set_post_url(request: Request, source_id: str, index: int, body: PostUrlIn) -> VariantOut:
         try:
             url = normalize_post_url(body.url)
         except ValueError as exc:
@@ -2107,10 +2121,10 @@ def create_app(
                 store._ws, loc[0], source_id, variant.filename,
                 object_store=getattr(store, "_object_store", None), variant=variant,
             )
-        return _variant_out(source_id, variant, file_ready=file_ready)
+        return _variant_out(source_id, variant, include_insights=_can_see_instagram_insights(request), file_ready=file_ready)
 
     @app.post("/api/variants/{source_id}/{index}/caption", response_model=VariantOut)
-    def set_caption(source_id: str, index: int, body: CaptionIn) -> VariantOut:
+    def set_caption(request: Request, source_id: str, index: int, body: CaptionIn) -> VariantOut:
         variant = store.set_caption(source_id, index, body.caption)
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
@@ -2121,7 +2135,7 @@ def create_app(
                 store._ws, loc[0], source_id, variant.filename,
                 object_store=getattr(store, "_object_store", None), variant=variant,
             )
-        return _variant_out(source_id, variant, file_ready=file_ready)
+        return _variant_out(source_id, variant, include_insights=_can_see_instagram_insights(request), file_ready=file_ready)
 
     @app.get("/api/drop-ledger/status", response_model=DropLedgerStatusOut)
     def drop_ledger_status() -> DropLedgerStatusOut:
@@ -2179,6 +2193,8 @@ def create_app(
 
     @app.get("/api/sources/{source_id}/zip")
     def source_zip(source_id: str):
+        if store._locate(source_id) is None:
+            raise HTTPException(status_code=404, detail="source not found")
         path = store.zip_ok_variants(source_id)
         if path is not None:
             return FileResponse(path, media_type="application/zip",
