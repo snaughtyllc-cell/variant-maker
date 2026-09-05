@@ -29,6 +29,21 @@ describe("StudioCaptionsBox thumbs", () => {
     expect(container.querySelectorAll("video")).toHaveLength(2);
     expect(screen.getByText("xyz123.mp4")).toBeInTheDocument();
   });
+
+  it("uses a label placeholder for Drive clips that have no file or still", () => {
+    const { container } = render(
+      <StudioCaptionsBox
+        generateCaptions
+        onGenerateCaptionsChange={() => {}}
+        sources={[{ key: "drive-1", name: "from-drive.mp4" }]}
+        prompts={[""]}
+        onPromptChange={() => {}}
+      />,
+    );
+    expect(container.querySelector("video")).toBeNull();
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("from-drive.mp4")).toBeInTheDocument();
+  });
 });
 
 describe("StudioCaptionsBox per source", () => {
