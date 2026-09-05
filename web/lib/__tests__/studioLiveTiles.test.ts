@@ -50,4 +50,19 @@ describe("packLiveTiles", () => {
     expect(liveRowThumbSrc(source)).toBe("/api/look/s1/look_v01.jpg");
     expect(liveTilePreviewSrc({ ...source, variants: [], lookPreview: undefined })).toBeNull();
   });
+
+  it("uses the reconstruct still when no variant JPEG is ready yet", () => {
+    const preparing: SourceProgress = {
+      ...source,
+      variants: [],
+      lookPreview: {
+        index: 1,
+        src: "/api/look/s1/look_v01_src.jpg",
+        var: "/api/look/s1/look_v01.jpg",
+        status: "ok",
+        mae: 12,
+      },
+    };
+    expect(liveTilePreviewSrc(preparing)).toBe("/api/look/s1/look_v01.jpg");
+  });
 });
