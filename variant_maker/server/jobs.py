@@ -601,7 +601,9 @@ class JobStore:
                 return res
             occ.wait(0.25)
 
-    def _release_occupancy(self, job: Job, token: CancelToken, reservation: Reservation | None) -> None:
+    def _release_occupancy(
+        self, job: Job, token: CancelToken, reservation: Reservation | None,
+    ) -> None:
         occ = self._occupancy
         if occ is None:
             return
@@ -1287,28 +1289,28 @@ class JobStore:
                 capture_exception(exc)
         finally:
             self._release_occupancy(job, token, reservation)
-            if job.job_id not in self._jobs:
-                return
+            still_ours = job.job_id in self._jobs
             res = reservation or getattr(token, "reservation", None)
-            if res is not None and job.fence and res.fence != job.fence:
-                return
-            if job.state in TERMINAL_SUCCESS:
-                terminal = job.state
-            elif token.is_set() or job.state == "cancel_requested":
-                terminal = "cancelled"
-            else:
-                terminal = "done"
-            job.state = terminal
-            if job.state == "done":
-                for source in job.sources:
-                    self._pull_missing_outputs(source.source_id)
-                self._refresh_copy_error(job)
-                self._record_usage(job)
-            self._persist(job)
-            self.prune_finished_jobs()
-            ev = self._done.get(job.job_id)
-            if ev is not None:
-                ev.set()
+            if still_ours and res is not None and job.fence and res.fence != job.fence:
+                still_ours = False
+            if still_ours:
+                if job.state in TERMINAL_SUCCESS:
+                    terminal = job.state
+                elif token.is_set() or job.state == "cancel_requested":
+                    terminal = "cancelled"
+                else:
+                    terminal = "done"
+                job.state = terminal
+                if job.state == "done":
+                    for source in job.sources:
+                        self._pull_missing_outputs(source.source_id)
+                    self._refresh_copy_error(job)
+                    self._record_usage(job)
+                self._persist(job)
+                self.prune_finished_jobs()
+                ev = self._done.get(job.job_id)
+                if ev is not None:
+                    ev.set()
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)

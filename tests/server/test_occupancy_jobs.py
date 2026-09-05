@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from tests.server.fakes import FakeObjectStore, FakeRunner
 from variant_maker.server.cancel import JobCancelled
