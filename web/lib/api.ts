@@ -177,7 +177,9 @@ async function putDirectObject(
   const method = init.method || "PUT";
   const headers = init.headers || { "Content-Type": file.type || "video/mp4" };
   onBytes?.(0, file.size);
-  const useXhr = typeof XMLHttpRequest === "function" && !import.meta.env?.VITEST;
+  // Vitest has no ImportMeta.env; Next typecheck rejects import.meta.env.
+  const inVitest = typeof process !== "undefined" && Boolean(process.env.VITEST);
+  const useXhr = typeof XMLHttpRequest === "function" && !inVitest;
   if (useXhr) {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
