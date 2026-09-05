@@ -54,8 +54,9 @@ describe("VariantSheet embedded review", () => {
     expect(screen.getByRole("region", { name: /variant review/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/go to variant 03/i)).toBeInTheDocument();
     expect(screen.getByText(/DRAG THE DIVIDER TO WIPE/i)).toBeInTheDocument();
-    expect(screen.getByText(/v03/)).toBeInTheDocument();
-    expect(screen.getByText(/of 1/)).toBeInTheDocument();
+    expect(screen.getAllByText(/v03/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/of 1/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 });
 

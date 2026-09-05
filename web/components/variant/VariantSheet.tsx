@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VariantOut } from "@/lib/types";
 import { sourceUrl } from "@/lib/api";
@@ -29,7 +29,7 @@ interface VariantSheetProps {
   onSendToDrive?: () => void;
 }
 
-const navBtnStyle = (disabled: boolean): React.CSSProperties => ({
+const navBtnStyle = (disabled: boolean): CSSProperties => ({
   width: 36,
   height: 36,
   borderRadius: 9,
@@ -86,6 +86,85 @@ export function VariantSheet({
   }, [isFirst, isLast, onNav]);
 
   if (!variant) return null;
+
+  const titleStyle: CSSProperties = {
+    fontFamily: "var(--font-brand)",
+    fontSize: 14.5,
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+    color: "var(--color-text)",
+    margin: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+  const subStyle: CSSProperties = {
+    display: "block",
+    fontFamily: "var(--font-space-grotesk), monospace",
+    fontSize: 10.5,
+    color: "var(--color-muted2)",
+    marginTop: 2,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+  const closeStyle: CSSProperties = {
+    width: 36,
+    height: 36,
+    marginLeft: 4,
+    borderRadius: 9,
+    background: "transparent",
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--color-muted)",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
+  const chrome = (title: ReactNode, close: ReactNode) => (
+    <div
+      className="variant-sheet__header"
+      style={{
+        display: "flex",
+        flexShrink: 0,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onNav(-1)}
+        disabled={isFirst}
+        aria-label="Previous variant"
+        style={navBtnStyle(isFirst)}
+      >
+        <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
+          chevron_left
+        </span>
+      </button>
+
+      <div style={{ flex: 1, minWidth: 0, padding: "0 4px" }}>
+        {title}
+        <span style={subStyle}>
+          variant {index + 1} of {variants.length} · {variant.filename}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onNav(+1)}
+        disabled={isLast}
+        aria-label="Next variant"
+        style={navBtnStyle(isLast)}
+      >
+        <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
+          chevron_right
+        </span>
+      </button>
+
+      {close}
+    </div>
+  );
 
   const body = (
     <div
@@ -197,6 +276,16 @@ export function VariantSheet({
   if (embedded) {
     return (
       <section className="gallery-review" aria-label="Variant review">
+        {chrome(
+          <h2 style={titleStyle}>
+            {sourceName} · v{padded}
+          </h2>,
+          <button type="button" aria-label="Close" onClick={onClose} style={closeStyle}>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }} aria-hidden="true">
+              close
+            </span>
+          </button>,
+        )}
         {body}
       </section>
     );
@@ -248,97 +337,16 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header — row of ‹ title › ✕; never stacks, never scrolls away */}
-          <div
-            className="variant-sheet__header"
-            style={{
-              display: "flex",
-              flexShrink: 0,
-            }}
-          >
-            {/* Prev */}
-            <button
-              type="button"
-              onClick={() => onNav(-1)}
-              disabled={isFirst}
-              aria-label="Previous variant"
-              style={navBtnStyle(isFirst)}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
-                chevron_left
-              </span>
-            </button>
-
-            {/* Title block */}
-            <div style={{ flex: 1, minWidth: 0, padding: "0 4px" }}>
-              <Dialog.Title
-                style={{
-                  fontFamily: "var(--font-brand)",
-                  fontSize: 14.5,
-                  fontWeight: 700,
-                  letterSpacing: "-0.01em",
-                  color: "var(--color-text)",
-                  margin: 0,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {sourceName} · v{padded}
-              </Dialog.Title>
-              <span
-                style={{
-                  display: "block",
-                  fontFamily: "var(--font-space-grotesk), monospace",
-                  fontSize: 10.5,
-                  color: "var(--color-muted2)",
-                  marginTop: 2,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                variant {index + 1} of {variants.length} · {variant.filename}
-              </span>
-            </div>
-
-            {/* Next */}
-            <button
-              type="button"
-              onClick={() => onNav(+1)}
-              disabled={isLast}
-              aria-label="Next variant"
-              style={navBtnStyle(isLast)}
-            >
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
-                chevron_right
-              </span>
-            </button>
-
-            {/* Close */}
-            <Dialog.Close
-              type="button"
-              aria-label="Close"
-              style={{
-                width: 36,
-                height: 36,
-                marginLeft: 4,
-                borderRadius: 9,
-                background: "transparent",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--color-muted)",
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
+          {chrome(
+            <Dialog.Title style={titleStyle}>
+              {sourceName} · v{padded}
+            </Dialog.Title>,
+            <Dialog.Close type="button" aria-label="Close" style={closeStyle}>
               <span className="material-symbols-rounded" style={{ fontSize: 20 }} aria-hidden="true">
                 close
               </span>
-            </Dialog.Close>
-          </div>
+            </Dialog.Close>,
+          )}
 
           {body}
         </Dialog.Content>

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { STUDIO_LIVE_PHONE_HEIGHT_PX, STUDIO_LIVE_RAIL_PX } from "@/lib/studioLayout";
+import { STUDIO_LIVE_RAIL_PX } from "@/lib/studioLayout";
 
 const css = readFileSync(resolve(__dirname, "../app/globals.css"), "utf8");
 const mobile = css.split("@media (max-width: 639px)")[1] ?? "";
@@ -15,10 +15,11 @@ function rule(block: string, selector: string): string {
 }
 
 describe("mobile Studio + Gallery CSS contract", () => {
-  it("pins Generate above the phone tab bar with no white dock", () => {
-    expect(mobile).toMatch(/\.studio-generate-bar--dock\s*\{[^}]*position:\s*fixed/s);
-    expect(mobile).toMatch(/\.studio-generate-bar--dock\s*\{[^}]*bottom:\s*var\(--tab-h\)/s);
-    expect(mobile).toMatch(/\.studio-generate-bar--dock\s*\{[^}]*background:\s*transparent/s);
+  it("keeps Generate in the Studio page flow instead of pinning it over Live Queue", () => {
+    const dock = rule(mobile, ".studio-generate-bar--dock");
+    expect(dock).toMatch(/position:\s*static/);
+    expect(dock).not.toMatch(/position:\s*fixed/);
+    expect(dock).not.toMatch(/bottom:\s*var\(--tab-h\)/);
   });
 
   it("lets the Gallery body scroll past PACKS so tiles are reachable", () => {
@@ -45,19 +46,29 @@ describe("mobile Studio + Gallery CSS contract", () => {
     );
   });
 
-  it("pins the Studio live/progress rail so tiles cannot eat the page", () => {
+  it("lets Studio scroll as one page with Live Queue in the flow", () => {
     const phoneLive = rule(mobile, ".studio-live");
-    expect(phoneLive).toMatch(new RegExp(`height:\\s*${STUDIO_LIVE_PHONE_HEIGHT_PX}px`));
-    expect(phoneLive).toMatch(new RegExp(`max-height:\\s*${STUDIO_LIVE_PHONE_HEIGHT_PX}px`));
-    expect(phoneLive).toMatch(/overflow:\s*hidden/);
-    expect(phoneLive).not.toMatch(/max-height:\s*none/);
-    expect(phoneLive).not.toMatch(/height:\s*auto/);
-    expect(rule(mobile, ".studio-live__finished")).toMatch(/overflow-y:\s*auto/);
+    expect(phoneLive).toMatch(/height:\s*auto/);
+    expect(phoneLive).toMatch(/max-height:\s*none/);
+    expect(phoneLive).toMatch(/overflow:\s*visible/);
+    expect(rule(mobile, ".studio-cockpit__scroll")).toMatch(/overflow:\s*visible/);
+    expect(rule(mobile, ".studio-cockpit__scroll")).not.toMatch(/overflow-y:\s*auto/);
 
     const deskLive = rule(desktop, ".studio-live");
     expect(deskLive).toMatch(new RegExp(`flex:\\s*0 0 ${STUDIO_LIVE_RAIL_PX}px`));
     expect(deskLive).toMatch(new RegExp(`width:\\s*${STUDIO_LIVE_RAIL_PX}px`));
     expect(deskLive).not.toMatch(/flex:\s*1 1 auto/);
+  });
+
+  it("shows pack Insights under the phone pack tiles", () => {
+    expect(css).toMatch(/\.gallery-pack-live\s*\{[^}]*display:\s*none/s);
+    expect(mobile).toMatch(/\.gallery-pack-live\s*\{[^}]*display:\s*flex/s);
+  });
+
+  it("gives the phone variant review its own close chrome and a bounded player", () => {
+    expect(mobile).toMatch(/\.gallery-body--review \.gallery-packs\s*\{[^}]*display:\s*none/s);
+    expect(mobile).toMatch(/\.gallery-review \.variant-sheet__player\s*\{[^}]*max-height:\s*48dvh/s);
+    expect(mobile).toMatch(/\.gallery-review \.variant-sheet__stage\s*\{[^}]*flex:\s*0 0 auto/s);
   });
 
   it("keeps the full varimo wordmark in the phone top bar", () => {

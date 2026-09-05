@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   PREPARING_JOB_ID,
+  captionCopiedLabel,
+  captionCopyLabel,
+  captionSaveLabel,
   captionSnippet,
+  captionStatusHint,
   captionToggleHint,
   captionToggleLabel,
   hqPrepToggleHint,
@@ -57,6 +61,15 @@ describe("prepare copy", () => {
     expect(uniquenessPassHint()).toBe("38% = pass vs the source");
     expect(uniquenessPassHint()).not.toMatch(/verified/i);
     expect(uniquenessPassHint()).not.toMatch(/65%/);
+  });
+
+  it("names caption save and copy actions", () => {
+    expect(captionSaveLabel()).toBe("Save caption");
+    expect(captionCopyLabel()).toBe("Copy caption");
+    expect(captionCopiedLabel()).toBe("Copied");
+    expect(captionStatusHint()).toMatch(/copy pastes this caption/i);
+    expect(captionStatusHint()).toMatch(/pass \/ flag/i);
+    expect(captionStatusHint()).not.toMatch(/duplicate/i);
   });
 
   it("snips captions to a single-line preview", () => {

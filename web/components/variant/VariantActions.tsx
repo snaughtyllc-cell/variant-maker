@@ -91,10 +91,9 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
   }
 
   const currentResult = variant.platform_result ?? "unknown";
-  const isDuplicate = currentResult === "duplicate_reject";
-  const isFlagged = currentResult === "flagged";
-  const isPassActive = !isDuplicate && !isFlagged;
-  const duplicateBusy = resultBusy === "duplicate_reject";
+  const isStuck = currentResult === "flagged" || currentResult === "duplicate_reject";
+  const isPassActive = !isStuck;
+  const flagBusy = resultBusy === "flagged";
 
   const segmentBase: React.CSSProperties = {
     flex: 1,
@@ -120,9 +119,9 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
 
   return (
     <div style={{ marginTop: 20 }}>
-      {/* RESULT — Pass / Duplicate / Flag. Only Duplicate is a wired action here;
-          Pass and Flag are a read-out of variant.platform_result, matching the
-          product rule that an unlabeled variant already counts as a pass. */}
+      {/* RESULT — Pass is unlabeled. Flag is the one miss action, for a live
+          post that is stuck and not moving in views. Duplicate rejected lives
+          on Drops / the ledger, not this sheet. */}
       <div
         style={{
           display: "flex",
@@ -132,7 +131,7 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
         }}
       >
         <div style={EYEBROW_STYLE}>Result</div>
-        {isDuplicate && (
+        {isStuck && (
           <span
             data-testid="platform-result-badge"
             style={{
@@ -145,7 +144,7 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
               border: "1px solid #f0d3ae",
             }}
           >
-            Duplicate rejected
+            Stuck
           </span>
         )}
       </div>
@@ -166,23 +165,18 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
 
         <button
           type="button"
-          onClick={() => handleSetResult("duplicate_reject")}
+          onClick={() => handleSetResult("flagged")}
           disabled={!!resultBusy}
           style={{
             ...segmentBase,
-            ...(isDuplicate ? segmentActive : segmentInactive),
+            ...(isStuck ? segmentActive : segmentInactive),
             cursor: resultBusy ? "not-allowed" : "pointer",
-            opacity: resultBusy && !duplicateBusy ? 0.6 : 1,
+            opacity: resultBusy && !flagBusy ? 0.6 : 1,
           }}
         >
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-orange)", flexShrink: 0 }} />
-          {duplicateBusy ? "Saving…" : "Duplicate rejected"}
-        </button>
-
-        <div style={{ ...segmentBase, ...(isFlagged ? segmentActive : segmentInactive) }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-amber)", flexShrink: 0 }} />
-          Flag
-        </div>
+          {flagBusy ? "Saving…" : "Flag"}
+        </button>
       </div>
 
       <div
@@ -195,7 +189,7 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
           color: "var(--color-muted2)",
         }}
       >
-        Unlabeled = pass. Only mark duplicate when the platform took it down.
+        Unlabeled = pass. Flag when a live post is stuck and views aren't moving.
       </div>
 
       <div style={{ marginTop: 20 }}>

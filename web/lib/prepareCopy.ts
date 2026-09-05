@@ -87,11 +87,19 @@ export function captionSaveLabel(): string {
   return "Save caption";
 }
 
+export function captionCopyLabel(): string {
+  return "Copy caption";
+}
+
+export function captionCopiedLabel(): string {
+  return "Copied";
+}
+
 export function captionStatusHint(): string {
   return (
-    "Edit here before Send to Drive or a drop. After it is posted, pass / duplicate " +
-    "is for this video — not the caption. If you change the caption on Instagram, " +
-    "this box will not update; use the post link to find the right copy."
+    "Edit here before Send to Drive or a drop. Copy pastes this caption onto the post. " +
+    "After it is posted, pass / flag is for this video — not the caption. If you change " +
+    "the caption on Instagram, this box will not update; use the post link to find the right copy."
   );
 }
 

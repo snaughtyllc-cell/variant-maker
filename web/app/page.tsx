@@ -207,7 +207,7 @@ export default function StudioPage() {
             <header className="studio-intro">
               <p>Studio</p>
               <h1>Build a pack</h1>
-              <span>Pick clips, set variants, watch the queue on the right.</span>
+              <span>Pick clips, set variants, then Generate. Live Queue sits at the bottom.</span>
             </header>
 
             <section className="studio-section">

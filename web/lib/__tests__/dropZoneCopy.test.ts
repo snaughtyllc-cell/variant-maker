@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
 import {
-  STUDIO_LIVE_PHONE_HEIGHT_PX,
   STUDIO_LIVE_RAIL_PX,
   studioProgressIdleClass,
   studioShellClass,
@@ -27,9 +26,7 @@ describe("studio layout classes", () => {
     expect(studioProgressIdleClass(true)).toBe("studio-progress");
   });
 
-  it("pins the live/progress rail to a small fixed portion", () => {
+  it("keeps the desktop live rail a fixed column", () => {
     expect(STUDIO_LIVE_RAIL_PX).toBe(460);
-    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeGreaterThan(240);
-    expect(STUDIO_LIVE_PHONE_HEIGHT_PX).toBeLessThanOrEqual(320);
   });
 });
