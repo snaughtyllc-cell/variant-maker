@@ -73,8 +73,10 @@ access token per job (`drive_tokens.mint_access_token`).
 
 Current production: min workers 0, max 4, idle timeout **600s**, ~$0.58/hr.
 
-**Trial:** drop idle timeout to **30–60 seconds** on the Fast CPU endpoint.
-Confirm cold-start is acceptable. Keep HQ off until separately benchmarked.
+**Wave 2 trial (Fast CPU):** min 0, **max 2**, idle timeout **120s**, FlashBoot
+on. Compare p50/p95 time-to-first-output and billed minutes against the 600s
+baseline before adding a primer. Do not keep-alive. HQ GPU occupancy is not
+this trial. Spec: `docs/superpowers/specs/2026-09-05-fast-idle-scale-zero.md`.
 `VARIANT_RUNPOD_MAX_SECONDS` (default 3600) is the per-job execution cap.
 
 Resume failure **does not** submit a second RunPod job. Cancel POSTs

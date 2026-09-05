@@ -23,11 +23,13 @@ falls back to `--runner local` and renders on Railway CPU (Tier 1). That path is
 too slow for VA in-and-out. Use RunPod serverless with **min workers = 0**,
 `VARIANT_QUALITY_MODE=fast` (see
 [`codex-runpod-and-drive.md`](codex-runpod-and-drive.md)).
-Idle timeout is a dashboard setting: production Fast is **600s** today;
-**trial 30–60s** after measuring cold-start (see pipeline-hosting.md).
-Overnight GPU is $0; a warm window after the last job costs GPU-hours only while
-that worker is still up. Prefer a **4090-class** card (~$1–2/hr while running) over
-L4 for HQ; **min workers stay 0**. HQ stays off until separately benchmarked.
+Idle timeout is a dashboard setting. Production Fast is **600s** today.
+Wave 2 trial (Fast CPU only): **120s idle**, **max workers 2**, FlashBoot on —
+see [`2026-09-05-fast-idle-scale-zero.md`](../superpowers/specs/2026-09-05-fast-idle-scale-zero.md).
+Do not add a morning primer until that trial is measured. Overnight Fast
+compute is $0 once both workers expire; storage and Railway still cost.
+Prefer a **4090-class** card (~$1–2/hr while running) over L4 for HQ;
+**min workers stay 0**. Do not buy always-on GPU. HQ occupancy is not this wave.
 
 ## 1. Railway (Codex can do this)
 
@@ -95,7 +97,10 @@ RunPod **CPU** serverless endpoint from that image:
 
 - Compute type: **CPU**. Instance with **8+ cores** (e.g. `cpu3g-8-32`).
 - Start command is already `python -u /app/deploy/runpod/cp_handler.py`.
-- Min workers **0**, max workers **4** (team Fast; HQ GPU max **3**), idle timeout **600s** (trial **30–60s** after measuring cold-start), FlashBoot on.
+- Min workers **0**, max workers **2** (one complete 20-pack per worker; occupancy
+  caps at two). Idle timeout **120s** as the Wave 2 experiment (baseline today
+  is **600s**). FlashBoot on where the CPU endpoint supports it. Do not run a
+  morning primer or keep-alive until FlashBoot + idle are measured.
 - Execution timeout **3600s** (a 20-pack must not die at 10–20 min).
 - Same `R2_*` env as the GPU endpoint.
 
