@@ -1,5 +1,6 @@
 "use client";
 import { formatDuration } from "@/lib/format";
+import { SourceThumb } from "./SourceThumb";
 
 interface FileListProps {
   files: File[];
@@ -14,7 +15,9 @@ export function FileList({ files, durations, onRemove }: FileListProps) {
     <>
       {files.map((file, i) => (
         <div className="studio-clip-card" key={`${file.name}-${i}`}>
-          <div className="studio-clip-card__thumb" />
+          <div className="studio-clip-card__thumb">
+            <SourceThumb file={file} label={file.name} />
+          </div>
           <div className="studio-clip-card__meta">
             <span className="studio-clip-card__name">{file.name}</span>
             <span className="studio-clip-card__sub">

@@ -1,5 +1,6 @@
 "use client";
 import type { DrivePick } from "./DrivePickerModal";
+import { SourceThumb } from "./SourceThumb";
 
 interface DrivePickListProps {
   picks: DrivePick[];
@@ -13,7 +14,9 @@ export function DrivePickList({ picks, onRemove }: DrivePickListProps) {
     <>
       {picks.map((pick, i) => (
         <div className="studio-clip-card" key={`${pick.id}-${i}`}>
-          <div className="studio-clip-card__thumb" />
+          <div className="studio-clip-card__thumb">
+            <SourceThumb label={pick.name} />
+          </div>
           <div className="studio-clip-card__meta">
             <span className="studio-clip-card__name">{pick.name}</span>
             <span className="studio-clip-card__sub">Google Drive</span>

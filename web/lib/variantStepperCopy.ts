@@ -5,6 +5,12 @@ export const DEFAULT_PER_VIDEO = 20;
 export const MAX_PER_VIDEO = 40;
 /** Suggested count when someone is timing a first Generate. */
 export const SPEED_TEST_PER_VIDEO = 3;
+/** Phone/desktop chips — numbers only so 20 is not framed as the required pack. */
+export const VARIANT_COUNT_PRESETS = [SPEED_TEST_PER_VIDEO, 10, 20] as const;
+
+export function variantPresetLabel(count: number): string {
+  return String(count);
+}
 
 export function variantStepperHint(qualityMode: "fast" | "hq"): string | null {
   if (qualityMode !== "fast") return null;

@@ -30,12 +30,13 @@ describe v1 only. Do not treat them as the current product.
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
-Solo members (no Drops / Workflows) still see **Studio · Gallery ·
-Analytics · Drive** (`/`, `/gallery`, `/analytics`, `/settings/drive`).
+Solo owners see **Studio · Gallery · Analytics** on the phone bar; Drive
+is under More. Solo members see **Studio · Gallery**, with Drive in More.
 
-Phone (`< 640px`) shows the six everyone-tabs (Analytics short label
-**Stats**). Team / Admin / Diagnostics sit under **More**. Desktop shows
-extras in the top row when the session is allowed to see them.
+Phone (`< 640px`) shows **Studio · Gallery · Analytics (Stats) · Flows**.
+**Drive** and **Drops** sit under the top-right **More** control, with Team /
+Admin / Diagnostics. Desktop SideNav keeps the full operator row
+(Studio / Gallery / Drops / Workflows / Drive).
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -46,10 +47,10 @@ row + progress card.
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast, Reconstruct-first (HQ) switch default off, Advanced, live queue. |
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
-| Analytics | `/analytics` | everyone | yes (label **Stats**) | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
-| Drops | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
+| Analytics | `/analytics` | owner / site admin | yes (label **Stats**) | Instagram Insights scoreboard: connected testers, pack totals, ranked originals, Sync, generate more of a winner. |
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
-| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
+| Drops | `/drops` | everyone | More | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
+| Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
@@ -87,7 +88,7 @@ Analytics; scoreboard on Analytics; compact views on Gallery. Ops:
   parked under Later above — not missing IA.
 - Do not hide Analytics, Drops, Workflows, Drive, Team, or Admin — they
   are live.
-- Do not put Admin / Diagnostics in the phone bottom bar. They stay
-  under More.
+- Do not put Admin / Diagnostics / Drive / Drops in the phone bottom bar.
+  Drive and Drops stay under More. Admin / Diagnostics stay under More.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,
   `showDiagnosticsNav`). Site admin is `SITE_ADMIN_EMAILS`.

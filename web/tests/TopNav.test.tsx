@@ -56,28 +56,47 @@ describe("TopNav", () => {
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
     expect(screen.queryByRole("link", { name: "Stats" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",
     );
   });
 
-  it("keeps Analytics in More for solo owners, not on the phone tab bar", () => {
+  it("puts Analytics on the phone bar for owners and Drive in More", () => {
     me.data = { ...BASE, experience: "solo", role: "owner", is_admin: false };
     render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Stats" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Stats" })[0]).toHaveAttribute("href", "/analytics");
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",
     );
-    fireEvent.click(screen.getByRole("button", { name: "More" }));
-    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
-      "href",
+  });
+
+  it("keeps agency phone bar at Studio, Gallery, Stats, Flows with Drive and Drops in More", () => {
+    render(<TopNav />);
+    const bar = document.querySelector(".vf-mobile-tabs") as HTMLElement;
+    expect([...bar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual([
+      "/",
+      "/gallery",
       "/analytics",
+      "/workflows",
+    ]);
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
+      "href",
+      "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
+    expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
   });
 
   it("centers the varimo wordmark and keeps More as an icon-only control", () => {

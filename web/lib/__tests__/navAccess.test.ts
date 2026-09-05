@@ -5,6 +5,8 @@ import {
   showAnalyticsNav,
   showDiagnosticsNav,
   showTeamNav,
+  visiblePhoneBarTabs,
+  visiblePhoneMoreTabs,
   visiblePrimaryTabs,
 } from "@/lib/navAccess";
 import { PRIMARY_TABS } from "@/lib/studioDestinations";
@@ -116,5 +118,34 @@ describe("visiblePrimaryTabs", () => {
         auth_required: true,
       }).map((d) => d.href),
     ).toEqual(["/", "/gallery", "/settings/drive"]);
+  });
+});
+
+describe("visiblePhoneBarTabs", () => {
+  it("puts Analytics on the bar for owners and keeps Drive in More", () => {
+    const me = { experience: "agency", is_admin: false, auth_required: true, role: "owner" };
+    expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual([
+      "/",
+      "/gallery",
+      "/analytics",
+      "/workflows",
+    ]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual([
+      "/drops",
+      "/settings/drive",
+      "/team",
+    ]);
+  });
+
+  it("drops Analytics for VAs and still hides Drive from the bar", () => {
+    const me = { experience: "agency", is_admin: false, auth_required: true, role: "member" };
+    expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/", "/gallery", "/workflows"]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/drops", "/settings/drive"]);
+  });
+
+  it("keeps solo owners at Studio, Gallery, Stats with Drive under More", () => {
+    const me = { experience: "solo", is_admin: false, auth_required: true, role: "owner" };
+    expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/", "/gallery", "/analytics"]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/settings/drive"]);
   });
 });

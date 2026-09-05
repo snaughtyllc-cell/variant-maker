@@ -3,7 +3,9 @@ import {
   DEFAULT_PER_VIDEO,
   MAX_PER_VIDEO,
   SPEED_TEST_PER_VIDEO,
+  VARIANT_COUNT_PRESETS,
   generatePackLabel,
+  variantPresetLabel,
   variantStepperHint,
 } from "@/lib/variantStepperCopy";
 
@@ -12,6 +14,9 @@ describe("variantStepperCopy", () => {
     expect(DEFAULT_PER_VIDEO).toBe(20);
     expect(MAX_PER_VIDEO).toBeGreaterThanOrEqual(20);
     expect(SPEED_TEST_PER_VIDEO).toBe(3);
+    expect(VARIANT_COUNT_PRESETS).toEqual([3, 10, 20]);
+    expect(variantPresetLabel(20)).toBe("20");
+    expect(variantPresetLabel(20)).not.toMatch(/usual/i);
   });
 
   it("on Fast, says 20 encodes and a 3-clip speed test", () => {

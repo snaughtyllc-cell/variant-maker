@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
-import { extraTabVisible, linkActive, visiblePrimaryTabs } from "@/lib/navAccess";
-import { EXTRA_TABS, STUDIO_DESTINATIONS } from "@/lib/studioDestinations";
+import { linkActive, visiblePhoneBarTabs, visiblePhoneMoreTabs } from "@/lib/navAccess";
+import { STUDIO_DESTINATIONS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 import { VarimoMark } from "../brand/VarimoMark";
 import { VarimoWordmark } from "../brand/VarimoWordmark";
@@ -43,8 +43,8 @@ export function TopNav() {
   const pathname = usePathname();
   const { data: me } = useAuthMe();
   const [moreOpen, setMoreOpen] = useState(false);
-  const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
-  const primaryTabs = visiblePrimaryTabs(me);
+  const phoneTabs = visiblePhoneBarTabs(me);
+  const moreTabs = visiblePhoneMoreTabs(me);
   const section = SECTION_DESTINATIONS.find((d) => linkActive(pathname, d.href));
   const isStudio = pathname === "/";
   // Phase C: Gallery, Drops, Flows and Drive each render their own 58px context
@@ -107,7 +107,7 @@ export function TopNav() {
           <VarimoWordmark className="vf-brand-wordmark" />
         </Link>
         <div className="vf-topbar-actions">
-          {(me?.email || allowedExtras.length > 0) && (
+          {(me?.email || moreTabs.length > 0) && (
             <button
               type="button"
               className="vf-more-trigger"
@@ -122,12 +122,12 @@ export function TopNav() {
         </div>
       </header>
 
-      {moreOpen && (me?.email || allowedExtras.length > 0) && (
+      {moreOpen && (me?.email || moreTabs.length > 0) && (
         <aside className="vf-mobile-more" id="vf-mobile-more" aria-label="More navigation">
           {me?.email && <span className="vf-mobile-email">{me.email}</span>}
-          {allowedExtras.length > 0 && (
+          {moreTabs.length > 0 && (
             <nav className="vf-mobile-extra-links">
-              {allowedExtras.map(({ href, label }) => {
+              {moreTabs.map(({ href, label }) => {
                 const Icon = ICONS[href as keyof typeof ICONS];
                 return <Link key={href} href={href} onClick={() => setMoreOpen(false)}><Icon size={16} /> {label}</Link>;
               })}
@@ -144,8 +144,8 @@ export function TopNav() {
         </div>
       )}
 
-      <nav className="vf-mobile-tabs" data-count={primaryTabs.length} aria-label="Primary navigation">
-        {primaryTabs.map((item) => {
+      <nav className="vf-mobile-tabs" data-count={phoneTabs.length} aria-label="Primary navigation">
+        {phoneTabs.map((item) => {
           const Icon = ICONS[item.href as keyof typeof ICONS];
           const active = linkActive(pathname, item.href);
           return (

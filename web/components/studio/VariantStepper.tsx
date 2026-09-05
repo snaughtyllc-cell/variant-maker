@@ -1,5 +1,9 @@
 "use client";
-import { MAX_PER_VIDEO, SPEED_TEST_PER_VIDEO } from "@/lib/variantStepperCopy";
+import {
+  MAX_PER_VIDEO,
+  VARIANT_COUNT_PRESETS,
+  variantPresetLabel,
+} from "@/lib/variantStepperCopy";
 
 interface VariantStepperProps {
   value: number;
@@ -14,11 +18,10 @@ export function VariantStepper({
   min = 1,
   max = MAX_PER_VIDEO,
 }: VariantStepperProps) {
-  const presets: Array<{ value: number; label: string }> = [
-    { value: SPEED_TEST_PER_VIDEO, label: `${SPEED_TEST_PER_VIDEO} · speed test` },
-    { value: 10, label: "10" },
-    { value: 20, label: "20 · usual" },
-  ];
+  const presets = VARIANT_COUNT_PRESETS.map((count) => ({
+    value: count,
+    label: variantPresetLabel(count),
+  }));
 
   function decrement() {
     if (value > min) onChange(value - 1);

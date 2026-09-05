@@ -48,7 +48,7 @@ export default function StudioPage() {
 
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
-  const jobLocked = Boolean(jobId && !complete);
+  const jobRunning = Boolean(jobId && !complete);
   const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
   const sizeLabel = formatSize(totalBytes);
   const sourceMeta =
@@ -75,8 +75,17 @@ export default function StudioPage() {
     setFileCaptions((prev) => [...prev, ...incoming.map(() => "")]);
   }, []);
 
+  function clearSourceDraft() {
+    setFiles([]);
+    setDurations([]);
+    setDrivePicks([]);
+    setFileCaptions([]);
+    setDriveCaptions([]);
+    setGenerateCaptions(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function openPicker() {
-    if (jobLocked) return;
     fileInputRef.current?.click();
   }
 
@@ -88,7 +97,6 @@ export default function StudioPage() {
   function handleTileDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragging(false);
-    if (jobLocked) return;
     acceptDropped(event.dataTransfer.files);
   }
 
@@ -149,31 +157,43 @@ export default function StudioPage() {
       return;
     }
     setError(null);
-    const names = files.length > 0
-      ? files.map((f) => f.name)
-      : drivePicks.map((p) => p.name);
+    const sendFiles = files;
+    const sendPicks = drivePicks;
+    const sendFileCaptions = fileCaptions;
+    const sendDriveCaptions = driveCaptions;
+    const sendGenerateCaptions = generateCaptions;
+    const names = sendFiles.length > 0
+      ? sendFiles.map((f) => f.name)
+      : sendPicks.map((p) => p.name);
     beginPrepare(names.map((filename, i) => ({
       source_id: `prep-${i}`,
       filename,
       requested: perVideo,
     })));
+    clearSourceDraft();
     setBusy(true);
     try {
       const resp =
-        drivePicks.length > 0
+        sendPicks.length > 0
           ? await createJobFromDrive({
-              destinationId: drivePicks[0].destinationId,
-              fileIds: drivePicks.map((p) => p.id),
+              destinationId: sendPicks[0].destinationId,
+              fileIds: sendPicks.map((p) => p.id),
               count: perVideo,
               qualityMode: "fast",
               allowCreativeEscalate,
-              generateCaptions,
+              generateCaptions: sendGenerateCaptions,
               prepMode,
-              captionPrompt: driveCaptions,
+              captionPrompt: sendDriveCaptions,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, prepMode, fileCaptions);
+          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions);
       start(resp, "fast", prepMode);
     } catch (e) {
+      setFiles(sendFiles);
+      setDrivePicks(sendPicks);
+      setFileCaptions(sendFileCaptions);
+      setDriveCaptions(sendDriveCaptions);
+      setGenerateCaptions(sendGenerateCaptions);
+      readDurations(sendFiles).then(setDurations);
       clear();
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
@@ -216,12 +236,11 @@ export default function StudioPage() {
                 <div
                   className="studio-drop-tile"
                   data-dragging={dragging}
-                  data-disabled={jobLocked || undefined}
                   onClick={openPicker}
                   onDrop={handleTileDrop}
                   onDragOver={(event) => {
                     event.preventDefault();
-                    if (!jobLocked) setDragging(true);
+                    setDragging(true);
                   }}
                   onDragLeave={() => setDragging(false)}
                   role="button"
@@ -244,7 +263,6 @@ export default function StudioPage() {
                   type="button"
                   className="studio-upload-btn"
                   onClick={openPicker}
-                  disabled={jobLocked}
                 >
                   <span className="material-symbols-rounded" style={{ fontSize: 18 }}>upload_file</span>
                   Upload files
@@ -253,7 +271,6 @@ export default function StudioPage() {
                   type="button"
                   className="studio-drive-picker"
                   onClick={() => setPickerOpen(true)}
-                  disabled={jobLocked}
                 >
                   <span className="material-symbols-rounded" style={{ fontSize: 18 }}>cloud</span>
                   From Drive
@@ -349,7 +366,7 @@ export default function StudioPage() {
               fileCount={sourceCount}
               perVideo={perVideo}
               onClick={handleGenerate}
-              disabled={jobLocked}
+              disabled={jobRunning}
               busy={busy}
               jobId={jobId}
               complete={complete}

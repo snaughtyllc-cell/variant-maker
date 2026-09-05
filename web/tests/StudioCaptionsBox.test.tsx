@@ -27,7 +27,27 @@ describe("StudioCaptionsBox thumbs", () => {
       />,
     );
     expect(container.querySelectorAll("video")).toHaveLength(2);
+    expect(screen.getByLabelText("xyz123.mp4 thumbnail")).toBeInTheDocument();
     expect(screen.getByText("xyz123.mp4")).toBeInTheDocument();
+    expect(container.querySelector(".studio-caption-sources")).toBeTruthy();
+  });
+
+  it("uses a switch labeled write captions, without the long hint", () => {
+    render(
+      <StudioCaptionsBox
+        generateCaptions={false}
+        onGenerateCaptionsChange={() => {}}
+        sources={[]}
+        prompts={[]}
+        onPromptChange={() => {}}
+      />,
+    );
+    const toggle = screen.getByTestId("studio-caption-toggle");
+    expect(toggle.querySelector(".studio-switch")).toBeTruthy();
+    expect(toggle.textContent).toMatch(/write captions for these copies/i);
+    expect(toggle.textContent).not.toMatch(/one box per source/i);
+    expect(toggle.textContent).not.toMatch(/thumbnail/i);
+    expect(screen.queryByRole("heading", { name: "Captions" })).not.toBeInTheDocument();
   });
 });
 
@@ -76,8 +96,8 @@ describe("StudioCaptionsBox per source", () => {
         onPromptChange={() => {}}
       />,
     );
-    expect(screen.getByText("gym.mp4")).toBeInTheDocument();
+    expect(screen.getAllByText("gym.mp4").length).toBeGreaterThan(0);
     expect(container.querySelector("video")).toBeNull();
-    expect(screen.getByLabelText("S1 thumbnail")).toHaveTextContent("S1");
+    expect(screen.getByLabelText("gym.mp4 thumbnail")).toBeInTheDocument();
   });
 });
