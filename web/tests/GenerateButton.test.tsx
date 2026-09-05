@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 
 describe("GenerateButton", () => {
@@ -40,11 +40,28 @@ describe("GenerateButton", () => {
         disabled
       />,
     );
-    const btn = screen.getByRole("button");
+    const btn = screen.getByRole("button", { name: /generating/i });
     expect(btn).toHaveTextContent("Generating…");
     expect(btn).toBeDisabled();
     expect(btn).not.toHaveAttribute("data-complete");
     expect(screen.getByText("1 clip → 20 variants")).toBeInTheDocument();
-    expect(btn.textContent).not.toMatch(/Cancel on the live run/i);
+    expect(screen.queryByRole("button", { name: /cancel pack/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Cancel pack while generating", () => {
+    const onCancel = vi.fn();
+    render(
+      <GenerateButton
+        fileCount={1}
+        perVideo={3}
+        onClick={vi.fn()}
+        jobId="j1"
+        complete={false}
+        disabled
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /cancel pack/i }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

@@ -34,6 +34,9 @@ describe("mobile Studio + Gallery CSS contract", () => {
     );
     expect(mobile).toMatch(new RegExp(`--generate-dock-h:\\s*${STUDIO_GENERATE_DOCK_H_PX}px`));
     expect(rule(mobile, ".studio-live")).toMatch(/padding-bottom:\s*calc\(\s*var\(--generate-dock-h\)/);
+    expect(css).toMatch(/\.studio-generate-cancel\s*\{/s);
+    expect(css).toMatch(/\.studio-live-row__cancel\s*\{[^}]*opacity:\s*1/s);
+    expect(css).not.toMatch(/\.studio-live-row__cancel\s*\{[^}]*opacity:\s*0/s);
   });
 
   it("lets the Gallery body scroll past PACKS so tiles are reachable", () => {

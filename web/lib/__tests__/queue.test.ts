@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { QueueSnapshot } from "@/lib/types";
 import {
   jobIsLive,
+  jobCanCancel,
   jobsAhead,
   queueHeadline,
   queueOccupiesHq,
@@ -63,6 +64,11 @@ describe("live Studio queue copy", () => {
     expect(jobIsLive("reserved")).toBe(true);
     expect(jobIsLive("cancel_requested")).toBe(true);
     expect(jobIsLive("done")).toBe(false);
+    expect(jobCanCancel("queued")).toBe(true);
+    expect(jobCanCancel("starting")).toBe(true);
+    expect(jobCanCancel("running")).toBe(true);
+    expect(jobCanCancel("cancel_requested")).toBe(false);
+    expect(jobCanCancel("done")).toBe(false);
     expect(queueRowLabel({ ...fastJob, state: "queued" })).toBe(
       "1. Fast · IMG_0683.mp4 · waiting",
     );

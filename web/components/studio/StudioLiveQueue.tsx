@@ -4,7 +4,7 @@ import Link from "next/link";
 import { cancelJob } from "@/lib/api";
 import { useQueue } from "@/lib/useQueue";
 import { useRun } from "@/lib/runStore";
-import { displayClipName } from "@/lib/queue";
+import { displayClipName, jobCanCancel } from "@/lib/queue";
 import { isPreparingJob } from "@/lib/prepareCopy";
 import { reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import { runHasStarted } from "@/lib/progress";
@@ -86,6 +86,7 @@ export function StudioLiveQueue() {
           name: displayClipName(s.filename),
           label: `${s.delivered}/${s.requested}`,
           pct: s.requested > 0 ? Math.min(100, Math.round((s.done / s.requested) * 100)) : 0,
+          cancelId: jobId && !isPreparingJob(jobId) ? jobId : undefined,
         }))
       : [];
 
@@ -97,7 +98,7 @@ export function StudioLiveQueue() {
       name: `${first}${extra}`,
       label: `${j.delivered}/${j.requested}`,
       pct: j.requested > 0 ? Math.min(100, Math.round((j.delivered / j.requested) * 100)) : 0,
-      cancelId: j.state === "running" ? j.job_id : undefined,
+      cancelId: jobCanCancel(j.state) ? j.job_id : undefined,
     };
   });
 
@@ -167,9 +168,7 @@ export function StudioLiveQueue() {
                   aria-label="Cancel pack"
                   title="Cancel pack"
                 >
-                  <span className="material-symbols-rounded" style={{ fontSize: 16 }}>
-                    {cancellingId === row.cancelId ? "hourglass_empty" : "close"}
-                  </span>
+                  {cancellingId === row.cancelId ? "Stopping…" : "Cancel"}
                 </button>
               )}
             </div>

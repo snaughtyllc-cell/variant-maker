@@ -108,4 +108,36 @@ describe("StudioLiveQueue reserved tracks", () => {
     expect(screen.getByTestId("hq-reconstruct-copy")).toHaveTextContent(/reconstruct/i);
     expect(screen.getByTestId("hq-reconstruct-copy")).toHaveTextContent(/Fast/i);
   });
+
+  it("shows Cancel on a queued pack, not only after it is running", () => {
+    queue.data = {
+      running: 1,
+      fast: 1,
+      hq: 0,
+      jobs: [
+        {
+          job_id: "aaa",
+          quality_mode: "fast",
+          state: "queued",
+          created_utc: "2026-08-20T02:00:00Z",
+          count: 8,
+          source_count: 1,
+          filenames: ["clip.mp4"],
+          delivered: 0,
+          requested: 8,
+          position: 1,
+        },
+      ],
+    };
+    render(<StudioLiveQueue />);
+    expect(screen.getByRole("button", { name: /cancel pack/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cancel pack/i })).toHaveTextContent("Cancel");
+  });
+
+  it("lets you cancel this browser's pack before the shared queue lists it", () => {
+    run.jobId = "j-local";
+    run.progress = initRun([{ source_id: "s1", filename: "clip.mp4", requested: 3 }]);
+    render(<StudioLiveQueue />);
+    expect(screen.getByRole("button", { name: /cancel pack/i })).toBeInTheDocument();
+  });
 });

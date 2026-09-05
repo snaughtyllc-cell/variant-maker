@@ -16,6 +16,10 @@ export function jobIsLive(state?: string | null): boolean {
   );
 }
 
+export function jobCanCancel(state?: string | null): boolean {
+  return jobIsLive(state) && state !== "cancel_requested";
+}
+
 export function jobsAhead(queue: QueueSnapshot, myJobId?: string | null): number {
   if (!myJobId) return queue.running;
   const mine = queue.jobs.find((j) => j.job_id === myJobId);

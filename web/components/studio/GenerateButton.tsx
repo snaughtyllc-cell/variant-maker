@@ -9,6 +9,8 @@ interface GenerateButtonProps {
   busy?: boolean;
   jobId?: string | null;
   complete?: boolean;
+  onCancel?: () => void;
+  cancelling?: boolean;
 }
 
 export function GenerateButton({
@@ -19,6 +21,8 @@ export function GenerateButton({
   busy,
   jobId,
   complete,
+  onCancel,
+  cancelling,
 }: GenerateButtonProps) {
   const isDisabled = disabled || busy || fileCount === 0;
   const inProgress = Boolean(busy || (jobId && !complete));
@@ -32,19 +36,31 @@ export function GenerateButton({
     : generatePackLabel(fileCount, perVideo);
 
   return (
-    <button
-      onClick={onClick}
-      disabled={isDisabled}
-      className="studio-generate-button"
-      data-complete={complete || undefined}
-    >
-      <span className="studio-generate-button__copy">
-        <span className="studio-generate-button__title">{label}</span>
-        <small>{support}</small>
-      </span>
-      <span className="studio-generate-button__arrow" aria-hidden="true">
-        <span className="material-symbols-rounded" style={{ fontSize: 19 }}>arrow_forward</span>
-      </span>
-    </button>
+    <>
+      <button
+        onClick={onClick}
+        disabled={isDisabled}
+        className="studio-generate-button"
+        data-complete={complete || undefined}
+      >
+        <span className="studio-generate-button__copy">
+          <span className="studio-generate-button__title">{label}</span>
+          <small>{support}</small>
+        </span>
+        <span className="studio-generate-button__arrow" aria-hidden="true">
+          <span className="material-symbols-rounded" style={{ fontSize: 19 }}>arrow_forward</span>
+        </span>
+      </button>
+      {inProgress && onCancel ? (
+        <button
+          type="button"
+          className="studio-generate-cancel"
+          onClick={onCancel}
+          disabled={cancelling}
+        >
+          {cancelling ? "Stopping…" : "Cancel pack"}
+        </button>
+      ) : null}
+    </>
   );
 }

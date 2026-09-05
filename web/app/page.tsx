@@ -10,13 +10,13 @@ import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/Studi
 import { StudioLiveQueue } from "@/components/studio/StudioLiveQueue";
 import { accepts, readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
-import { createJob, createJobFromDrive } from "@/lib/api";
+import { createJob, createJobFromDrive, cancelJob } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
 import { studioCaptionSources } from "@/lib/studioCaptionSources";
-import { hqPrepToggleHint, hqPrepToggleLabel } from "@/lib/prepareCopy";
+import { hqPrepToggleHint, hqPrepToggleLabel, isPreparingJob } from "@/lib/prepareCopy";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -42,6 +42,8 @@ export default function StudioPage() {
   const [fileCaptions, setFileCaptions] = useState<string[]>([]);
   const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const cancelRequestedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +159,7 @@ export default function StudioPage() {
       return;
     }
     setError(null);
+    cancelRequestedRef.current = false;
     const sendFiles = files;
     const sendPicks = drivePicks;
     const sendFileCaptions = fileCaptions;
@@ -186,6 +189,15 @@ export default function StudioPage() {
               captionPrompt: sendDriveCaptions,
             })
           : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions);
+      if (cancelRequestedRef.current) {
+        try {
+          await cancelJob(resp.job_id);
+        } catch {
+          /* pack may already have stopped */
+        }
+        clear();
+        return;
+      }
       start(resp, "fast", prepMode);
     } catch (e) {
       setFiles(sendFiles);
@@ -198,6 +210,22 @@ export default function StudioPage() {
       setError(e instanceof Error ? e.message : "Job failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleCancelPack() {
+    if (cancelling) return;
+    cancelRequestedRef.current = true;
+    setCancelling(true);
+    const id = jobId && !isPreparingJob(jobId) ? jobId : null;
+    try {
+      if (id) await cancelJob(id);
+    } catch {
+      /* poll drops the row once the job closes */
+    } finally {
+      clear();
+      setBusy(false);
+      setCancelling(false);
     }
   }
 
@@ -370,6 +398,8 @@ export default function StudioPage() {
               busy={busy}
               jobId={jobId}
               complete={complete}
+              onCancel={jobRunning || busy ? handleCancelPack : undefined}
+              cancelling={cancelling}
             />
           </div>
         </div>
