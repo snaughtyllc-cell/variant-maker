@@ -1376,8 +1376,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   }
   .studio-cockpit { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .studio-cockpit__scroll { flex: 0 0 auto; min-height: auto; overflow: visible; padding: 18px 16px 8px; }
-  .studio-generate-bar { padding: 10px 16px 16px; }
-  .studio-generate-bar--dock {
+  .studio-generate-bar {
+    background: transparent;
+    box-shadow: none;
+    padding: 10px 16px 12px;
+  }
+  .studio-generate-bar.studio-generate-bar--dock {
     background: transparent;
     border: 0;
     box-shadow: none;
