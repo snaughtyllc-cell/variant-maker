@@ -36,3 +36,5 @@ Webhook: `https://<live-studio>/api/billing/webhook`.
 
 `varimo.io/pricing` must point at Live Studio `/pricing` (custom domain
 or redirect). This repo cannot push to `varimo-live` (403).
+
+Paste-ready Live agent prompt: `docs/ops/codex-live-agency.md`.
