@@ -84,9 +84,9 @@ def test_plans_are_public_and_checkout_starts_session(tmp_path):
     assert body["plans"][0]["id"] == "agency"
     assert body["plans"][0]["included_fast_hours"] == 90
     assert body["plans"][0]["overage_usd_per_hour"] == 0.75
-    assert body["plans"][0]["typical_fast20_minutes"] == 13
-    assert body["plans"][0]["typical_fast20_packs"] == 400
-    assert body["plans"][0]["typical_fast20_copies"] == 8000
+    assert body["plans"][0]["typical_fast20_minutes"] == 10
+    assert body["plans"][0]["typical_fast20_packs"] == 540
+    assert body["plans"][0]["typical_fast20_copies"] == 10800
     resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com", "plan": "agency"})
     assert resp.status_code == 200
     assert resp.json()["url"].startswith("https://checkout.stripe.com/")

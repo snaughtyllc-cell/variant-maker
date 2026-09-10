@@ -20,9 +20,9 @@ describe("PricingCard", () => {
         name: "Agency",
         price_usd: 200,
         included_fast_hours: 90,
-        typical_fast20_minutes: 13,
-        typical_fast20_packs: 400,
-        typical_fast20_copies: 8000,
+        typical_fast20_minutes: 10,
+        typical_fast20_packs: 540,
+        typical_fast20_copies: 10800,
         overage_usd_per_hour: 0.75,
         cogs_fast_usd_per_hour: 0.58,
       }],
@@ -40,9 +40,9 @@ describe("PricingCard", () => {
     });
     expect(screen.getByText(/\$0\.75\/hr/i)).toBeInTheDocument();
     expect(screen.getByText(/not a hard stop/i)).toBeInTheDocument();
-    expect(screen.getByText(/13 minutes/i)).toBeInTheDocument();
-    expect(screen.getByText(/400 packs/i)).toBeInTheDocument();
-    expect(screen.getByText(/8,000 copies/i)).toBeInTheDocument();
+    expect(screen.getByText(/10 minutes/i)).toBeInTheDocument();
+    expect(screen.getByText(/540 packs/i)).toBeInTheDocument();
+    expect(screen.getByText(/10,800 copies/i)).toBeInTheDocument();
     expect(screen.queryByText(/we pay about/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Subscribe — \$200\/month/i })).toBeEnabled();
   });

@@ -163,7 +163,7 @@ password or Google.
 
 **Paywall (Wave 6):** Studio `/pricing` starts Stripe Checkout for Agency
 ($200/mo, **90 Fast worker-hours** / 30 days). A typical talking-head Fast
-20-pack is about **13 minutes** of Fast time (~400 packs / ~8,000 copies in
+20-pack is about **10 minutes** of Fast time (~540 packs / ~10,800 copies in
 the included block) — typical, not a promise. `POST /api/billing/webhook`
 (signed) invites that email as `new_workspace`. They sign in at
 `/login?paid=1` — nobody pastes them in.

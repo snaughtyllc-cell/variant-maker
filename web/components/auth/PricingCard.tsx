@@ -56,9 +56,9 @@ export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
   const hours = plan?.included_fast_hours ?? 90;
   const overage = plan?.overage_usd_per_hour ?? 0.75;
   const price = plan?.price_usd ?? 200;
-  const packMinutes = plan?.typical_fast20_minutes ?? 13;
-  const packs = plan?.typical_fast20_packs ?? 400;
-  const copies = plan?.typical_fast20_copies ?? 8000;
+  const packMinutes = plan?.typical_fast20_minutes ?? 10;
+  const packs = plan?.typical_fast20_packs ?? 540;
+  const copies = plan?.typical_fast20_copies ?? 10800;
   const copiesLabel = copies.toLocaleString("en-US");
 
   return (

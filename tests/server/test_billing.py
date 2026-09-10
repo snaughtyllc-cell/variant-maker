@@ -20,8 +20,8 @@ def test_agency_includes_ninety_fast_hours_by_default():
     plan = get_plan("agency", environ={})
     assert plan.included_fast_hours == 90
     packs, copies = typical_fast20_throughput(90)
-    assert packs == 400
-    assert copies == 8000
+    assert packs == 540
+    assert copies == 10800
 
 
 def test_agency_overage_is_worker_hours_not_per_pack():

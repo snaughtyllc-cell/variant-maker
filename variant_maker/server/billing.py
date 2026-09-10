@@ -27,11 +27,9 @@ AGENCY_PRICE_ENV = "STRIPE_PRICE_AGENCY"
 AGENCY_FAST_HOURS_ENV = "VARIANT_PLAN_AGENCY_FAST_HOURS"
 AGENCY_OVERAGE_ENV = "VARIANT_PLAN_AGENCY_OVERAGE_USD"
 PERIOD_DAYS = 30
-# Warm-worker talking-head Fast 20 on Lab — billed Fast time, not a SLA.
-TYPICAL_FAST20_MINUTES = 13.0
+# Warm-worker talking-head Fast 20 — billed Fast time, not a SLA.
+TYPICAL_FAST20_MINUTES = 10.0
 TYPICAL_FAST20_COPIES_PER_PACK = 20
-# Round the marketing pack count so 90h reads as ~400, not 415.
-_TYPICAL_PACK_ROUND = 50
 
 ACTIVE_STATUSES = frozenset({"active", "trialing"})
 KNOWN_PLANS = frozenset({AGENCY_PLAN_ID})
@@ -98,13 +96,13 @@ def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str
 def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
     """Typical talking-head Fast-20 packs / copies for an included-hour block.
 
-    Uses ~13 minutes of Fast time per 20-pack (warm worker, short talking-head).
-    Rounded to the nearest 50 packs so the public number stays a range, not a
-    promise. Heavier clips and cold start take longer.
+    Uses ~10 minutes of Fast time per 20-pack (warm worker, short talking-head).
+    90 hours → 540 packs / 10,800 copies. Heavier clips and cold start take
+    longer — typical, not a promise.
     """
     hours = max(0.0, float(included_fast_hours or 0.0))
     raw_packs = (hours * 60.0) / TYPICAL_FAST20_MINUTES if TYPICAL_FAST20_MINUTES else 0.0
-    packs = int(round(raw_packs / _TYPICAL_PACK_ROUND) * _TYPICAL_PACK_ROUND) if raw_packs else 0
+    packs = round(raw_packs) if raw_packs else 0
     return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
 
 
