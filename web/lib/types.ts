@@ -314,6 +314,9 @@ export interface BillingPlan {
   included_fast_hours: number;
   overage_usd_per_hour: number;
   cogs_fast_usd_per_hour: number;
+  typical_fast20_minutes?: number;
+  typical_fast20_packs?: number;
+  typical_fast20_copies?: number;
 }
 
 export interface BillingPlans {

@@ -8,9 +8,20 @@ from variant_maker.server.billing import (
     get_plan,
     grant_paid_subscription,
     overage_snapshot,
+    typical_fast20_throughput,
 )
 from variant_maker.server.job_metrics import FAST_USD_PER_HOUR
 from variant_maker.server.tenants import TenantStore, provision_login
+
+
+def test_agency_includes_ninety_fast_hours_by_default():
+    """Product lock: $200 Agency includes 90 Fast hours, not the first-cut 40."""
+    assert AGENCY_INCLUDED_FAST_HOURS == 90
+    plan = get_plan("agency", environ={})
+    assert plan.included_fast_hours == 90
+    packs, copies = typical_fast20_throughput(90)
+    assert packs == 400
+    assert copies == 8000
 
 
 def test_agency_overage_is_worker_hours_not_per_pack():
@@ -20,11 +31,11 @@ def test_agency_overage_is_worker_hours_not_per_pack():
     assert plan.overage_usd_per_hour == AGENCY_OVERAGE_USD_PER_HOUR
     assert plan.cogs_fast_usd_per_hour == FAST_USD_PER_HOUR
     assert plan.overage_usd_per_hour > plan.cogs_fast_usd_per_hour
-    included = overage_snapshot(plan, 40 * 3600)
+    included = overage_snapshot(plan, AGENCY_INCLUDED_FAST_HOURS * 3600)
     assert included.overage_fast_seconds == 0
     assert included.overage_usd == 0
     assert included.remaining_fast_seconds == 0
-    hour_over = overage_snapshot(plan, 41 * 3600)
+    hour_over = overage_snapshot(plan, (AGENCY_INCLUDED_FAST_HOURS + 1) * 3600)
     assert hour_over.overage_fast_seconds == 3600
     assert hour_over.overage_usd == AGENCY_OVERAGE_USD_PER_HOUR
 
@@ -43,7 +54,7 @@ def test_agency_hours_and_rate_are_env_overridable(monkeypatch):
 def test_under_included_fast_hours_has_no_overage():
     snap = overage_snapshot(get_plan("agency"), 1000)
     assert snap.overage_usd == 0
-    assert snap.remaining_fast_seconds == 40 * 3600 - 1000
+    assert snap.remaining_fast_seconds == AGENCY_INCLUDED_FAST_HOURS * 3600 - 1000
 
 
 def test_paid_grant_invites_unknown_email(tmp_path):

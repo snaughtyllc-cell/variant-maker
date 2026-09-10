@@ -53,17 +53,26 @@ export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
     }
   }
 
-  const hours = plan?.included_fast_hours ?? 40;
+  const hours = plan?.included_fast_hours ?? 90;
   const overage = plan?.overage_usd_per_hour ?? 0.75;
-  const cogs = plan?.cogs_fast_usd_per_hour ?? 0.58;
   const price = plan?.price_usd ?? 200;
+  const packMinutes = plan?.typical_fast20_minutes ?? 13;
+  const packs = plan?.typical_fast20_packs ?? 400;
+  const copies = plan?.typical_fast20_copies ?? 8000;
+  const copiesLabel = copies.toLocaleString("en-US");
 
   return (
     <>
-      <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 18px" }}>
+      <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 12px" }}>
         ${price}/month Agency. {hours} Fast worker-hours included each period, then{" "}
-        ${overage.toFixed(2)}/hr (we pay about ${cogs.toFixed(2)}). Not a hard stop — you keep
-        generating, and extra Fast time is usage, not a fake unlimited cap.
+        ${overage.toFixed(2)}/hr. Not a hard stop — you keep generating, and extra Fast
+        time is usage, not a fake unlimited cap.
+      </p>
+      <p style={{ fontSize: 13, color: "var(--color-text)", lineHeight: 1.5, margin: "0 0 18px" }}>
+        A typical talking-head Fast 20-pack uses about {packMinutes} minutes of Fast
+        time. {hours} hours is on the order of {packs} packs — about {copiesLabel} copies —
+        in a 30-day period. Heavier clips and a cold worker take longer. Typical, not a
+        promise.
       </p>
       {!configured && (
         <div

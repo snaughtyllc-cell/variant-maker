@@ -19,7 +19,10 @@ describe("PricingCard", () => {
         id: "agency",
         name: "Agency",
         price_usd: 200,
-        included_fast_hours: 40,
+        included_fast_hours: 90,
+        typical_fast20_minutes: 13,
+        typical_fast20_packs: 400,
+        typical_fast20_copies: 8000,
         overage_usd_per_hour: 0.75,
         cogs_fast_usd_per_hour: 0.58,
       }],
@@ -33,10 +36,14 @@ describe("PricingCard", () => {
   it("explains included Fast hours then overage, not fake unlimited", async () => {
     render(<PricingCard />);
     await waitFor(() => {
-      expect(screen.getByText(/40 Fast worker-hours/i)).toBeInTheDocument();
+      expect(screen.getByText(/90 Fast worker-hours/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/\$0\.75\/hr/i)).toBeInTheDocument();
     expect(screen.getByText(/not a hard stop/i)).toBeInTheDocument();
+    expect(screen.getByText(/13 minutes/i)).toBeInTheDocument();
+    expect(screen.getByText(/400 packs/i)).toBeInTheDocument();
+    expect(screen.getByText(/8,000 copies/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we pay about/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Subscribe — \$200\/month/i })).toBeEnabled();
   });
 

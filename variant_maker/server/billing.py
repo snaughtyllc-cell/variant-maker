@@ -21,12 +21,17 @@ from variant_maker.server.usage import period_fast_seconds
 
 AGENCY_PLAN_ID = "agency"
 AGENCY_PRICE_USD = 200
-AGENCY_INCLUDED_FAST_HOURS = 40
+AGENCY_INCLUDED_FAST_HOURS = 90
 AGENCY_OVERAGE_USD_PER_HOUR = 0.75
 AGENCY_PRICE_ENV = "STRIPE_PRICE_AGENCY"
 AGENCY_FAST_HOURS_ENV = "VARIANT_PLAN_AGENCY_FAST_HOURS"
 AGENCY_OVERAGE_ENV = "VARIANT_PLAN_AGENCY_OVERAGE_USD"
 PERIOD_DAYS = 30
+# Warm-worker talking-head Fast 20 on Lab — billed Fast time, not a SLA.
+TYPICAL_FAST20_MINUTES = 13.0
+TYPICAL_FAST20_COPIES_PER_PACK = 20
+# Round the marketing pack count so 90h reads as ~400, not 415.
+_TYPICAL_PACK_ROUND = 50
 
 ACTIVE_STATUSES = frozenset({"active", "trialing"})
 KNOWN_PLANS = frozenset({AGENCY_PLAN_ID})
@@ -88,6 +93,19 @@ def plan_catalog(environ: Mapping[str, str] | None = None) -> list[Plan]:
 def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str:
     env = os.environ if environ is None else environ
     return (env.get(plan.stripe_price_env) or "").strip()
+
+
+def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
+    """Typical talking-head Fast-20 packs / copies for an included-hour block.
+
+    Uses ~13 minutes of Fast time per 20-pack (warm worker, short talking-head).
+    Rounded to the nearest 50 packs so the public number stays a range, not a
+    promise. Heavier clips and cold start take longer.
+    """
+    hours = max(0.0, float(included_fast_hours or 0.0))
+    raw_packs = (hours * 60.0) / TYPICAL_FAST20_MINUTES if TYPICAL_FAST20_MINUTES else 0.0
+    packs = int(round(raw_packs / _TYPICAL_PACK_ROUND) * _TYPICAL_PACK_ROUND) if raw_packs else 0
+    return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
 
 
 def overage_snapshot(plan: Plan, fast_seconds: float) -> OverageSnapshot:
@@ -306,6 +324,7 @@ def apply_stripe_event(store: TenantStore, event: Mapping[str, Any]) -> str:
 
 
 def plan_public_dict(plan: Plan) -> dict[str, Any]:
+    packs, copies = typical_fast20_throughput(plan.included_fast_hours)
     return {
         "id": plan.id,
         "name": plan.name,
@@ -313,6 +332,9 @@ def plan_public_dict(plan: Plan) -> dict[str, Any]:
         "included_fast_hours": plan.included_fast_hours,
         "overage_usd_per_hour": plan.overage_usd_per_hour,
         "cogs_fast_usd_per_hour": plan.cogs_fast_usd_per_hour,
+        "typical_fast20_minutes": TYPICAL_FAST20_MINUTES,
+        "typical_fast20_packs": packs,
+        "typical_fast20_copies": copies,
     }
 
 
