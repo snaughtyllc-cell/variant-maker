@@ -18,12 +18,14 @@ Live already had a pack-quota ladder (Creator / Studio / Agency 100-pack
 hard stop). This patch:
 
 - Adds `/pricing` + Stripe Checkout + webhook auto-invite
-- Makes **Agency $200 / uncapped** so paid seats are not hard-stopped
+- Makes **Agency $200 / 90 Fast hours**. The sidebar meter drains to 0,
+  then flips to an amber **Usage** tag. Generate does **not** hard-stop.
+  Do not label Agency “uncapped.”
 - Paid first login creates `plan=agency` (not Creator)
 - Typical Fast 20-pack copy: ~10 minutes → 540 packs / 10,800 copies
 
 Jeff-invited `internal` testers stay uncapped. Creator / Studio admin
-plans are unchanged.
+plans keep their pack meters and hard stops.
 
 Checkout stays “not connected” until Railway Live has
 `STRIPE_RESTRICTED_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_AGENCY`.

@@ -6,7 +6,7 @@ Checkout + webhook live in stripe_billing.py.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -17,7 +17,7 @@ from variant_maker.server.tenants import (
     TenantStore,
     normalize_email,
 )
-from variant_maker.server.usage import period_fast_seconds
+from variant_maker.server.usage import in_flight_fast_seconds, period_fast_seconds
 
 AGENCY_PLAN_ID = "agency"
 AGENCY_PRICE_USD = 200
@@ -104,6 +104,50 @@ def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
     raw_packs = (hours * 60.0) / TYPICAL_FAST20_MINUTES if TYPICAL_FAST20_MINUTES else 0.0
     packs = round(raw_packs) if raw_packs else 0
     return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
+
+
+def _hours_label(seconds: float) -> str:
+    hours = max(0.0, float(seconds or 0.0)) / 3600.0
+    if abs(hours - round(hours)) < 0.05:
+        return str(round(hours))
+    return f"{hours:.1f}"
+
+
+def fast_hour_meter(plan: Plan, snap: OverageSnapshot) -> dict[str, Any]:
+    """Sidebar readout: included Fast hours drain to 0, then a Usage tag.
+
+    Never a hard stop. After the included block the bar stays empty and the
+    label switches to Usage (overage at the plan sell rate).
+    """
+    included = snap.included_fast_seconds
+    remaining_pct = 0 if included <= 0 else round(100.0 * snap.remaining_fast_seconds / included)
+    remaining_pct = max(0, min(100, remaining_pct))
+    if snap.overage_fast_seconds > 0:
+        return {
+            "uncapped": False,
+            "hard_stop": False,
+            "tone": "usage",
+            "remaining_pct": 0,
+            "meter_line": "Usage",
+            "label": "Usage",
+            "included_fast_hours": plan.included_fast_hours,
+            "remaining_fast_seconds": snap.remaining_fast_seconds,
+            "overage_fast_seconds": snap.overage_fast_seconds,
+        }
+    total = _hours_label(plan.included_fast_hours * 3600.0)
+    left = _hours_label(snap.remaining_fast_seconds)
+    line = f"{left} of {total}h left"
+    return {
+        "uncapped": False,
+        "hard_stop": False,
+        "tone": "included",
+        "remaining_pct": remaining_pct,
+        "meter_line": line,
+        "label": line,
+        "included_fast_hours": plan.included_fast_hours,
+        "remaining_fast_seconds": snap.remaining_fast_seconds,
+        "overage_fast_seconds": snap.overage_fast_seconds,
+    }
 
 
 def overage_snapshot(plan: Plan, fast_seconds: float) -> OverageSnapshot:
@@ -342,6 +386,8 @@ def billing_status_payload(
     workspace: Any,
     is_admin: bool,
     environ: Mapping[str, str] | None = None,
+    jobs: Iterable[Any] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Usage readout. Never blocks Generate — overage is recorded, not a hard stop."""
     if is_admin and (rec is None or rec.status not in ACTIVE_STATUSES):
@@ -357,6 +403,7 @@ def billing_status_payload(
             "period_start_utc": None,
             "period_end_utc": None,
             "collects_overage": False,
+            "usage": None,
         }
     if rec is None or rec.status not in ACTIVE_STATUSES:
         return {
@@ -371,11 +418,17 @@ def billing_status_payload(
             "period_start_utc": rec.period_start_utc if rec is not None else None,
             "period_end_utc": rec.period_end_utc if rec is not None else None,
             "collects_overage": False,
+            "usage": None,
         }
     plan = get_plan(rec.plan, environ)
     start = _parse_utc(rec.period_start_utc)
     end = _parse_utc(rec.period_end_utc)
-    seconds = period_fast_seconds(workspace, start=start, end=end) if workspace is not None else 0.0
+    if workspace is not None:
+        seconds = period_fast_seconds(
+            workspace, start=start, end=end, jobs=jobs, now=now,
+        )
+    else:
+        seconds = in_flight_fast_seconds(jobs, now=now, start=start)
     snap = overage_snapshot(plan, seconds)
     return {
         "plan": plan_public_dict(plan),
@@ -389,4 +442,5 @@ def billing_status_payload(
         "period_start_utc": rec.period_start_utc,
         "period_end_utc": rec.period_end_utc,
         "collects_overage": True,
+        "usage": fast_hour_meter(plan, snap),
     }

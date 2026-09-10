@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -13,6 +14,9 @@ from .workspace import Workspace
 USAGE_FILENAME = "usage.jsonl"
 _WEEK = timedelta(days=7)
 _lock = threading.Lock()
+_IN_FLIGHT_STATES = frozenset({
+    "queued", "reserved", "starting", "running", "uploading", "cancel_requested",
+})
 
 
 @dataclass(frozen=True)
@@ -169,21 +173,76 @@ def _actor_email(row: dict[str, Any]) -> str:
     return raw or UNATTRIBUTED_EMAIL
 
 
+def in_flight_fast_seconds(
+    jobs: Iterable[Any] | None,
+    *,
+    now: datetime | None = None,
+    start: datetime | None = None,
+) -> float:
+    """Elapsed Fast time on jobs that are still generating.
+
+    Uses started_utc when present, else submitted_utc / created_utc. HQ and
+    finished jobs do not count. `now` is wall clock — never the billing
+    period end, or a live pack would look like 30 days of usage.
+    """
+    when = now or datetime.now(UTC)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    else:
+        when = when.astimezone(UTC)
+    when_start = start
+    if when_start is not None:
+        if when_start.tzinfo is None:
+            when_start = when_start.replace(tzinfo=UTC)
+        else:
+            when_start = when_start.astimezone(UTC)
+    total = 0.0
+    for job in jobs or ():
+        if str(getattr(job, "quality_mode", "") or "").strip().lower() != "fast":
+            continue
+        if str(getattr(job, "state", "") or "") not in _IN_FLIGHT_STATES:
+            continue
+        tel = getattr(job, "telemetry", None) or {}
+        started = None
+        if isinstance(tel, dict):
+            started = _parse_utc(str(tel.get("started_utc") or tel.get("submitted_utc") or ""))
+        if started is None:
+            started = _parse_utc(str(getattr(job, "created_utc", "") or ""))
+        if started is None:
+            continue
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        else:
+            started = started.astimezone(UTC)
+        if when_start is not None and started < when_start:
+            started = when_start
+        if started >= when:
+            continue
+        total += (when - started).total_seconds()
+    return max(0.0, total)
+
+
 def period_fast_seconds(
     ws: Workspace,
     *,
     start: datetime | None = None,
     end: datetime | None = None,
+    jobs: Iterable[Any] | None = None,
+    now: datetime | None = None,
 ) -> float:
     """Fast worker-seconds in [start, end). HQ packs do not count.
 
     Prefer billed.real_work_s (generation time, not idle retention). Fall back to
-    submitted_utc → completed_utc when the split is missing.
+    submitted_utc → completed_utc when the split is missing. In-flight Fast
+    jobs add elapsed wall time so the Agency meter runs down while generating.
     """
     path = usage_path(ws)
-    if not os.path.isfile(path):
-        return 0.0
-    when_end = end or datetime.now(UTC)
+    live_now = now or datetime.now(UTC)
+    if live_now.tzinfo is None:
+        live_now = live_now.replace(tzinfo=UTC)
+    else:
+        live_now = live_now.astimezone(UTC)
+    when_end = end or live_now
     if when_end.tzinfo is None:
         when_end = when_end.replace(tzinfo=UTC)
     when_end = when_end.astimezone(UTC)
@@ -194,27 +253,29 @@ def period_fast_seconds(
     else:
         when_start = start.astimezone(UTC)
     total = 0.0
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return 0.0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
+    if os.path.isfile(path):
         try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(row, dict):
-            continue
-        if str(row.get("quality_mode") or "").strip().lower() != "fast":
-            continue
-        ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
-        if ts is None or ts < when_start or ts >= when_end:
-            continue
-        total += _fast_seconds_for_row(row)
+            with open(path, encoding="utf-8") as f:
+                lines = f.readlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("quality_mode") or "").strip().lower() != "fast":
+                continue
+            ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
+            if ts is None or ts < when_start or ts >= when_end:
+                continue
+            total += _fast_seconds_for_row(row)
+    total += in_flight_fast_seconds(jobs, now=live_now, start=when_start)
     return total
 
 
