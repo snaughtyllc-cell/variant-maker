@@ -158,8 +158,28 @@ open Studio). To give each operator their own gallery + Drive:
    Remove their own members. They cannot mint `new_workspace` invites.
 
 Non-admins never see the Admin page or anyone else’s packs. Uninvited emails
-get “ask the operator to add you.” Invited people can use email + password
-or Google.
+get a pricing / operator message. Invited or **paid** people can use email +
+password or Google.
+
+**Paywall (Wave 6):** Studio `/pricing` starts Stripe Checkout for Agency
+($200/mo, **90 Fast worker-hours** / 30 days). A typical talking-head Fast
+20-pack is about **10 minutes** of Fast time (~540 packs / ~10,800 copies in
+the included block) — typical, not a promise. `POST /api/billing/webhook`
+(signed) invites that email as `new_workspace`. They sign in at
+`/login?paid=1` — nobody pastes them in.
+Landing-page CTAs can link to `/pricing` or POST `/api/billing/checkout` if
+`VARIANT_BILLING_CHECKOUT_ORIGINS` includes the marketing origin. After the
+included Fast hours, Fast keeps running and Studio records overage at
+`$0.75/hr` (RunPod Fast COGS `$0.58/hr`, do not put COGS on the marketing
+site) — not a hard cap, not fake unlimited. Stripe does not invoice that
+overage yet; the $200 subscription is what Checkout charges today.
+
+Set on Railway: `STRIPE_RESTRICTED_KEY` (prefer `rk_`), `STRIPE_WEBHOOK_SECRET`,
+`STRIPE_PRICE_AGENCY`. One more thing — if you will charge US or EU
+customers, consider Stripe Tax *after* an active registration. Do not turn on
+`automatic_tax` without one (Stripe would collect $0 tax while looking on).
+
+**Platform flags:** Gallery can mark Passed / Duplicate rejected / Flagged
 
 **Platform flags:** Gallery can mark Passed / Duplicate rejected / Flagged
 (`platform_result`). Unlabeled clips count as pass. Drop Ledger (Google Sheet)
