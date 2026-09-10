@@ -3,14 +3,17 @@
 Lab `#108` is merged to `tier1`. Do **not** `git merge` Lab into Live.
 
 The Live-adapted patch is `dist/varimo-live-agency-paywall.patch` (this
-repo). Apply it on `snaughtyllc-cell/varimo-live` / `main`:
+repo; two commits). Apply it on `snaughtyllc-cell/varimo-live` / `main`.
+If the first Agency paywall commit is already on Live, apply only
+`dist/varimo-live-agency-fast-meter.patch`.
 
 ```bash
 git clone https://github.com/snaughtyllc-cell/varimo-live.git
 cd varimo-live
 git checkout -b cursor/paywall-auto-enroll-b385
-git apply --check ../variant-maker/dist/varimo-live-agency-paywall.patch
-git apply ../variant-maker/dist/varimo-live-agency-paywall.patch
+git am ../variant-maker/dist/varimo-live-agency-paywall.patch
+# or, if checkout + webhook already landed:
+# git am ../variant-maker/dist/varimo-live-agency-fast-meter.patch
 # commit, PR, merge to main
 ```
 
