@@ -28,7 +28,7 @@ describe v1 only. Do not treat them as the current product.
 | Everyone signed in | **Studio · Gallery · Analytics · Drops · Workflows · Drive** |
 | Workspace owner (or site admin) | + **Team** |
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
-| Unauthenticated | **Login** only |
+| Unauthenticated | **Login** and **Pricing** |
 
 Solo owners see **Studio · Gallery · Analytics** on the phone bar; Drive
 is under More. Solo members see **Studio · Gallery**, with Drive in More.
@@ -54,7 +54,8 @@ row + progress card.
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
-| Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
+| Login | `/login` | unauthenticated | — | Email + password or Google after checkout or an invite. No app tabs. |
+| Pricing | `/pricing` | unauthenticated | — | Agency Stripe Checkout. Webhook invites the payer. Landing can link here. |
 
 ## Nested surfaces a redesign must include
 

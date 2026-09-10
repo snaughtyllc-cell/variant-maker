@@ -169,6 +169,71 @@ def _actor_email(row: dict[str, Any]) -> str:
     return raw or UNATTRIBUTED_EMAIL
 
 
+def period_fast_seconds(
+    ws: Workspace,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> float:
+    """Fast worker-seconds in [start, end). HQ packs do not count.
+
+    Prefer billed.real_work_s (generation time, not idle retention). Fall back to
+    submitted_utc → completed_utc when the split is missing.
+    """
+    path = usage_path(ws)
+    if not os.path.isfile(path):
+        return 0.0
+    when_end = end or datetime.now(UTC)
+    if when_end.tzinfo is None:
+        when_end = when_end.replace(tzinfo=UTC)
+    when_end = when_end.astimezone(UTC)
+    if start is None:
+        when_start = when_end - timedelta(days=30)
+    elif start.tzinfo is None:
+        when_start = start.replace(tzinfo=UTC)
+    else:
+        when_start = start.astimezone(UTC)
+    total = 0.0
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return 0.0
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("quality_mode") or "").strip().lower() != "fast":
+            continue
+        ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
+        if ts is None or ts < when_start or ts >= when_end:
+            continue
+        total += _fast_seconds_for_row(row)
+    return total
+
+
+def _fast_seconds_for_row(row: dict[str, Any]) -> float:
+    billed = row.get("billed")
+    if isinstance(billed, dict) and billed.get("real_work_s") is not None:
+        try:
+            return max(0.0, float(billed["real_work_s"]))
+        except (TypeError, ValueError):
+            pass
+    submitted = str(row.get("submitted_utc") or "")
+    completed = str(row.get("completed_utc") or row.get("utc") or "")
+    start = _parse_utc(submitted)
+    finish = _parse_utc(completed)
+    if start is None or finish is None:
+        return 0.0
+    return max(0.0, (finish - start).total_seconds())
+
+
 def user_week_rollup(ws: Workspace, *, now: datetime | None = None) -> list[UserWeek]:
     """Last-7-day Fast/HQ/packs grouped by the operator who submitted the job."""
     path = usage_path(ws)

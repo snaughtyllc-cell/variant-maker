@@ -7,6 +7,7 @@ from tests.server.fakes import FakeRunner
 from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
 from variant_maker.server.usage import (
     USAGE_FILENAME,
+    period_fast_seconds,
     record_job,
     user_week_rollup,
     week_rollup,
@@ -150,6 +151,21 @@ def test_user_week_rollup_splits_copies_by_customer_email(tmp_path):
     assert rows["unattributed"].fast_copies == 1 and rows["unattributed"].packs == 1
     total = week_rollup(ws)
     assert total.fast_copies == 7 and total.packs == 3
+
+
+def test_period_fast_seconds_uses_real_work_and_skips_hq(tmp_path):
+    now = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    ws, fast = _job(tmp_path, job_id="fast1", delivered=2, requested=2)
+    fast.telemetry = {
+        "quality_mode": "fast",
+        "billed": {"real_work_s": 90, "idle_retention_s": 120, "total_s": 210},
+    }
+    record_job(ws, fast, now=now)
+    ws, hq = _job(tmp_path, job_id="hq1", quality_mode="hq", delivered=1, requested=1)
+    hq.telemetry = {"billed": {"real_work_s": 600}}
+    record_job(ws, hq, now=now)
+    seconds = period_fast_seconds(ws, start=now - timedelta(days=1), end=now + timedelta(hours=1))
+    assert seconds == 90
 
 
 def test_week_window_is_seven_days_inclusive(tmp_path):
