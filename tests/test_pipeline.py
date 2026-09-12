@@ -133,6 +133,8 @@ def test_pipeline_dry_run_renders_nothing(real_clip, tmp_path):
         assert [f for f in os.listdir(out) if f.endswith(".mp4")] == []
     assert len(m.variants) == 2
     assert all(v.ffmpeg_cmd.startswith("ffmpeg") for v in m.variants)
+    assert all("vignette=" not in v.ffmpeg_cmd for v in m.variants)
+    assert all(v.params["video"]["vignette"] == pytest.approx(0.0) for v in m.variants)
 
 
 @pytest.mark.integration
@@ -248,3 +250,38 @@ def test_cli_dry_run_smoke(real_clip):
     )
     assert res.exit_code == 0, res.output
     assert "ffmpeg" in res.output
+    assert "vignette=" not in res.output
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_live_pin_engine_render_skips_vignette(real_clip, tmp_path):
+    """Pinned live digest is this engine: vig 0. PI/5 still darkens the same clip."""
+    from variant_maker import ffmpeg
+    from variant_maker.platforms import get_platform
+    from variant_maker.quality import _signalstats
+    from variant_maker.sampler import sample
+
+    clip = _short_clip(real_clip, tmp_path)
+    src = probe(clip)
+    params = sample(
+        MEDIUM, 42, duration_s=src.duration_s, width=src.width, height=src.height,
+    )
+    assert params["video"]["vignette"] == pytest.approx(0.0)
+    out = str(tmp_path / "livepin.mp4")
+    path, cmd = ffmpeg.render_variant(src, params, get_platform("reels"), out)
+    assert os.path.isfile(path)
+    assert "vignette=" not in cmd
+
+    dark = str(tmp_path / "pi5.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", clip,
+            "-vf", "vignette=angle=0.5880026035475675",
+            "-an", dark,
+        ],
+        check=True, capture_output=True,
+    )
+    y_src, _ = _signalstats(clip)
+    y_dark, _ = _signalstats(dark)
+    assert y_src - y_dark > 8.0, (y_src, y_dark)

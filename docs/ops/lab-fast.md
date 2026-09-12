@@ -31,7 +31,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
 - Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:fc5a81090bac281b33eae122c087b19d6c9f0c090f8a68a2c1a2686723866097`
 - Vignette **off** (0). Cap 0–0.04 still looked always-on: ffmpeg PI/5 mapping. `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
-- CI `34699477701` on `tier1` (`#123`) pushed `:lab`. Lab Studio `lab_fast_pin=pinned`. **Jeff 2026-09-12: its fixed**, then **push to live.** Lab health `live_fast_pin=pinned` `v2_patch=200`. Writeup: `docs/ops/live-pin-fc5a8109-2026-09-12.md`.
+- CI `34699477701` on `tier1` (`#123`) pushed `:lab`. Lab Studio `lab_fast_pin=pinned`. **Jeff 2026-09-12: its fixed**, then **push to live.** Lab health `live_fast_pin=pinned` `v2_patch=200`, then one-shot `skipped_disabled`. Engine test: dry-run + render have no `vignette=`; PI/5 on the fixture drops luma 26. Writeup: `docs/ops/live-pin-fc5a8109-2026-09-12.md`.
 - Prior lab image `sha256:7787da9dc36910e4d65f37949ada07df1dd765f7e635006e98bdad6f7c533c46` / same cap (feature-branch CI `34696985114`, superseded by the `tier1` push).
 - Prior lab image `sha256:80564ee0cebed85ffc967bc434638f32c9ad08fbd08f98e110e6018bbd6418ac` / Fast identity A–D+C2. Pack `6e8dfa80fba8` whole-clip too dark (compete vig 0.02–0.12). Writeup: `docs/ops/lab-identity-6e8dfa80fba8.md`.
 - Identity proof (not look-signed): pack `6e8dfa80fba8` — writeup `docs/ops/lab-identity-6e8dfa80fba8.md`.
