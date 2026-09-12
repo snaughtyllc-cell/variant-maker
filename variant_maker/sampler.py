@@ -107,7 +107,19 @@ RESAMPLE_PX_CHOICES = tuple(x for x in range(-32, 33, 2) if abs(x) >= 8)
 RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
 # Per-copy output cadence. Instagram takes these. Not a second speed factor.
 FPS_CHOICES = (30, 48, 60)
+# Daily Fast encode family — never `slow` (pack time). Separate RNG so crop/resample stay put.
+ENCODE_PRESETS = ("fast", "medium")
+ENCODE_GOP_CHOICES = (30, 48, 60, 90, 120, 150)
+ENCODE_BF_CHOICES = (2, 3, 4)
+ENCODE_REFS_CHOICES = (3, 4, 5)
+ENCODE_CRF = {"fast": (17, 19), "medium": (19, 22)}
+AAC_KBPS_FAST = (128, 192)
+ARESAMPLE_RATES = (44100, 48000)
 _EXTRA_AXES_XOR = 0xF95
+_ENCODE_RNG_XOR = 0xE0DE
+_IDENTITY_RNG_XOR = 0x1D07
+_IDENTITY_TRIM_EPS = 1e-4
+_IDENTITY_SPEED_EPS = 1e-6
 _ROTATE_SAFE_MOTION = (0.7, 1.3)
 _ROTATE_SAFE_HEAD = (0.35, 0.8)
 
@@ -264,6 +276,67 @@ def clamp_trims(trim_s: float, trim_end_s: float, duration_s: float) -> tuple[fl
     start = min(start, budget)
     end = min(end, max(0.0, duration_s - start - remaining_floor))
     return round(start, 4), round(end, 4)
+
+
+def is_identity_time(video: dict) -> bool:
+    """True when start trim, end trim, and speed are all no-ops vs the master."""
+    trim_s = float(video.get("trim_s") or 0.0)
+    trim_end = float(video.get("trim_end_s") or 0.0)
+    speed = float(video.get("speed") or 1.0)
+    return (
+        trim_s <= _IDENTITY_TRIM_EPS
+        and trim_end <= _IDENTITY_TRIM_EPS
+        and abs(speed - 1.0) <= _IDENTITY_SPEED_EPS
+    )
+
+
+def _remap_int(value: float, src: Range, lo: int, hi: int) -> int:
+    """Map a continuous draw onto an inclusive integer band (same relative position)."""
+    span = src.hi - src.lo
+    if span <= 0 or hi <= lo:
+        return int(lo)
+    t = min(1.0, max(0.0, (float(value) - src.lo) / span))
+    return int(lo + round(t * (hi - lo)))
+
+
+def break_identity_time(
+    preset: Preset,
+    video: dict,
+    audio: dict,
+    *,
+    duration_s: float | None,
+    rng: random.Random,
+) -> None:
+    """Nudge an identity time vector inside this preset's existing bands, then clamp.
+
+    Does not paste medium trim (0.15–0.50) onto subtle or a 1s clip.
+    """
+    if not is_identity_time(video):
+        return
+    if preset.trim_s.hi > _IDENTITY_TRIM_EPS:
+        lo = max(float(preset.trim_s.lo), _IDENTITY_TRIM_EPS)
+        hi = float(preset.trim_s.hi)
+        lo = min(lo, hi)
+        val = rng.uniform(lo, hi) if hi > lo else hi
+        if rng.random() < 0.5:
+            video["trim_s"] = val
+        else:
+            video["trim_end_s"] = val
+        if duration_s is not None:
+            video["trim_s"], video["trim_end_s"] = clamp_trims(
+                video["trim_s"], video["trim_end_s"], duration_s,
+            )
+    if is_identity_time(video):
+        slo, shi = float(preset.speed.lo), float(preset.speed.hi)
+        if abs(shi - slo) > _IDENTITY_SPEED_EPS:
+            pick_lo = rng.random() < 0.5
+            if pick_lo and abs(slo - 1.0) > _IDENTITY_SPEED_EPS:
+                video["speed"] = slo
+            elif abs(shi - 1.0) > _IDENTITY_SPEED_EPS:
+                video["speed"] = shi
+            else:
+                video["speed"] = slo if abs(slo - 1.0) >= abs(shi - 1.0) else shi
+            audio["speed"] = video["speed"]
 
 
 def clamp_strength(strength: float) -> float:
@@ -449,17 +522,22 @@ def sample(
             raw["trim_s"], raw["trim_end_s"], duration_s,
         )
 
-    gop = rng.choice(preset.gop_choices)
-
     video = dict(raw)
     # Floor int axes toward their calm 'lo' end so the rounded value never exceeds its
     # budgeted share (keeps total_distortion(params) <= budget a hard guarantee).
     for name in _INT_AXES:
         video[name] = int(video[name])
-    video["gop"] = gop
     extra = random.Random(int(seed) ^ _EXTRA_AXES_XOR)
     video["vignette"] = extra.uniform(preset.vignette.lo, preset.vignette.hi)
     video["out_fps"] = extra.choice(FPS_CHOICES)
+    encode_rng = random.Random(int(seed) ^ _ENCODE_RNG_XOR)
+    encode_preset = encode_rng.choice(ENCODE_PRESETS)
+    crf_lo, crf_hi = ENCODE_CRF[encode_preset]
+    video["encode_preset"] = encode_preset
+    video["encode_crf"] = _remap_int(video["crf"], preset.crf, crf_lo, crf_hi)
+    video["gop"] = encode_rng.choice(ENCODE_GOP_CHOICES)
+    video["encode_bf"] = encode_rng.choice(ENCODE_BF_CHOICES)
+    video["encode_refs"] = encode_rng.choice(ENCODE_REFS_CHOICES)
 
     # Audio mirrors the single speed factor. Voice-safe default: no pitch / EQ /
     # loudnorm (those make talking sound robotic). audio_uniqueness is the later
@@ -489,7 +567,13 @@ def sample(
             "eq_bands": preset.eq_bands,
             "eq_gains": [0.0] * preset.eq_bands,
             "pitch_pct": 0.0,
-            "aac_kbps": int(preset.aac_kbps.hi),
+            "aac_kbps": int(encode_rng.randint(AAC_KBPS_FAST[0], AAC_KBPS_FAST[1])),
         }
+    audio["aresample_hz"] = encode_rng.choice(ARESAMPLE_RATES)
+
+    ident_rng = random.Random(int(seed) ^ _IDENTITY_RNG_XOR)
+    break_identity_time(
+        preset, video, audio, duration_s=duration_s, rng=ident_rng,
+    )
 
     return {"video": video, "audio": audio}

@@ -54,6 +54,15 @@ def test_cmd_has_color_metadata_and_codec_flags():
     assert "-b:v" not in cmd
     assert "make=Apple" not in " ".join(cmd)
     assert "location=" not in " ".join(cmd)
+    assert _sublist(["-map_chapters", "-1"], cmd)
+    assert _sublist(["-flags", "+bitexact"], cmd)
+    assert _sublist(["-movflags", "+faststart"], cmd)
+    assert any(
+        tok.startswith("info=0") and "repeat-headers=1" in tok
+        for tok in cmd
+    )
+    assert "libx265" not in cmd and "libaom-av1" not in cmd
+    assert _sublist(["-metadata", "encoder="], cmd)
 
 
 def test_us_metadata_args_are_deterministic_apple_us():
@@ -71,6 +80,17 @@ def test_us_metadata_args_are_deterministic_apple_us():
         a[i + 1] for i, tok in enumerate(a) if tok == "-metadata" and a[i + 1].startswith("location=")
     )
     assert loc.startswith("location=") and loc.endswith("/")
+
+
+def test_cmd_uses_sampled_encode_preset_not_always_medium():
+    p = make_params(encode_preset="fast", encode_crf=18, encode_bf=2, encode_refs=5)
+    cmd = ffmpeg.build_render_cmd(make_src(), p, REELS, "out.mp4")
+    assert _sublist(["-preset", "fast"], cmd)
+    assert _sublist(["-crf", "18"], cmd)
+    assert "slow" not in cmd
+    x264 = cmd[cmd.index("-x264-params") + 1]
+    assert "bframes=2" in x264
+    assert "ref=5" in x264
 
 
 def test_cmd_writes_us_metadata_when_enabled():
@@ -102,17 +122,20 @@ def test_cmd_wires_audio_when_present():
     assert "-af" in cmd and "-an" not in cmd
 
 
-def test_cmd_copies_audio_when_filters_are_empty():
-    """No tempo/trim/EQ — keep the original soundtrack instead of re-encoding it."""
+def test_cmd_never_copies_audio_even_when_trim_and_speed_are_identity():
+    """Empty tempo/trim is not a license to keep the source bitstream."""
     p = make_params(speed=1.0, trim_s=0.0)
     p["audio"] = {
         "speed": 1.0, "loudnorm_i": None, "eq_bands": 1, "eq_gains": [0.0],
-        "pitch_pct": 0.0, "aac_kbps": 160,
+        "pitch_pct": 0.0, "aac_kbps": 160, "aresample_hz": 44100,
     }
     p["video"]["trim_end_s"] = 0.0
     cmd = ffmpeg.build_render_cmd(make_src(has_audio=True), p, REELS, "out.mp4")
-    assert _sublist(["-c:a", "copy"], cmd)
-    assert "-af" not in cmd
+    assert _sublist(["-c:a", "aac"], cmd)
+    assert _sublist(["-b:a", "160k"], cmd)
+    assert "-c:a" in cmd and "copy" not in cmd[cmd.index("-c:a") + 1]
+    assert "-af" in cmd
+    assert "aresample=44100" in cmd[cmd.index("-af") + 1]
     assert "-an" not in cmd
 
 

@@ -447,4 +447,9 @@ def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
         effective_s = _remaining_duration_s(v, src.duration_s) / speed
         if effective_s >= _LOUDNORM_MIN_S:
             parts.append(f"loudnorm=I={float(ln):.1f}:TP=-1.5:LRA=11")
+    # Always re-encode: aresample is the no-level-change force (never volume=0.99).
+    rate = int(a.get("aresample_hz") or 48000)
+    if rate not in (44100, 48000):
+        rate = 48000
+    parts.append(f"aresample={rate}")
     return ",".join(parts)

@@ -9,6 +9,8 @@ from variant_maker.sampler import (
     CROP_OFFSET_LO,
     CROP_Y_KEEP_BOTTOM_HI,
     CROP_Y_KEEP_BOTTOM_LO,
+    ENCODE_CRF,
+    ENCODE_GOP_CHOICES,
     FPS_CHOICES,
     RESAMPLE_FLAGS,
     RESAMPLE_PX_CHOICES,
@@ -95,7 +97,13 @@ def test_video_axes_within_range_bounds(preset):
             )
         assert preset.crf.lo <= v["crf"] <= preset.crf.hi
         assert v["crf"] == int(v["crf"])  # encoder setting is an integer
-        assert v["gop"] in preset.gop_choices
+        assert v["gop"] in ENCODE_GOP_CHOICES
+        assert v["encode_preset"] in ("fast", "medium")
+        assert v["encode_preset"] != "slow"
+        assert v["encode_bf"] in (2, 3, 4)
+        assert v["encode_refs"] in (3, 4, 5)
+        lo, hi = ENCODE_CRF[v["encode_preset"]]
+        assert lo <= v["encode_crf"] <= hi
         assert v["out_fps"] in FPS_CHOICES
 
 
@@ -190,6 +198,8 @@ def test_voice_safe_audio_skips_uniqueness_axes_by_default():
         assert a["pitch_pct"] == 0.0
         assert a["loudnorm_i"] is None
         assert all(g == 0.0 for g in a["eq_gains"])
+        assert 128 <= a["aac_kbps"] <= 192
+        assert a["aresample_hz"] in (44100, 48000)
 
 
 def test_audio_uniqueness_draws_eq_and_loudnorm():
@@ -778,11 +788,42 @@ def test_vignette_and_out_fps_use_separate_rng():
     assert v["trim_end_s"] == pytest.approx(0.36960162784195627)
     assert v["resample_px"] == -30
     assert v["resample_flags"] == "bicubic"
-    assert v["gop"] == 90
+    assert v["gop"] in ENCODE_GOP_CHOICES
     assert MEDIUM.vignette.lo <= v["vignette"] <= MEDIUM.vignette.hi
     assert v["out_fps"] in FPS_CHOICES
     assert sample(MEDIUM, 7)["video"]["vignette"] == v["vignette"]
     assert sample(MEDIUM, 7)["video"]["out_fps"] == v["out_fps"]
+
+
+def test_identity_time_vector_is_illegal_inside_preset_bands():
+    """trim≈0 ∧ trim_end≈0 ∧ speed=1 must not survive sample(); nudge stays in-band."""
+    from variant_maker.sampler import is_identity_time
+
+    for preset in (SUBTLE, MEDIUM, STRONG):
+        for s in SEEDS[:200]:
+            p = sample(preset, s, duration_s=8.0)
+            v, a = p["video"], p["audio"]
+            assert not is_identity_time(v), f"{preset.name} seed={s} stayed identity"
+            assert a["speed"] == v["speed"]
+            assert preset.speed.lo - 1e-9 <= v["speed"] <= preset.speed.hi + 1e-9
+            assert v["trim_s"] >= -1e-12 and v["trim_end_s"] >= -1e-12
+            assert preset.trim_s.lo - 1e-9 <= v["trim_s"] <= preset.trim_s.hi + 1e-9 or v["trim_s"] == 0
+            assert preset.trim_s.lo - 1e-9 <= v["trim_end_s"] <= preset.trim_s.hi + 1e-9 or v["trim_end_s"] == 0
+
+
+def test_identity_nudge_keeps_one_second_and_subtle_legal():
+    """Second clamp must leave a usable remainder; do not paste medium 0.15–0.50 on subtle."""
+    from variant_maker.sampler import is_identity_time
+
+    for s in SEEDS[:200]:
+        p = sample(SUBTLE, s, duration_s=1.0)
+        v = p["video"]
+        assert not is_identity_time(v)
+        assert v["trim_s"] + v["trim_end_s"] <= 0.5 + 1e-9
+        assert v["trim_s"] <= SUBTLE.trim_s.hi + 1e-9
+        assert v["trim_end_s"] <= SUBTLE.trim_s.hi + 1e-9
+        remaining = 1.0 - v["trim_s"] - v["trim_end_s"]
+        assert remaining >= 0.05 - 1e-9
 
 
 def test_apply_rotate_safe_uses_their_band():

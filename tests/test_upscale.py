@@ -26,7 +26,15 @@ def test_default_model_upscales_at_its_native_scale():
     assert upscale.NATIVE_SCALE[upscale.DEFAULT_MODEL] == 4
 
 
-def test_available_is_false_for_bogus_dir():
+def test_hq_reassemble_audio_never_copies():
+    """Stage C re-encodes the temp soundtrack. Do not -c:a copy."""
+    args = upscale.hq_reassemble_audio_args(
+        {"audio": {"aresample_hz": 44100, "aac_kbps": 160}},
+    )
+    assert args[args.index("-c:a") + 1] == "aac"
+    assert "copy" not in args
+    assert "aresample=44100" in args[args.index("-af") + 1]
+    assert args[args.index("-b:a") + 1] == "160k"
     assert upscale.available("/nonexistent/realesrgan") is False
 
 

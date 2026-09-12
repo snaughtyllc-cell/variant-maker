@@ -1,9 +1,11 @@
 """Phase 5. Build + run one ffmpeg invocation per variant.
 
-Applies color.output_color_args(...) on OUTPUT, -map_metadata -1, -fflags +bitexact,
-libx264 with sampled crf/gop, aac audio, and a social maxrate ceiling (constrained
-VBR — CRF still picks quality). Returns the exact command string for the manifest
-(the reproduction contract — x264 isn't bit-deterministic, so the cmd + params ARE the record).
+Applies color.output_color_args(...) on OUTPUT, -map_metadata -1, -map_chapters -1,
+demuxer + encoder +bitexact, libx264 (fast/medium, never slow on daily Fast) with
+sampled crf/gop/bframes/refs, always AAC+aresample when audio exists, and a social
+maxrate ceiling (constrained VBR — CRF still picks quality). Returns the exact
+command string for the manifest (the reproduction contract — x264 isn't
+bit-deterministic, so the cmd + params ARE the record).
 """
 from __future__ import annotations
 
@@ -108,24 +110,39 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
 
     vf = build_video_filters(params, src, platform)
     video_flag = "-filter_complex" if ";" in vf else "-vf"
+    encode_preset = str(v.get("encode_preset") or "medium")
+    if encode_preset not in ("fast", "medium"):
+        encode_preset = "medium"
+    crf = v.get("encode_crf", v["crf"])
+    bf = int(v.get("encode_bf") or 3)
+    refs = int(v.get("encode_refs") or 3)
+    x264 = f"info=0:repeat-headers=1:bframes={bf}:ref={refs}"
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-i", src.path,
         "-map_metadata", "-1",
+        "-map_chapters", "-1",
         "-fflags", "+bitexact",
+        "-flags", "+bitexact",
         video_flag, vf,
-        "-c:v", "libx264", "-preset", "medium",
-        "-crf", str(v["crf"]), "-g", str(v["gop"]),
+        "-c:v", "libx264", "-preset", encode_preset,
+        "-crf", str(crf), "-g", str(v["gop"]),
+        "-x264-params", x264,
         *x264_rate_args(platform),
         "-pix_fmt", "yuv420p",
         *output_color_args(out_color),
+        "-movflags", "+faststart",
+        "-metadata", "encoder=",
     ]
     if src.has_audio:
         af = build_audio_filters(params, src, True)
-        if af:
-            cmd += ["-af", af, "-c:a", "aac", "-b:a", f"{a['aac_kbps']}k"]
-        else:
-            cmd += ["-c:a", "copy"]
+        kbps = int(a.get("aac_kbps") or 160)
+        if not af:
+            rate = int(a.get("aresample_hz") or 48000)
+            if rate not in (44100, 48000):
+                rate = 48000
+            af = f"aresample={rate}"
+        cmd += ["-af", af, "-c:a", "aac", "-b:a", f"{kbps}k"]
     else:
         cmd += ["-an"]
     if params.get("us_metadata"):

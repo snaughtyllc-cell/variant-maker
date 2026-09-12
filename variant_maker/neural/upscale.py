@@ -53,6 +53,16 @@ def _even(n: float) -> int:
     return int(n) // 2 * 2
 
 
+def hq_reassemble_audio_args(params: dict) -> list[str]:
+    """AAC + aresample only. Temp already has tempo; never `-c:a copy`."""
+    a = params.get("audio") or {}
+    rate = int(a.get("aresample_hz") or 48000)
+    if rate not in (44100, 48000):
+        rate = 48000
+    kbps = int(a.get("aac_kbps") or 160)
+    return ["-af", f"aresample={rate}", "-c:a", "aac", "-b:a", f"{kbps}k", "-shortest"]
+
+
 def upscale_clip(
     src, params: dict, out_path: str, *, platform, scale: int | None = None,
     model: str = DEFAULT_MODEL, model_dir: str = DEFAULT_DIR, backend=None,
@@ -61,7 +71,7 @@ def upscale_clip(
     reassemble at the target geometry, re-muxing the (already correct) audio.
 
     All color/sync/trim/speed correctness comes from the tested `render_variant`; the audio
-    is COPIED from that render so it can't desync. The upscale step is the only OS/GPU-specific
+    is re-encoded from that render (AAC + aresample, never copy). The upscale step is the only OS/GPU-specific
     part — it goes through `backend` (ncnn on mac, CUDA on a Linux GPU box). Returns
     (out_path, cmd_str, neural_ops).
     """
@@ -147,7 +157,7 @@ def upscale_clip(
                        *x264_rate_args(platform),
                        "-pix_fmt", "yuv420p", *output_color_args(oc)]
         if src.has_audio:
-            reassemble += ["-c:a", "copy", "-shortest"]
+            reassemble += hq_reassemble_audio_args(params)
         reassemble += [out_path]
         subprocess.run(reassemble, check=True, capture_output=True)
         cmds.append(shlex.join(reassemble))
