@@ -103,6 +103,7 @@ from .instagram_oauth import (
     resolve_redirect_uri as resolve_ig_redirect_uri,
     status_payload as ig_status_payload,
 )
+from .job_isolation import IsolationError, authorize_object_key, is_legacy_object_key
 from .jobs import (
     Job,
     JobSource,
@@ -2001,6 +2002,67 @@ def create_app(
             return None
         return RedirectResponse(url, status_code=302)
 
+    def _allow_output_key(job, source_id: str, filename: str, key: str) -> bool:
+        base = os.path.basename(str(filename or ""))
+        if not key or not base:
+            return False
+        if is_legacy_object_key(key):
+            return key == output_key(source_id, base)
+        tenant = getattr(job, "tenant_id", None) if job is not None else None
+        job_id = getattr(job, "job_id", None) if job is not None else None
+        if not tenant or not job_id:
+            return False
+        try:
+            return authorize_object_key(key, tenant_id=tenant, job_id=job_id)
+        except IsolationError:
+            return False
+
+    def _output_object_keys(source_id: str, filename: str) -> list[str]:
+        """Play/save keys: recorded Fast prefix first, then legacy outputs/{source_id}/."""
+        base = os.path.basename(str(filename or ""))
+        if not base or base in (".", ".."):
+            return []
+        loc = store._locate(source_id)
+        if loc is None:
+            return [output_key(source_id, base)]
+        job_id, source = loc
+        job = store.get(job_id)
+        keys: list[str] = []
+        for v in source.variants:
+            obj = getattr(v, "object_key", None)
+            if obj and v.filename == base:
+                keys.append(str(obj))
+            if obj and base in (getattr(v, "look_src", None), getattr(v, "look_var", None)):
+                prefix = str(obj).rsplit("/", 1)[0]
+                if prefix:
+                    keys.append(f"{prefix}/{base}")
+        if job is not None:
+            stored = store._store_output_key(job, source_id, base)
+            if stored:
+                keys.append(stored)
+            prefix = store._output_prefix(job, source_id)
+            if prefix:
+                keys.append(f"{prefix.rstrip('/')}/{base}")
+        keys.append(output_key(source_id, base))
+        out: list[str] = []
+        seen: set[str] = set()
+        for key in keys:
+            if not key or key in seen or not _allow_output_key(job, source_id, base, key):
+                continue
+            seen.add(key)
+            out.append(key)
+        return out
+
+    def _redirect_output(source_id: str, filename: str, *, as_attachment: bool = False):
+        safe = os.path.basename(filename) or "variant.mp4"
+        for key in _output_object_keys(source_id, filename):
+            redirected = _redirect_object(
+                key, filename=safe, as_attachment=as_attachment,
+            )
+            if redirected is not None:
+                return redirected
+        return None
+
     @app.get("/api/look/{source_id}/{filename}")
     def look_still(source_id: str, filename: str):
         """Source vs variant JPEG stills for the look-first visual test."""
@@ -2011,7 +2073,7 @@ def create_app(
         path = store.find_variant(source_id, filename)
         if path is not None:
             return FileResponse(path, media_type="image/jpeg")
-        redirected = _redirect_object(output_key(source_id, filename), filename=filename)
+        redirected = _redirect_output(source_id, filename)
         if redirected is not None:
             return redirected
         raise HTTPException(status_code=404, detail="look still not found")
@@ -2029,10 +2091,8 @@ def create_app(
                     content_disposition_type="attachment",
                 )
             return FileResponse(path, media_type="video/mp4")
-        redirected = _redirect_object(
-            output_key(source_id, filename),
-            filename=os.path.basename(filename) or "variant.mp4",
-            as_attachment=bool(int(dl or 0)),
+        redirected = _redirect_output(
+            source_id, filename, as_attachment=bool(int(dl or 0)),
         )
         if redirected is not None:
             return redirected

@@ -718,6 +718,97 @@ def test_zip_and_file_routes_redirect_to_object_store(tmp_path):
     assert "objects.test" in links["files"][0]["url"]
 
 
+def test_variant_file_redirects_namespaced_object_key(tmp_path):
+    """Fast jobs land under tenants/…/attempts/…; play/save must not only look at outputs/{source_id}/."""
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
+    from variant_maker.server.job_isolation import attempt_output_key
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner, object_store=blobstore)
+    client = TestClient(create_app(store))
+
+    job_id, source_id, attempt = "jobns01", "srcns01", "attns01"
+    key = attempt_output_key("ws_lab", job_id, attempt, source_id, "v01.mp4")
+    still_key = attempt_output_key("ws_lab", job_id, attempt, source_id, "look_v01.jpg")
+    staged = tmp_path / "ns.mp4"
+    staged.write_bytes(b"NAMESPACED-MP4")
+    still = tmp_path / "look_v01.jpg"
+    still.write_bytes(b"JPEG")
+    blobstore.put(key, str(staged))
+    blobstore.put(still_key, str(still))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-09-12T12:28:49Z",
+        tenant_id="ws_lab", attempt_id=attempt, state="done",
+        sources=[JobSource(
+            source_id=source_id, filename="clip.mp4", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="v01.mp4", status="ok",
+                quality={"vmaf": 99.9}, object_key=key,
+                look_var="look_v01.jpg",
+            )],
+        )],
+    )
+    store._install_hydrated_job(job)
+
+    gallery = client.get("/api/gallery").json()[0]
+    assert gallery["copy_status"] == "ok"
+    assert gallery["files_ready"] == 1
+    assert gallery["variants"][0]["file_ready"] is True
+
+    file_resp = client.get(f"/api/variants/{source_id}/v01.mp4", follow_redirects=False)
+    assert file_resp.status_code == 302
+    loc = file_resp.headers["location"]
+    assert key in loc
+    assert loc.startswith("https://objects.test/tenants/")
+
+    pulled_still = os.path.join(ws.source_out_dir(job_id, source_id), "look_v01.jpg")
+    if os.path.isfile(pulled_still):
+        os.remove(pulled_still)
+    still_resp = client.get(f"/api/look/{source_id}/look_v01.jpg", follow_redirects=False)
+    assert still_resp.status_code == 302
+    assert still_key in still_resp.headers["location"]
+    assert still_resp.headers["location"].startswith("https://objects.test/tenants/")
+
+
+def test_variant_file_rejects_foreign_tenant_object_key(tmp_path):
+    """A recorded key under another tenant must not be presigned."""
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
+    from variant_maker.server.job_isolation import attempt_output_key
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner, object_store=blobstore)
+    client = TestClient(create_app(store))
+
+    job_id, source_id, attempt = "jobns02", "srcns02", "attns02"
+    foreign = attempt_output_key("ws_other", job_id, attempt, source_id, "v01.mp4")
+    staged = tmp_path / "x.mp4"
+    staged.write_bytes(b"NOPE")
+    blobstore.put(foreign, str(staged))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-09-12T12:28:49Z",
+        tenant_id="ws_lab", attempt_id=attempt, state="done",
+        sources=[JobSource(
+            source_id=source_id, filename="clip.mp4", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="v01.mp4", status="ok",
+                quality={"vmaf": 99.9}, object_key=foreign,
+            )],
+        )],
+    )
+    store._install_hydrated_job(job)
+
+    resp = client.get(f"/api/variants/{source_id}/v01.mp4", follow_redirects=False)
+    assert resp.status_code == 404
+
+
 class _CountingFetchRunner(FakeRunner):
     def __init__(self):
         super().__init__()
