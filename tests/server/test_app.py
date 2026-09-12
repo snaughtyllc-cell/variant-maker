@@ -25,18 +25,23 @@ def test_health_lab_flag(monkeypatch):
     assert body["status"] == "ok"
     assert body["lab"] is True
     assert "lab_fast_pin" in body
+    assert "live_fast_pin" in body
 
 
 def test_health_lab_fast_pin_detail(monkeypatch):
-    from variant_maker.server import lab_fast_pin
+    from variant_maker.server import lab_fast_pin, live_fast_pin
 
     monkeypatch.setenv("VARIANT_LAB", "1")
     lab_fast_pin.LAST_STATUS = "error_403"
     lab_fast_pin.LAST_DETAIL = "v2_patch=403"
+    live_fast_pin.LAST_STATUS = "pinned"
+    live_fast_pin.LAST_DETAIL = "v2_patch=200"
     client = TestClient(create_app())
     body = client.get("/api/health").json()
     assert body["lab_fast_pin"] == "error_403"
     assert body["lab_fast_pin_detail"] == "v2_patch=403"
+    assert body["live_fast_pin"] == "pinned"
+    assert body["live_fast_pin_detail"] == "v2_patch=200"
 
 
 def _client(tmp_path, plan=None):

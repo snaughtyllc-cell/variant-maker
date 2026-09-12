@@ -1378,7 +1378,7 @@ def create_app(
 
     @app.get("/api/health")
     def health() -> dict:
-        from . import lab_fast_pin
+        from . import lab_fast_pin, live_fast_pin
 
         raw = (os.environ.get("VARIANT_LAB") or "").strip().lower()
         lab = raw in {"1", "true", "yes"}
@@ -1387,6 +1387,9 @@ def create_app(
             out["lab_fast_pin"] = lab_fast_pin.LAST_STATUS
             if lab_fast_pin.LAST_DETAIL:
                 out["lab_fast_pin_detail"] = lab_fast_pin.LAST_DETAIL
+            out["live_fast_pin"] = live_fast_pin.LAST_STATUS
+            if live_fast_pin.LAST_DETAIL:
+                out["live_fast_pin_detail"] = live_fast_pin.LAST_DETAIL
         return out
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:

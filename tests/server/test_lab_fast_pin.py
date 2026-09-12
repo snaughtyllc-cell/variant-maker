@@ -100,9 +100,14 @@ def test_cli_main_pins_before_serving(tmp_path, monkeypatch):
     from variant_maker.server import cli
 
     pinned = []
+    live_pinned = []
     monkeypatch.setattr(
         "variant_maker.server.lab_fast_pin.pin_lab_fast_endpoint",
         lambda environ=None: pinned.append(True) or "pinned",
+    )
+    monkeypatch.setattr(
+        "variant_maker.server.live_fast_pin.pin_live_fast_endpoint",
+        lambda environ=None: live_pinned.append(True) or "pinned",
     )
     monkeypatch.setattr(uvicorn, "run", lambda *a, **k: None)
     monkeypatch.setattr("sys.argv", ["variant-server", "--data-dir", str(tmp_path)])
@@ -110,6 +115,7 @@ def test_cli_main_pins_before_serving(tmp_path, monkeypatch):
         cli.main()
     assert exc.value.code == 0
     assert pinned == [True]
+    assert live_pinned == [True]
 
 
 def test_sanitize_detail_strips_live_id_and_keys():
