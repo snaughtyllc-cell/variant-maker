@@ -780,6 +780,22 @@ def test_crop_drift_pairs_differ_across_seeds():
     assert len(pairs) > 40
 
 
+def test_medium_strong_vignette_capped_and_can_skip():
+    """Compete 0.02–0.12 always-on darkened the whole clip (Jeff 2026-09-12).
+
+    0.114 was already a black-corner look-fail. Cap matches subtle. Include 0 so
+    medium is not a systematic exposure drop. Escalate must not restore 0.20.
+    """
+    assert MEDIUM.vignette.lo == 0.0
+    assert MEDIUM.vignette.hi == pytest.approx(0.04)
+    assert STRONG.vignette.lo == 0.0
+    assert STRONG.vignette.hi == pytest.approx(0.04)
+    for preset in (MEDIUM, STRONG):
+        for s in SEEDS[:80]:
+            vig = sample(preset, s)["video"]["vignette"]
+            assert 0.0 <= vig <= 0.04 + 1e-12, f"{preset.name} seed={s} vig={vig}"
+
+
 def test_vignette_and_out_fps_use_separate_rng():
     """New axes must not consume the main stream (crop / resample / GOP stay put)."""
     v = sample(MEDIUM, 7)["video"]

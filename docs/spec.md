@@ -173,7 +173,7 @@ Two checks, run on every variant; fail → reduce strength and regenerate (bound
 |---|---|---|---|
 | crop punch-in (kept, rescaled) | 0.98–1.00 | 0.92–0.96 | 0.88–0.93 |
 | rotation deg (`safe` default; `never` zeros) | 0 | motion 0.7–1.3 / talking-head 0.35–0.8 | same bands, sampled ±2 then clamped |
-| vignette (edge darken) | 0–0.04 | 0.02–0.12 | 0.04–0.20 |
+| vignette (edge darken; 0 = skip) | 0–0.04 | 0–0.04 | 0–0.04 |
 | output fps | 30 / 48 / 60 per copy | same | same |
 | brightness (zero-mean) | ±0.01 | ±0.025 | ±0.04 |
 | contrast | 0.99–1.01 | 0.97–1.03 | 0.95–1.06 |

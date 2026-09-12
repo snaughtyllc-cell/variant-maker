@@ -27,7 +27,7 @@ class Preset:
     saturation: Range
     gamma: Range
     hue_deg: Range
-    vignette: Range  # edge darken; 0 = skip; unbudgeted fingerprint
+    vignette: Range  # edge darken; 0 = skip. Must include 0 — a lo>0 band is a systematic darken.
     grain: Range
     unsharp: Range
     warp_k1: Range  # Fast pixel seed (lenscorrection); zero-mean; VMAF-capped
@@ -66,7 +66,9 @@ MEDIUM = Preset(
     crop_keep=Range(0.92, 0.96), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03),     hue_deg=Range(-3, 3),
-    vignette=Range(0.02, 0.12),
+    # 0.02–0.12 always-on darkened the whole clip (Jeff 2026-09-12). 0.114
+    # was already black-corner look-fail (`lookcompete4`). Same cap as subtle.
+    vignette=Range(0.0, 0.04),
     grain=Range(7, 12), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.015, 0.015),
     # ~720–864 then back to 1080×1920. The uniqueness frame (576×1024) can see this;
     # ±32 px could not. Escalate's strong.hi sits below medium.lo.
@@ -84,7 +86,7 @@ STRONG = Preset(
     crop_keep=Range(0.88, 0.93), rotate_deg=Range(-2.0, 2.0),
     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05),     hue_deg=Range(-6, 6),
-    vignette=Range(0.04, 0.20),
+    vignette=Range(0.0, 0.04),
     grain=Range(10, 16), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.020, 0.020),
     rebuild_scale=Range(0.50, 0.66),
     speed=Range(0.94, 1.06),
