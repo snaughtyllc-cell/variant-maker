@@ -568,6 +568,21 @@ def test_vignette_emitted_after_color():
     assert "vignette=" not in filtergraph.build_video_filters(make_params(), make_src(), REELS)
 
 
+def test_small_vignette_is_not_ffmpeg_pi5_default():
+    """Cap 0.04 used to emit angle≈0.59 (PI/5-0.04). That is ffmpeg's demo
+    strength — whole-frame darken, not a corner kiss."""
+    import math
+
+    vf = filtergraph.build_video_filters(
+        make_params(video={"vignette": 0.04}), make_src(), REELS,
+    )
+    match = re.search(r"vignette=angle=([0-9.]+)", vf)
+    assert match, vf
+    angle = float(match.group(1))
+    assert angle > 1.2, angle
+    assert angle == pytest.approx(math.pi / 2.0 - 0.04, abs=1e-4)
+
+
 def test_out_fps_overrides_platform_fps():
     p = make_params(video={"out_fps": 60})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)

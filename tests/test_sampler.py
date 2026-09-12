@@ -780,20 +780,21 @@ def test_crop_drift_pairs_differ_across_seeds():
     assert len(pairs) > 40
 
 
-def test_medium_strong_vignette_capped_and_can_skip():
-    """Compete 0.02–0.12 always-on darkened the whole clip (Jeff 2026-09-12).
-
-    0.114 was already a black-corner look-fail. Cap matches subtle. Include 0 so
-    medium is not a systematic exposure drop. Escalate must not restore 0.20.
+def test_vignette_off_until_look_signed():
+    """0–0.04 still looked always-on: filtergraph subtracted amount from ffmpeg
+    PI/5, so every vig>0 was default-strength (Jeff 2026-09-12, new gens after
+    the cap). Skip until a mapping is look-signed. Escalate must not restore 0.12.
     """
+    assert SUBTLE.vignette.lo == 0.0
+    assert SUBTLE.vignette.hi == pytest.approx(0.0)
     assert MEDIUM.vignette.lo == 0.0
-    assert MEDIUM.vignette.hi == pytest.approx(0.04)
+    assert MEDIUM.vignette.hi == pytest.approx(0.0)
     assert STRONG.vignette.lo == 0.0
-    assert STRONG.vignette.hi == pytest.approx(0.04)
-    for preset in (MEDIUM, STRONG):
+    assert STRONG.vignette.hi == pytest.approx(0.0)
+    for preset in (SUBTLE, MEDIUM, STRONG):
         for s in SEEDS[:80]:
             vig = sample(preset, s)["video"]["vignette"]
-            assert 0.0 <= vig <= 0.04 + 1e-12, f"{preset.name} seed={s} vig={vig}"
+            assert vig == pytest.approx(0.0), f"{preset.name} seed={s} vig={vig}"
 
 
 def test_vignette_and_out_fps_use_separate_rng():

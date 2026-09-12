@@ -367,8 +367,10 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(f"hue=h={v['hue_deg']:.4f}")
     vig = float(v.get("vignette") or 0.0)
     if vig > _EPS:
-        # Smaller angle → stronger edge darken. Amount is added onto ffmpeg's PI/5 default.
-        angle = max(0.22, math.pi / 5.0 - vig)
+        # Larger angle = weaker. ffmpeg default PI/5 (~0.63) darkens most of
+        # the frame. Amount 0.04 used to be PI/5-0.04 ≈ 0.59, so the 0–0.04
+        # cap still looked always-on (Jeff 2026-09-12). PI/2 is corners only.
+        angle = max(0.22, math.pi / 2.0 - vig)
         parts.append(f"vignette=angle={angle:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")

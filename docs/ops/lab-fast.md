@@ -28,7 +28,7 @@ Do **not** recycle live workers to test a lab digest.
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
 - Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:74ee1695616abac788d7e2ebb1e0895c842760c3fd027dd7f47f64fa07c15d6c`
-- Vignette cap **0–0.04** (can skip) + BtbN dated autobuild ffmpeg. `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
+- Vignette **off** (0). Cap 0–0.04 still looked always-on: ffmpeg PI/5 mapping. `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
 - CI `34698649413` on `tier1` (`#122`) pushed `:lab`. Lab Studio boot pin **succeeded**: `/api/health` `lab_fast_pin=pinned` `v2_patch=200` (digest, lab `xar25v77v3j27u` only). GitHub `RUNPOD_API_KEY` still empty. Live health is `lab:false` — **did not PATCH live.** Generate a **new** pack; `6e8dfa80fba8` still has 0.02–0.12 vig.
 - Prior lab image `sha256:7787da9dc36910e4d65f37949ada07df1dd765f7e635006e98bdad6f7c533c46` / same cap (feature-branch CI `34696985114`, superseded by the `tier1` push).
 - Prior lab image `sha256:80564ee0cebed85ffc967bc434638f32c9ad08fbd08f98e110e6018bbd6418ac` / Fast identity A–D+C2. Pack `6e8dfa80fba8` whole-clip too dark (compete vig 0.02–0.12). Writeup: `docs/ops/lab-identity-6e8dfa80fba8.md`.
