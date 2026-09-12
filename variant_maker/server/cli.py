@@ -95,6 +95,11 @@ def main() -> None:
     args = p.parse_args()
 
     import uvicorn
+
+    from . import lab_fast_pin
+
+    pin_status = lab_fast_pin.pin_lab_fast_endpoint()
+    print(f"lab fast pin: {pin_status}", flush=True)
     uvicorn.run(build_app(args.data_dir, resolve_runner(args.runner)),
                 # Login throttling requires the TCP peer, never a rewritten XFF address.
                 host=args.host, port=args.port, proxy_headers=False)
