@@ -53,6 +53,12 @@ def _even(n: float) -> int:
     return int(n) // 2 * 2
 
 
+def hq_reassemble_video_identity_args() -> list[str]:
+    """Drop x264 user-data SEI on the shipped HQ remux (same as Fast)."""
+    from ..ffmpeg import h264_drop_sei_args
+    return h264_drop_sei_args()
+
+
 def hq_reassemble_audio_args(params: dict) -> list[str]:
     """AAC + aresample only. Temp already has tempo; never `-c:a copy`."""
     a = params.get("audio") or {}
@@ -155,7 +161,8 @@ def upscale_clip(
         reassemble += ["-vf", f"{sat_fix}{scale_fmt}",
                        "-c:v", "libx264", "-preset", "medium", "-crf", str(params["video"]["crf"]),
                        *x264_rate_args(platform),
-                       "-pix_fmt", "yuv420p", *output_color_args(oc)]
+                       "-pix_fmt", "yuv420p", *output_color_args(oc),
+                       *hq_reassemble_video_identity_args()]
         if src.has_audio:
             reassemble += hq_reassemble_audio_args(params)
         reassemble += [out_path]

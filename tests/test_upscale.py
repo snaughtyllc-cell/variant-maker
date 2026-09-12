@@ -38,6 +38,15 @@ def test_hq_reassemble_audio_never_copies():
     assert upscale.available("/nonexistent/realesrgan") is False
 
 
+def test_hq_reassemble_drops_h264_sei():
+    """Stage C is the shipped HQ file; it must drop x264 user-data SEI too."""
+    from variant_maker import ffmpeg
+    args = upscale.hq_reassemble_video_identity_args()
+    assert args == ffmpeg.h264_drop_sei_args()
+    assert "-bsf:v" in args
+    assert "filter_units=remove_types=6" in args
+
+
 def test_available_is_false_when_models_missing(tmp_path):
     """Binary present but no models/ dir -> unusable; gating must not pass it."""
     binonly = tmp_path / "binonly"

@@ -3,7 +3,8 @@
 Applies color.output_color_args(...) on OUTPUT, -map_metadata -1, -map_chapters -1,
 demuxer + encoder +bitexact, libx264 (fast/medium, never slow on daily Fast) with
 sampled crf/gop/bframes/refs, always AAC+aresample when audio exists, and a social
-maxrate ceiling (constrained VBR — CRF still picks quality). Returns the exact
+maxrate ceiling (constrained VBR — CRF still picks quality). Drops H.264 SEI
+(NAL type 6) so the x264 version/options string is not a constant. Returns the exact
 command string for the manifest (the reproduction contract — x264 isn't
 bit-deterministic, so the cmd + params ARE the record).
 """
@@ -20,6 +21,15 @@ from .probe import SourceInfo
 
 # None = not probed yet. Cached so has_rubberband() does not spawn ffmpeg per variant.
 _rubberband_cached: bool | None = None
+
+# H.264 SEI NAL is type 6 (includes x264's unregistered user-data "x264 - core …").
+# x264-params info=0 does not drop that SEI on current ffmpeg/libx264.
+H264_DROP_SEI_BSF = "filter_units=remove_types=6"
+
+
+def h264_drop_sei_args() -> list[str]:
+    """PURE: drop H.264 SEI after libx264 so the version string is not in the file."""
+    return ["-bsf:v", H264_DROP_SEI_BSF]
 
 
 def has_rubberband() -> bool:
@@ -133,6 +143,7 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
         *output_color_args(out_color),
         "-movflags", "+faststart",
         "-metadata", "encoder=",
+        *h264_drop_sei_args(),
     ]
     if src.has_audio:
         af = build_audio_filters(params, src, True)

@@ -1,13 +1,14 @@
+import os
 import subprocess
 
 import pytest
+from conftest import HAS_FFMPEG, mean_saturation
 
 from variant_maker import ffmpeg
-from variant_maker.probe import ColorTags, SourceInfo, probe
 from variant_maker.platforms import SOCIAL_BUFSIZE, SOCIAL_MAXRATE, get_platform
-from variant_maker.sampler import derive_seed, sample
 from variant_maker.presets import MEDIUM
-from conftest import HAS_FFMPEG, mean_saturation
+from variant_maker.probe import ColorTags, SourceInfo, probe
+from variant_maker.sampler import derive_seed, sample
 
 REELS = get_platform("reels")
 
@@ -63,6 +64,12 @@ def test_cmd_has_color_metadata_and_codec_flags():
     )
     assert "libx265" not in cmd and "libaom-av1" not in cmd
     assert _sublist(["-metadata", "encoder="], cmd)
+    # info=0 does not drop the x264 user-data SEI; NAL type 6 is SEI.
+    assert _sublist(["-bsf:v", "filter_units=remove_types=6"], cmd)
+
+
+def test_h264_drop_sei_args_are_nal_type_6():
+    assert ffmpeg.h264_drop_sei_args() == ["-bsf:v", "filter_units=remove_types=6"]
 
 
 def test_us_metadata_args_are_deterministic_apple_us():
@@ -275,3 +282,40 @@ def test_render_real_variant_plays_with_audio_in_sync(real_clip, tmp_path):
     # video and audio trimmed/tempo'd identically -> durations track (gross-desync guard)
     assert abs(float(vid["duration"]) - float(aud["duration"])) < 0.3
     assert "libx264" in cmd_str
+    assert "-bsf:v filter_units=remove_types=6" in cmd_str
+
+
+def _x264_sei_strings(path: str) -> list[str]:
+    annex = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-i", path,
+            "-c:v", "copy", "-an", "-bsf:v", "h264_mp4toannexb", "-f", "h264", "-",
+        ],
+        capture_output=True, check=True,
+    )
+    strings = subprocess.run(
+        ["strings", "-n", "8"], input=annex.stdout, capture_output=True, check=False,
+    )
+    hits = []
+    for line in strings.stdout.splitlines():
+        s = line.decode("ascii", "ignore")
+        if "x264" in s.lower():
+            hits.append(s.strip())
+    return hits
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_render_drops_x264_sei_user_data(real_clip, tmp_path):
+    """C2: shipped files must not carry the x264 - core options SEI."""
+    src = probe(real_clip)
+    out = str(tmp_path / "variant.mp4")
+    params = sample(MEDIUM, derive_seed(20260912, 1), duration_s=src.duration_s)
+    ffmpeg.render_variant(src, params, get_platform("none"), out)
+    assert _x264_sei_strings(out) == []
+    still = str(tmp_path / "frame.jpg")
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", out, "-frames:v", "1", still],
+        check=True, capture_output=True,
+    )
+    assert os.path.getsize(still) > 0
