@@ -29,7 +29,7 @@ Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
 - Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:fc5a81090bac281b33eae122c087b19d6c9f0c090f8a68a2c1a2686723866097`
 - Vignette **off** (0). Cap 0–0.04 still looked always-on: ffmpeg PI/5 mapping. `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
-- CI `34699477701` on `tier1` (`#123`) pushed `:lab`. Lab Studio boot pin **succeeded**: `/api/health` `lab_fast_pin=pinned` `v2_patch=200`. **Lab only. Live stays `c497505`.** Generate a **new** pack; packs from `74ee1695…` still have the PI/5 vignette.
+- CI `34699477701` on `tier1` (`#123`) pushed `:lab`. Lab Studio `lab_fast_pin=pinned`. **Jeff 2026-09-12: its fixed.** Lab only. Live stays `c497505` (still has compete vig). Do not PATCH live.
 - Prior lab image `sha256:7787da9dc36910e4d65f37949ada07df1dd765f7e635006e98bdad6f7c533c46` / same cap (feature-branch CI `34696985114`, superseded by the `tier1` push).
 - Prior lab image `sha256:80564ee0cebed85ffc967bc434638f32c9ad08fbd08f98e110e6018bbd6418ac` / Fast identity A–D+C2. Pack `6e8dfa80fba8` whole-clip too dark (compete vig 0.02–0.12). Writeup: `docs/ops/lab-identity-6e8dfa80fba8.md`.
 - Identity proof (not look-signed): pack `6e8dfa80fba8` — writeup `docs/ops/lab-identity-6e8dfa80fba8.md`.
@@ -93,7 +93,7 @@ Lab packs:
 | **`f05d803` 19-bit / 30% ship floor — was live** | SaveInta Fast 2 (`saveintafloor`): **26/26 bits**, both medium `ok`. AQMTp Fast 2 escalate (`aqmtpfloor`): **19/19 bits (~30%)**, both strong `below_target` **still `ok`**. AQMTp Fast 2 no-escalate (`aqmtpnoesc`): copy 1 **16 bits uniqueness_fail**; copy 2 **19 bits `ok` / `below_target`**. Was live Fast **no `VF_LAB`**. | — |
 | **`c497505` crop-drift lab verify (`1fbe4f51de83`) — live stays** | vs compete LOOK `166cf4bae4be` (**33/32**, **20/19**, **45/46**). Drift: SaveInta **33/33** medium `ok`; AQMTp **18/17** `uniqueness_fail` (parked); bring-me-down **43/45** medium `ok`. Stills not lava/snow. | bring-me-down **43/45** bits, VMAF 100, look ok. |
 | **`c709df0` copyid record Generate (`3d4fae98ca77`) — not a verdict** | Worker ran `copyid=record`. SaveInta **30/35** medium `ok`, heads **null**. AQMTp **19** strong / **21** medium `below_target`; escalate copy kept heads but audio `available: false` (fpcalc libav vs BtbN mp4). Motion **46/45**. Fast auto_tune dropped heads; wav fallback + pass-through fix next image. Stay `record`. Live untouched. | bring-me-down **46/45** bits, VMAF 98.4 / 100. |
-| **`fc5a8109…` vignette off (`sha256:fc5a8109…3866097`) — lab recycled** | CI `34699477701` (`#123` / `tier1`). Skip vig (0). PI/5 mapping made 0–0.04 look always-on. Lab Studio `lab_fast_pin=pinned`. **Lab only. Live stays `c497505`.** Generate a **new** pack. | — |
+| **`fc5a8109…` vignette off (`sha256:fc5a8109…3866097`) — Jeff: its fixed** | CI `34699477701` (`#123` / `tier1`). Skip vig (0). Lab Studio `lab_fast_pin=pinned`. **Lab only. Live stays `c497505`.** | — |
 | **`74ee1695…` vignette cap 0–0.04 (`sha256:74ee1695…07c15d6c`) — still dark** | CI `34698649413` (`#122`). Jeff: new gens still the dark look. | — |
 | **`f6bd9b1d…` vignette cap 0–0.04 (`sha256:f6bd9b1d…eea4a54`) — superseded tag** | CI `34697929520` / `tier1` before the pin-fallback merge. Same cap. | — |
 | **`8067b6c1…` vignette cap 0–0.04 (`sha256:8067b6c1…c26dd5c`) — superseded tag** | CI `34697248914` on `tier1` (`#117`). Same cap. | — |
