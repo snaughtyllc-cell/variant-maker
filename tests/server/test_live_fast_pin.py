@@ -43,10 +43,20 @@ def test_skips_when_one_shot_disabled():
     assert calls == []
 
 
+def test_skips_when_one_shot_spent():
+    calls = []
+    status = pin_live_fast_endpoint(
+        {"VARIANT_LAB": "1", "RUNPOD_API_KEY": "k"},
+        patch=lambda *a: calls.append(a) or (200, "ok"),
+    )
+    assert status == "skipped_disabled"
+    assert calls == []
+
+
 def test_skips_without_api_key():
     calls = []
     status = pin_live_fast_endpoint(
-        {"VARIANT_LAB": "1"},
+        {"VARIANT_LAB": "1", "VARIANT_LIVE_FAST_PIN": "1"},
         patch=lambda *a: calls.append(a) or (200, "ok"),
     )
     assert status == "skipped_no_key"
@@ -58,6 +68,7 @@ def test_pins_live_url_never_lab_url():
     status = pin_live_fast_endpoint(
         {
             "VARIANT_LAB": "true",
+            "VARIANT_LIVE_FAST_PIN": "1",
             "RUNPOD_API_KEY": "secret",
             "RUNPOD_FAST_ENDPOINT_ID": LAB_FAST_ENDPOINT,
         },
@@ -89,7 +100,7 @@ def test_http_body_is_image_only_no_env():
         return 200, "ok"
 
     status = pin_live_fast_endpoint(
-        {"VARIANT_LAB": "1", "RUNPOD_API_KEY": "k"},
+        {"VARIANT_LAB": "1", "VARIANT_LIVE_FAST_PIN": "1", "RUNPOD_API_KEY": "k"},
         http=http,
     )
     assert status == "pinned"
@@ -113,7 +124,7 @@ def test_v2_403_falls_back_to_v1_image_name_only():
         raise AssertionError(f"unexpected {method} {url} {body}")
 
     status = pin_live_fast_endpoint(
-        {"VARIANT_LAB": "1", "RUNPOD_API_KEY": "job-key"},
+        {"VARIANT_LAB": "1", "VARIANT_LIVE_FAST_PIN": "1", "RUNPOD_API_KEY": "job-key"},
         http=http,
     )
     assert status == "pinned"
@@ -136,7 +147,7 @@ def test_does_not_patch_templates():
         return 403, '{"error":"forbidden"}'
 
     status = pin_live_fast_endpoint(
-        {"VARIANT_LAB": "1", "RUNPOD_API_KEY": "k"},
+        {"VARIANT_LAB": "1", "VARIANT_LIVE_FAST_PIN": "1", "RUNPOD_API_KEY": "k"},
         http=http,
     )
     assert status.startswith("error_")
@@ -148,6 +159,7 @@ def test_refuses_image_override_with_vf_lab_or_lab_id():
     status = pin_live_fast_endpoint(
         {
             "VARIANT_LAB": "1",
+            "VARIANT_LIVE_FAST_PIN": "1",
             "RUNPOD_API_KEY": "k",
             "VARIANT_LIVE_FAST_IMAGE": (
                 f"ghcr.io/snaughtyllc-cell/variant-fast@sha256:{'ab' * 32}"
@@ -200,6 +212,7 @@ def test_prefers_endpoint_update_key():
     status = pin_live_fast_endpoint(
         {
             "VARIANT_LAB": "1",
+            "VARIANT_LIVE_FAST_PIN": "1",
             "RUNPOD_API_KEY": "job-only",
             "RUNPOD_ENDPOINT_UPDATE_KEY": "mgmt-write",
         },

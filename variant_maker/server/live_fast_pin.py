@@ -14,8 +14,8 @@ PINNED_IMAGE = (
     "ghcr.io/snaughtyllc-cell/variant-fast@"
     "sha256:fc5a81090bac281b33eae122c087b19d6c9f0c090f8a68a2c1a2686723866097"
 )
-# Flip to False after Live Fast is confirmed on this digest.
-ONE_SHOT_ENABLED = True
+# Spent 2026-09-12: Lab health live_fast_pin=pinned v2_patch=200.
+ONE_SHOT_ENABLED = False
 _V2_PATCH_URL = "https://api.runpod.io/v2/serverless/{endpoint}"
 _V1_ENDPOINT_URL = "https://rest.runpod.io/v1/endpoints/{endpoint}"
 _USER_AGENT = "varyforge-live-fast-pin/1"
