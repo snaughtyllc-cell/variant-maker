@@ -50,7 +50,32 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Fast CPU lab tag
+        id: push
         run: |
           docker build -f deploy/runpod/Dockerfile.fast \
             -t ghcr.io/snaughtyllc-cell/variant-fast:lab .
-          docker push ghcr.io/snaughtyllc-cell/variant-fast:lab
+          docker push ghcr.io/snaughtyllc-cell/variant-fast:lab | tee /tmp/push.log
+          DIGEST=$(grep -oE 'sha256:[a-f0-9]{64}' /tmp/push.log | tail -1)
+          test -n "$DIGEST"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Lab Fast digest $DIGEST"
+
+      - name: Pin Lab Fast endpoint to this digest
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          LAB_FAST_ENDPOINT: xar25v77v3j27u
+          LAB_FAST_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test "$LAB_FAST_ENDPOINT" = "xar25v77v3j27u"
+          test "$LAB_FAST_ENDPOINT" != "j0b1q4iuunzhnq"
+          IMAGE="ghcr.io/snaughtyllc-cell/variant-fast@${LAB_FAST_DIGEST}"
+          echo "Pin $LAB_FAST_ENDPOINT to $IMAGE"
+          if [ -z "${RUNPOD_API_KEY:-}" ]; then
+            echo "RUNPOD_API_KEY unset; :lab is on GHCR. Recycle lab by hand. Do not PATCH live."
+            exit 0
+          fi
+          curl -sfS -X PATCH "https://api.runpod.io/v2/serverless/${LAB_FAST_ENDPOINT}" \
+            -H "Authorization: Bearer ${RUNPOD_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"image\":\"${IMAGE}\"}"

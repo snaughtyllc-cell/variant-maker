@@ -54,6 +54,13 @@ def test_lab_fast_ci_cannot_push_live_latest():
         assert "docker push ghcr.io/snaughtyllc-cell/variant-fast:latest" not in text, path.name
 
 
+def test_lab_fast_ci_recycles_lab_endpoint_only():
+    lab = (ROOT / ".github/workflows/build-variant-fast-lab.yml").read_text()
+    assert "LAB_FAST_ENDPOINT: xar25v77v3j27u" in lab
+    assert "api.runpod.io/v2/serverless/${LAB_FAST_ENDPOINT}" in lab
+    assert "api.runpod.io/v2/serverless/j0b1q4iuunzhnq" not in lab
+
+
 def test_live_lane_template_is_live_not_lab():
     raw = json.loads((ROOT / "deploy/varimo-lane.live.json").read_text(encoding="utf-8"))
     assert raw["lane"] == "live"
