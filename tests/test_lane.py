@@ -43,6 +43,9 @@ def test_lab_fast_ci_cannot_push_live_latest():
     lab = (ROOT / ".github/workflows/build-variant-fast-lab.yml").read_text()
     assert "-t ghcr.io/snaughtyllc-cell/variant-fast:lab" in lab
     assert "-t ghcr.io/snaughtyllc-cell/variant-fast:latest" not in lab
+    # Engine on Lab default must rebuild :lab. Live :latest stays on varimo-live.
+    assert "\n      - tier1\n" in lab
+    assert "workflow_dispatch" in lab
     live_wf = ROOT / ".github/workflows/build-variant-fast.yml"
     assert not live_wf.exists(), "Live Fast :latest CI belongs on varimo-live, not Lab"
     for path in (ROOT / ".github/workflows").glob("*.yml"):

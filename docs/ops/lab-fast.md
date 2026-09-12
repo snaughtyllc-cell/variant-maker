@@ -12,11 +12,15 @@ Live Fast stays pinned. This endpoint is for engine experiments.
 | Workers | max **4** (CPU) | max 1, min 0 |
 | Recycle | promote only | whenever |
 
-CI: `.github/workflows/build-variant-fast-lab.yml` also on
-`cursor/aqmtp-uniqueness-c975` and `cursor/ig-720-fast-20-c975` (plus the
-older look branches).
-Pushes the `variant-fast:lab` tag only. This Lab repo must **not** push
-`variant-fast:latest`. Live `:latest` CI belongs on `snaughtyllc-cell/varimo-live`.
+CI: `.github/workflows/build-variant-fast-lab.yml` on **`tier1`**
+(and leftover experiment branches). Pushes the `variant-fast:lab` tag
+only. This Lab repo must **not** push `variant-fast:latest`. Live
+`:latest` CI belongs on `snaughtyllc-cell/varimo-live`.
+
+A merge to `tier1` that touches the Fast image paths rebuilds `:lab`.
+That tag is **not** what Lab RunPod runs until the lab endpoint
+(`xar25v77v3j27u`) is digest-pinned to the new sha and workers recycle.
+Do **not** PATCH live `j0b1q4iuunzhnq`.
 
 Do **not** set `RUNPOD_FAST_ENDPOINT_ID` on production Studio to the lab id.
 Do **not** recycle live workers to test a lab digest.

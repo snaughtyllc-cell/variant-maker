@@ -2,9 +2,12 @@ name: Build varimo Fast CPU worker (lab)
 
 # Lab GitHub (snaughtyllc-cell/variant-maker) only.
 # Experiment image only. Does not overwrite variant-fast:latest (live).
+# Lab default branch is tier1 — that is the image Generate-on-lab should get
+# after recycle. Do not add a :latest push here.
 on:
   push:
     branches:
+      - tier1
       - cursor/fast-shot-probe-c975
       - cursor/fast-chroma-cloud-c975
       - cursor/fast-cloud-less-grain-c975
