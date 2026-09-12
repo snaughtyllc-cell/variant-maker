@@ -27,6 +27,18 @@ def test_health_lab_flag(monkeypatch):
     assert "lab_fast_pin" in body
 
 
+def test_health_lab_fast_pin_detail(monkeypatch):
+    from variant_maker.server import lab_fast_pin
+
+    monkeypatch.setenv("VARIANT_LAB", "1")
+    lab_fast_pin.LAST_STATUS = "error_403"
+    lab_fast_pin.LAST_DETAIL = "v2_patch=403"
+    client = TestClient(create_app())
+    body = client.get("/api/health").json()
+    assert body["lab_fast_pin"] == "error_403"
+    assert body["lab_fast_pin_detail"] == "v2_patch=403"
+
+
 def _client(tmp_path, plan=None):
     store = JobStore(Workspace(str(tmp_path)), FakeRunner(plan or {}))
     return TestClient(create_app(store)), store
