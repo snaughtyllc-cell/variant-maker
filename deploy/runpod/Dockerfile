@@ -17,12 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # distro ffmpeg lacks. Use BtbN's GPL static build: it is reachable from CI, unlike the
 # John Van Sickle host, and bundles libvmaf. BtbN GPL is expected to include rubberband
 # (Phase 13 pitch); do not hard-fail the image if that filter is missing.
-RUN cd /tmp && wget -q -O ffmpeg.tar.xz \
-      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
-    tar xf ffmpeg.tar.xz && \
-    cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ && \
-    rm -rf /tmp/ffmpeg* && \
-    test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
+# Dated autobuild tarball — not the rolling `latest` tag (404 during republish).
+COPY deploy/runpod/install_btbn_ffmpeg.py /tmp/install_btbn_ffmpeg.py
+RUN python3 /tmp/install_btbn_ffmpeg.py
 RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband || echo "WARN: no rubberband filter"
 
 # RIFE path only — do not wget the ~411MB ubuntu zip. Bake rife-ncnn-vulkan + rife-v4.6

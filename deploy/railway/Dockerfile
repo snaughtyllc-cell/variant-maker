@@ -20,15 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ffmpeg WITH libvmaf so VARIANT_RUNNER=local works before RunPod is wired.
 # The previous johnvansickle archive endpoint is unreachable from Railway's build
 # workers. BtbN publishes a Linux static GPL build with libvmaf enabled.
-RUN cd /tmp \
- && curl -fsSL --retry 5 --retry-all-errors \
-      -o ffmpeg.tar.xz \
-      https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
- && tar xf ffmpeg.tar.xz \
- && cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg \
-       ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ \
- && rm -rf /tmp/ffmpeg-* \
- && test "$(ffmpeg -hide_banner -filters 2>/dev/null | grep -c libvmaf)" -ge 1
+# Dated autobuild tarball — not the rolling `latest` tag (404 during republish).
+COPY deploy/runpod/install_btbn_ffmpeg.py /tmp/install_btbn_ffmpeg.py
+RUN python3 /tmp/install_btbn_ffmpeg.py
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
