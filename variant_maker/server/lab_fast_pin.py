@@ -11,6 +11,7 @@ LAB_FAST_ENDPOINT = "xar25v77v3j27u"
 LIVE_FAST_ENDPOINT = "j0b1q4iuunzhnq"
 DEFAULT_IMAGE = "ghcr.io/snaughtyllc-cell/variant-fast:lab"
 _PATCH_URL = "https://api.runpod.io/v2/serverless/{endpoint}"
+LAST_STATUS = "not_run"
 
 
 def _truthy(raw: str | None) -> bool:
@@ -53,24 +54,30 @@ def pin_lab_fast_endpoint(
     patch: Callable[[str, str, str], tuple[int, str]] | None = None,
 ) -> str:
     env = environ if environ is not None else os.environ
+
+    def finish(status: str) -> str:
+        global LAST_STATUS
+        LAST_STATUS = status
+        return status
+
     endpoint = target_endpoint(env)
     if endpoint is None:
         if not _truthy(env.get("VARIANT_LAB")):
-            return "skipped_not_lab"
-        return "skipped_not_lab_endpoint"
+            return finish("skipped_not_lab")
+        return finish("skipped_not_lab_endpoint")
     if endpoint == LIVE_FAST_ENDPOINT:
-        return "skipped_not_lab_endpoint"
+        return finish("skipped_not_lab_endpoint")
     key = (env.get("RUNPOD_API_KEY") or "").strip()
     if not key:
-        return "skipped_no_key"
+        return finish("skipped_no_key")
     image = (env.get("VARIANT_LAB_FAST_IMAGE") or DEFAULT_IMAGE).strip() or DEFAULT_IMAGE
     url = _PATCH_URL.format(endpoint=endpoint)
     if LIVE_FAST_ENDPOINT in url:
-        return "skipped_not_lab_endpoint"
+        return finish("skipped_not_lab_endpoint")
     do_patch = patch or _default_patch
     status, body = do_patch(url, key, image)
     if status >= 300:
         print(f"lab fast pin HTTP {status}: {body[:200]}", flush=True)
-        return f"error_{status}"
+        return finish(f"error_{status}")
     print(f"Pinned lab {endpoint} to {image}. Did not PATCH live.", flush=True)
-    return "pinned"
+    return finish("pinned")

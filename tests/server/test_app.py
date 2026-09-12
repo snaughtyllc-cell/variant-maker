@@ -21,7 +21,10 @@ def test_health_ok():
 def test_health_lab_flag(monkeypatch):
     monkeypatch.setenv("VARIANT_LAB", "1")
     client = TestClient(create_app())
-    assert client.get("/api/health").json() == {"status": "ok", "lab": True}
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert body["lab"] is True
+    assert "lab_fast_pin" in body
 
 
 def _client(tmp_path, plan=None):

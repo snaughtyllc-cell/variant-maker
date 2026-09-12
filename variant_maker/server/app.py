@@ -1378,8 +1378,14 @@ def create_app(
 
     @app.get("/api/health")
     def health() -> dict:
+        from . import lab_fast_pin
+
         raw = (os.environ.get("VARIANT_LAB") or "").strip().lower()
-        return {"status": "ok", "lab": raw in {"1", "true", "yes"}}
+        lab = raw in {"1", "true", "yes"}
+        out: dict = {"status": "ok", "lab": lab}
+        if lab:
+            out["lab_fast_pin"] = lab_fast_pin.LAST_STATUS
+        return out
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
         assert tenants is not None
