@@ -1385,6 +1385,8 @@ def create_app(
         out: dict = {"status": "ok", "lab": lab}
         if lab:
             out["lab_fast_pin"] = lab_fast_pin.LAST_STATUS
+            if lab_fast_pin.LAST_DETAIL:
+                out["lab_fast_pin_detail"] = lab_fast_pin.LAST_DETAIL
         return out
 
     def _auth_me_out(user, viewing_id: str | None = None) -> AuthMeOut:
