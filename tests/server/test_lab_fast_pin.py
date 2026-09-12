@@ -52,7 +52,8 @@ def test_pins_lab_endpoint_never_live_url():
         patch=lambda url, key, image: calls.append((url, key, image)) or (200, "ok"),
     )
     assert status == "pinned"
-    assert len(calls) == 1
+    from variant_maker.server import lab_fast_pin as mod
+    assert mod.LAST_STATUS == "pinned"
     url, key, image = calls[0]
     assert LAB_FAST_ENDPOINT in url
     assert LIVE_FAST_ENDPOINT not in url
