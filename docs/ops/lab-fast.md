@@ -27,9 +27,10 @@ Do **not** recycle live workers to test a lab digest.
 
 Lab endpoint id: `xar25v77v3j27u` (`varyforge-fast-cpu-lab`).
 
-- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:80564ee0cebed85ffc967bc434638f32c9ad08fbd08f98e110e6018bbd6418ac`
-- Fast identity A–D + C2 SEI drop (`225c7fa` / `56487ea`). `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
-- CI `34692652542` rebuilt `:lab` after recycle-CI. Jeff recycled **lab** `xar25v77v3j27u` by hand. **Do not PATCH live.** Digest is the pin; dashboard `VF_ENGINE_REV` may lag.
+- Image: `ghcr.io/snaughtyllc-cell/variant-fast@sha256:7787da9dc36910e4d65f37949ada07df1dd765f7e635006e98bdad6f7c533c46`
+- Vignette cap **0–0.04** (can skip) + BtbN dated autobuild ffmpeg. `VF_LAB=1`. `VARIANT_MAKER_COPYID=record`
+- CI `34696985114` pushed `:lab` (`#117`). GitHub `RUNPOD_API_KEY` empty — **recycle lab `xar25v77v3j27u` by hand** to this digest. **Do not PATCH live.**
+- Prior lab image `sha256:80564ee0cebed85ffc967bc434638f32c9ad08fbd08f98e110e6018bbd6418ac` / Fast identity A–D+C2. Pack `6e8dfa80fba8` whole-clip too dark (compete vig 0.02–0.12). Writeup: `docs/ops/lab-identity-6e8dfa80fba8.md`.
 - Identity proof (not look-signed): pack `6e8dfa80fba8` — writeup `docs/ops/lab-identity-6e8dfa80fba8.md`.
 - Live Fast stays `c497505` / `sha256:3d24473a…`, **no `VF_LAB`**, copyid **off**.
 - Prior lab image `sha256:1b79750ae36b7bbc15d8411dc44945e2a62f890a86c512d7ba6cd4d3fe119a6c` / `225c7fa` (first A–D+C2 `:lab` push, CI `34692427812`; superseded after recycle).
@@ -91,6 +92,7 @@ Lab packs:
 | **`f05d803` 19-bit / 30% ship floor — was live** | SaveInta Fast 2 (`saveintafloor`): **26/26 bits**, both medium `ok`. AQMTp Fast 2 escalate (`aqmtpfloor`): **19/19 bits (~30%)**, both strong `below_target` **still `ok`**. AQMTp Fast 2 no-escalate (`aqmtpnoesc`): copy 1 **16 bits uniqueness_fail**; copy 2 **19 bits `ok` / `below_target`**. Was live Fast **no `VF_LAB`**. | — |
 | **`c497505` crop-drift lab verify (`1fbe4f51de83`) — live stays** | vs compete LOOK `166cf4bae4be` (**33/32**, **20/19**, **45/46**). Drift: SaveInta **33/33** medium `ok`; AQMTp **18/17** `uniqueness_fail` (parked); bring-me-down **43/45** medium `ok`. Stills not lava/snow. | bring-me-down **43/45** bits, VMAF 100, look ok. |
 | **`c709df0` copyid record Generate (`3d4fae98ca77`) — not a verdict** | Worker ran `copyid=record`. SaveInta **30/35** medium `ok`, heads **null**. AQMTp **19** strong / **21** medium `below_target`; escalate copy kept heads but audio `available: false` (fpcalc libav vs BtbN mp4). Motion **46/45**. Fast auto_tune dropped heads; wav fallback + pass-through fix next image. Stay `record`. Live untouched. | bring-me-down **46/45** bits, VMAF 98.4 / 100. |
+| **`7787da9d…` vignette cap 0–0.04 (`sha256:7787da9d…c533c46`) — GHCR, recycle lab by hand** | CI `34696985114` (`#117`) pushed `:lab` after BtbN `latest` 404 killed `34696701553`. Cap is in the image. GitHub `RUNPOD_API_KEY` empty. **Recycle lab `xar25v77v3j27u` only. Do not PATCH live.** Generate a **new** pack; `6e8dfa80fba8` still has 0.02–0.12 vig. | — |
 | **`80564ee0…` Fast identity A–D+C2 (`sha256:80564ee0cebed85f…d6418ac`) — lab recycled** | Job `6e8dfa80fba8` Fast 3, **6.5s 720 motion** (~0.45 min). All SHA16 ≠ source/peers; AAC `atrim`+`atempo` never copy; encoder empty; `sei_x264` **no**. Copy 2 MAE **61.33** `review_required` (keep medium). **Identity proof, not look-signed. Not SaveInta. Do not pin live.** Jeff: **whole clip too dark** — compete vignette 0.02–0.12. Cap **0–0.04** next image. Writeup: `docs/ops/lab-identity-6e8dfa80fba8.md`. | Motion 43/46/45 bits, VMAF 99.9+, all medium `ok`. |
 | **`225c7fa` Fast identity A–D+C2 (`sha256:1b79750a…`) — first `:lab` push** | CI `34692427812` pushed `:lab`. Never copy audio; encode family; strip-only tags; drop x264 SEI. Stay `record`. Superseded by `80564ee0…` after recycle. **Do not PATCH live.** | — |
 | **`3caeb44` voice-safe audio (`sha256:e5173d9a…`) — published, not a look pack** | CI `33310677990` pushed `:lab`. Pitch/EQ/loudnorm off unless `audio_uniqueness`. Stay `record`. Recycle **lab** workers to pick it up. **Do not PATCH live.** | — |

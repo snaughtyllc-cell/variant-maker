@@ -21,8 +21,10 @@ on:
       - cursor/crop-drift-live-cdb6
       - cursor/copyid-lab-record-cdb6
       - cursor/lab-backlog-6cba
+      - cursor/lab-fast-ffmpeg-btbn-ef2b
     paths:
       - deploy/runpod/Dockerfile.fast
+      - deploy/runpod/install_btbn_ffmpeg.py
       - deploy/runpod/cp_handler.py
       - variant_maker/*.py
       - variant_maker/copyid/**
