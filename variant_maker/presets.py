@@ -49,7 +49,7 @@ SUBTLE = Preset(
     crop_keep=Range(0.98, 1.00), rotate_deg=Range(0.0, 0.0),
     brightness=Range(-0.01, 0.01), contrast=Range(0.99, 1.01),
     saturation=Range(0.99, 1.02), gamma=Range(0.99, 1.01),     hue_deg=Range(-1, 1),
-    vignette=Range(0.0, 0.04),
+    vignette=Range(0.0, 0.0),
     grain=Range(3, 6), unsharp=Range(0.0, 0.0), warp_k1=Range(-0.004, 0.004),
     rebuild_scale=Range(0.90, 0.98),
     speed=Range(0.99, 1.01),
@@ -66,9 +66,10 @@ MEDIUM = Preset(
     crop_keep=Range(0.92, 0.96), rotate_deg=Range(-0.8, 0.8),
     brightness=Range(-0.025, 0.025), contrast=Range(0.97, 1.03),
     saturation=Range(0.96, 1.05), gamma=Range(0.97, 1.03),     hue_deg=Range(-3, 3),
-    # 0.02–0.12 always-on darkened the whole clip (Jeff 2026-09-12). 0.114
-    # was already black-corner look-fail (`lookcompete4`). Same cap as subtle.
-    vignette=Range(0.0, 0.04),
+    # 0.02–0.12 always-on, then 0–0.04, still whole-clip dark: filtergraph
+    # subtracted amount from ffmpeg PI/5, so vig>0 was default-strength
+    # (Jeff 2026-09-12, new gens after the cap). Skip until look-signed.
+    vignette=Range(0.0, 0.0),
     grain=Range(7, 12), unsharp=Range(0.2, 0.35), warp_k1=Range(-0.015, 0.015),
     # ~720–864 then back to 1080×1920. The uniqueness frame (576×1024) can see this;
     # ±32 px could not. Escalate's strong.hi sits below medium.lo.
@@ -86,7 +87,7 @@ STRONG = Preset(
     crop_keep=Range(0.88, 0.93), rotate_deg=Range(-2.0, 2.0),
     brightness=Range(-0.04, 0.04), contrast=Range(0.95, 1.06),
     saturation=Range(0.92, 1.10), gamma=Range(0.95, 1.05),     hue_deg=Range(-6, 6),
-    vignette=Range(0.0, 0.04),
+    vignette=Range(0.0, 0.0),
     grain=Range(10, 16), unsharp=Range(0.3, 0.45), warp_k1=Range(-0.020, 0.020),
     rebuild_scale=Range(0.50, 0.66),
     speed=Range(0.94, 1.06),
