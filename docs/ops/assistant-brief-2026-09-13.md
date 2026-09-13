@@ -442,3 +442,21 @@ rebuild kernels. AQMTp stays parked. How-to page and Telegram: later.
 **Product bar:** look as close to the original as possible; file as original
 as possible (SHA, AAC never copy, empty encoder, no SEI). Harder look only
 when uniqueness needs it.
+
+**SSIM alignment diagnostic (Lab-only, 2026-09-13).** Optional
+`--ssim-align-diag` / `VARIANT_SSIM_ALIGN_DIAG=1`. Compares fractional
+25/50/75 SSIM vs trim-mapped source times. **Does not change gate 24.**
+Does not escalate. Not enabled by `VARIANT_LAB`. Live Fast unchanged.
+Jeff NC run: clock can add a few bits (carne −5; Nah seriously **26→22**
+this seed). Kings / Homegirl **27→26 / 26→25** this seed. Aligned
+threshold is uncalibrated; fractional stays until it isn’t. Do not
+compare aligned bits to floor 19. Do not raise 24. Motion peer 24 is
+same-batch diversity (crossPasses), unmeasured here. Writeup:
+`docs/ops/ssim-align-diag-2026-09-13.md`. If aligned is ever calibrated,
+peer floor must not inherit the source number (do not repeat 10 → 24).
+Peer-fail is same seed, then strong (wider trim), not a reseed. On a
+motion peer miss, “escalated to strong” reads as “redrew trim wider”
+until a same-trim comparison says otherwise. Uniqueness bits are SSIM
+**All** (chroma included); look MAE is luma-only. TH seed sweep
+(42–46): kings aligned stays ≥25; Homegirl/Nah straddle 24. Fractional
+gate all ok. Look max MAE often one-q spikes, not a 38-wide look spend.

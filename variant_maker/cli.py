@@ -34,6 +34,12 @@ from . import __version__
     help="one medium encode + source/variant stills; look gate, no uniqueness hunt",
 )
 @click.option(
+    "--ssim-align-diag", is_flag=True,
+    help="Lab diagnostic: compare fractional vs trim-aligned SSIM. "
+         "Does not change the 24-bit uniqueness gate. "
+         "Env VARIANT_SSIM_ALIGN_DIAG=1 also enables. Off by default.",
+)
+@click.option(
     "--auto-tune/--no-auto-tune", default=None,
     help="bisect strength to the uniqueness target (default: on for Fast, off for HQ)",
 )
@@ -47,7 +53,7 @@ from . import __version__
 @click.version_option(version=__version__)
 def main(**config):
     """Generate N look-good variants of INPUT plus a manifest."""
-    from . import pipeline
+    from . import pipeline, uniqueness
     m = pipeline.run(config)
     if config.get("look_first") and m.variants:
         v = m.variants[0]
@@ -55,6 +61,21 @@ def main(**config):
             f"look {v.look_status} mae={v.look_mae} max={getattr(v, 'look_mae_max', None)} "
             f"stills={v.look_src or '-'} {v.look_var or '-'}"
         )
+    if uniqueness.ssim_align_diag_wanted(config):
+        for v in m.variants:
+            diag = (v.quality or {}).get("ssim_align_diag") or {}
+            if diag.get("error"):
+                click.echo(f"v{v.index:02d} ssim-align-diag error={diag['error']}")
+                continue
+            frac = (diag.get("fractional") or {}).get("bits")
+            aligned = (diag.get("aligned") or {}).get("bits")
+            delta = diag.get("bits_delta")
+            if frac is None and aligned is None:
+                continue
+            click.echo(
+                f"v{v.index:02d} ssim-align-diag fractional={frac} aligned={aligned} "
+                f"bits_delta={delta} (24-bit gate unchanged)"
+            )
 
 
 if __name__ == "__main__":
