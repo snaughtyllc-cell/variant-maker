@@ -456,4 +456,7 @@ same-batch diversity (crossPasses), unmeasured here. Writeup:
 peer floor must not inherit the source number (do not repeat 10 → 24).
 Peer-fail is same seed, then strong (wider trim), not a reseed. On a
 motion peer miss, “escalated to strong” reads as “redrew trim wider”
-until a same-trim comparison says otherwise.
+until a same-trim comparison says otherwise. Uniqueness bits are SSIM
+**All** (chroma included); look MAE is luma-only. TH seed sweep
+(42–46): kings aligned stays ≥25; Homegirl/Nah straddle 24. Fractional
+gate all ok. Look max MAE often one-q spikes, not a 38-wide look spend.

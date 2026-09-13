@@ -228,7 +228,45 @@ scale → mild rebuild → rotate → warp → **eq always** → hue → unsharp
   (luma snow rejected). 720 cloud **4–7** + luma dust **11–13**. Grain is
   protected from shrink. Vignette 0. No shade.
 - Distortion budget is not MAE. Look MAE is the actual file (crop
-  included). We did not score MAE on the Jeff NC TH run.
+  included). Seed sweep below scored it.
+
+**Meters:** uniqueness bits use ffmpeg SSIM **All** (Y+U+V), not luma.
+`bits_from_ssim` is `round((1 − All) × 64)`. 1080 chroma-only noise
+(`c0s=0`, `c1s/c2s=g`) is meant to move All while leaving VMAF/luma.
+Look MAE is **luma-only** (`coarse_luma_v1`, `format=gray` at 16×28).
+Chroma grain is visible to the uniqueness meter and almost invisible to
+MAE. It is not a luma-only SSIM default.
 
 Parked “hold / slide / settle, same keep” is editorial on top of travel
 that already exists. Keep still varies. Do not unpark without Jeff stills.
+
+## Seed sweep — three TH files × seeds 42–46 (n=1, index 1)
+
+Same medium Fast recipe. Gate **24** unchanged. Look scored on the
+actual files. Index 1 is a different draw than the earlier index-5/6
+rows.
+
+| Clip | Self | Gate All | Aligned All | Aligned Y | Look max MAE | Status |
+|---|---|---|---|---|---|---|
+| kings 42–46 | 21 | 26,26,27,28,26 | **25,25,25,27,25** | 27,27,27,29,27 | 115,115,115,14,115 | 4/5 `review_required` |
+| Homegirl 42–46 | 22 | 25,26,27,26,26 | **23,23,24,25,24** | 24,24,26,26,26 | 55,55,55,55,55 | 5/5 `review_required` |
+| Nah seriously 42–46 | 20 | 24,26,26,26,28 | **21,23,22,25,22** | 23,25,24,27,24 | 66,66,66,66,32 | 4/5 `review_required` |
+
+All 15 fractional gates **ok** (24–28). Aligned **straddles 24** on
+Homegirl and Nah; kings sits **above** (25–27). “Just above 24” was this
+seed, not the class.
+
+Aligned Y bits are **1–2 higher** than All on these files (luma more
+different than the combined score). Crop/rotate/travel are doing the
+uniqueness work. Chroma grain is in All, not luma-only, and is not
+what is clearing 24 here.
+
+Look: `review_required` is almost always **one** fraction at 55–115
+while the other two sit at 4–16 (signed band). Kings seed 45 is 11–14
+all three (`no_coarse_luma_alarm`). Nah seed 46 is 10/24/32. Max-of-3
+fractional MAE is the same clock bug as uniqueness — a false look fail
+on one q, not lava on the face. Do not retune **38**. Unattended still
+keeps medium.
+
+Do not raise 24. Do not fold aligned into the gate (this sweep would
+fail more still-face copies). Do not hunt chroma to buy All bits.
