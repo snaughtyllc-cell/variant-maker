@@ -137,7 +137,7 @@ route is missing from that catalog.
 | **Drops** | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
-| **How to** | `/how-to` | everyone | More | Best practices / case scenarios. Not a phone-bar tab. No fingerprint internals. |
+| **How to** | `/how-to` | everyone | More | Generating / Automation / Posting tabs. Not a phone-bar tab. No fingerprint internals. |
 | **Team** | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | **Admin** | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |

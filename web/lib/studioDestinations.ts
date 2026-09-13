@@ -67,7 +67,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "extra",
     summary:
-      "Best practices: Studio→Gallery, Workflows Drive in/out, posting cadence, Repurpose/Buffer. Not a phone-bar tab. No fingerprint internals.",
+      "Three How-to tabs: Generating (Studio→Gallery), Automation (Workflows, captions, Repurpose/Buffer), Posting. Not a phone-bar tab. No fingerprint internals. No Analytics.",
   },
   {
     href: "/team",

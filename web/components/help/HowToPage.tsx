@@ -1,14 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { CircleHelp } from "lucide-react";
 import {
+  HOW_TO_CATEGORIES,
   HOW_TO_EYEBROW,
-  HOW_TO_JUMP_LINKS,
   HOW_TO_LEAD,
-  HOW_TO_SECTIONS,
   HOW_TO_TITLE,
+  type HowToCategory,
 } from "@/lib/howTo";
 
 export function HowToPage() {
+  const [activeId, setActive] = useState<HowToCategory["id"]>(HOW_TO_CATEGORIES[0].id);
+  const category = HOW_TO_CATEGORIES.find((item) => item.id === activeId) ?? HOW_TO_CATEGORIES[0];
+
   return (
     <main className="how-to-page">
       <div className="workspace-heading">
@@ -23,29 +29,52 @@ export function HowToPage() {
       </div>
 
       <article className="how-to-article">
-        {HOW_TO_SECTIONS.map((section) => (
-          <section key={section.id} className="how-to-section" aria-labelledby={`how-to-${section.id}`}>
-            <h2 id={`how-to-${section.id}`}>{section.title}</h2>
-            {section.paragraphs.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
-            ))}
-            {section.bullets && section.bullets.length > 0 && (
-              <ul>
-                {section.bullets.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))}
+        <div className="how-to-tabs" role="tablist" aria-label="How-to categories">
+          {HOW_TO_CATEGORIES.map((item) => {
+            const selected = item.id === category.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`how-to-tab-${item.id}`}
+                aria-selected={selected}
+                aria-controls={`how-to-panel-${item.id}`}
+                tabIndex={selected ? 0 : -1}
+                data-active={selected}
+                onClick={() => setActive(item.id)}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
 
-        <nav className="how-to-jumps" aria-label="Open a Studio tab">
-          {HOW_TO_JUMP_LINKS.map((link) => (
-            <Link key={link.href} href={link.href}>
-              {link.label}
-            </Link>
+        <div
+          className="how-to-panel"
+          role="tabpanel"
+          id={`how-to-panel-${category.id}`}
+          aria-labelledby={`how-to-tab-${category.id}`}
+        >
+          <p className="how-to-blurb">{category.blurb}</p>
+          {category.topics.map((topic) => (
+            <section key={topic.id} className="how-to-section" aria-labelledby={`how-to-${topic.id}`}>
+              <h2 id={`how-to-${topic.id}`}>{topic.title}</h2>
+              {topic.paragraphs.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </section>
           ))}
-        </nav>
+          {category.jumps.length > 0 && (
+            <nav className="how-to-jumps" aria-label={`Open ${category.label}`}>
+              {category.jumps.map((link) => (
+                <Link key={link.href} href={link.href}>
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </div>
       </article>
     </main>
   );

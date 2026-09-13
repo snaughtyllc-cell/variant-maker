@@ -52,7 +52,7 @@ row + progress card.
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drops | `/drops` | everyone | More | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
-| How to | `/how-to` | everyone | More | Best practices / case scenarios: Studio→Gallery, Workflows Drive in/out, posting cadence, Repurpose/Buffer. No fingerprint internals. Not a Generate walkthrough. |
+| How to | `/how-to` | everyone | More | Three tabs: Generating (Studio→Gallery), Automation (Workflows, auto captions, Repurpose/Buffer plugins), Posting. No Analytics. No fingerprint internals. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
@@ -78,11 +78,12 @@ old four-row list.
 | Idea | Why it waits |
 |---|---|
 | **Announcements** — in-app updates / bug-fix notes so operators see what shipped (Jeff 2026-08-29) | Not a seventh phone tab. Not a Fast/uniqueness change. Park until a wave above is idle. When built: everyone signed in, short dated notes, no marketing blog. |
+| **Cut Analytics / testers** (Jeff 2026-09-13) | Not sure Studio ever shifts to Insights. How-to does **not** teach testers. Do not remove the Analytics tab in a drive-by. Park the cut until Jeff signs it. |
 
-Instagram Analytics is live IA (not Later). Connect testers on Drive and
-Analytics; scoreboard on Analytics; compact views on Gallery. Ops:
-`docs/ops/instagram-testers.md`. Spec:
-`docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
+Instagram Analytics is still a live tab today (not gone). Scoreboard on
+Analytics; compact views on Gallery. Ops: `docs/ops/instagram-testers.md`.
+Spec: `docs/superpowers/specs/2026-09-02-instagram-insights-gallery.md`.
+How-to does not mention it.
 
 ## What not to invent
 

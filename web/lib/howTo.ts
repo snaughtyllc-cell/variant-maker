@@ -1,62 +1,107 @@
 /**
- * Operator How-to copy: case scenarios and posting hygiene, not a Generate
- * walkthrough. Never fingerprint internals (SHA / AAC / SEI / encode tags).
- * Tests scan this module.
+ * Operator How-to copy: three categories (Generating, Automation, Posting).
+ * Never fingerprint internals (SHA / AAC / SEI / encode tags). Tests scan this module.
  */
 
-export type HowToSection = {
+export type HowToJump = { href: string; label: string };
+
+export type HowToTopic = {
   id: string;
   title: string;
   paragraphs: string[];
-  bullets?: string[];
+};
+
+export type HowToCategory = {
+  id: "generating" | "automation" | "posting";
+  label: string;
+  blurb: string;
+  topics: HowToTopic[];
+  jumps: readonly HowToJump[];
 };
 
 export const HOW_TO_TITLE = "How to";
 export const HOW_TO_EYEBROW = "Best practices";
 export const HOW_TO_LEAD =
-  "How to run packs well — Studio to Gallery, Workflows, posting, and the schedulers you already use. Not a click-by-click of Generate.";
+  "Three jobs: generating packs, automating the handoff, and posting. Open a tab.";
 
-export const HOW_TO_SECTIONS: HowToSection[] = [
+export const HOW_TO_CATEGORIES: HowToCategory[] = [
   {
-    id: "studio",
-    title: "Studio → Gallery",
-    paragraphs: [
-      "Start from the original master. Drop it on Studio or pick it from Drive. Generate a Fast pack, then open Gallery and check the look before anything goes out.",
-      "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
+    id: "generating",
+    label: "Generating",
+    blurb: "How to use Studio. Original in, Fast pack, check the look in Gallery.",
+    jumps: [
+      { href: "/", label: "Studio" },
+      { href: "/gallery", label: "Gallery" },
     ],
-  },
-  {
-    id: "workflows",
-    title: "Workflows",
-    paragraphs: [
-      "Drive in, Drive out. Save two folders: an inbox for raw clips and a different output folder for finished packs. Share the studio Drive email as Editor so the machine can actually open them.",
-      "A workflow watches the inbox, makes the pack, and drops copies into output — one subfolder per source, not one giant pile.",
-    ],
-  },
-  {
-    id: "posting",
-    title: "Posting",
-    paragraphs: [
-      "If you post the same pack across multiple accounts, do not drop every copy on every account at the same time. Stagger. Flags, integrity issues, and bans stack when a whole set lands at once.",
-      "Trial Reels: skip sexual clips. If one of those gets flagged, a lot of them get flagged — then you have a pile of sexual flags on the account. The usual miss with copies is not the file itself getting the account banned. It is using the wrong kind of content, then posting that same content over and over so flags pile up.",
+    topics: [
+      {
+        id: "studio-gallery",
+        title: "Studio → Gallery",
+        paragraphs: [
+          "Start from the original master. Drop it on Studio or pick it from Drive. Generate a Fast pack, then open Gallery and check the look before anything goes out.",
+          "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
+        ],
+      },
     ],
   },
   {
     id: "automation",
-    title: "Automation",
-    paragraphs: [
-      "You do not have to post by hand. Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule.",
-      "Repurpose reads the Drive filename as the caption — set captions in Drive before the handoff. We do not run those seats; we hand off the folder.",
+    label: "Automation",
+    blurb: "Drive in, Drive out — then plugins you already use to caption and schedule.",
+    jumps: [
+      { href: "/workflows", label: "Workflows" },
+      { href: "/settings/drive", label: "Drive" },
+    ],
+    topics: [
+      {
+        id: "workflows",
+        title: "Workflows",
+        paragraphs: [
+          "Drive in, Drive out. Save two folders: an inbox for raw clips and a different output folder for finished packs. Share the studio Drive email as Editor so the machine can actually open them.",
+          "A workflow watches the inbox, makes the pack, and drops copies into output — one subfolder per source, not one giant pile.",
+        ],
+      },
+      {
+        id: "captions",
+        title: "Auto captions",
+        paragraphs: [
+          "Paste captions in Drive (caption bank). Workflow auto-caption is off by default — turn it on if you want each file named from that folder.",
+          "Repurpose.io uses the Drive filename as the post caption, so set names before the handoff.",
+        ],
+      },
+      {
+        id: "plugins",
+        title: "Plugins",
+        paragraphs: [
+          "Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule. Those are plugins on the folder, not extra Studio tabs. We do not run those seats.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "posting",
+    label: "Posting",
+    blurb: "How to put copies on accounts without stacking flags.",
+    jumps: [],
+    topics: [
+      {
+        id: "accounts",
+        title: "Multiple accounts",
+        paragraphs: [
+          "If you post the same pack across multiple accounts, do not drop every copy on every account at the same time. Stagger. Flags, integrity issues, and bans stack when a whole set lands at once.",
+        ],
+      },
+      {
+        id: "trial",
+        title: "Trial Reels and content type",
+        paragraphs: [
+          "Skip sexual clips on Trial Reels. If one of those gets flagged, a lot of them get flagged — then you have a pile of sexual flags on the account.",
+          "The usual miss with copies is not the file itself getting the account banned. It is using the wrong kind of content, then posting that same content over and over so flags pile up.",
+        ],
+      },
     ],
   },
 ];
-
-export const HOW_TO_JUMP_LINKS = [
-  { href: "/", label: "Studio" },
-  { href: "/gallery", label: "Gallery" },
-  { href: "/workflows", label: "Workflows" },
-  { href: "/settings/drive", label: "Drive" },
-] as const;
 
 /** Patterns that must never appear in How-to (clone bait / internals). */
 export const HOW_TO_FORBIDDEN: readonly RegExp[] = [
@@ -80,9 +125,12 @@ export const HOW_TO_FORBIDDEN: readonly RegExp[] = [
 
 export function howToPlainText(): string {
   const parts = [HOW_TO_TITLE, HOW_TO_EYEBROW, HOW_TO_LEAD];
-  for (const section of HOW_TO_SECTIONS) {
-    parts.push(section.title, ...section.paragraphs, ...(section.bullets ?? []));
+  for (const category of HOW_TO_CATEGORIES) {
+    parts.push(category.label, category.blurb);
+    for (const topic of category.topics) {
+      parts.push(topic.title, ...topic.paragraphs);
+    }
+    parts.push(...category.jumps.map((link) => link.label));
   }
-  parts.push(...HOW_TO_JUMP_LINKS.map((link) => link.label));
   return parts.join("\n");
 }
