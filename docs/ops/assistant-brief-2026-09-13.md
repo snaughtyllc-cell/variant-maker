@@ -439,6 +439,11 @@ color after the pack needs more difference. Do not put on copy 1. Also
 ranked: framing vocabulary (hold / slide / settle, same keep); motion-only
 rebuild kernels. AQMTp stays parked. How-to page and Telegram: later.
 
+**Agency ideas (2026-09-13).** Capture:
+`docs/ops/agency-ideas-2026-09-13.md`. How-to unparks next. MOV→MP4,
+image variants, HQ look question, Sentry/PostHog, API/MCP, Buffer/
+Repurpose add-on, G-Lark, face-swap. Not a build.
+
 **Product bar:** look as close to the original as possible; file as original
 as possible (SHA, AAC never copy, empty encoder, no SEI). Harder look only
 when uniqueness needs it.
