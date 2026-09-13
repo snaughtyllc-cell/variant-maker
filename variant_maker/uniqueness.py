@@ -40,8 +40,9 @@ DEFAULT_TARGET = TARGET_BITS / 64.0  # 24/64 = 0.375
 # Under 19 is below TikFusion's ~18-bit / ~28% floor — do not push those files.
 FLOOR_BITS = 19
 DEFAULT_FLOOR = FLOOR_BITS / 64.0  # 19/64 ≈ 0.297 → 30% UI
-# Same-batch peer floor. 20 medium copies of a talking-head already land ~28–31
-# vs each other; 24 keeps them spread without forcing strong.
+# Same-batch peer floor (TikFusion crossPasses analog). Motion uses 24 on
+# variant vs earlier kept, same fractional SSIM as vs-source. Talking-head
+# peer_gate is off — still-face copies land ~13–17 even at strong.
 MIN_PEER_BITS = 24
 DEFAULT_PEER = MIN_PEER_BITS  # alias
 MAX_PASSES = 3

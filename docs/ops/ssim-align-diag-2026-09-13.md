@@ -126,35 +126,56 @@ Pool / kings / Homegirl / the Studio file moved **−1** on those three
 frames (rounding). Carne and pool have nearly the same trims / Δt;
 `bits_delta` is per-file, per-instant, not predictable from `h` and `e`.
 
-Talking-head is **not** “the clock did it” as a class. Kings **27→26** and
-Homegirl **26→25** still sit just above 24 when the moments match. Those
-files are a still face plus look-safe Fast.
+Talking-head is **not** “the clock did it” as a class. Self bits **< 24**
+means the source does not differ from itself by 24 across half its own
+runtime. The gate still asks a look-safe variant to differ from that
+source by 24 **at the same moment**. Fractional sampling quietly lends the
+gate some of the source’s own temporal drift; aligned takes that away.
+That margin is what look-close talking-head at 24 costs — not a sampling
+bug that was mostly fixed.
 
-**Nah seriously is the first hole we actually hit:** fractional gate **26**
-`ok`, aligned **22**. Tail trim **0.48 s**. Δt at 25% is ~0, but **−0.15 s
-at 50%** and **−0.32 s at 75%**. Those late fractional pairs were the
-low-SSIM ones (All 0.54 / 0.52); aligned recovered All ~0.65. The
-fractional gate can pass a file whose same-moment bits are under 24.
-Keeping the gate fractional is a **deliberate deferral** (six files,
-Lab-only, do not hunt a still face). It is not a finding that fractional
-is fine. Do **not** compare aligned 22 to floor 19 — the floor was
-calibrated on fractional bits. Do **not** copy `aligned.bits` onto
+This run (seed **42**): kings **27→26**, Homegirl **26→25**, Nah seriously
+**26→22**. One seed, one trim draw each. “First fractional-ok /
+aligned-under-24 case” describes **this run**, not that file. A different
+seed can move a bit or two on a 7 s mouth.
+
+**Nah seriously (this run):** fractional gate **26** `ok`, aligned
+**22**. Tail trim **0.48 s**. Δt at 25% is ~0, but **−0.15 s at 50%** and
+**−0.32 s at 75%**. Those late fractional pairs were the low-SSIM ones
+(All 0.54 / 0.52); aligned recovered All ~0.65.
+
+The aligned threshold is **uncalibrated** (six files, one seed).
+Fractional stays until that exists. That is the reason for the deferral
+— not “switching the clock would start the hunt.” (Keeping **24** on an
+aligned clock *would* tighten the gate; that is an argument against
+keeping 24 after a switch, not against the clock.) Do **not** compare
+aligned 22 to floor 19. Do **not** copy `aligned.bits` onto
 `uniqueness_status`. Do **not** raise 24.
 
 **Self bits** = one source file, 25% vs 75% of *itself* on the SSIM
 canvas. Not a re-encode. Not vs the variant. `< 24` → `talking_head`.
 
 **Gate 24** = source → this variant only (`score_uniqueness` /
-`bits_vs`). Motion packs also require peer bits ≥ 24 (variant vs earlier
-kept copies, same fractional clock). Talking-head **peer bits are not in
-the 24 decision**. This diagnostic only covers source pairs. These Jeff
-NC encodes were n=1, so no peer pair ran.
+`bits_vs`). This diagnostic only covers that pair. These Jeff NC encodes
+were n=1, so no peer pair ran. “Clock mismatch is real, mostly −1” is
+about source→variant only.
+
+**Motion peer 24** is a second gate. Intent (2026-07-14): same-batch
+diversity, TikFusion `crossPasses` analog. Floor started at **10**, then
+rose with vs-source to **24**. It was not designed as a trim-diversity
+check — it fell out of applying the same fractional metric to variant vs
+earlier kept copies. On a source that already moves 42–51 self-bits,
+most of the peer margin over look **is** the trim offset
+`(1−q)(h₁−h₂) − q(e₁−e₂)`. Unmeasured here. Talking-head **peer_gate is
+off** because still-face copies land ~13–17 peer bits even at strong
+(face-zoom still failed); `MIN_PEER_BITS` stays 24. Do not run a motion
+peer align pack unless asked.
 
 **Look MAE 38** uses the same `FRAME_FRACS` on each file’s own duration
-(`look.py`). Same clock bug. We did **not** measure aligned MAE on this
-run. Do not retune 38. Do not assume the look budget is “looser” on
-motion without that measurement. Inflated uniqueness bits and inflated
-MAE pull opposite ways (easier uniqueness pass, easier look alarm).
+(`look.py`). Same mismatch. On motion content the typical direction is
+known: mismatch adds difference, so fractional MAE is an **upper bound**
+on same-moment MAE (false uniqueness pass, false look fail). Size is
+unmeasured. Not cancellation. Do not retune 38.
 
 **Trim is a silent uniqueness lever** while the gate stays fractional.
 Medium tail can reach ~0.50 s. Nobody budgeted trim as uniqueness. Do
