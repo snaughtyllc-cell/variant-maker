@@ -368,6 +368,28 @@ export default function IntegrationsPage() {
             ))
           )}
         </div>
+
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 10, marginTop: 28 }}>
+          On your machine
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 12 }}>
+          <code>varimo-mcp</code> runs on the agency computer. It calls the same Fast pack /
+          Gallery metadata / Drive export loop. We do not host MCP, and we do not post.
+        </p>
+        <pre
+          style={{
+            background: "var(--color-panel2)",
+            border: "1px solid var(--color-line)",
+            borderRadius: 14,
+            padding: 14,
+            fontSize: 12,
+            overflowX: "auto",
+            marginBottom: 18,
+          }}
+        >{`export VARIMO_BASE_URL="${typeof window === "undefined" ? "https://your-studio.example" : window.location.origin}"
+export VARIMO_API_KEY="paste-the-key-you-copied"
+pip install -e ".[mcp]"
+varimo-mcp`}</pre>
       </div>
     </main>
   );

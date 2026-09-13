@@ -1,7 +1,7 @@
 # Studio API + MCP
 
-Status: **Phase 1 on Lab**. HTTP workspace keys + `/api/v1`. MCP is Phase 2
-and is not built. Date: 2026-09-13.
+Status: **Phase 2 on Lab**. HTTP workspace keys + `/api/v1` + stdio
+`varimo-mcp`. Hosted remote MCP is not built. Date: 2026-09-13.
 
 Do not `git merge` Lab ↔ Live. After a separate Lab accept, copy files with
 `scripts/promote-to-live.sh`. No Live Fast pin or `:latest` push from this work.
@@ -58,10 +58,18 @@ curl -sS "$VARIMO_BASE_URL/api/v1/packs/PACK_ID" \
 A key spends the same Fast processing as Generate. There is no separate MCP
 fee and no extra weekly cap to document here.
 
+## Phase 2 — `varimo-mcp`
+
+Install extra `.[mcp]`. Executable `varimo-mcp`. Stdio only. Reads
+`VARIMO_BASE_URL` and `VARIMO_API_KEY`. Calls only `/api/v1`. Tools:
+`create_pack`, `get_pack`, `list_gallery`, `send_to_drive` (submit **or**
+`export_id` status — not both). HTTPS except localhost HTTP for Lab. Redirects
+are refused so the key is not forwarded. Logs go to stderr.
+
 ## Not in v1
 
-MCP stdio (`varimo-mcp`), workflow triggers, caption-bank, HQ, uploads/URLs,
-raw media download, Instagram, webhooks, split export, per-folder ACLs.
+Workflow triggers, caption-bank, HQ, uploads/URLs, raw media download,
+Instagram, webhooks, split export, per-folder ACLs, hosted remote MCP.
 Hard client split = another workspace.
 
 Do not document fingerprint or uniqueness internals (SHA / AAC / SEI / encode

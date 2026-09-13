@@ -102,4 +102,12 @@ describe("IntegrationsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revoke Old bot" }));
     await waitFor(() => expect(revokeWorkspaceApiKey).toHaveBeenCalledWith("k1"));
   });
+
+  it("documents varimo-mcp on the agency machine", async () => {
+    render(<IntegrationsPage />);
+    await screen.findByText("On your machine");
+    expect(screen.getAllByText(/varimo-mcp/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/VARIMO_BASE_URL/)).toBeTruthy();
+    expect(screen.getByText(/paste-the-key-you-copied/)).toBeTruthy();
+  });
 });
