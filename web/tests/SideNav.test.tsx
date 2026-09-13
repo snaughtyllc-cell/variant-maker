@@ -50,6 +50,7 @@ describe("SideNav", () => {
     me.data = { ...BASE, role: "member" };
     render(<SideNav />);
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("shows Team and Admin for the site admin", () => {
@@ -107,6 +108,7 @@ describe("SideNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("keeps Analytics as an extra for solo owners, not a primary tab", () => {
@@ -123,6 +125,7 @@ describe("SideNav", () => {
       "href",
       "/analytics",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("renders role extras from the same catalog as the IA doc", () => {

@@ -17,6 +17,7 @@ const NAV_ICONS = {
   "/drops": "inventory_2",
   "/workflows": "schema",
   "/settings/drive": "cloud",
+  "/how-to": "menu_book",
   "/team": "group",
   "/admin": "shield",
   "/diagnostics": "monitor_heart",
@@ -33,6 +34,8 @@ export function SideNav() {
   const { data: me } = useAuthMe();
   const primaryTabs = visiblePrimaryTabs(me);
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
+  const helpExtras = allowedExtras.filter((tab) => tab.href === "/how-to");
+  const workspaceExtras = allowedExtras.filter((tab) => tab.href !== "/how-to");
   const initials = me?.email ? me.email.slice(0, 2).toUpperCase() : "";
 
   async function handleLogout() {
@@ -60,28 +63,52 @@ export function SideNav() {
         })}
       </nav>
 
-      {allowedExtras.length > 0 && (
+      {(helpExtras.length > 0 || workspaceExtras.length > 0) && (
         <>
           <div className="vf-sidenav-divider" />
-          <div className="vf-sidenav-section-label">Workspace</div>
-          <nav className="vf-sidenav-extra" aria-label="Workspace navigation">
-            {allowedExtras.map(({ href, label }) => {
-              const active = linkActive(pathname, href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className="vf-sidenav-link vf-sidenav-link-extra"
-                  data-active={active}
-                >
-                  <span className="material-symbols-rounded" aria-hidden="true">
-                    {NAV_ICONS[href as keyof typeof NAV_ICONS]}
-                  </span>
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          {helpExtras.length > 0 && (
+            <nav className="vf-sidenav-extra" aria-label="Help">
+              {helpExtras.map(({ href, label }) => {
+                const active = linkActive(pathname, href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="vf-sidenav-link vf-sidenav-link-extra"
+                    data-active={active}
+                  >
+                    <span className="material-symbols-rounded" aria-hidden="true">
+                      {NAV_ICONS[href as keyof typeof NAV_ICONS]}
+                    </span>
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
+          {workspaceExtras.length > 0 && (
+            <>
+              <div className="vf-sidenav-section-label">Workspace</div>
+              <nav className="vf-sidenav-extra" aria-label="Workspace navigation">
+                {workspaceExtras.map(({ href, label }) => {
+                  const active = linkActive(pathname, href);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className="vf-sidenav-link vf-sidenav-link-extra"
+                      data-active={active}
+                    >
+                      <span className="material-symbols-rounded" aria-hidden="true">
+                        {NAV_ICONS[href as keyof typeof NAV_ICONS]}
+                      </span>
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </>
+          )}
         </>
       )}
 
