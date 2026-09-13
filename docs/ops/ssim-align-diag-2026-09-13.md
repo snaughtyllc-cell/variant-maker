@@ -210,3 +210,25 @@ these still faces at 22–27 (aligned).
 Do not raise 24. Do not escalate from `bits_delta`. Do not set
 `VARIANT_SSIM_ALIGN_DIAG` on Lab Studio or Live. Unlabeled after a drop
 stays **`unknown`**, not a pass.
+
+## Medium talking-head: what MAE is spent on
+
+Not crop-and-scale only. Filter order: trim → crop (keep + start→end
+travel + handheld) → chroma grain on 1080 / cloud+dust on 720 → even
+scale → mild rebuild → rotate → warp → **eq always** → hue → unsharp.
+
+- **Registration (unbudgeted):** 1080 keep **0.92–0.96** (Jeff NC
+  0.923–0.936); 720 keep **0.86–0.90** from the top. x 0.35–0.65. Travel
+  ≥0.08 max 0.24. Handheld. Rotate 0.35–0.8°. Rebuild 0.90–0.98.
+- **Global color (always emitted, budget-protected):** brightness ±0.025,
+  contrast 0.97–1.03, sat 0.96–1.05, gamma 0.97–1.03, hue ±3. Shrink
+  hits encode first so color still shows. On seed-42 TH draws, color was
+  near-neutral (brightness ~0.003, hue <0.5°).
+- **Texture (what 576 was calibrated on):** 1080 chroma grain **34–42**
+  (luma snow rejected). 720 cloud **4–7** + luma dust **11–13**. Grain is
+  protected from shrink. Vignette 0. No shade.
+- Distortion budget is not MAE. Look MAE is the actual file (crop
+  included). We did not score MAE on the Jeff NC TH run.
+
+Parked “hold / slide / settle, same keep” is editorial on top of travel
+that already exists. Keep still varies. Do not unpark without Jeff stills.
