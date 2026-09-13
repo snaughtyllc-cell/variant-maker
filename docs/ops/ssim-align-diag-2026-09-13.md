@@ -100,3 +100,18 @@ not a gate).
 3. Pipeline never copies `aligned.bits` onto `quality.bits` or
    `uniqueness_status`.
 4. Live image / `VF_LAB` / copyid / vignette / crop bands are out of scope.
+
+## First run — Jeff NC Drive (2026-09-13)
+
+Folder `1Xr5BFioBkYJuGFyuXkUIUl6ynpYqvcOj`. Two sources only (not the whole
+folder). Medium Fast, reels-fit-to-source, seed 42. Gate **24** unchanged.
+
+| Clip | Canvas | Shot (self bits) | Trim h/e | Gate bits | Aligned bits | `bits_delta` | Δt @ 25% |
+|---|---|---|---|---|---|---|---|
+| Am I invited to the carne asada? | 1088×1920 / 10.2 s | motion **43** | 0.24 / 0.18 | **33** `ok` | **28** | **−5** | 0.14 s |
+| If you need a pool cleaner hit my line! | 720×1280 / 19.4 s | motion **42** | 0.30 / 0.25 | **40** `ok` | **39** | **−1** | 0.16 s |
+
+Both stay above 24 after aligning. The short 1080 clip’s fractional score
+was partly different moments (−5). The longer 720 barely moved (−1). These
+are **motion** sources, not a still talking-head. Not a Live pack. Not a
+platform verdict. Do not raise 24.
