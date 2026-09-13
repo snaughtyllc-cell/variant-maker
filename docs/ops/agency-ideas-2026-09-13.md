@@ -1,87 +1,113 @@
 # Agency ideas — capture 2026-09-13
 
-Jeff: target is **agencies**. Beat TikFusion by making more of the workflow
-live in **one Studio**, not by raising gate 24 or cloning Pixel AI.
+Jeff: target is **agencies**. The job is **one asset, many accounts** —
+prepare, review, hand off a pack. “The whole workflow in one Studio” is
+too loose; it can justify a converter, a scheduler, or a phone farm.
+Adjacency does not earn a feature.
 
-This is a parking list, not a build. Lab vs Live still applies: Studio
-pages ship on `varimo-live`. Engine experiments stay Lab. Do not
-`git merge` the two GitHubs.
+Parking list, not a build. Lab vs Live: Studio pages ship on
+`varimo-live`. Engine experiments stay Lab. Do not `git merge` the two
+GitHubs.
 
-Wording: unlabeled after a drop is **`unknown`**, not a pass. How-to
-talks posting hygiene + file identity. It does **not** claim Instagram
-behavior.
+Wording: unlabeled after a drop is **`unknown`**, not a pass. How-to is
+posting hygiene. It does **not** claim Instagram behavior.
+
+Codex review (regular app, 2026-09-13) is folded in below.
 
 ---
 
 ## The list (do not lose)
 
-| # | Idea | Where it lives | Note |
+| # | Idea | Bucket | Note |
 |---|---|---|---|
-| 1 | **How-to / best practices** | Live Studio page | Already parked. Unpark next. |
-| 2 | **MOV → MP4 converter** | Studio ingest | iPhone HEVC .mov is huge; TikFusion has this. ffmpeg already *opens* MOV; this is a smaller MP4 for upload/storage. |
-| 3 | **Image variants** | New Studio surface | Same “one asset, many accounts” job as video. Not the video pipeline. |
-| 4 | **HQ — does it actually help posted variants?** | Advice + one Lab look test | Reconstruct-first already exists. Question is look, not a new engine. Fable/Codex later. |
-| 5 | **Face / body swap (trends)** | Not Generate | Trend tool, not uniqueness. Likeness/legal. Park. |
-| 6 | **Cloudflare** | Already in stack | R2 is the default object store (zero egress). Also CDN/WAF/cache headers on Studio. Not a new product. |
-| 7 | **Sentry** | Live Studio ops | Errors/crashes. Code is env-gated (`docs/ops/telemetry.md`). |
-| 8 | **PostHog** | Live Studio ops | Product analytics (who ran Fast/HQ). Not the same as Sentry. Both. |
-| 9 | **API / MCP (“connect your AI”)** | Live API keys or MCP | Generate + gallery access. Not posting as us. |
-| 10 | **Repurpose.io add-on** | Scheduling add-on | Jeff already uses it. More accounts, cheaper, weak analytics. We would resell/operate a seat, not scrape IG. |
-| 11 | **Buffer (or similar) add-on** | Scheduling + analytics | Official APIs, fewer accounts, more expensive, Insights. Same “we hold the sub, charge an upsell.” |
-| 12 | **G-Lark cloud phones** | Integrations / far later | Jeff’s cloud phones + their API. Device farm + automation. High ToS surface. Not v1. |
+| 1 | **How-to / best practices** | Live Studio page | Unpark. Operators already asking. |
+| 2 | **Ingest (MOV / iPhone files)** | Studio ingest | Pain is transfer/prep, not “ffmpeg can’t open MOV.” HEVC→H.264 is not automatically smaller. |
+| 3 | **Image variants** | Same company, later | Same job, new recipe. Needs stills volume, not “after How-to.” |
+| 4 | **HQ look question** | Quality question, not a feature | Reconstruct-first exists. Fast vs HQ stills ≠ “helps posted variants.” |
+| 5 | **Face / body swap** | **Cut from Studio** | Creative production, not asset-pack. |
+| 6 | **Cloudflare** | Infra | R2 already. Not a feature rank. |
+| 7 | **Sentry** | Ops | Errors. Env-gated. Not a product bet. |
+| 8 | **PostHog** | Ops | Usage. Different from Sentry. Turn on when there is a question to measure. |
+| 9 | **API / MCP** | Live, if batch demand | Generate + gallery. “Connect your AI” is packaging. Recurring batches would pull this ahead of images. |
+| 10 | **Repurpose.io add-on** | Boundary: handoff vs we-operate-seats | More accounts, cheaper, weak analytics. |
+| 11 | **Buffer add-on** | Same boundary | Official schedule + Insights, fewer accounts, costlier. |
+| 12 | **G-Lark cloud phones** | **Cut from Studio** | Distribution infrastructure / device farm. |
 
 ---
 
-## Rank (this studio, this year)
+## Rank
 
-### Do next (Studio / Live)
+### Do next
 
-1. **How-to.** Operators are already asking. Cover: drop source → Fast N → look stills → Drive → drop. File identity (SHA ≠ source, AAC never copy, no SEI). Cadence: don’t fire 20 copies at one account in one sitting. Drop Ledger: unlabeled ≠ pass. “Stay original-looking” = look-close Fast + don’t re-encode a variant as a new source. **Not** a detector guide.
+1. **How-to (Live).** Demand is already here. Cover the loop you already
+   sell: drop source → Fast N → look stills → Drive → drop. Cadence is
+   hygiene (don’t dump 20 copies on one account in one sitting). Drop
+   Ledger: unlabeled ≠ pass. “Stay original-looking” = look-close Fast +
+   don’t re-encode a variant as a new source. SHA / AAC / SEI belong in
+   a short “what’s in the file” note, not the product promise. **Not** a
+   detector guide.
 
-2. **MOV → MP4.** Agency pain is upload size and time, not “ffmpeg can’t open .mov.” Transcode HEVC MOV → tagged H.264 MP4 (even dims, color tags) as an ingest step, then Generate as today.
+2. **Ingest, if it actually saves transfer or prep.** “We accept MOV”
+   (true today) and “we save a 4 GB wait” are different claims. Converting
+   *after* upload does not remove the upload. HEVC is often *smaller*
+   than H.264 at the same quality; a converter that only remuxes or
+   transcodes to H.264 can make files bigger. Rank this only if we
+   shrink bitrate, convert **before** upload, or fix a real
+   compatibility/tooling mess. Matching TikFusion’s feature name is
+   not enough.
 
-3. **Turn on Sentry + PostHog keys on Live** if not already signed. They are different: Sentry = “it broke,” PostHog = “who used Fast/HQ.” Do not put keys on the Fast worker image.
+3. **Sentry on Live** (ops). Crashes while agencies are on the box.
+   PostHog when there is a usage question worth measuring. Not a
+   feature slot. No keys on the Fast worker image.
 
-### Talk, don’t build yet
+### Not a feature rank
 
-4. **HQ worth it?** One Lab pair: same source, Fast vs reconstruct-first, Jeff stills + short playback. Fable/Codex get that packet, not a blank “should we GPU.” Daily pack stays Fast. HQ stays one GPU pass then Fast N.
+- **HQ.** One Lab Fast vs reconstruct-first stills pair can say “this
+  source looks different.” It cannot say HQ helps posted variants. Daily
+  pack stays Fast. Tone-curve stays late-pack / fail-24.
 
-5. **Image variants.** Real agency job. Separate recipe (no trim/speed, still SSIM/look). After How-to so Studio doesn’t grow a second engine in the same week.
+- **Cloudflare, Sentry, PostHog** as product rows. Infra / ops.
 
-6. **API / MCP.** Agencies and “connect Cursor/ChatGPT to Studio.” Scope: create job, poll, list gallery. Auth = workspace API key. No IG login, no G-Lark, no Buffer in v1 of the API.
+### Same company, later — earn the slot
 
-### Add-on company (integrations talk)
+- **API** before **image variants** only if agencies are asking to
+  automate repeat Generate. Otherwise How-to + ingest first; images
+  wait on stills volume, not calendar. Image variants are this job
+  (one still, many accounts) but a new recipe is a real expansion.
+- **Scheduler handoff** (export / “open in Buffer”) extends the Studio.
+  **We hold Buffer/Repurpose seats and post for them** is a managed
+  distribution company: accounts, billing, support, posting failures.
+  Official APIs do not settle that it is *this* business. Wait until
+  agencies show handoff—not prep—is the obstacle.
 
-This is how you become “the whole workflow” vs TikFusion’s converter+variants. It is also a **different cost and ToS shape** than a variant generator.
+### Cut from the Studio proposition
 
-- **Repurpose vs Buffer:** Repurpose = more destinations / accounts per dollar, weak analytics. Buffer = official schedule + analytics, fewer accounts, higher bill. Starting small and growing the seat as agencies opt in is a real model. We do **not** scrape cookies or run unofficial posters.
-- **G-Lark:** useful to Jeff personally. Offering cloud phones as an add-on is a phone farm, not a button on Generate. Park until How-to + converter + telemetry are boring.
-- **Face swap:** trend content. Separate SKU or never. Do not mix into uniqueness Generate.
+- **G-Lark / cloud phones** — operating distribution infrastructure.
+- **Face / body swap** — creative production / likeness.
 
-### Already decided / already built
+Not “later on the same list.” Out.
+
+---
+
+## Already built
 
 | Item | Status |
 |---|---|
-| Cloudflare R2 | Default media store. “Wrote Cloudflare down” = this. |
-| Sentry / PostHog code | Optional env; Lab first, Live after Jeff signs the week readout. |
-| HQ reconstruct-first | Studio checkbox, default off. One GPU then Fast N. |
-| Gate 24 / MAE 38 / vig-off | Unchanged. Not an agency idea. |
-| How-to / Telegram / tone-curve | Parked on the assistant brief until this list. How-to unparks; Telegram still later; tone-curve still late-pack. |
+| Cloudflare R2 | Default media store |
+| Sentry / PostHog code | Optional env; Live after Jeff signs |
+| HQ reconstruct-first | Checkbox, default off. One GPU then Fast N |
+| Gate 24 / MAE 38 / vig-off | Unchanged |
+| Telegram / tone-curve | Still parked. Tone-curve late-pack only |
 
 ---
 
-## What “better than TikFusion for agencies” actually is
+## Competitive argument we will defend
 
-1. Look-close variants that still clear local 24 (the engine you already have).
-2. A Studio that answers the support questions (How-to) and takes iPhone files without a 4 GB wait (converter).
-3. One place for video **and later** stills.
-4. Optional official posting/analytics add-on (Buffer/Repurpose seats we operate).
-5. API so their VA tools and AIs can drive Generate.
-
-Not: face-swap, cloud phones, or a built-in “stay in the green” predictor.
+A more complete **asset-pack workflow**: prepare, review, hand off.
+Not accumulating adjacent services under “one Studio.”
 
 ---
 
-## Codex / Fable
+## Next build
 
-Send **this page**, not a raw idea dump. Ask them to review rank and cuts, not to invent a roadmap. HQ question waits until we have one Fast vs HQ stills pair.
+How-to on **Live** (`varimo-live`). Not this Lab PR.
