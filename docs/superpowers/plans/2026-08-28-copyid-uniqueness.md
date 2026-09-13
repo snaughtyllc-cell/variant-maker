@@ -15,4 +15,5 @@ TDD. Extra heads are lazy. Fast default stays `copyid=off`.
 6. Lazy SSCD / DINOv2 backends (available() only unless lab).
 7. `@pytest.mark.lab` smoke; lab runbook.
 
-Do not raise `TARGET_BITS`. Do not gate Fast 20 on audio by default.
+Do not raise `TARGET_BITS`. Original-bed Chromaprint is diagnostic only —
+never fuse audio into `gate`. Do not put SSCD on the slim Fast image.

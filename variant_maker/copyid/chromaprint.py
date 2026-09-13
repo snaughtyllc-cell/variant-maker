@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import tempfile
 
+from .fuse import AUDIO_POLICY_ORIGINAL_BED
+
 AUDIO_METRIC = "chromaprint_v1"
 # Match window in fingerprint *items* (fpcalc ~8192-ish samples/item at default).
 MAX_OFFSET = 120
@@ -14,6 +16,23 @@ MIN_OVERLAP = 8
 # Chromaprint's usual decode rate. We resample here so fpcalc does not need
 # the worker image's libav to understand BtbN-encoded mp4s.
 FPCALC_RATE = 11025
+
+
+def _audio_base(*, score_state: str, reason: str | None = None) -> dict:
+    """Unavailable / error / disabled — uniqueness stays None, never a fake 0."""
+    out = {
+        "uniqueness": None,
+        "sim": None,
+        "status": "unknown",
+        "available": False,
+        "metric": AUDIO_METRIC,
+        "score_state": score_state,
+        "policy": AUDIO_POLICY_ORIGINAL_BED,
+        "diagnostic": True,
+    }
+    if reason:
+        out["reason"] = reason
+    return out
 
 
 def available() -> bool:
@@ -109,23 +128,20 @@ def _fpcalc(path: str, *, length: int = 120) -> tuple[list[int], str]:
 
 
 def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
-    """Audio uniqueness vs a Chromaprint match. Missing binary → unavailable."""
-    base = {
-        "uniqueness": None,
-        "sim": None,
-        "status": "unknown",
-        "available": False,
-        "metric": AUDIO_METRIC,
-    }
+    """Audio uniqueness vs a Chromaprint match. Missing binary → unavailable.
+
+    Picture variants keep the original bed. A high match is expected and is
+    diagnostic-only — never a low uniqueness score that looks like a fail.
+    """
     if not available():
-        return {**base, "reason": "no_fpcalc"}
+        return _audio_base(score_state="unavailable", reason="no_fpcalc")
     if not os.path.isfile(path_a) or not os.path.isfile(path_b):
-        return {**base, "reason": "missing_file"}
+        return _audio_base(score_state="unavailable", reason="missing_file")
     try:
         fa, via_a = _fpcalc(path_a, length=length)
         fb, via_b = _fpcalc(path_b, length=length)
         if not fa or not fb:
-            return {**base, "reason": "empty"}
+            return _audio_base(score_state="unavailable", reason="empty")
         sim = match_fingerprints(fa, fb)
         uniq = 1.0 - sim
         via = "ffmpeg_wav" if "ffmpeg_wav" in (via_a, via_b) else "direct"
@@ -135,9 +151,12 @@ def score_audio(path_a: str, path_b: str, *, length: int = 120) -> dict:
             "status": "ok",
             "available": True,
             "metric": AUDIO_METRIC,
+            "score_state": "measured",
+            "policy": AUDIO_POLICY_ORIGINAL_BED,
+            "diagnostic": True,
             "n_a": len(fa),
             "n_b": len(fb),
             "via": via,
         }
     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
-        return {**base, "reason": "error"}
+        return _audio_base(score_state="error", reason="error")

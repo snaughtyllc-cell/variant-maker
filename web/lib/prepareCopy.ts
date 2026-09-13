@@ -227,7 +227,18 @@ function headUniqueness(
   return typeof value === "number" ? value : null;
 }
 
-function coverageChipTitle(kind: UniquenessCoverageKind, state: UniquenessCoverageState): string {
+function audioIsDiagnostic(
+  heads: Record<string, QualityHead | null | undefined> | null | undefined,
+): boolean {
+  const head = heads?.audio;
+  return head?.diagnostic === true || head?.policy === "original_bed";
+}
+
+function coverageChipTitle(
+  kind: UniquenessCoverageKind,
+  state: UniquenessCoverageState,
+  diagnostic = false,
+): string {
   if (kind === "pixel") {
     return state === "scored"
       ? "Pixel SSIM vs the original at 25/50/75. This is the Originality percent. Not a platform check."
@@ -238,6 +249,9 @@ function coverageChipTitle(kind: UniquenessCoverageKind, state: UniquenessCovera
       ? "Visual copy-id ran on this copy. Local tuning dial, not a platform check."
       : "Visual copy-id is not scored yet. Not a platform check.";
   }
+  if (state === "scored" && diagnostic) {
+    return "Original bed audio fingerprint. Diagnostic only — a high match is expected and does not block shipment. Not a platform check.";
+  }
   return state === "scored"
     ? "Audio fingerprint ran on this copy. Local tuning dial, not a platform check."
     : "Audio fingerprint is not scored yet. Not a platform check.";
@@ -247,9 +261,11 @@ function coverageChipText(
   kind: UniquenessCoverageKind,
   state: UniquenessCoverageState,
   uniqueness: number | null,
+  diagnostic = false,
 ): string {
   const label = COVERAGE_LABEL[kind];
   if (state === "not_scored") return `${label} · not scored`;
+  if (kind === "audio" && diagnostic) return `${label} · diagnostic`;
   if (kind !== "pixel" && uniqueness != null) return `${label} · ${pct01(uniqueness)}%`;
   return `${label} · scored`;
 }
@@ -268,14 +284,15 @@ export function uniquenessCoverageChips(
         : headAvailable(heads, kind)
           ? "scored"
           : "not_scored";
+    const diagnostic = kind === "audio" && audioIsDiagnostic(heads);
     const scoredUniqueness =
       kind === "pixel" ? uniqueness ?? null : headUniqueness(heads, kind);
     return {
       kind,
       label: COVERAGE_LABEL[kind],
       state,
-      text: coverageChipText(kind, state, scoredUniqueness),
-      title: coverageChipTitle(kind, state),
+      text: coverageChipText(kind, state, scoredUniqueness, diagnostic),
+      title: coverageChipTitle(kind, state, diagnostic),
     };
   });
 }

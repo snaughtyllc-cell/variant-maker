@@ -112,7 +112,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
     # attempt on the strong preset.
     uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
-    # off (default Fast) | record (score heads, SSIM gates) | gate (fused min).
+    # off (default Fast) | record (score heads, SSIM gates) |
+    # gate (min of SSIM + visual; original-bed audio is diagnostic).
     copyid_mode = normalize_mode(config.get("copyid"))
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
@@ -187,6 +188,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
         "copyid": copyid_mode,
+        "audio_policy": "original_bed",
     }
 
     def _prep(i: int):

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from .compare import chamfer_sim, cosine, uniq_from_sim
-from .fuse import FUSED_METRIC, fuse_heads
+from .fuse import AUDIO_POLICY_ORIGINAL_BED, FUSED_METRIC, fuse_heads, head_excluded_from_fuse
 from .visual import DEFAULT_N_FRAMES, DEFAULT_TAU, score_visual_from_emb
 
 MODES = ("off", "record", "gate")
@@ -39,11 +39,15 @@ def score_heads(
     heads: dict = {}
     if audio:
         from .chromaprint import score_audio
-        a = score_audio(src_path, variant_path)
-        if a.get("available"):
-            heads["audio"] = a
-        else:
-            heads["audio"] = a  # still record unavailable for diagnostics
+        heads["audio"] = score_audio(src_path, variant_path)
+    else:
+        from .chromaprint import AUDIO_METRIC
+        heads["audio"] = {
+            "uniqueness": None, "sim": None, "status": "unknown",
+            "available": False, "metric": AUDIO_METRIC,
+            "score_state": "disabled", "policy": AUDIO_POLICY_ORIGINAL_BED,
+            "diagnostic": True, "reason": "disabled",
+        }
     backend = visual_backend
     if backend is None:
         from .backends import get_visual_backend
@@ -57,16 +61,19 @@ def score_heads(
         heads["visual"] = {
             "uniqueness": None, "sim": None, "status": "unknown",
             "available": False, "backend": None, "n_frames": n_frames,
+            "score_state": "unavailable",
         }
     return heads
 
 
 __all__ = [
+    "AUDIO_POLICY_ORIGINAL_BED",
     "FUSED_METRIC",
     "MODES",
     "chamfer_sim",
     "cosine",
     "fuse_heads",
+    "head_excluded_from_fuse",
     "normalize_mode",
     "score_heads",
     "score_visual_from_emb",

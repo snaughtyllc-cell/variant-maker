@@ -27,6 +27,7 @@ def score_visual_from_emb(
             "available": False,
             "backend": backend,
             "n_frames": 0,
+            "score_state": "unavailable",
         }
     sim = chamfer_sim(query, ref)
     aligned = aligned_mean_sim(query, ref)
@@ -40,6 +41,7 @@ def score_visual_from_emb(
         "backend": backend,
         "n_frames": n_frames if n_frames is not None else len(query),
         "tau": tau,
+        "score_state": "measured",
     }
 
 

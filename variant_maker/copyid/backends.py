@@ -54,7 +54,11 @@ class FakeBackend(VisualBackend):
 
 
 def get_visual_backend(kind: str | None = None) -> VisualBackend | None:
-    """Resolve SSCD → DINO → None. ``kind``: auto|sscd|dino|off|fake."""
+    """Resolve SSCD → DINO → None. ``kind``: auto|sscd|dino|off|fake.
+
+    Weights on disk are an availability check, not an enablement switch.
+    ``copyid`` still has to be ``record`` or ``gate`` before anyone scores.
+    """
     raw = (kind or os.environ.get("VARIANT_MAKER_COPYID_VISUAL") or "auto").strip().lower()
     if raw in ("off", "none", "0"):
         return None
@@ -94,6 +98,7 @@ def score_visual(
         "available": False,
         "backend": getattr(backend, "name", "unknown"),
         "n_frames": n_frames,
+        "score_state": "unavailable",
     }
     if not backend.available():
         return unavailable
@@ -110,4 +115,4 @@ def score_visual(
             q, r, tau=tau, backend=backend.name, n_frames=n_frames,
         )
     except (OSError, ValueError, TypeError, RuntimeError):
-        return unavailable
+        return {**unavailable, "score_state": "error", "reason": "error"}

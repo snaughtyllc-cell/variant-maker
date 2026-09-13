@@ -219,9 +219,10 @@ def score_uniqueness(
     Returns uniqueness ∈ [0, 1] as bits/64, plus raw ``bits`` for logs/tests.
 
     ``copyid``: ``off`` (default) | ``record`` | ``gate``. Extra visual/audio
-    heads are lazy (see ``variant_maker.copyid``). ``gate`` fuses with min
-    uniqueness; SSIM ``below_floor`` is never overridden. ``extra_heads``
-    injects already-scored heads (tests).
+    heads are lazy (see ``variant_maker.copyid``). ``gate`` min-fuses SSIM +
+    visual only. Original-bed Chromaprint is diagnostic and never drives
+    autotune, escalate, or ship/fail. SSIM ``below_floor`` is never overridden.
+    ``extra_heads`` injects already-scored heads (tests).
     """
     del n_frames  # fixed FRAME_FRACS — kept in signature for older callers
     base = {
@@ -265,7 +266,7 @@ def _attach_copyid(
         env = os.environ.get("VARIANT_MAKER_COPYID")
         if not env or str(env).strip().lower() in ("off", "0", "false", "no", ""):
             return result
-    from .copyid import fuse_heads, normalize_mode, score_heads
+    from .copyid import fuse_heads, head_excluded_from_fuse, normalize_mode, score_heads
 
     mode = normalize_mode(copyid)
     # extra_heads is a test injection; it still requires record|gate to attach.
@@ -286,7 +287,10 @@ def _attach_copyid(
         return result
     usable = [
         name for name, head in extras.items()
-        if head and head.get("available") and head.get("uniqueness") is not None
+        if head
+        and head.get("available")
+        and head.get("uniqueness") is not None
+        and not head_excluded_from_fuse(name, head)
     ]
     if not usable:
         return result
