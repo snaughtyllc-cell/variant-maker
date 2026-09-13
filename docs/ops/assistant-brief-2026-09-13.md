@@ -452,4 +452,6 @@ this seed). Kings / Homegirl **27→26 / 26→25** this seed. Aligned
 threshold is uncalibrated; fractional stays until it isn’t. Do not
 compare aligned bits to floor 19. Do not raise 24. Motion peer 24 is
 same-batch diversity (crossPasses), unmeasured here. Writeup:
-`docs/ops/ssim-align-diag-2026-09-13.md`.
+`docs/ops/ssim-align-diag-2026-09-13.md`. If aligned is ever calibrated,
+peer floor must not inherit the source number (do not repeat 10 → 24).
+Peer-fail is same seed, then strong (wider trim), not a reseed.

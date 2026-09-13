@@ -171,6 +171,23 @@ off** because still-face copies land ~13–17 peer bits even at strong
 (face-zoom still failed); `MIN_PEER_BITS` stays 24. Do not run a motion
 peer align pack unless asked.
 
+If aligned is ever calibrated, the **peer floor must not inherit the
+source number**. Source→variant aligned loses the source’s drift and
+lands a few bits lower. Peer aligned loses the trim offset entirely and
+lands near look contribution — low, likely well under 24 even on
+motion. The 10 → 24 move was symmetry with the source gate. Do not
+repeat that.
+
+**Peer-fail path (motion):** not a new seed. `vseed` stays
+`derive_seed(master, index)`. Fast: one medium at strength 1.0
+(`FAST_TUNE_MAX_ITERS = 1`), then one strong escalate if still missing
+source 24 or peer 24. Same-seed strength rungs keep medium trim (trim is
+unbudgeted). Strong redraws trim from **0.30–0.85 s** (medium is
+0.15–0.50) plus crop/grain/rebuild. That retry is not “only trim” and it
+is not a reseed, but trim **does** move on the escalate, which is the
+silent uniqueness lever. Do not reseed to farm peer bits. Do not widen
+medium trim.
+
 **Look MAE 38** uses the same `FRAME_FRACS` on each file’s own duration
 (`look.py`). Same mismatch. On motion content the typical direction is
 known: mismatch adds difference, so fractional MAE is an **upper bound**
