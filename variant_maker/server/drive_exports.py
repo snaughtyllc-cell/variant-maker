@@ -55,6 +55,7 @@ class ExportJob:
     state: str  # pending | running | succeeded | partial | failed
     created_utc: str
     files: list[ExportFile] = field(default_factory=list)
+    created_via: str | None = None
 
 
 def _now() -> str:
@@ -101,7 +102,7 @@ class ExportStore:
         self._dir = exports_dir
 
     def create(self, *, destination_id: str, folder_id: str,
-               files: list[ExportFile]) -> ExportJob:
+               files: list[ExportFile], created_via: str | None = None) -> ExportJob:
         job = ExportJob(
             export_id=f"exp_{secrets.token_hex(6)}",
             destination_id=destination_id,
@@ -109,6 +110,7 @@ class ExportStore:
             state="pending",
             created_utc=_now(),
             files=files,
+            created_via=created_via,
         )
         self.save(job)
         return job

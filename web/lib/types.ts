@@ -381,6 +381,30 @@ export interface Team {
   invites: Invite[];
 }
 
+export type ApiKeyScope = "jobs:create" | "jobs:read" | "gallery:read" | "drive:export";
+
+export interface WorkspaceApiKey {
+  key_id: string;
+  label: string;
+  prefix: string;
+  scopes: ApiKeyScope[];
+  created_utc: string;
+  expires_utc: string | null;
+  last_used_utc: string | null;
+  revoked_utc: string | null;
+}
+
+export interface WorkspaceApiKeyCreated extends WorkspaceApiKey {
+  token: string;
+}
+
+export interface WorkspaceApiKeysPage {
+  workspace_id: string;
+  workspace_name: string | null;
+  keys: WorkspaceApiKey[];
+  destinations: { id: string; name: string }[];
+}
+
 export interface AdminWorkspace {
   id: string;
   name: string;

@@ -27,7 +27,8 @@ describe v1 only. Do not treat them as the current product.
 |---|---|
 | Everyone signed in | **Studio · Gallery · Analytics · Drops · Workflows · Drive · How to** |
 | Workspace owner (or site admin) | + **Team** |
-| Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
+| Home-workspace owner | + **Integrations** (hidden while viewing another studio) |
+| Site admin (`VARIANT_AUTH_ADMIN_EMAIL`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** and **Pricing** |
 
 Solo owners see **Studio · Gallery · Analytics** on the phone bar; Drive
@@ -54,6 +55,7 @@ row + progress card.
 | Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
 | How to | `/how-to` | everyone | More | Three tabs: Generating (Studio→Gallery), Automation (Workflows, auto captions, Repurpose/Buffer plugins), Posting. No Analytics. No fingerprint internals. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
+| Integrations | `/settings/integrations` | owner (home workspace) | More | Owner-issued workspace API keys. Fast packs, Gallery metadata, Drive export. Not inside Drive. Not a phone-bar tab. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Email + password or Google after checkout or an invite. No app tabs. |
@@ -90,11 +92,13 @@ How-to does not mention it.
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
 - Do not add an Updates / Announcements tab in a redesign pass. It is
   parked under Later above — not missing IA.
-- Do not hide Analytics, Drops, Workflows, Drive, Team, Admin, or How to — they
-  are live.
-- Do not put Admin / Diagnostics / Drive / Drops / How to in the phone bottom bar.
-  Drive, Drops, and How to stay under More. Admin / Diagnostics stay under More.
+- Do not hide Analytics, Drops, Workflows, Drive, Team, Admin, How to, or
+  Integrations — they are live.
+- Do not put Admin / Diagnostics / Drive / Drops / How to / Integrations in the
+  phone bottom bar. Drive, Drops, How to, and Integrations stay under More.
+  Admin / Diagnostics stay under More.
 - How-to copy is posting hygiene. Do not document fingerprint internals
   (SHA / AAC / SEI / encode tags) on that page.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,
-  `showDiagnosticsNav`, `extraTabVisible`). Site admin is `SITE_ADMIN_EMAILS`.
+  `showIntegrationsNav`, `showDiagnosticsNav`, `extraTabVisible`). Site admin is
+  `VARIANT_AUTH_ADMIN_EMAIL` (docs that still say `SITE_ADMIN_EMAILS` are drift).

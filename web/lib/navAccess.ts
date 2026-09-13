@@ -45,6 +45,18 @@ export function showTeamNav(me: {
   return isAgencyExperience(me);
 }
 
+/** Workspace API keys. Home-workspace owner only. Hidden while viewing another studio. */
+export function showIntegrationsNav(me: {
+  role?: string | null;
+  auth_required?: boolean;
+  viewing_other?: boolean;
+} | undefined): boolean {
+  if (!me) return false;
+  if (me.auth_required === false) return false;
+  if (me.viewing_other) return false;
+  return me.role === "owner";
+}
+
 /** Instagram Analytics: workspace owners and site admins. Solo owners included. VAs never. */
 export function showAnalyticsNav(me: {
   role?: string | null;
@@ -115,7 +127,7 @@ export function visiblePhoneMoreTabs(me: {
 }
 
 /**
- * Extra destinations (How to / Team / Analytics / Admin / Diagnostics).
+ * Extra destinations (How to / Team / Integrations / Analytics / Admin / Diagnostics).
  * Shared by TopNav so More and the desktop extras agree.
  */
 export function extraTabVisible(
@@ -125,6 +137,7 @@ export function extraTabVisible(
     is_admin?: boolean;
     role?: string | null;
     experience?: string | null;
+    viewing_other?: boolean;
   } | undefined,
 ): boolean {
   const dest = destination(href);
@@ -132,6 +145,7 @@ export function extraTabVisible(
   if (dest.audience === "everyone") return true;
   if (href === "/diagnostics") return showDiagnosticsNav(me);
   if (href === "/team") return showTeamNav(me);
+  if (href === "/settings/integrations") return showIntegrationsNav(me);
   if (href === "/analytics") return showAnalyticsNav(me);
   if (href === "/admin") return Boolean(me?.is_admin);
   return false;

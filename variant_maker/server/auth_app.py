@@ -19,6 +19,7 @@ PUBLIC_API_PATHS = frozenset({
     "/api/billing/plans",
     "/api/billing/checkout",
     "/api/billing/webhook",
+    "/api/v1/openapi.json",
 })
 
 

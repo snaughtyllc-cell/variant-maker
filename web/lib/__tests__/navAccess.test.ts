@@ -5,6 +5,7 @@ import {
   showAnalyticsNav,
   showDiagnosticsNav,
   showTeamNav,
+  showIntegrationsNav,
   extraTabVisible,
   visiblePhoneBarTabs,
   visiblePhoneMoreTabs,
@@ -59,6 +60,22 @@ describe("showTeamNav", () => {
         auth_required: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("showIntegrationsNav", () => {
+  it("shows for home-workspace owners including solo", () => {
+    expect(showIntegrationsNav({ role: "owner", auth_required: true, viewing_other: false })).toBe(
+      true,
+    );
+  });
+
+  it("hides for VAs, viewing-other, and when login is off", () => {
+    expect(showIntegrationsNav({ role: "member", auth_required: true })).toBe(false);
+    expect(showIntegrationsNav({ role: "owner", auth_required: true, viewing_other: true })).toBe(
+      false,
+    );
+    expect(showIntegrationsNav({ role: "owner", auth_required: false })).toBe(false);
   });
 });
 
@@ -136,6 +153,7 @@ describe("visiblePhoneBarTabs", () => {
       "/settings/drive",
       "/how-to",
       "/team",
+      "/settings/integrations",
     ]);
   });
 
@@ -152,7 +170,11 @@ describe("visiblePhoneBarTabs", () => {
   it("keeps solo owners at Studio, Gallery, Analytics with Drive under More", () => {
     const me = { experience: "solo", is_admin: false, auth_required: true, role: "owner" };
     expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/", "/gallery", "/analytics"]);
-    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/settings/drive", "/how-to"]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual([
+      "/settings/drive",
+      "/how-to",
+      "/settings/integrations",
+    ]);
   });
 });
 
@@ -173,6 +195,32 @@ describe("extraTabVisible", () => {
       true,
     );
     expect(extraTabVisible("/how-to", undefined)).toBe(true);
+  });
+
+  it("shows Integrations for owners and hides it for VAs", () => {
+    expect(
+      extraTabVisible("/settings/integrations", {
+        role: "owner",
+        is_admin: false,
+        viewing_other: false,
+        auth_required: true,
+      }),
+    ).toBe(true);
+    expect(
+      extraTabVisible("/settings/integrations", {
+        role: "member",
+        is_admin: false,
+        auth_required: true,
+      }),
+    ).toBe(false);
+    expect(
+      extraTabVisible("/settings/integrations", {
+        role: "owner",
+        is_admin: true,
+        viewing_other: true,
+        auth_required: true,
+      }),
+    ).toBe(false);
   });
 
   it("still hides unknown extras", () => {

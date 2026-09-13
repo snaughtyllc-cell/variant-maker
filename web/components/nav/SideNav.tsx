@@ -19,6 +19,7 @@ const NAV_ICONS = {
   "/settings/drive": "cloud",
   "/how-to": "menu_book",
   "/team": "group",
+  "/settings/integrations": "key",
   "/admin": "shield",
   "/diagnostics": "monitor_heart",
 } as const;

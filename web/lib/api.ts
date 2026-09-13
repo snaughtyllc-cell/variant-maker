@@ -33,6 +33,8 @@ import {
   Team,
   VariantOut,
   Workflow,
+  WorkspaceApiKeyCreated,
+  WorkspaceApiKeysPage,
 } from "./types";
 import type { JobUploadProgress } from "./jobUpload";
 
@@ -815,6 +817,29 @@ export async function setAdminView(workspaceId: string | null): Promise<void> {
 }
 
 export const getWorkspaceTeam = () => fetch("/api/workspace/team").then(json<Team>);
+
+export const getWorkspaceApiKeys = () =>
+  fetch("/api/workspace/api-keys").then(json<WorkspaceApiKeysPage>);
+
+export function createWorkspaceApiKey(body: {
+  label: string;
+  preset?: "full" | "read";
+  scopes?: string[];
+  expires_days?: number;
+}): Promise<WorkspaceApiKeyCreated> {
+  return fetch("/api/workspace/api-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<WorkspaceApiKeyCreated>);
+}
+
+export async function revokeWorkspaceApiKey(keyId: string): Promise<void> {
+  const res = await fetch(`/api/workspace/api-keys/${encodeURIComponent(keyId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
 
 export function createWorkspaceInvite(email: string): Promise<Invite> {
   return fetch("/api/workspace/invites", {
