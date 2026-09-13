@@ -52,7 +52,7 @@ row + progress card.
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drops | `/drops` | everyone | More | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
-| How to | `/how-to` | everyone | More | Operator loop: source → Fast → look stills → Drive → drop with cadence. Unlabeled after a drop is unknown, not a pass. No fingerprint internals. |
+| How to | `/how-to` | everyone | More | Best practices / case scenarios: Studio→Gallery, Workflows Drive in/out, posting cadence, Repurpose/Buffer. No fingerprint internals. Not a Generate walkthrough. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |

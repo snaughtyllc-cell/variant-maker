@@ -67,7 +67,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "extra",
     summary:
-      "Operator loop: source → Fast pack → look stills → Drive → drop with cadence. Not a phone-bar tab. No fingerprint internals.",
+      "Best practices: Studio→Gallery, Workflows Drive in/out, posting cadence, Repurpose/Buffer. Not a phone-bar tab. No fingerprint internals.",
   },
   {
     href: "/team",

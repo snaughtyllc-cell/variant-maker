@@ -1,6 +1,7 @@
 /**
- * Operator How-to copy. Keep this page posting hygiene — never fingerprint
- * internals (SHA / AAC / SEI / encode tags). Tests scan this module.
+ * Operator How-to copy: case scenarios and posting hygiene, not a Generate
+ * walkthrough. Never fingerprint internals (SHA / AAC / SEI / encode tags).
+ * Tests scan this module.
  */
 
 export type HowToSection = {
@@ -11,66 +12,41 @@ export type HowToSection = {
 };
 
 export const HOW_TO_TITLE = "How to";
-export const HOW_TO_EYEBROW = "Operator loop";
+export const HOW_TO_EYEBROW = "Best practices";
 export const HOW_TO_LEAD =
-  "One source clip in. Fast copies out. Check the look. Send to Drive. Post with space between copies. This page is how we run packs — not a promise about what Instagram will do.";
+  "How to run packs well — Studio to Gallery, Workflows, posting, and the schedulers you already use. Not a click-by-click of Generate.";
 
 export const HOW_TO_SECTIONS: HowToSection[] = [
   {
-    id: "source",
-    title: "1. Start from the original",
+    id: "studio",
+    title: "Studio → Gallery",
     paragraphs: [
-      "Use the master clip. Drop it on Studio or pick it from Drive.",
+      "Start from the original master. Drop it on Studio or pick it from Drive. Generate a Fast pack, then open Gallery and check the look before anything goes out.",
       "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
-      "Phone files are fine if they play. Convert only when it actually saves a huge upload wait.",
     ],
   },
   {
-    id: "fast",
-    title: "2. Make a Fast pack",
+    id: "workflows",
+    title: "Workflows",
     paragraphs: [
-      "On Studio, set how many copies and generate. Fast is the daily path.",
-      "Reconstruct first (HQ) is optional and off by default. Turn it on when the source already looks soft — one GPU pass, then Fast. Not every pack, and not a 4K upscaler.",
+      "Drive in, Drive out. Save two folders: an inbox for raw clips and a different output folder for finished packs. Share the studio Drive email as Editor so the machine can actually open them.",
+      "A workflow watches the inbox, makes the pack, and drops copies into output — one subfolder per source, not one giant pile.",
     ],
   },
   {
-    id: "look",
-    title: "3. Check the look",
+    id: "posting",
+    title: "Posting",
     paragraphs: [
-      "Open Gallery. Compare stills to the source. If a copy looks washed, muddy, or unlike the clip, do not send it.",
-      "Play the file when you are unsure. Stills are not the whole video.",
+      "If you post the same pack across multiple accounts, do not drop every copy on every account at the same time. Stagger. Flags, integrity issues, and bans stack when a whole set lands at once.",
+      "Trial Reels: skip sexual clips. If one of those gets flagged, a lot of them get flagged — then you have a pile of sexual flags on the account. The usual miss with copies is not the file itself getting the account banned. It is using the wrong kind of content, then posting that same content over and over so flags pile up.",
     ],
   },
   {
-    id: "handoff",
-    title: "4. Hand off",
+    id: "automation",
+    title: "Automation",
     paragraphs: [
-      "Send to Drive. Split a pack across folders if accounts need different files.",
-      "Workflows can watch an inbox folder if you already drop sources there.",
-    ],
-  },
-  {
-    id: "cadence",
-    title: "5. Post with cadence",
-    paragraphs: [
-      "Do not dump a whole pack onto one account in one sitting. One copy per account, or a small set over time.",
-    ],
-  },
-  {
-    id: "ledger",
-    title: "6. Label what happened",
-    paragraphs: [
-      "After you post, mark the Drop Ledger.",
-      "Unlabeled is unknown — not a pass, not a miss. Flagged or duplicate-rejected is a miss. A quiet week is not proof the copies worked.",
-    ],
-  },
-  {
-    id: "not",
-    title: "What this is not",
-    paragraphs: [
-      "Studio is not checking Instagram for you.",
-      "Originality in Gallery is a local check that copies are not identical to the source. It is not Instagram saying yes.",
-      "Stay look-close on Fast. Do not chase a harder look just to move a number.",
+      "You do not have to post by hand. Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule.",
+      "Repurpose reads the Drive filename as the caption — set captions in Drive before the handoff. We do not run those seats; we hand off the folder.",
     ],
   },
 ];
@@ -78,9 +54,8 @@ export const HOW_TO_SECTIONS: HowToSection[] = [
 export const HOW_TO_JUMP_LINKS = [
   { href: "/", label: "Studio" },
   { href: "/gallery", label: "Gallery" },
-  { href: "/settings/drive", label: "Drive" },
-  { href: "/drops", label: "Drops" },
   { href: "/workflows", label: "Workflows" },
+  { href: "/settings/drive", label: "Drive" },
 ] as const;
 
 /** Patterns that must never appear in How-to (clone bait / internals). */
