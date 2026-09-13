@@ -24,6 +24,15 @@ const COPY_BTN: CSSProperties = {
   flexShrink: 0,
 };
 
+const SELECT_STYLE: CSSProperties = {
+  background: "var(--color-panel2)",
+  border: "1px solid var(--color-line)",
+  borderRadius: 9,
+  padding: "8px 12px",
+  fontSize: 13,
+  color: "var(--color-text)",
+};
+
 export default function IntegrationsPage() {
   const router = useRouter();
   const { data: me, isLoading: meLoading } = useAuthMe();
@@ -38,6 +47,7 @@ export default function IntegrationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [selectedDestId, setSelectedDestId] = useState("");
 
   useEffect(() => {
     if (meLoading) return;
@@ -142,6 +152,10 @@ export default function IntegrationsPage() {
   }
 
   const studioName = page?.workspace_name || me?.workspace_name || "this studio";
+  const dests = page?.destinations ?? [];
+  const selectedFolderId = dests.some((d) => d.id === selectedDestId)
+    ? selectedDestId
+    : dests[0]?.id ?? "";
   const machineSnippet = [
     `export VARIMO_BASE_URL="${origin}"`,
     `export VARIMO_API_KEY="paste-the-key-you-copied"`,
@@ -210,14 +224,7 @@ export default function IntegrationsPage() {
             value={preset}
             onChange={(e) => setPreset(e.target.value as "full" | "read")}
             aria-label="Key preset"
-            style={{
-              background: "var(--color-panel2)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 9,
-              padding: "8px 12px",
-              fontSize: 13,
-              color: "var(--color-text)",
-            }}
+            style={SELECT_STYLE}
           >
             <option value="full">Packs + Gallery + export</option>
             <option value="read">Read only</option>
@@ -226,14 +233,7 @@ export default function IntegrationsPage() {
             value={expiresDays}
             onChange={(e) => setExpiresDays(Number(e.target.value))}
             aria-label="Expiry"
-            style={{
-              background: "var(--color-panel2)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 9,
-              padding: "8px 12px",
-              fontSize: 13,
-              color: "var(--color-text)",
-            }}
+            style={SELECT_STYLE}
           >
             <option value={30}>30 days</option>
             <option value={90}>90 days</option>
@@ -301,54 +301,64 @@ export default function IntegrationsPage() {
           Same folders as Drive
         </div>
         <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 10 }}>
-          Not a second Drive. These are the folders you already added on{" "}
-          <Link href="/settings/drive">Drive</Link>. Your bot cannot tap that screen, so
-          copy the <code>dst_…</code> id when it asks which folder to use.
+          Pick the folder by the name you already gave it on{" "}
+          <Link href="/settings/drive">Drive</Link>. Not a second Drive. Copy
+          hands that choice to your bot — you do not type a code.
         </p>
-        <div
-          style={{
-            background: "var(--color-panel)",
-            border: "1px solid var(--color-line)",
-            borderRadius: 14,
-            marginBottom: 28,
-            overflow: "hidden",
-          }}
-        >
-          {(page?.destinations ?? []).length === 0 ? (
-            <div style={{ padding: 14, fontSize: 12.5, color: "var(--color-muted)" }}>
-              No folders yet. Add them on <Link href="/settings/drive">Drive</Link>.
-            </div>
-          ) : (
-            (page?.destinations ?? []).map((d) => (
-              <div
-                key={d.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 14px",
-                  borderBottom: "1px solid var(--color-line)",
-                  fontSize: 12.5,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700 }}>{d.name}</div>
-                  <div style={{ color: "var(--color-muted)", marginTop: 2, fontFamily: "var(--font-geist-mono), monospace" }}>
-                    {d.id}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void copyText(d.id, `dest:${d.id}`)}
-                  aria-label={`Copy ${d.name} folder id`}
-                  style={COPY_BTN}
-                >
-                  {copied === `dest:${d.id}` ? "Copied" : "Copy"}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+        {dests.length === 0 ? (
+          <div
+            style={{
+              background: "var(--color-panel)",
+              border: "1px solid var(--color-line)",
+              borderRadius: 14,
+              marginBottom: 28,
+              padding: 14,
+              fontSize: 12.5,
+              color: "var(--color-muted)",
+            }}
+          >
+            No Drive folders yet — add them on <Link href="/settings/drive">Drive</Link> first.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              alignItems: "center",
+              marginBottom: 28,
+            }}
+          >
+            <select
+              value={selectedFolderId}
+              onChange={(e) => setSelectedDestId(e.target.value)}
+              aria-label="Drive folder"
+              style={{ ...SELECT_STYLE, minWidth: 220, flex: "1 1 220px" }}
+            >
+              {dests.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!selectedFolderId}
+              onClick={() => {
+                if (!selectedFolderId) return;
+                void copyText(selectedFolderId, "dest");
+              }}
+              aria-label="Copy selected Drive folder"
+              style={{
+                ...COPY_BTN,
+                cursor: selectedFolderId ? "pointer" : "not-allowed",
+                opacity: selectedFolderId ? 1 : 0.55,
+              }}
+            >
+              {copied === "dest" ? "Copied" : "Copy"}
+            </button>
+          </div>
+        )}
 
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 10 }}>
           Keys
