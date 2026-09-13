@@ -53,8 +53,7 @@ from . import __version__
 @click.version_option(version=__version__)
 def main(**config):
     """Generate N look-good variants of INPUT plus a manifest."""
-    from . import pipeline
-    from . import uniqueness
+    from . import pipeline, uniqueness
     m = pipeline.run(config)
     if config.get("look_first") and m.variants:
         v = m.variants[0]

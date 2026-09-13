@@ -20,9 +20,10 @@ def test_gate_stays_24_and_formula_is_ssim_not_phash():
 def test_mapped_source_time_matches_reviewer_formula():
     """t_mapped = h + q(D - h - e). Speed cancels."""
     duration, head, tail = 10.0, 0.50, 0.10
-    assert uniqueness.mapped_source_time(0.25, duration, head, tail) == pytest.approx(2.60)
+    # t_mapped = h + q(D - h - e). 0.50 + 0.25*9.40 = 2.85, not q + q(remaining).
+    assert uniqueness.mapped_source_time(0.25, duration, head, tail) == pytest.approx(2.85)
     assert uniqueness.mapped_source_time(0.50, duration, head, tail) == pytest.approx(5.20)
-    assert uniqueness.mapped_source_time(0.75, duration, head, tail) == pytest.approx(7.80)
+    assert uniqueness.mapped_source_time(0.75, duration, head, tail) == pytest.approx(7.55)
     # Same mapped times if speed were 0.96 or 1.04 — speed is not an argument.
     assert uniqueness.source_time_mismatch(0.25, head, tail) == pytest.approx(0.35)
     assert uniqueness.source_time_mismatch(0.50, head, tail) == pytest.approx(0.20)
@@ -141,8 +142,8 @@ def test_diagnose_trim_changes_fractional_vs_aligned(tmp_path):
 
 
 def test_pipeline_default_skips_align_diag(tmp_path, monkeypatch):
-    from variant_maker import pipeline
     from tests.test_uniqueness_pipeline import _cfg, _ok_score, _stub_common
+    from variant_maker import pipeline
 
     _stub_common(monkeypatch)
     monkeypatch.setattr(
@@ -162,13 +163,14 @@ def test_pipeline_default_skips_align_diag(tmp_path, monkeypatch):
 
 
 def test_pipeline_flag_records_diag_without_changing_gate(tmp_path, monkeypatch):
-    from variant_maker import pipeline
     from tests.test_uniqueness_pipeline import _cfg, _ok_score, _stub_common
+    from variant_maker import pipeline
 
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
-        lambda *a, **k: _ok_score(0.2, bits=12, status="below_target"),
+        # 20 bits is below the 24-bit gate but above the 19-bit ship floor.
+        lambda *a, **k: _ok_score(20 / 64, bits=20, status="below_target"),
     )
     monkeypatch.setattr(
         pipeline.uniqueness, "diagnose_ssim_alignment",
@@ -184,13 +186,13 @@ def test_pipeline_flag_records_diag_without_changing_gate(tmp_path, monkeypatch)
     assert rec.uniqueness_status == "below_target"
     assert rec.uniqueness_metric == "ssim_bits_v1"
     assert rec.quality["ssim_align_diag"]["aligned"]["bits"] == 8
-    assert rec.quality["bits"] == 12
+    assert rec.quality["bits"] == 20
     assert m.run.get("ssim_align_diag") is True
 
 
 def test_pipeline_env_records_diag(tmp_path, monkeypatch):
-    from variant_maker import pipeline
     from tests.test_uniqueness_pipeline import _cfg, _ok_score, _stub_common
+    from variant_maker import pipeline
 
     _stub_common(monkeypatch)
     monkeypatch.setenv("VARIANT_SSIM_ALIGN_DIAG", "1")
@@ -208,8 +210,8 @@ def test_pipeline_env_records_diag(tmp_path, monkeypatch):
 
 
 def test_pipeline_lab_env_does_not_run_align_diag(tmp_path, monkeypatch):
-    from variant_maker import pipeline
     from tests.test_uniqueness_pipeline import _cfg, _ok_score, _stub_common
+    from variant_maker import pipeline
 
     _stub_common(monkeypatch)
     monkeypatch.setenv("VARIANT_LAB", "1")
