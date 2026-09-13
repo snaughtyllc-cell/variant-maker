@@ -103,8 +103,9 @@ not a gate).
 
 ## First run — Jeff NC Drive (2026-09-13)
 
-Folder `1Xr5BFioBkYJuGFyuXkUIUl6ynpYqvcOj`. Three sources (not the whole
-folder). Medium Fast, reels-fit-to-source, seed 42. Gate **24** unchanged.
+Folder `1Xr5BFioBkYJuGFyuXkUIUl6ynpYqvcOj`. Medium Fast, reels-fit-to-source,
+master seed **42**. Gate **24** unchanged. VMAF skipped (this Lab box has
+no libvmaf). Second Drive file `1XSaLGi…` skipped (not shared).
 
 | Clip | Canvas | Shot (self bits) | Trim h/e | Gate bits | Aligned bits | `bits_delta` | Δt @ 25% |
 |---|---|---|---|---|---|---|---|
@@ -112,10 +113,33 @@ folder). Medium Fast, reels-fit-to-source, seed 42. Gate **24** unchanged.
 | If you need a pool cleaner hit my line! | 720×1280 / 19.4 s | motion **42** | 0.30 / 0.25 | **40** `ok` | **39** | **−1** | 0.16 s |
 | Stay safe out there kings | 1080×1920 / 8.1 s | talking_head **21** | 0.28 / 0.36 | **27** `ok` | **26** | **−1** | 0.12 s |
 | studio `@varimo.io` `1s9vsj7a…` | 1080×1920 / 16.6 s **48 fps** | motion **51** | 0.24 / 0.20 | **45** `ok` | **44** | **−1** | 0.13 s |
-
-`1XSaLGiRgbkDnszRsmXsWiBYD-SXzSAP8` was not readable (not found / not
-shared with this agent).
+| Homegirl always got something to say… | 1080×1920 / 6.7 s | talking_head **22** | 0.22 / 0.21 | **26** `ok` | **25** | **−1** | 0.11 s |
+| Nah seriously I would never | 1080×1920 / 6.9 s | talking_head **20** | 0.18 / **0.48** | **26** `ok` | **22** | **−4** | 0.02 s |
 
 The 48 fps file is owned by `studio@varimo.io` — likely a Fast output, not
-a phone source. Treating it as input still gives `bits_delta` −1. Clock
-mismatch is not the talking-head story. Do not raise 24.
+a phone source. Do not treat **45 / 44** as “this phone source is easy.”
+
+### What the numbers mean
+
+Clock mismatch is **real**. Carne (−5) and Nah seriously (−4) moved.
+Pool / kings / Homegirl / the Studio file are **−1** (noise).
+
+Talking-head is **not** “the clock did it” as a class. Kings **27→26** and
+Homegirl **26→25** still sit just above 24 when the moments match. Those
+files are a still face plus look-safe Fast.
+
+**Nah seriously is the first hole we actually hit:** fractional gate **26**
+`ok`, aligned **22**. Tail trim **0.48 s**. Δt at 25% is ~0, but **−0.15 s
+at 50%** and **−0.32 s at 75%**. Those late fractional pairs were the
+low-SSIM ones (All 0.54 / 0.52); aligned recovered All ~0.65. The gate
+passed by comparing different moments. Aligned **22** is still above floor
+**19**. Do **not** hunt this file, do **not** copy `aligned.bits` onto
+`uniqueness_status`, do **not** raise 24.
+
+Motion vs talking-head is still mostly **content**. Motion self-bits
+42–51; these talking-heads 20–22. Fast then lands motion at 28–45 and
+these still faces at 22–27 (aligned).
+
+Do not raise 24. Do not escalate from `bits_delta`. Do not set
+`VARIANT_SSIM_ALIGN_DIAG` on Lab Studio or Live. Unlabeled after a drop
+stays **`unknown`**, not a pass.

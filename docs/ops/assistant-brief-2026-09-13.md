@@ -447,4 +447,6 @@ when uniqueness needs it.
 `--ssim-align-diag` / `VARIANT_SSIM_ALIGN_DIAG=1`. Compares fractional
 25/50/75 SSIM vs trim-mapped source times. **Does not change gate 24.**
 Does not escalate. Not enabled by `VARIANT_LAB`. Live Fast unchanged.
-Writeup: `docs/ops/ssim-align-diag-2026-09-13.md`.
+Jeff NC run: clock can add a few bits (carne −5; Nah seriously **26→22**
+on a 0.48 s tail). Kings / Homegirl stay **27→26 / 26→25**. Do not raise
+24. Writeup: `docs/ops/ssim-align-diag-2026-09-13.md`.
