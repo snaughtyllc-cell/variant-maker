@@ -35,11 +35,27 @@ export const HOW_TO_CATEGORIES: HowToCategory[] = [
     ],
     topics: [
       {
+        id: "original",
+        title: "Start from the original",
+        paragraphs: [
+          "Use the master clip. Drop it on Studio or pick it from Drive.",
+          "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
+        ],
+      },
+      {
         id: "studio-gallery",
         title: "Studio → Gallery",
         paragraphs: [
-          "Start from the original master. Drop it on Studio or pick it from Drive. Generate a Fast pack, then open Gallery and check the look before anything goes out.",
-          "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
+          "Set how many copies and generate a Fast pack. Fast is the daily path.",
+          "When the pack is done, it lands in Gallery — that is where you review and send.",
+        ],
+      },
+      {
+        id: "look",
+        title: "Check the look",
+        paragraphs: [
+          "Open Gallery and compare stills to the source. If a copy looks washed, muddy, or unlike the clip, do not send it.",
+          "Play the file when you are unsure. Stills are not the whole video.",
         ],
       },
     ],
@@ -62,18 +78,17 @@ export const HOW_TO_CATEGORIES: HowToCategory[] = [
         ],
       },
       {
-        id: "captions",
-        title: "Auto captions",
+        id: "filenames",
+        title: "Drive filenames",
         paragraphs: [
-          "Paste captions in Drive (caption bank). Workflow auto-caption is off by default — turn it on if you want each file named from that folder.",
-          "Repurpose.io uses the Drive filename as the post caption, so set names before the handoff.",
+          "Plugins like Repurpose.io and Buffer use the Drive filename as the post caption. Name the file before you hand the folder off.",
         ],
       },
       {
         id: "plugins",
         title: "Plugins",
         paragraphs: [
-          "Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule. Those are plugins on the folder, not extra Studio tabs. We do not run those seats.",
+          "Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule. Those are plugins on the folder, not extra Studio tabs.",
         ],
       },
     ],

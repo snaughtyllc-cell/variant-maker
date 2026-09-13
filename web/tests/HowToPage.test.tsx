@@ -8,7 +8,9 @@ describe("HowToPage", () => {
     render(<HowToPage />);
     expect(screen.getByRole("heading", { level: 1, name: "How to" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Generating" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: /start from the original/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /studio → gallery/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /check the look/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Gallery" })).toHaveAttribute("href", "/gallery");
     expect(screen.queryByRole("heading", { name: /^workflows$/i })).not.toBeInTheDocument();
@@ -16,8 +18,10 @@ describe("HowToPage", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
     expect(screen.getByRole("heading", { name: /^workflows$/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /auto captions/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /drive filenames/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^plugins$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/caption bank/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/we do not run those seats/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/workflows");
     expect(screen.getByRole("link", { name: "Drive" })).toHaveAttribute("href", "/settings/drive");
     expect(screen.queryByRole("heading", { name: /studio → gallery/i })).not.toBeInTheDocument();
