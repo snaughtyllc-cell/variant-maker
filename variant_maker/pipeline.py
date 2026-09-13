@@ -187,6 +187,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
         "copyid": copyid_mode,
+        "ssim_align_diag": uniqueness.ssim_align_diag_wanted(config),
     }
 
     def _prep(i: int):
@@ -572,6 +573,25 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "vmaf_scope": "proxy_encode_quality",
             "heads": u.get("heads"),
         }
+        # Lab diagnostic only. Never changes uniqueness_status / bits / escalate.
+        if uniqueness.ssim_align_diag_wanted(config):
+            video = ((r or {}).get("params") or {}).get("video") or {}
+            try:
+                quality_info["ssim_align_diag"] = uniqueness.diagnose_ssim_alignment(
+                    src.path,
+                    path,
+                    trim_s=float(video.get("trim_s") or 0.0),
+                    trim_end_s=float(video.get("trim_end_s") or 0.0),
+                    speed=float(video.get("speed") or 1.0),
+                    duration_s=getattr(src, "duration_s", None),
+                    frame_dir=os.path.join(out_dir, "ssim_align", f"v{i:02d}"),
+                )
+            except (OSError, ValueError, TypeError, subprocess.CalledProcessError) as exc:
+                quality_info["ssim_align_diag"] = {
+                    "diagnostic": uniqueness.ALIGN_DIAGNOSTIC,
+                    "error": str(exc),
+                    "gate_unchanged": True,
+                }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
             with kept_lock:

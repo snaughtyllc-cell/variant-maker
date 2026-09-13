@@ -55,6 +55,10 @@ SSIM_LONG = 1024
 SSIM_SHORT = 576
 
 _SSIM_ALL_RE = re.compile(r"SSIM\s+(?:Y|R):[^\n]*?\sAll:([0-9.]+)")
+_SSIM_PLANES_RE = re.compile(
+    r"SSIM\s+(?:Y|R):([0-9.]+)[^\n]*?(?:U|G):([0-9.]+)[^\n]*?(?:V|B):([0-9.]+)[^\n]*?All:([0-9.]+)"
+)
+ALIGN_DIAGNOSTIC = "ssim_align_diag_v1"
 
 
 def _probe_duration(path: str) -> float:
@@ -82,6 +86,61 @@ def _probe_duration(path: str) -> float:
 def bits_from_ssim(mean_ssim: float) -> int:
     """TikFusion conversion: bits ∈ [0, 64], higher = more different."""
     return int(round((1.0 - float(mean_ssim)) * 64))
+
+
+def mapped_source_time(
+    q: float, duration_s: float, trim_s: float, trim_end_s: float,
+) -> float:
+    """Source time for output fraction ``q`` after head/tail trim.
+
+    ``t_mapped = h + q(D - h - e)``. Playback speed cancels for fractional
+    sampling. Lab diagnostic only — not a gate.
+    """
+    dur = max(float(duration_s), 0.0)
+    head = max(float(trim_s), 0.0)
+    tail = max(float(trim_end_s), 0.0)
+    remaining = max(dur - head - tail, 0.0)
+    return head + float(q) * remaining
+
+
+def fractional_source_time(q: float, duration_s: float) -> float:
+    return float(q) * max(float(duration_s), 0.0)
+
+
+def source_time_mismatch(q: float, trim_s: float, trim_end_s: float) -> float:
+    """``Δt = (1-q)h - qe`` between fractional source sample and mapped time."""
+    return (1.0 - float(q)) * float(trim_s) - float(q) * float(trim_end_s)
+
+
+def parse_ssim_report(text: str) -> dict:
+    """Y/U/V (or R/G/B) plus All from an ffmpeg ``ssim`` log line."""
+    planes = _SSIM_PLANES_RE.search(text or "")
+    if planes:
+        y, u, v, all_ = planes.groups()
+        return {
+            "Y": float(y), "U": float(u), "V": float(v), "All": float(all_),
+        }
+    match = _SSIM_ALL_RE.search(text or "")
+    if not match:
+        raise ValueError(f"no SSIM All= value in ffmpeg output: {(text or '')[-500]!r}")
+    return {"Y": None, "U": None, "V": None, "All": float(match.group(1))}
+
+
+def ssim_align_diag_wanted(
+    config: dict | None = None,
+    environ: dict | None = None,
+) -> bool:
+    """Off unless CLI ``--ssim-align-diag`` or ``VARIANT_SSIM_ALIGN_DIAG``.
+
+    Live default off. ``VARIANT_LAB`` does **not** enable this (would slow
+    every Lab Generate).
+    """
+    if config and config.get("ssim_align_diag"):
+        return True
+    env = environ if environ is not None else os.environ
+    return (env.get("VARIANT_SSIM_ALIGN_DIAG") or "").strip().lower() in {
+        "1", "true", "yes",
+    }
 
 
 def status_for_bits(bits: int | None, *, target: float | None) -> str:
@@ -159,8 +218,7 @@ def _extract_frame(
 
 
 
-def _ssim_pair(ref_path: str, dist_path: str) -> float:
-    """Return All-channel SSIM for two still images (0..1)."""
+def _ssim_ffmpeg(ref_path: str, dist_path: str) -> str:
     proc = subprocess.run(
         [
             "ffmpeg", "-v", "info",
@@ -173,12 +231,110 @@ def _ssim_pair(ref_path: str, dist_path: str) -> float:
         capture_output=True,
         text=True,
     )
-    # SSIM line is on stderr for ffmpeg.
-    text = (proc.stderr or "") + (proc.stdout or "")
-    match = _SSIM_ALL_RE.search(text)
-    if not match:
-        raise ValueError(f"no SSIM All= value in ffmpeg output: {text[-500]!r}")
-    return float(match.group(1))
+    return (proc.stderr or "") + (proc.stdout or "")
+
+
+def _ssim_pair(ref_path: str, dist_path: str) -> float:
+    """Return All-channel SSIM for two still images (0..1)."""
+    return float(parse_ssim_report(_ssim_ffmpeg(ref_path, dist_path))["All"])
+
+
+def _ssim_planes(ref_path: str, dist_path: str) -> dict:
+    return parse_ssim_report(_ssim_ffmpeg(ref_path, dist_path))
+
+
+def diagnose_ssim_alignment(
+    src_path: str,
+    variant_path: str,
+    *,
+    trim_s: float = 0.0,
+    trim_end_s: float = 0.0,
+    speed: float = 1.0,
+    duration_s: float | None = None,
+    frame_dir: str | None = None,
+) -> dict:
+    """Compare fractional-timeline SSIM vs source-time-aligned SSIM.
+
+    Same canvas and pad as ``mean_ssim``. Does **not** change the 24-bit gate.
+    ``speed`` is recorded only; fractional mapping cancels it.
+    """
+    from .probe import probe
+
+    info = probe(src_path, hash_content=False)
+    canvas = ssim_canvas(info.width, info.height)
+    dur_src = max(float(duration_s if duration_s is not None else info.duration_s or 0.0), 0.1)
+    dur_var = _probe_duration(variant_path)
+    keep = bool(frame_dir)
+    tmp_ctx = (
+        tempfile.TemporaryDirectory(prefix="vm-ssim-align-")
+        if not keep else None
+    )
+    root = frame_dir if keep else tmp_ctx.name  # type: ignore[union-attr]
+    if keep:
+        os.makedirs(root, exist_ok=True)
+
+    def _pair(label: str, i: int, t_src: float, t_var: float, q: float) -> dict:
+        fa = os.path.join(root, f"{label}_src_{i}.png")
+        fb = os.path.join(root, f"{label}_var_{i}.png")
+        _extract_frame(src_path, t_src, fa, canvas=canvas)
+        _extract_frame(variant_path, t_var, fb, canvas=canvas)
+        planes = _ssim_planes(fa, fb)
+        row = {
+            "q": q,
+            "t_src_requested": t_src,
+            "t_var_requested": t_var,
+            "delta_t_vs_aligned": source_time_mismatch(q, trim_s, trim_end_s),
+            "ssim": planes,
+        }
+        if keep:
+            row["src_frame"] = fa
+            row["var_frame"] = fb
+        return row
+
+    try:
+        frac_rows: list[dict] = []
+        align_rows: list[dict] = []
+        for i, q in enumerate(FRAME_FRACS):
+            t_var = q * dur_var
+            frac_rows.append(
+                _pair("frac", i, fractional_source_time(q, dur_src), t_var, q)
+            )
+            align_rows.append(
+                _pair(
+                    "align", i,
+                    mapped_source_time(q, dur_src, trim_s, trim_end_s),
+                    t_var, q,
+                )
+            )
+    finally:
+        if tmp_ctx is not None:
+            tmp_ctx.cleanup()
+
+    def _pack(rows: list[dict]) -> dict:
+        alls = [float(r["ssim"]["All"]) for r in rows if r["ssim"].get("All") is not None]
+        mean = sum(alls) / len(alls) if alls else 0.0
+        return {
+            "mean_ssim": mean,
+            "bits": bits_from_ssim(mean),
+            "frames": rows,
+        }
+
+    fractional = _pack(frac_rows)
+    aligned = _pack(align_rows)
+    return {
+        "diagnostic": ALIGN_DIAGNOSTIC,
+        "metric": METRIC_VERSION,
+        "gate_unchanged": True,
+        "trim_s": float(trim_s),
+        "trim_end_s": float(trim_end_s),
+        "speed": float(speed),
+        "src_duration_s": dur_src,
+        "var_duration_s": dur_var,
+        "canvas": [canvas[0], canvas[1]],
+        "fractional": fractional,
+        "aligned": aligned,
+        "bits_delta": aligned["bits"] - fractional["bits"],
+    }
 
 
 def mean_ssim(path_a: str, path_b: str) -> float:

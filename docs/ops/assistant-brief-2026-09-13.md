@@ -442,3 +442,9 @@ rebuild kernels. AQMTp stays parked. How-to page and Telegram: later.
 **Product bar:** look as close to the original as possible; file as original
 as possible (SHA, AAC never copy, empty encoder, no SEI). Harder look only
 when uniqueness needs it.
+
+**SSIM alignment diagnostic (Lab-only, 2026-09-13).** Optional
+`--ssim-align-diag` / `VARIANT_SSIM_ALIGN_DIAG=1`. Compares fractional
+25/50/75 SSIM vs trim-mapped source times. **Does not change gate 24.**
+Does not escalate. Not enabled by `VARIANT_LAB`. Live Fast unchanged.
+Writeup: `docs/ops/ssim-align-diag-2026-09-13.md`.
