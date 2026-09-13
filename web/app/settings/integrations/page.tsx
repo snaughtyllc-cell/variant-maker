@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
@@ -12,6 +12,18 @@ import { useAuthMe } from "@/lib/useAuthMe";
 import { showIntegrationsNav } from "@/lib/navAccess";
 import type { WorkspaceApiKey, WorkspaceApiKeysPage } from "@/lib/types";
 
+const COPY_BTN: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--color-text)",
+  background: "var(--color-panel2)",
+  border: "1px solid var(--color-line)",
+  padding: "7px 12px",
+  borderRadius: 9,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
 export default function IntegrationsPage() {
   const router = useRouter();
   const { data: me, isLoading: meLoading } = useAuthMe();
@@ -21,7 +33,8 @@ export default function IntegrationsPage() {
   const [preset, setPreset] = useState<"full" | "read">("full");
   const [expiresDays, setExpiresDays] = useState(90);
   const [token, setToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("https://your-studio.example");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -30,6 +43,10 @@ export default function IntegrationsPage() {
     if (meLoading) return;
     if (!allowed) router.replace("/");
   }, [meLoading, allowed, router]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     if (!allowed) return;
@@ -53,7 +70,7 @@ export default function IntegrationsPage() {
     e.preventDefault();
     if (submitting) return;
     setFormError(null);
-    setCopied(false);
+    setCopied(null);
     setSubmitting(true);
     try {
       const created = await createWorkspaceApiKey({
@@ -75,13 +92,12 @@ export default function IntegrationsPage() {
     }
   }
 
-  async function handleCopy() {
-    if (!token) return;
+  async function copyText(text: string, which: string) {
     try {
-      await navigator.clipboard.writeText(token);
-      setCopied(true);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
     } catch {
-      setFormError("Copy failed — select the key and copy it yourself.");
+      setFormError("Copy failed — select the text and copy it yourself.");
     }
   }
 
@@ -126,6 +142,12 @@ export default function IntegrationsPage() {
   }
 
   const studioName = page?.workspace_name || me?.workspace_name || "this studio";
+  const machineSnippet = [
+    `export VARIMO_BASE_URL="${origin}"`,
+    `export VARIMO_API_KEY="paste-the-key-you-copied"`,
+    `pip install -e ".[mcp]"`,
+    "varimo-mcp",
+  ].join("\n");
 
   return (
     <main className="team-page integrations-page">
@@ -250,8 +272,12 @@ export default function IntegrationsPage() {
             >
               {token}
             </code>
-            <button type="button" className="vf-primary-button" onClick={handleCopy}>
-              {copied ? "Copied" : "Copy"}
+            <button
+              type="button"
+              className="vf-primary-button"
+              onClick={() => { if (token) void copyText(token, "token"); }}
+            >
+              {copied === "token" ? "Copied" : "Copy"}
             </button>
             <button
               type="button"
@@ -271,9 +297,14 @@ export default function IntegrationsPage() {
           </div>
         )}
 
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 10 }}>
-          Drive folder IDs
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 8 }}>
+          Same folders as Drive
         </div>
+        <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 10 }}>
+          Not a second Drive. These are the folders you already added on{" "}
+          <Link href="/settings/drive">Drive</Link>. Your bot cannot tap that screen, so
+          copy the <code>dst_…</code> id when it asks which folder to use.
+        </p>
         <div
           style={{
             background: "var(--color-panel)",
@@ -306,6 +337,14 @@ export default function IntegrationsPage() {
                     {d.id}
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => void copyText(d.id, `dest:${d.id}`)}
+                  aria-label={`Copy ${d.name} folder id`}
+                  style={COPY_BTN}
+                >
+                  {copied === `dest:${d.id}` ? "Copied" : "Copy"}
+                </button>
               </div>
             ))
           )}
@@ -369,12 +408,30 @@ export default function IntegrationsPage() {
           )}
         </div>
 
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 10, marginTop: 28 }}>
-          On your machine
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginTop: 28,
+            marginBottom: 10,
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", flex: 1 }}>
+            On your machine
+          </div>
+          <button
+            type="button"
+            onClick={() => void copyText(machineSnippet, "mcp")}
+            aria-label="Copy on-your-machine setup"
+            style={COPY_BTN}
+          >
+            {copied === "mcp" ? "Copied" : "Copy"}
+          </button>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 12 }}>
-          <code>varimo-mcp</code> runs on the agency computer. It calls the same Fast pack /
-          Gallery metadata / Drive export loop. We do not host MCP, and we do not post.
+          This runs on the agency computer (or paste it into your AI app). Same Fast pack /
+          Gallery metadata / Drive export loop. We do not host it, and we do not post.
         </p>
         <pre
           style={{
@@ -386,10 +443,7 @@ export default function IntegrationsPage() {
             overflowX: "auto",
             marginBottom: 18,
           }}
-        >{`export VARIMO_BASE_URL="${typeof window === "undefined" ? "https://your-studio.example" : window.location.origin}"
-export VARIMO_API_KEY="paste-the-key-you-copied"
-pip install -e ".[mcp]"
-varimo-mcp`}</pre>
+        >{machineSnippet}</pre>
       </div>
     </main>
   );

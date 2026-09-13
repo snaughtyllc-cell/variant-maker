@@ -110,4 +110,15 @@ describe("IntegrationsPage", () => {
     expect(screen.getByText(/VARIMO_BASE_URL/)).toBeTruthy();
     expect(screen.getByText(/paste-the-key-you-copied/)).toBeTruthy();
   });
+
+  it("copies a Drive folder id and the on-your-machine snippet", async () => {
+    render(<IntegrationsPage />);
+    await screen.findByText("Same folders as Drive");
+    fireEvent.click(screen.getByRole("button", { name: "Copy Inbox folder id" }));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("dst_in");
+    fireEvent.click(screen.getByRole("button", { name: "Copy on-your-machine setup" }));
+    const snippet = vi.mocked(navigator.clipboard.writeText).mock.calls.at(-1)?.[0];
+    expect(String(snippet)).toContain("VARIMO_BASE_URL=");
+    expect(String(snippet)).toContain("varimo-mcp");
+  });
 });
