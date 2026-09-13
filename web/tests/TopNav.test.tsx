@@ -62,6 +62,7 @@ describe("TopNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("puts Analytics on the phone bar for owners and Drive in More", () => {
@@ -77,6 +78,7 @@ describe("TopNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("keeps agency phone bar at Studio, Gallery, Analytics, Flows with Drive and Drops in More", () => {
@@ -96,7 +98,22 @@ describe("TopNav", () => {
       "/settings/drive",
     );
     expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
     expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
+  });
+
+  it("puts How to in More for VAs, not on the phone bar", () => {
+    me.data = { ...BASE, role: "member" };
+    render(<TopNav />);
+    const bar = document.querySelector(".vf-mobile-tabs") as HTMLElement;
+    expect([...bar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual([
+      "/",
+      "/gallery",
+      "/workflows",
+    ]);
+    expect(screen.queryByRole("link", { name: "How to" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("centers the varimo wordmark and keeps More as an icon-only control", () => {

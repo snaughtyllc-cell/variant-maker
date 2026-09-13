@@ -5,7 +5,7 @@ Pure client of the FastAPI backend via a same-origin dev proxy.
 
 **Redesign / Codex:** do not use the old four-screen list
 (Studio / Gallery / variant side-panel / Diagnostics). That was v1.
-The live product has ten destinations. Source of truth:
+The live product has eleven destinations. Source of truth:
 [`docs/ops/studio-ia.md`](../docs/ops/studio-ia.md) and
 `web/lib/studioDestinations.ts`.
 
@@ -137,6 +137,7 @@ route is missing from that catalog.
 | **Drops** | `/drops` | everyone | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
+| **How to** | `/how-to` | everyone | More | Operator loop and posting hygiene. Not a phone-bar tab. No fingerprint internals. |
 | **Team** | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | **Admin** | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
@@ -152,9 +153,9 @@ Nested (not tabs — a redesign must still include them):
 | **Drive picker** | Studio | Import source files from a saved Drive destination. |
 | **Watch / queue / cancel** | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
 
-Phone (`< 640px`) shows the six everyone-tabs (Analytics short label
-**Stats**). Team / Admin / Diagnostics sit under **More**. Desktop shows
-extras in the top row when the session is allowed. Auth gating:
+Phone (`< 640px`) shows **Studio · Gallery · Analytics · Flows**. Drive, Drops,
+and How to sit under **More** with Team / Admin / Diagnostics. Desktop SideNav
+shows extras when the session is allowed. Auth gating:
 `web/lib/navAccess.ts`.
 
 ---

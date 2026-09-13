@@ -25,18 +25,19 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Everyone signed in | **Studio · Gallery · Analytics · Drops · Workflows · Drive** |
+| Everyone signed in | **Studio · Gallery · Analytics · Drops · Workflows · Drive · How to** |
 | Workspace owner (or site admin) | + **Team** |
 | Site admin (`SITE_ADMIN_EMAILS`) | + **Admin · Diagnostics** |
 | Unauthenticated | **Login** and **Pricing** |
 
 Solo owners see **Studio · Gallery · Analytics** on the phone bar; Drive
-is under More. Solo members see **Studio · Gallery**, with Drive in More.
+and How to sit under More. Solo members see **Studio · Gallery**, with Drive
+and How to in More.
 
 Phone (`< 640px`) shows **Studio · Gallery · Analytics · Flows**.
-**Drive** and **Drops** sit under the top-right **More** control, with Team /
-Admin / Diagnostics. Desktop SideNav keeps the full operator row
-(Studio / Gallery / Drops / Workflows / Drive).
+**Drive**, **Drops**, and **How to** sit under the top-right **More** control,
+with Team / Admin / Diagnostics. Desktop SideNav keeps the full operator row
+(Studio / Gallery / Drops / Workflows / Drive) and How to in extras.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -51,6 +52,7 @@ row + progress card.
 | Workflows | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drops | `/drops` | everyone | More | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Drive | `/settings/drive` | everyone | More | Share varimo Drive email, paste folder link, captions, Drop Ledger, Instagram testers, password. |
+| How to | `/how-to` | everyone | More | Operator loop: source → Fast → look stills → Drive → drop with cadence. Unlabeled after a drop is unknown, not a pass. No fingerprint internals. |
 | Team | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
@@ -87,9 +89,11 @@ Analytics; scoreboard on Analytics; compact views on Gallery. Ops:
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
 - Do not add an Updates / Announcements tab in a redesign pass. It is
   parked under Later above — not missing IA.
-- Do not hide Analytics, Drops, Workflows, Drive, Team, or Admin — they
+- Do not hide Analytics, Drops, Workflows, Drive, Team, Admin, or How to — they
   are live.
-- Do not put Admin / Diagnostics / Drive / Drops in the phone bottom bar.
-  Drive and Drops stay under More. Admin / Diagnostics stay under More.
+- Do not put Admin / Diagnostics / Drive / Drops / How to in the phone bottom bar.
+  Drive, Drops, and How to stay under More. Admin / Diagnostics stay under More.
+- How-to copy is posting hygiene. Do not document fingerprint internals
+  (SHA / AAC / SEI / encode tags) on that page.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,
-  `showDiagnosticsNav`). Site admin is `SITE_ADMIN_EMAILS`.
+  `showDiagnosticsNav`, `extraTabVisible`). Site admin is `SITE_ADMIN_EMAILS`.
