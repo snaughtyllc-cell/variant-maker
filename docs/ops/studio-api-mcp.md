@@ -29,6 +29,10 @@ Cookie only. Token format `vf_<key_id>_<secret>`. Digest stored; plaintext once.
 Default expiry 90 days (owner can pick 30). Presets: **full** (all four scopes)
 or **read** (`jobs:read` + `gallery:read`).
 
+The `dst_…` ids on Integrations are Studio names for folders already on the
+Drive screen — not a second Drive. The bot pastes that id as
+`input_destination_id` / `destination_id` because it cannot tap Drive.
+
 Auth off (`VARIANT_AUTH_ADMIN_EMAIL` unset): key issue and bearer are off.
 
 ## Operator loop
