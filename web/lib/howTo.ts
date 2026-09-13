@@ -1,87 +1,107 @@
 /**
- * Operator How-to copy. Keep this page posting hygiene — never fingerprint
- * internals (SHA / AAC / SEI / encode tags). Tests scan this module.
+ * Operator How-to copy: three categories (Generating, Automation, Posting).
+ * Never fingerprint internals (SHA / AAC / SEI / encode tags). Tests scan this module.
  */
 
-export type HowToSection = {
+export type HowToJump = { href: string; label: string };
+
+export type HowToTopic = {
   id: string;
   title: string;
   paragraphs: string[];
-  bullets?: string[];
+};
+
+export type HowToCategory = {
+  id: "generating" | "automation" | "posting";
+  label: string;
+  blurb: string;
+  topics: HowToTopic[];
+  jumps: readonly HowToJump[];
 };
 
 export const HOW_TO_TITLE = "How to";
-export const HOW_TO_EYEBROW = "Operator loop";
+export const HOW_TO_EYEBROW = "Best practices";
 export const HOW_TO_LEAD =
-  "One source clip in. Fast copies out. Check the look. Send to Drive. Post with space between copies. This page is how we run packs — not a promise about what Instagram will do.";
+  "Three jobs: generating packs, automating the handoff, and posting. Open a tab.";
 
-export const HOW_TO_SECTIONS: HowToSection[] = [
+export const HOW_TO_CATEGORIES: HowToCategory[] = [
   {
-    id: "source",
-    title: "1. Start from the original",
-    paragraphs: [
-      "Use the master clip. Drop it on Studio or pick it from Drive.",
-      "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
-      "Phone files are fine if they play. Convert only when it actually saves a huge upload wait.",
+    id: "generating",
+    label: "Generating",
+    blurb: "How to use Studio. Original in, Fast pack, check the look in Gallery.",
+    jumps: [
+      { href: "/", label: "Studio" },
+      { href: "/gallery", label: "Gallery" },
+    ],
+    topics: [
+      {
+        id: "studio-gallery",
+        title: "Studio → Gallery",
+        paragraphs: [
+          "Start from the original master. Drop it on Studio or pick it from Drive. Generate a Fast pack, then open Gallery and check the look before anything goes out.",
+          "Do not run a finished copy through Studio as a new source. That stacks encodes and the look gets worse.",
+        ],
+      },
     ],
   },
   {
-    id: "fast",
-    title: "2. Make a Fast pack",
-    paragraphs: [
-      "On Studio, set how many copies and generate. Fast is the daily path.",
-      "Reconstruct first (HQ) is optional and off by default. Turn it on when the source already looks soft — one GPU pass, then Fast. Not every pack, and not a 4K upscaler.",
+    id: "automation",
+    label: "Automation",
+    blurb: "Drive in, Drive out — then plugins you already use to caption and schedule.",
+    jumps: [
+      { href: "/workflows", label: "Workflows" },
+      { href: "/settings/drive", label: "Drive" },
+    ],
+    topics: [
+      {
+        id: "workflows",
+        title: "Workflows",
+        paragraphs: [
+          "Drive in, Drive out. Save two folders: an inbox for raw clips and a different output folder for finished packs. Share the studio Drive email as Editor so the machine can actually open them.",
+          "A workflow watches the inbox, makes the pack, and drops copies into output — one subfolder per source, not one giant pile.",
+        ],
+      },
+      {
+        id: "captions",
+        title: "Auto captions",
+        paragraphs: [
+          "Paste captions in Drive (caption bank). Workflow auto-caption is off by default — turn it on if you want each file named from that folder.",
+          "Repurpose.io uses the Drive filename as the post caption, so set names before the handoff.",
+        ],
+      },
+      {
+        id: "plugins",
+        title: "Plugins",
+        paragraphs: [
+          "Point the export Drive folder at Repurpose.io or Buffer and let that tool schedule. Those are plugins on the folder, not extra Studio tabs. We do not run those seats.",
+        ],
+      },
     ],
   },
   {
-    id: "look",
-    title: "3. Check the look",
-    paragraphs: [
-      "Open Gallery. Compare stills to the source. If a copy looks washed, muddy, or unlike the clip, do not send it.",
-      "Play the file when you are unsure. Stills are not the whole video.",
-    ],
-  },
-  {
-    id: "handoff",
-    title: "4. Hand off",
-    paragraphs: [
-      "Send to Drive. Split a pack across folders if accounts need different files.",
-      "Workflows can watch an inbox folder if you already drop sources there.",
-    ],
-  },
-  {
-    id: "cadence",
-    title: "5. Post with cadence",
-    paragraphs: [
-      "Do not dump a whole pack onto one account in one sitting. One copy per account, or a small set over time.",
-    ],
-  },
-  {
-    id: "ledger",
-    title: "6. Label what happened",
-    paragraphs: [
-      "After you post, mark the Drop Ledger.",
-      "Unlabeled is unknown — not a pass, not a miss. Flagged or duplicate-rejected is a miss. A quiet week is not proof the copies worked.",
-    ],
-  },
-  {
-    id: "not",
-    title: "What this is not",
-    paragraphs: [
-      "Studio is not checking Instagram for you.",
-      "Originality in Gallery is a local check that copies are not identical to the source. It is not Instagram saying yes.",
-      "Stay look-close on Fast. Do not chase a harder look just to move a number.",
+    id: "posting",
+    label: "Posting",
+    blurb: "How to put copies on accounts without stacking flags.",
+    jumps: [],
+    topics: [
+      {
+        id: "accounts",
+        title: "Multiple accounts",
+        paragraphs: [
+          "If you post the same pack across multiple accounts, do not drop every copy on every account at the same time. Stagger. Flags, integrity issues, and bans stack when a whole set lands at once.",
+        ],
+      },
+      {
+        id: "trial",
+        title: "Trial Reels and content type",
+        paragraphs: [
+          "Skip sexual clips on Trial Reels. If one of those gets flagged, a lot of them get flagged — then you have a pile of sexual flags on the account.",
+          "The usual miss with copies is not the file itself getting the account banned. It is using the wrong kind of content, then posting that same content over and over so flags pile up.",
+        ],
+      },
     ],
   },
 ];
-
-export const HOW_TO_JUMP_LINKS = [
-  { href: "/", label: "Studio" },
-  { href: "/gallery", label: "Gallery" },
-  { href: "/settings/drive", label: "Drive" },
-  { href: "/drops", label: "Drops" },
-  { href: "/workflows", label: "Workflows" },
-] as const;
 
 /** Patterns that must never appear in How-to (clone bait / internals). */
 export const HOW_TO_FORBIDDEN: readonly RegExp[] = [
@@ -105,9 +125,12 @@ export const HOW_TO_FORBIDDEN: readonly RegExp[] = [
 
 export function howToPlainText(): string {
   const parts = [HOW_TO_TITLE, HOW_TO_EYEBROW, HOW_TO_LEAD];
-  for (const section of HOW_TO_SECTIONS) {
-    parts.push(section.title, ...section.paragraphs, ...(section.bullets ?? []));
+  for (const category of HOW_TO_CATEGORIES) {
+    parts.push(category.label, category.blurb);
+    for (const topic of category.topics) {
+      parts.push(topic.title, ...topic.paragraphs);
+    }
+    parts.push(...category.jumps.map((link) => link.label));
   }
-  parts.push(...HOW_TO_JUMP_LINKS.map((link) => link.label));
   return parts.join("\n");
 }
