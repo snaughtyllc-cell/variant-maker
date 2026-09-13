@@ -46,7 +46,10 @@ const OWNER: AuthMe = {
 const page: WorkspaceApiKeysPage = {
   workspace_id: "ws_ops",
   workspace_name: "Ops studio",
-  destinations: [{ id: "dst_in", name: "Inbox" }],
+  destinations: [
+    { id: "dst_in", name: "Inbox" },
+    { id: "dst_out", name: "Out" },
+  ],
   keys: [
     {
       key_id: "k1",
@@ -111,14 +114,27 @@ describe("IntegrationsPage", () => {
     expect(screen.getByText(/paste-the-key-you-copied/)).toBeTruthy();
   });
 
-  it("copies a Drive folder id and the on-your-machine snippet", async () => {
+  it("copies the selected Drive folder for the bot without showing the id", async () => {
     render(<IntegrationsPage />);
     await screen.findByText("Same folders as Drive");
-    fireEvent.click(screen.getByRole("button", { name: "Copy Inbox folder id" }));
+    expect(screen.queryByText("dst_in")).toBeNull();
+    expect(screen.queryByText("dst_out")).toBeNull();
+    const picker = screen.getByLabelText("Drive folder");
+    fireEvent.click(screen.getByRole("button", { name: "Copy selected Drive folder" }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("dst_in");
+    fireEvent.change(picker, { target: { value: "dst_out" } });
+    fireEvent.click(screen.getByRole("button", { name: "Copy selected Drive folder" }));
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("dst_out");
     fireEvent.click(screen.getByRole("button", { name: "Copy on-your-machine setup" }));
     const snippet = vi.mocked(navigator.clipboard.writeText).mock.calls.at(-1)?.[0];
     expect(String(snippet)).toContain("VARIMO_BASE_URL=");
     expect(String(snippet)).toContain("varimo-mcp");
+  });
+
+  it("points to Drive when no folders are connected", async () => {
+    vi.mocked(getWorkspaceApiKeys).mockResolvedValue({ ...page, destinations: [] });
+    render(<IntegrationsPage />);
+    await screen.findByText(/No Drive folders yet/);
+    expect(screen.queryByLabelText("Drive folder")).toBeNull();
   });
 });
