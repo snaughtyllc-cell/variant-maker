@@ -111,8 +111,11 @@ folder). Medium Fast, reels-fit-to-source, seed 42. Gate **24** unchanged.
 | Am I invited to the carne asada? | 1088×1920 / 10.2 s | motion **43** | 0.24 / 0.18 | **33** `ok` | **28** | **−5** | 0.14 s |
 | If you need a pool cleaner hit my line! | 720×1280 / 19.4 s | motion **42** | 0.30 / 0.25 | **40** `ok` | **39** | **−1** | 0.16 s |
 | Stay safe out there kings | 1080×1920 / 8.1 s | talking_head **21** | 0.28 / 0.36 | **27** `ok` | **26** | **−1** | 0.12 s |
+| studio `@varimo.io` `1s9vsj7a…` | 1080×1920 / 16.6 s **48 fps** | motion **51** | 0.24 / 0.20 | **45** `ok` | **44** | **−1** | 0.13 s |
 
-All three stay above 24 after aligning. The short motion 1080’s fractional
-score was partly different moments (−5). The 720 motion and the 1080
-talking-head barely moved (−1). Clock mismatch is not the talking-head
-story. Not a Live pack. Not a platform verdict. Do not raise 24.
+`1XSaLGiRgbkDnszRsmXsWiBYD-SXzSAP8` was not readable (not found / not
+shared with this agent).
+
+The 48 fps file is owned by `studio@varimo.io` — likely a Fast output, not
+a phone source. Treating it as input still gives `bits_delta` −1. Clock
+mismatch is not the talking-head story. Do not raise 24.
