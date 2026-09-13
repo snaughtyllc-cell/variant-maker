@@ -448,5 +448,7 @@ when uniqueness needs it.
 25/50/75 SSIM vs trim-mapped source times. **Does not change gate 24.**
 Does not escalate. Not enabled by `VARIANT_LAB`. Live Fast unchanged.
 Jeff NC run: clock can add a few bits (carne −5; Nah seriously **26→22**
-on a 0.48 s tail). Kings / Homegirl stay **27→26 / 26→25**. Do not raise
-24. Writeup: `docs/ops/ssim-align-diag-2026-09-13.md`.
+on a 0.48 s tail). Kings / Homegirl stay **27→26 / 26→25**. Fractional
+gate can pass under-24 aligned bits; keeping it is a deferral, not a
+finding that fractional is fine. Do not compare aligned bits to floor 19.
+Do not raise 24. Writeup: `docs/ops/ssim-align-diag-2026-09-13.md`.

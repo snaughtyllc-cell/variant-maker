@@ -122,7 +122,9 @@ a phone source. Do not treat **45 / 44** as “this phone source is easy.”
 ### What the numbers mean
 
 Clock mismatch is **real**. Carne (−5) and Nah seriously (−4) moved.
-Pool / kings / Homegirl / the Studio file are **−1** (noise).
+Pool / kings / Homegirl / the Studio file moved **−1** on those three
+frames (rounding). Carne and pool have nearly the same trims / Δt;
+`bits_delta` is per-file, per-instant, not predictable from `h` and `e`.
 
 Talking-head is **not** “the clock did it” as a class. Kings **27→26** and
 Homegirl **26→25** still sit just above 24 when the moments match. Those
@@ -131,10 +133,33 @@ files are a still face plus look-safe Fast.
 **Nah seriously is the first hole we actually hit:** fractional gate **26**
 `ok`, aligned **22**. Tail trim **0.48 s**. Δt at 25% is ~0, but **−0.15 s
 at 50%** and **−0.32 s at 75%**. Those late fractional pairs were the
-low-SSIM ones (All 0.54 / 0.52); aligned recovered All ~0.65. The gate
-passed by comparing different moments. Aligned **22** is still above floor
-**19**. Do **not** hunt this file, do **not** copy `aligned.bits` onto
-`uniqueness_status`, do **not** raise 24.
+low-SSIM ones (All 0.54 / 0.52); aligned recovered All ~0.65. The
+fractional gate can pass a file whose same-moment bits are under 24.
+Keeping the gate fractional is a **deliberate deferral** (six files,
+Lab-only, do not hunt a still face). It is not a finding that fractional
+is fine. Do **not** compare aligned 22 to floor 19 — the floor was
+calibrated on fractional bits. Do **not** copy `aligned.bits` onto
+`uniqueness_status`. Do **not** raise 24.
+
+**Self bits** = one source file, 25% vs 75% of *itself* on the SSIM
+canvas. Not a re-encode. Not vs the variant. `< 24` → `talking_head`.
+
+**Gate 24** = source → this variant only (`score_uniqueness` /
+`bits_vs`). Motion packs also require peer bits ≥ 24 (variant vs earlier
+kept copies, same fractional clock). Talking-head **peer bits are not in
+the 24 decision**. This diagnostic only covers source pairs. These Jeff
+NC encodes were n=1, so no peer pair ran.
+
+**Look MAE 38** uses the same `FRAME_FRACS` on each file’s own duration
+(`look.py`). Same clock bug. We did **not** measure aligned MAE on this
+run. Do not retune 38. Do not assume the look budget is “looser” on
+motion without that measurement. Inflated uniqueness bits and inflated
+MAE pull opposite ways (easier uniqueness pass, easier look alarm).
+
+**Trim is a silent uniqueness lever** while the gate stays fractional.
+Medium tail can reach ~0.50 s. Nobody budgeted trim as uniqueness. Do
+**not** widen trim to farm bits, and do **not** shrink it to “fix” this.
+Bands stay.
 
 Motion vs talking-head is still mostly **content**. Motion self-bits
 42–51; these talking-heads 20–22. Fast then lands motion at 28–45 and
