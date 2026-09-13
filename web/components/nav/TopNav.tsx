@@ -8,6 +8,7 @@ import {
   Cloud,
   FolderOpen,
   GalleryHorizontalEnd,
+  KeyRound,
   LogOut,
   MoreHorizontal,
   PackageCheck,
@@ -34,6 +35,7 @@ const ICONS = {
   "/settings/drive": Cloud,
   "/how-to": CircleHelp,
   "/team": UsersRound,
+  "/settings/integrations": KeyRound,
   "/admin": ShieldCheck,
   "/diagnostics": Settings2,
 } as const;

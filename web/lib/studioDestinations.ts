@@ -77,6 +77,14 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     summary: "Agency owner invites VAs into this studio. Solo creators cannot invite.",
   },
   {
+    href: "/settings/integrations",
+    label: "Integrations",
+    audience: "owner",
+    tab: "extra",
+    summary:
+      "Owner-issued workspace API keys for Fast packs, Gallery metadata, and Drive export. Not inside Drive. Not a phone-bar tab.",
+  },
+  {
     href: "/analytics",
     label: "Analytics",
     audience: "owner",
@@ -117,7 +125,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
 /** Phone bottom bar + desktop primary row. */
 export const PRIMARY_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "primary");
 
-/** How to (everyone) plus Team / Analytics / Admin / Diagnostics — gated in navAccess. */
+/** How to (everyone) plus Team / Integrations / Analytics / Admin / Diagnostics — gated in navAccess. */
 export const EXTRA_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "extra");
 
 /** Surfaces that are not top-level tabs but must be in any redesign. */

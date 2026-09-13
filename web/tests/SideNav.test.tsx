@@ -43,6 +43,10 @@ describe("SideNav", () => {
   it("shows Team for workspace owners", () => {
     render(<SideNav />);
     expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
+    expect(screen.getAllByRole("link", { name: "Integrations" })[0]).toHaveAttribute(
+      "href",
+      "/settings/integrations",
+    );
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
   });
 
@@ -50,6 +54,7 @@ describe("SideNav", () => {
     me.data = { ...BASE, role: "member" };
     render(<SideNav />);
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Integrations" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
@@ -126,6 +131,10 @@ describe("SideNav", () => {
       "/analytics",
     );
     expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
+    expect(screen.getAllByRole("link", { name: "Integrations" })[0]).toHaveAttribute(
+      "href",
+      "/settings/integrations",
+    );
   });
 
   it("renders role extras from the same catalog as the IA doc", () => {

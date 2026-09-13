@@ -23,6 +23,9 @@ from starlette.requests import ClientDisconnect
 from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
+from .api_keys import ApiKeyStore
+from .api_v1 import authorize_bearer, register_api_v1
+from .api_v1_limits import IdempotencyStore, SlidingWindow
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
 from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
@@ -615,16 +618,26 @@ def create_app(
             environ=auth_env if auth_environ is not None else None,
         )
         login_pending = OAuthPendingStore(os.path.join(auth_dir, "login_pending.json"))
+        api_keys = ApiKeyStore(os.path.join(auth_dir, "api_keys.json"))
+        api_idem = IdempotencyStore(os.path.join(auth_dir, "api_idempotency.json"))
+        api_audit_path = os.path.join(auth_dir, "api_audit.jsonl")
         if hydrate:
             hub.hydrate_all(tenants.list_workspace_ids())
-    elif hydrate:
-        fallback_store.hydrate_from_disk()
+    else:
+        api_keys = None
+        api_idem = None
+        api_audit_path = None
+        if hydrate:
+            fallback_store.hydrate_from_disk()
+
+    v1_windows = SlidingWindow()
 
     store = JobStoreProxy(fallback_store)
     app.state.store = store
     app.state.tenants = tenants
     app.state.tenant_hub = hub
     app.state.auth_required = auth_on
+    app.state.api_keys = api_keys
 
     if oauth_token_path is None:
         oauth_token_path = fallback_store._ws.oauth_token_path()
@@ -648,6 +661,7 @@ def create_app(
 
     # Explicit "" means "no SA" (tests); None means fall through to env.
     sa_arg = None if sa_json_path in (None, "") else sa_json_path
+    drive_injected = drive is not None
     drive_info = resolve_drive_status(
         sa_arg,
         oauth_token_path=oauth_token_path,
@@ -839,6 +853,8 @@ def create_app(
             return app.state.drive
         if bundle.drive is not None:
             return bundle.drive
+        if drive_injected and app.state.drive is not None:
+            return app.state.drive
         info = _compute_drive_info()
         if info.status == "ready" and info.auth_mode == "oauth":
             bundle.drive, bundle.sheets = _attach_oauth_clients()
@@ -847,6 +863,8 @@ def create_app(
                 bundle.drive = _build_drive_client(sa_json_path=sa_arg)
             except Exception:  # noqa: BLE001 — SA json may be unreadable
                 bundle.drive = None
+        if bundle.drive is None and app.state.drive is not None:
+            return app.state.drive
         return bundle.drive
 
     def _sheets() -> SheetsClient | None:
@@ -1028,6 +1046,18 @@ def create_app(
         user = _require_user(request)
         if user.role != "owner" and not is_admin_email(user.email, admin_email):
             raise HTTPException(status_code=403, detail="owner only")
+        return user
+
+    def _require_home_owner(request: Request):
+        """Key management: home-workspace owner only. No admin view-as, no bearer."""
+        if getattr(request.state, "api_principal", None) is not None:
+            raise HTTPException(status_code=403, detail="owner only")
+        user = _require_user(request)
+        if user.role != "owner":
+            raise HTTPException(status_code=403, detail="owner only")
+        viewing = getattr(request.state, "viewing_workspace_id", None) or user.workspace_id
+        if viewing != user.workspace_id:
+            raise HTTPException(status_code=403, detail="home workspace only")
         return user
 
     def _actor_email(request: Request) -> str | None:
@@ -1350,9 +1380,24 @@ def create_app(
     async def tenant_middleware(request: Request, call_next):
         token = tenant_cv.set(None)
         try:
+            path = request.url.path
+            has_authz = bool((request.headers.get("authorization") or "").strip())
+            if has_authz or path.startswith("/api/v1"):
+                err = authorize_bearer(
+                    request,
+                    auth_on=auth_on,
+                    keys=api_keys,
+                    tenants=tenants,
+                    hub=hub,
+                    windows=v1_windows,
+                    audit_path=api_audit_path,
+                )
+                if err is not None:
+                    return err
+                if getattr(request.state, "api_principal", None) is not None:
+                    return await call_next(request)
             if not auth_on or tenants is None or hub is None:
                 return await call_next(request)
-            path = request.url.path
             sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
             user = tenants.get_user(sess["email"]) if sess else None
             if user is None or not user.workspace_id:
@@ -2939,6 +2984,21 @@ def create_app(
         require_user=_require_user,
         admin_email=admin_email,
         is_admin=is_admin_email,
+    )
+
+    register_api_v1(
+        app,
+        auth_on=auth_on,
+        keys=api_keys,
+        idem=api_idem,
+        windows=v1_windows,
+        audit_path=api_audit_path,
+        require_drive=_require_drive,
+        get_drive=_drive,
+        off_volume=_off_volume_mailbox,
+        export_runner=_drive_export_runner,
+        require_home_owner=_require_home_owner,
+        tenants=tenants,
     )
 
     return app

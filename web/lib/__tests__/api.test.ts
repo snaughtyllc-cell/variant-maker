@@ -864,6 +864,49 @@ describe("workspace team API", () => {
   });
 });
 
+describe("workspace API keys", () => {
+  const page = {
+    workspace_id: "ws_ops",
+    workspace_name: "Ops",
+    keys: [],
+    destinations: [{ id: "dst_1", name: "Inbox" }],
+  };
+
+  it("getWorkspaceApiKeys GETs /api/workspace/api-keys", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(page), { status: 200 }),
+    );
+    await api.getWorkspaceApiKeys();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/workspace/api-keys");
+  });
+
+  it("createWorkspaceApiKey POSTs label and preset", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        key_id: "k1", label: "bot", prefix: "vf_ab", scopes: ["jobs:read"],
+        created_utc: "2026-09-13T00:00:00Z", expires_utc: null, last_used_utc: null,
+        revoked_utc: null, token: "vf_ab_secret",
+      }), { status: 201 }),
+    );
+    const out = await api.createWorkspaceApiKey({ label: "bot", preset: "read", expires_days: 30 });
+    expect(out.token).toBe("vf_ab_secret");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workspace/api-keys");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      label: "bot", preset: "read", expires_days: 30,
+    });
+  });
+
+  it("revokeWorkspaceApiKey DELETEs the key id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await api.revokeWorkspaceApiKey("k1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/workspace/api-keys/k1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
 describe("Instagram API", () => {
   const status = {
     oauth_available: true,
