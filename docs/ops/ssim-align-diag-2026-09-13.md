@@ -185,8 +185,12 @@ source 24 or peer 24. Same-seed strength rungs keep medium trim (trim is
 unbudgeted). Strong redraws trim from **0.30–0.85 s** (medium is
 0.15–0.50) plus crop/grain/rebuild. That retry is not “only trim” and it
 is not a reseed, but trim **does** move on the escalate, which is the
-silent uniqueness lever. Do not reseed to farm peer bits. Do not widen
-medium trim.
+silent uniqueness lever. If strong clears peer 24 where medium did not,
+the log cannot say which did it (wider trim vs the effect stack). Given
+what peer bits are on motion, the trim redraw is the likelier cause.
+Read **“escalated to strong”** on a motion peer fail as **“redrew trim
+wider”** until a same-trim comparison says otherwise. Do not reseed to
+farm peer bits. Do not widen medium trim.
 
 **Look MAE 38** uses the same `FRAME_FRACS` on each file’s own duration
 (`look.py`). Same mismatch. On motion content the typical direction is
