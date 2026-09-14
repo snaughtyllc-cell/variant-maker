@@ -47,7 +47,6 @@ export default function IntegrationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
-  const [selectedDestId, setSelectedDestId] = useState("");
 
   useEffect(() => {
     if (meLoading) return;
@@ -153,9 +152,6 @@ export default function IntegrationsPage() {
 
   const studioName = page?.workspace_name || me?.workspace_name || "this studio";
   const dests = page?.destinations ?? [];
-  const selectedFolderId = dests.some((d) => d.id === selectedDestId)
-    ? selectedDestId
-    : dests[0]?.id ?? "";
   const machineSnippet = [
     `export VARIMO_BASE_URL="${origin}"`,
     `export VARIMO_API_KEY="paste-the-key-you-copied"`,
@@ -173,7 +169,7 @@ export default function IntegrationsPage() {
           <p className="workspace-heading__copy">
             Issue a key so your own automation can make Fast packs in{" "}
             <strong style={{ color: "var(--color-text)", fontWeight: 700 }}>{studioName}</strong>,
-            read Gallery metadata, and send ready copies to a Drive folder you already connected.
+            read Gallery metadata, and send ready copies to any Drive folder you already connected.
             Review still happens in Gallery. We do not post.
           </p>
         </div>
@@ -301,64 +297,50 @@ export default function IntegrationsPage() {
           Same folders as Drive
         </div>
         <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 10 }}>
-          Pick the folder by the name you already gave it on{" "}
-          <Link href="/settings/drive">Drive</Link>. Not a second Drive. Copy
-          hands that choice to your bot — you do not type a code.
+          This key can use every folder already on{" "}
+          <Link href="/settings/drive">Drive</Link> — Inbox, Out, and any others.
+          It is not locked to one folder. Copy is only so a bot can name which
+          folder a given job should use. You do not type a code.
         </p>
-        {dests.length === 0 ? (
-          <div
-            style={{
-              background: "var(--color-panel)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 14,
-              marginBottom: 28,
-              padding: 14,
-              fontSize: 12.5,
-              color: "var(--color-muted)",
-            }}
-          >
-            No Drive folders yet — add them on <Link href="/settings/drive">Drive</Link> first.
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              alignItems: "center",
-              marginBottom: 28,
-            }}
-          >
-            <select
-              value={selectedFolderId}
-              onChange={(e) => setSelectedDestId(e.target.value)}
-              aria-label="Drive folder"
-              style={{ ...SELECT_STYLE, minWidth: 220, flex: "1 1 220px" }}
-            >
-              {dests.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={!selectedFolderId}
-              onClick={() => {
-                if (!selectedFolderId) return;
-                void copyText(selectedFolderId, "dest");
-              }}
-              aria-label="Copy selected Drive folder"
-              style={{
-                ...COPY_BTN,
-                cursor: selectedFolderId ? "pointer" : "not-allowed",
-                opacity: selectedFolderId ? 1 : 0.55,
-              }}
-            >
-              {copied === "dest" ? "Copied" : "Copy"}
-            </button>
-          </div>
-        )}
+        <div
+          style={{
+            background: "var(--color-panel)",
+            border: "1px solid var(--color-line)",
+            borderRadius: 14,
+            marginBottom: 28,
+            overflow: "hidden",
+          }}
+        >
+          {dests.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12.5, color: "var(--color-muted)" }}>
+              No Drive folders yet — add them on <Link href="/settings/drive">Drive</Link> first.
+            </div>
+          ) : (
+            dests.map((d) => (
+              <div
+                key={d.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "10px 14px",
+                  borderBottom: "1px solid var(--color-line)",
+                  fontSize: 12.5,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{d.name}</div>
+                <button
+                  type="button"
+                  onClick={() => void copyText(d.id, `dest:${d.id}`)}
+                  aria-label={`Copy ${d.name} for a job`}
+                  style={COPY_BTN}
+                >
+                  {copied === `dest:${d.id}` ? "Copied" : "Copy"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
 
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", marginBottom: 10 }}>
           Keys

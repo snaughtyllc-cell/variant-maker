@@ -29,10 +29,11 @@ Cookie only. Token format `vf_<key_id>_<secret>`. Digest stored; plaintext once.
 Default expiry 90 days (owner can pick 30). Presets: **full** (all four scopes)
 or **read** (`jobs:read` + `gallery:read`).
 
-Integrations lists Drive folders by the names already on the Drive
-screen — not a second Drive. Copy puts Studio’s `dst_…` handle on the
-clipboard for the bot (`input_destination_id` / `destination_id`).
-Humans pick Inbox / Out by name and do not type the id.
+A key can use every Drive folder already on the Drive screen — not a
+second Drive, and not one folder bound to the key. Copy puts Studio’s
+`dst_…` handle on the clipboard so a bot can name Inbox vs Out on a
+given job (`input_destination_id` / `destination_id`). Humans never type
+the id.
 
 Auth off (`VARIANT_AUTH_ADMIN_EMAIL` unset): key issue and bearer are off.
 
