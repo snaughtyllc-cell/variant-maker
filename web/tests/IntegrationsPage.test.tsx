@@ -114,17 +114,18 @@ describe("IntegrationsPage", () => {
     expect(screen.getByText(/paste-the-key-you-copied/)).toBeTruthy();
   });
 
-  it("copies the selected Drive folder for the bot without showing the id", async () => {
+  it("lists every Drive folder for the key and copies one only for a job", async () => {
     render(<IntegrationsPage />);
     await screen.findByText("Same folders as Drive");
+    expect(screen.getByText("Inbox")).toBeTruthy();
+    expect(screen.getByText("Out")).toBeTruthy();
     expect(screen.queryByText("dst_in")).toBeNull();
     expect(screen.queryByText("dst_out")).toBeNull();
-    const picker = screen.getByLabelText("Drive folder");
-    fireEvent.click(screen.getByRole("button", { name: "Copy selected Drive folder" }));
+    expect(screen.queryByLabelText("Drive folder")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Copy Inbox for a job" }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("dst_in");
-    fireEvent.change(picker, { target: { value: "dst_out" } });
-    fireEvent.click(screen.getByRole("button", { name: "Copy selected Drive folder" }));
-    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("dst_out");
+    fireEvent.click(screen.getByRole("button", { name: "Copy Out for a job" }));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("dst_out");
     fireEvent.click(screen.getByRole("button", { name: "Copy on-your-machine setup" }));
     const snippet = vi.mocked(navigator.clipboard.writeText).mock.calls.at(-1)?.[0];
     expect(String(snippet)).toContain("VARIMO_BASE_URL=");
@@ -135,6 +136,6 @@ describe("IntegrationsPage", () => {
     vi.mocked(getWorkspaceApiKeys).mockResolvedValue({ ...page, destinations: [] });
     render(<IntegrationsPage />);
     await screen.findByText(/No Drive folders yet/);
-    expect(screen.queryByLabelText("Drive folder")).toBeNull();
+    expect(screen.queryByText("Inbox")).toBeNull();
   });
 });
