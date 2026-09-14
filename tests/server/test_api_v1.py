@@ -218,6 +218,35 @@ def test_scopes_and_cross_workspace_404(tmp_path):
     ).status_code == 401
 
 
+def test_create_key_accepts_https_origin_behind_http_proxy(tmp_path):
+    app, _, _ = _v1_app(tmp_path)
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    resp = jeff.post(
+        "/api/workspace/api-keys",
+        json={"label": "Agency bot", "preset": "full", "expires_days": 30},
+        headers={
+            "Origin": "https://varyforge-studio-lab.up.railway.app",
+            "Host": "varyforge-studio-lab.up.railway.app",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["token"].startswith("vf_")
+
+
+def test_create_key_rejects_foreign_origin(tmp_path):
+    app, _, _ = _v1_app(tmp_path)
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    resp = jeff.post(
+        "/api/workspace/api-keys",
+        json={"label": "Agency bot", "preset": "full", "expires_days": 30},
+        headers={"Origin": "https://evil.example"},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "origin mismatch"
+
+
 def test_revoke_blocks_next_request(tmp_path):
     app, _, _ = _v1_app(tmp_path)
     jeff = TestClient(app)

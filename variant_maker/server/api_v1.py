@@ -11,13 +11,14 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from variant_maker.farm.drive import DriveClient, is_video_file
+from variant_maker.server.drive_oauth import public_request_base
 from variant_maker.server.api_keys import (
     DEFAULT_TTL_DAYS,
     ApiKeyStore,
@@ -427,11 +428,29 @@ def _limit_or_429(decision: LimitDecision) -> None:
 
 
 def same_origin_ok(request: Request) -> bool:
+    """Cookie key create/revoke must come from this Studio host.
+
+    Next.js rewrites to FastAPI over HTTP on 127.0.0.1, so ``request.base_url``
+    is not the browser Origin (HTTPS public host). Compare hosts, not the
+    internal bind URL.
+    """
     origin = (request.headers.get("origin") or "").strip().rstrip("/")
     if not origin:
         return True
     fallback = str(request.base_url).rstrip("/")
-    return origin == fallback
+    public = public_request_base(request.headers, fallback).rstrip("/")
+    origin_host = (urlparse(origin).netloc or "").lower()
+    public_host = (urlparse(public).netloc or "").lower()
+    if origin == public or (origin_host and public_host and origin_host == public_host):
+        return True
+    raw_host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("X-Forwarded-Host")
+        or request.headers.get("host")
+        or request.headers.get("Host")
+        or ""
+    ).split(",")[0].strip().lower()
+    return bool(origin_host and raw_host and origin_host == raw_host)
 
 
 def create_fast_pack_from_drive(
