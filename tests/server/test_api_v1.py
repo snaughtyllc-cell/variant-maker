@@ -6,7 +6,7 @@ import json
 from farm_fakes import FakeDrive
 from fastapi.testclient import TestClient
 
-from tests.server.fakes import FakeRunner
+from tests.server.fakes import FakeObjectStore, FakeRunner
 from tests.server.test_auth_app import _env, _exchange, _login, _tenant_wait
 from variant_maker.server.app import create_app
 from variant_maker.server.jobs import JobStore
@@ -321,3 +321,76 @@ def test_openapi_is_public_and_has_no_cookie_routes(tmp_path):
     assert "/gallery" in paths
     assert "/drive/destinations" in paths
     assert "/drive/destinations/{dest_id}/videos" in paths
+
+
+class _CaptureDriveRunner(FakeRunner):
+    """RunPod-shaped runner: resume_run exists so the job thread mints a Drive token."""
+
+    def __init__(self) -> None:
+        super().__init__({})
+        self.drive_tokens: list[str | None] = []
+
+    def resume_run(self, *args, **kwargs):
+        return self.run(*args, **kwargs)
+
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None, **kwargs):
+        self.drive_tokens.append(kwargs.get("drive_access_token"))
+        return super().run(
+            source_path, count=count, out_dir=out_dir, source_id=source_id,
+            on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+            quality_mode=quality_mode, cancel_token=cancel_token, **kwargs,
+        )
+
+
+def test_drive_pack_mints_workspace_oauth_on_worker_thread(tmp_path):
+    """Listing Drive works on the request; Fast download mints on a worker thread.
+
+    That thread has no request ContextVar. The mint must still use this
+    workspace's OAuth file — not the empty default store.
+    """
+    drive = FakeDrive()
+    blob = FakeObjectStore()
+    runner = _CaptureDriveRunner()
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, runner, object_store=blob)
+    env = _env()
+    sa_path = tmp_path / "sa.json"
+    sa_path.write_text(json.dumps({"client_email": "bot@x.iam.gserviceaccount.com"}))
+    app = create_app(
+        store,
+        hydrate=True,
+        auth_environ=env,
+        oauth_environ=env,
+        login_exchange=_exchange,
+        sa_json_path=str(sa_path),
+        drive=drive,
+    )
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    dest, inbox = _dest(jeff, drive, "Inbox")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"video-bytes")
+    fid = drive.put_file("clip.mp4", str(clip), parent=inbox)
+    ws_id = jeff.get("/api/auth/me").json()["workspace_id"]
+    app.state.tenant_hub.bundle(ws_id).oauth_token_store.save({
+        "token": "ya29.from-workspace",
+        "email": "jeff@x.com",
+        "client_id": "cid",
+        "client_secret": "sec",
+    })
+    token = _issue(jeff)["token"]
+    api = TestClient(app)
+    created = api.post(
+        "/api/v1/packs",
+        headers=_headers(token, **{"Idempotency-Key": "pack-drive-mint"}),
+        json={"input_destination_id": dest["id"], "drive_file_id": fid, "count": 8},
+    )
+    assert created.status_code == 201, created.text
+    pack_id = created.json()["pack_id"]
+    _tenant_wait(jeff, pack_id)
+    job = app.state.tenant_hub.bundle(ws_id).store.get(pack_id)
+    assert job is not None
+    assert job.error is None, job.error
+    assert job.state == "done"
+    assert "ya29.from-workspace" in runner.drive_tokens

@@ -67,13 +67,19 @@ class TenantHub:
                 return existing
             root = tenant_root(self.data_dir, workspace_id)
             ws = Workspace(root)
+            oauth_path = ws.oauth_token_path()
+            factory = getattr(self, "_drive_mint_factory", None)
+            if callable(factory):
+                token_fn = factory(oauth_path)
+            else:
+                token_fn = getattr(self, "_drive_token_fn", None)
             store = JobStore(
                 ws, self._runner,
                 object_store=self._object_store,
                 gallery_keep_jobs=self._gallery_keep_jobs,
                 gallery_keep_hours=self._gallery_keep_hours,
                 workspace_id=workspace_id,
-                drive_token_fn=getattr(self, "_drive_token_fn", None),
+                drive_token_fn=token_fn,
                 occupancy=self._occupancy,
                 occupancy_journal=self._journal,
             )
