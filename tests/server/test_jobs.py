@@ -327,6 +327,42 @@ def test_job_errors_when_ok_metadata_has_no_files(tmp_path):
     assert source_files_ready(job.sources[0], store._ws, job.job_id) == 0
 
 
+class _EmptyResultRunner:
+    """Fast worker completed with no variant metadata — silent 0/8 if JobStore ignores it."""
+
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None, **kw):
+        os.makedirs(out_dir, exist_ok=True)
+        return SourceResult(variants=[], manifest_path=os.path.join(out_dir, "manifest.json"))
+
+    def resume_run(self, *a, **k):
+        raise AssertionError("resume should not run for a new Drive pack")
+
+
+def test_job_errors_when_fast_returns_no_copies(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), _EmptyResultRunner())
+    job = store.create_job([("a.mp4", b"x")], count=8)
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert job.sources[0].delivered == 0
+    assert job.error is not None
+    assert "no copies" in job.error.lower()
+
+
+def test_drive_pack_errors_when_fast_returns_no_copies(tmp_path):
+    store = JobStore(
+        Workspace(str(tmp_path)), _EmptyResultRunner(),
+        drive_token_fn=lambda: "ya29.job",
+    )
+    job = store.create_job_from_drive_ids([("clip.mp4", "drv1")], count=8)
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert job.sources[0].delivered == 0
+    assert job.error is not None
+    assert "no copies" in job.error.lower()
+    assert "drive" in job.error.lower()
+
+
 def test_retry_copy_is_unnecessary_when_object_store_has_files(tmp_path):
     from tests.server.fakes import FakeObjectStore, FakeRunPodClient
     from variant_maker.server.runpod_runner import RunPodServerlessRunner
