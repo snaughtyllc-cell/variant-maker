@@ -179,6 +179,14 @@ class DestinationIdOut(BaseModel):
     name: str
 
 
+class FoldersOut(BaseModel):
+    folders: list[DestinationIdOut] = []
+
+
+class ClipsOut(BaseModel):
+    clips: list[DestinationIdOut] = []
+
+
 class ApiKeysPageOut(BaseModel):
     workspace_id: str
     workspace_name: str | None = None
@@ -543,6 +551,14 @@ def _v1_openapi() -> dict:
     def _gallery() -> GalleryPageOut:  # pragma: no cover
         return GalleryPageOut()
 
+    @docs.get("/drive/destinations", response_model=FoldersOut)
+    def _folders() -> FoldersOut:  # pragma: no cover
+        return FoldersOut()
+
+    @docs.get("/drive/destinations/{dest_id}/videos", response_model=ClipsOut)
+    def _clips(dest_id: str) -> ClipsOut:  # pragma: no cover
+        return ClipsOut()
+
     @docs.post("/drive/exports", response_model=ExportAcceptedOut, status_code=201)
     def _export(body: ExportCreateIn) -> ExportAcceptedOut:  # pragma: no cover
         return ExportAcceptedOut(export_id="e", state="pending", status_url="/api/v1/drive/exports/e")
@@ -556,6 +572,7 @@ def _v1_openapi() -> dict:
     spec = docs.openapi()
     spec["info"]["description"] = (
         "Workspace API for Fast packs from a Drive clip, Gallery metadata, and Drive export. "
+        "List folders and clips by name with the key — operators do not fill destination or file ids. "
         "Review copies in Studio. No media download, no Instagram, no fingerprint internals."
     )
     return spec
@@ -653,6 +670,34 @@ def register_api_v1(
         if rec is None:
             raise HTTPException(status_code=404, detail="key not found")
         return Response(status_code=204, headers=NO_STORE)
+
+    @app.get("/api/v1/drive/destinations", response_model=FoldersOut)
+    def v1_list_folders(request: Request) -> JSONResponse:
+        principal = require_scope(request, "jobs:read")
+        _limit_or_429(rate_for_read(windows, key_id=principal.key_id, workspace_id=principal.workspace_id))
+        folders = [
+            DestinationIdOut(id=d.id, name=d.name).model_dump()
+            for d in app.state.destinations.list()
+        ]
+        return no_store({"folders": folders})
+
+    @app.get("/api/v1/drive/destinations/{dest_id}/videos", response_model=ClipsOut)
+    def v1_list_clips(request: Request, dest_id: str) -> JSONResponse:
+        principal = require_scope(request, "jobs:read")
+        _limit_or_429(rate_for_read(windows, key_id=principal.key_id, workspace_id=principal.workspace_id))
+        dest = app.state.destinations.get(dest_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        require_drive()
+        drive = get_drive()
+        if drive is None:
+            raise HTTPException(status_code=503, detail="Drive is not connected")
+        clips = [
+            DestinationIdOut(id=f.id, name=f.name).model_dump()
+            for f in drive.list_files(dest.folder_id)
+            if is_video_file(f)
+        ]
+        return no_store({"clips": clips})
 
     @app.post("/api/v1/packs", status_code=201)
     def create_pack(request: Request, body: PackCreateIn) -> JSONResponse:

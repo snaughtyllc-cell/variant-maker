@@ -11,7 +11,14 @@ from mcp.types import ToolAnnotations
 
 from variant_maker.mcp.client import StudioV1Client, StudioV1Error
 
-TOOL_NAMES = ("create_pack", "get_pack", "list_gallery", "send_to_drive")
+TOOL_NAMES = (
+    "list_folders",
+    "list_clips",
+    "create_pack",
+    "get_pack",
+    "list_gallery",
+    "send_to_drive",
+)
 
 _LOG = logging.getLogger("varimo_mcp")
 
@@ -46,11 +53,32 @@ def build_server(*, client: StudioV1Client | None = None) -> FastMCP:
     mcp = FastMCP(
         "varimo",
         instructions=(
-            "Create Fast packs from a Drive clip already in a connected folder, "
-            "read Gallery metadata, and export selected copies. "
-            "The operator reviews look in Studio Gallery. We do not post."
+            "Give only the API key. Call list_folders, pick Inbox and Out by name, "
+            "call list_clips on Inbox, then create_pack. Do not ask the operator for "
+            "destination ids or Drive file ids. Review look in Studio Gallery before "
+            "send_to_drive. We do not post."
         ),
     )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+    )
+    def list_folders() -> str:
+        """Names of Drive folders already on this workspace. Pick Inbox / Out by name."""
+        try:
+            return _dump(studio.list_folders())
+        except (StudioV1Error, ValueError) as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @mcp.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+    )
+    def list_clips(destination_id: str) -> str:
+        """Videos in one folder from list_folders. Names only — pick a clip, then create_pack."""
+        try:
+            return _dump(studio.list_clips(destination_id))
+        except (StudioV1Error, ValueError) as exc:
+            raise RuntimeError(str(exc)) from exc
 
     @mcp.tool(
         annotations=ToolAnnotations(

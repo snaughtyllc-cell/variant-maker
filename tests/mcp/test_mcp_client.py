@@ -61,6 +61,26 @@ def request_path(request: httpx.Request) -> str:
     return request.url.path
 
 
+def test_list_folders_and_clips_are_gets():
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(f"{request.method} {request.url.path}")
+        if request.url.path.endswith("/videos"):
+            return httpx.Response(200, json={"clips": [{"id": "file_1", "name": "clip.mp4"}]})
+        return httpx.Response(200, json={"folders": [{"id": "dst_in", "name": "Inbox"}]})
+
+    client = _client(handler)
+    folders = client.list_folders()
+    clips = client.list_clips("dst_in")
+    assert folders["folders"][0]["name"] == "Inbox"
+    assert clips["clips"][0]["id"] == "file_1"
+    assert seen == [
+        "GET /api/v1/drive/destinations",
+        "GET /api/v1/drive/destinations/dst_in/videos",
+    ]
+
+
 def test_get_pack_and_gallery_are_gets():
     seen: list[str] = []
 

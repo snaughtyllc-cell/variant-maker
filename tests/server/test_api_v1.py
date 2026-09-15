@@ -125,10 +125,31 @@ def test_pack_gallery_export_loop_and_safe_projection(tmp_path):
     token = _issue(jeff)["token"]
     api = TestClient(app)
 
+    folders = api.get("/api/v1/drive/destinations", headers=_headers(token))
+    assert folders.status_code == 200, folders.text
+    names = {f["name"]: f["id"] for f in folders.json()["folders"]}
+    assert names["Inbox"] == dest_in["id"]
+    assert names["Out"] == dest_out["id"]
+    blob = json.dumps(folders.json())
+    assert "folder_id" not in blob
+    assert "folder_url" not in blob
+
+    clips = api.get(
+        f"/api/v1/drive/destinations/{names['Inbox']}/videos",
+        headers=_headers(token),
+    )
+    assert clips.status_code == 200, clips.text
+    clip_row = clips.json()["clips"][0]
+    assert clip_row["name"] == "clip.mp4"
+    assert clip_row["id"] == fid
+    clip_blob = json.dumps(clips.json())
+    assert "md5" not in clip_blob
+    assert "mime_type" not in clip_blob
+
     created = api.post(
         "/api/v1/packs",
         headers=_headers(token, **{"Idempotency-Key": "pack-1"}),
-        json={"input_destination_id": dest_in["id"], "drive_file_id": fid, "count": 8},
+        json={"input_destination_id": names["Inbox"], "drive_file_id": clip_row["id"], "count": 8},
     )
     assert created.status_code == 201, created.text
     pack_id = created.json()["pack_id"]
@@ -136,7 +157,7 @@ def test_pack_gallery_export_loop_and_safe_projection(tmp_path):
     replay = api.post(
         "/api/v1/packs",
         headers=_headers(token, **{"Idempotency-Key": "pack-1"}),
-        json={"input_destination_id": dest_in["id"], "drive_file_id": fid, "count": 8},
+        json={"input_destination_id": names["Inbox"], "drive_file_id": clip_row["id"], "count": 8},
     )
     assert replay.status_code == 201
     assert replay.json()["pack_id"] == pack_id
@@ -162,7 +183,7 @@ def test_pack_gallery_export_loop_and_safe_projection(tmp_path):
         "/api/v1/drive/exports",
         headers=_headers(token, **{"Idempotency-Key": "exp-1"}),
         json={
-            "destination_id": dest_out["id"],
+            "destination_id": names["Out"],
             "variants": [{"source_id": body["sources"][0]["source_id"], "index": copy["index"]}],
         },
     )
@@ -211,6 +232,13 @@ def test_scopes_and_cross_workspace_404(tmp_path):
     pack_id = created.json()["pack_id"]
     ops_token = _issue(ops, label="ops bot")["token"]
     assert api.get(f"/api/v1/packs/{pack_id}", headers=_headers(ops_token)).status_code == 404
+    listed = api.get("/api/v1/drive/destinations", headers=_headers(read))
+    assert listed.status_code == 200
+    assert listed.json()["folders"][0]["name"] == "Inbox"
+    assert api.get(
+        "/api/v1/drive/destinations/dst_missing/videos",
+        headers=_headers(read),
+    ).status_code == 404
     assert api.post(
         "/api/workspace/api-keys",
         headers=_headers(full),
@@ -291,3 +319,5 @@ def test_openapi_is_public_and_has_no_cookie_routes(tmp_path):
     assert "/packs" in paths
     assert "/api/jobs" not in json.dumps(paths)
     assert "/gallery" in paths
+    assert "/drive/destinations" in paths
+    assert "/drive/destinations/{dest_id}/videos" in paths

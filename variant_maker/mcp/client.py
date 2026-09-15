@@ -81,6 +81,15 @@ class StudioV1Client:
     def close(self) -> None:
         self._http.close()
 
+    def list_folders(self) -> dict[str, Any]:
+        return self._request("GET", "/api/v1/drive/destinations")
+
+    def list_clips(self, destination_id: str) -> dict[str, Any]:
+        dest = (destination_id or "").strip()
+        if not dest:
+            raise ValueError("destination_id required")
+        return self._request("GET", f"/api/v1/drive/destinations/{dest}/videos")
+
     def create_pack(
         self,
         *,
