@@ -341,6 +341,19 @@ export interface BillingStatus {
   period_start_utc: string | null;
   period_end_utc: string | null;
   collects_overage: boolean;
+  usage?: UsageMeter | null;
+}
+
+export interface UsageMeter {
+  uncapped: boolean;
+  hard_stop?: boolean;
+  tone?: "included" | "usage";
+  remaining_pct?: number | null;
+  meter_line?: string | null;
+  label?: string | null;
+  included_fast_hours?: number | null;
+  remaining_fast_seconds?: number | null;
+  overage_fast_seconds?: number | null;
 }
 
 export interface AuthMe {
@@ -355,6 +368,7 @@ export interface AuthMe {
   is_admin: boolean;
   has_password: boolean;
   experience?: "solo" | "agency";
+  usage?: UsageMeter | null;
 }
 
 export interface Invite {
