@@ -23,7 +23,9 @@ RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband || echo "WARN:
 
 WORKDIR /app
 COPY . /app
-RUN pip install --no-cache-dir "/app[serverless]" runpod
+# [farm] is Gallery Send-to-Drive on this worker. Drive *ingest* uses stdlib
+# HTTPS in gpu_worker so a missing google client cannot silently 0/8 a pack.
+RUN pip install --no-cache-dir "/app[serverless,farm]" runpod
 
 # Control-plane handler (not the Drive-farm handler). No CMD override needed.
 CMD ["python", "-u", "/app/deploy/runpod/cp_handler.py"]

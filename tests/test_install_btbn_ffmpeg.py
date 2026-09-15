@@ -102,6 +102,11 @@ def test_copy_bins_from_n_prefixed_tree(tmp_path: Path):
     assert (dest / "ffprobe").read_bytes() == b"ffprobe-bin"
 
 
+def test_fast_dockerfile_installs_farm_extra_for_drive_export():
+    text = (ROOT / "deploy/runpod/Dockerfile.fast").read_text()
+    assert "[serverless,farm]" in text or "[farm,serverless]" in text
+
+
 def test_dockerfiles_install_via_script_not_rolling_latest_url():
     paths = [
         ROOT / "deploy/runpod/Dockerfile.fast",

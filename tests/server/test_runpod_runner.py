@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from tests.server.fakes import FakeObjectStore, FakeRunPodClient
 from variant_maker.server.events import VariantEvent
 from variant_maker.server.runner import SourceResult, VariantResult
@@ -194,6 +196,31 @@ def test_runner_skips_put_when_source_already_in_object_storage(tmp_path):
     )
     assert store.puts == []
     assert store._data["inputs/srcA/in.mp4"] == b"ALREADY"
+
+
+def test_runner_raises_on_worker_error_chunk(tmp_path):
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    chunks = [{"type": "error", "message": "Drive download failed (401): Invalid Credentials"}]
+    with pytest.raises(RuntimeError, match="Drive download failed"):
+        RunPodServerlessRunner(store, FakeRunPodClient(chunks)).run(
+            str(src), count=1, out_dir=str(tmp_path / "out"), source_id="srcA",
+            on_event=lambda e: None,
+        )
+
+
+def test_runner_raises_on_runpod_error_object(tmp_path):
+    """Handler exceptions often arrive as {error: ...} with no type. Must not 0/8."""
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    chunks = [{"error": "No module named 'googleapiclient'"}]
+    with pytest.raises(RuntimeError, match="googleapiclient"):
+        RunPodServerlessRunner(store, FakeRunPodClient(chunks)).run(
+            str(src), count=1, out_dir=str(tmp_path / "out"), source_id="srcA",
+            on_event=lambda e: None,
+        )
 
 
 def test_runner_forwards_worker_queue_status_as_wait_events(tmp_path):

@@ -1272,6 +1272,13 @@ class JobStore:
                             quality_mode=job.quality_mode,
                             cancel_token=token,
                         )
+                if not result.variants:
+                    if extra.get("drive_file_id"):
+                        raise RuntimeError(
+                            "Fast worker finished with no copies. "
+                            "The Fast worker did not ingest the Drive clip."
+                        )
+                    raise RuntimeError("Fast worker finished with no copies.")
                 source.variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,

@@ -1,4 +1,9 @@
+import io
 import os
+import urllib.error
+import urllib.request
+
+import pytest
 
 from tests.server.fakes import FakeObjectStore
 from variant_maker.server import gpu_worker
@@ -232,6 +237,132 @@ def test_hq_worker_stays_serial_even_if_jobs_requested(monkeypatch, tmp_path):
         "quality_mode": "hq", "jobs": 8,
     })
     assert captured["jobs"] == 1
+
+
+class _FakeDriveResp:
+    def __init__(self, payload: bytes, status: int = 200) -> None:
+        self._payload = payload
+        self.status = status
+        self._sent = False
+
+    def read(self, n: int = -1) -> bytes:
+        if self._sent:
+            return b""
+        self._sent = True
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_download_drive_file_uses_stdlib_http(monkeypatch, tmp_path):
+    """Fast CPU image has no google client. Ingest must use stdlib HTTPS."""
+    dest = tmp_path / "clip.mp4"
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["auth"] = req.get_header("Authorization")
+        seen["timeout"] = timeout
+        return _FakeDriveResp(b"VIDEOBYTES")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    gpu_worker._download_drive_file("1td4cWaqtr_GujAC0_yUxqKXVPcstyR-G", str(dest), "ya29.job")
+    assert dest.read_bytes() == b"VIDEOBYTES"
+    assert "googleapis.com/drive/v3/files/" in seen["url"]
+    assert "alt=media" in seen["url"]
+    assert "supportsAllDrives=true" in seen["url"]
+    assert seen["auth"] == "Bearer ya29.job"
+    assert seen["timeout"] == 300
+
+
+def test_download_drive_file_http_error_is_explicit(monkeypatch, tmp_path):
+    dest = tmp_path / "clip.mp4"
+
+    def boom(req, timeout=None):
+        raise urllib.error.HTTPError(
+            req.full_url, 401, "Unauthorized", hdrs=None,
+            fp=io.BytesIO(b'{"error":{"message":"Invalid Credentials"}}'),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(RuntimeError, match="Drive download failed \\(401\\)"):
+        gpu_worker._download_drive_file("file1", str(dest), "ya29.job")
+    assert not dest.exists() or dest.stat().st_size == 0
+
+
+def test_process_job_downloads_drive_clip_then_runs(monkeypatch, tmp_path):
+    store = FakeObjectStore()
+
+    def fake_download(file_id, dest, access_token):
+        assert file_id == "drv1"
+        assert access_token == "ya29.job"
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as fh:
+            fh.write(b"CLIP")
+
+    class FakeRecord:
+        def __init__(self):
+            self.index, self.filename, self.status, self.quality = 1, "v01.mp4", "ok", {"vmaf": 95.0}
+
+    def fake_run(config, *, on_event=None):
+        with open(config["input"], "rb") as fh:
+            assert fh.read() == b"CLIP"
+        out = config["out"]
+        open(os.path.join(out, "v01.mp4"), "w").close()
+        open(os.path.join(out, "manifest.json"), "w").close()
+        on_event("done", index=1, status="ok", quality={"vmaf": 95.0}, filename="v01.mp4")
+
+        class M:
+            def __init__(self):
+                self.variants = [FakeRecord()]
+
+        return M()
+
+    monkeypatch.setattr(gpu_worker, "_download_drive_file", fake_download)
+    monkeypatch.setattr(gpu_worker.pipeline, "run", fake_run)
+    chunks = list(gpu_worker.process_job(
+        {
+            "source_key": "inputs/s1/clip.mp4",
+            "source_id": "s1",
+            "count": 1,
+            "drive_file_id": "drv1",
+            "drive_access_token": "ya29.job",
+            "filename": "clip.mp4",
+        },
+        store,
+        work_dir=str(tmp_path / "work"),
+    ))
+    assert any(c["type"] == "result" and c["variants"] for c in chunks)
+    assert "inputs/s1/clip.mp4" in store.list_prefix("inputs/s1/")
+
+
+def test_process_job_yields_error_chunk_when_drive_download_fails(monkeypatch, tmp_path):
+    store = FakeObjectStore()
+
+    def boom(file_id, dest, access_token):
+        raise RuntimeError("Drive download failed (401): Invalid Credentials")
+
+    monkeypatch.setattr(gpu_worker, "_download_drive_file", boom)
+    gen = gpu_worker.process_job(
+        {
+            "source_id": "s1",
+            "count": 1,
+            "drive_file_id": "drv1",
+            "drive_access_token": "ya29.job",
+            "filename": "clip.mp4",
+        },
+        store,
+        work_dir=str(tmp_path / "work"),
+    )
+    first = next(gen)
+    assert first["type"] == "error"
+    assert "Drive download failed" in first["message"]
+    with pytest.raises(RuntimeError, match="Drive download failed"):
+        next(gen)
 
 
 def test_deliver_drive_copies_object_keys_to_drive(tmp_path, monkeypatch):
