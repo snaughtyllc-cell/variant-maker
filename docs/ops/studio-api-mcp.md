@@ -16,6 +16,8 @@ only call `/api/v1`. Cookie UI keeps today’s `/api/*` routes.
 
 | Route | Scope | What it does |
 |---|---|---|
+| `GET /api/v1/drive/destinations` | `jobs:read` | Folder names already on Drive (`id` + `name` only). The bot picks Inbox / Out by name. |
+| `GET /api/v1/drive/destinations/{id}/videos` | `jobs:read` | Video clips in that folder (`id` + `name` only). No md5, no mime. |
 | `POST /api/v1/packs` | `jobs:create` | One Fast pack from one Drive clip already in a configured folder. `count` is 8 or 20. Requires `Idempotency-Key`. |
 | `GET /api/v1/packs/{pack_id}` | `jobs:read` | State, ready counts, shortfall, copy indexes. Review URL is Gallery. |
 | `GET /api/v1/gallery` | `gallery:read` | Safe metadata page (`limit`, `cursor`, optional `pack_id`). |
@@ -30,35 +32,34 @@ Default expiry 90 days (owner can pick 30). Presets: **full** (all four scopes)
 or **read** (`jobs:read` + `gallery:read`).
 
 A key can use every Drive folder already on the Drive screen — not a
-second Drive, and not one folder bound to the key. Copy puts Studio’s
-`dst_…` handle on the clipboard so a bot can name Inbox vs Out on a
-given job (`input_destination_id` / `destination_id`). Humans never type
-the id.
+second Drive, and not one folder bound to the key. Give the key to the
+bot. It lists folders and clips by name. Humans never fill Inbox or clip
+ids.
 
 Auth off (`VARIANT_AUTH_ADMIN_EMAIL` unset): key issue and bearer are off.
 
 ## Operator loop
 
-1. Connect Drive and add input / output folders.
-2. Create a key on Integrations. Copy it once.
-3. From the agency machine:
+1. Connect Drive and add Inbox / Out folders.
+2. Create a key on Integrations. Copy it once. Give that key to the AI
+   (or `VARIMO_API_KEY` on the agency machine). Nothing else.
+3. The bot lists folders, picks Inbox by name, lists clips, starts a pack:
 
 ```bash
 export VARIMO_BASE_URL="https://your-studio.example"
 export VARIMO_API_KEY="vf_…"   # never paste this into chat or a screenshot
 
-curl -sS -X POST "$VARIMO_BASE_URL/api/v1/packs" \
-  -H "Authorization: Bearer $VARIMO_API_KEY" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -H "Content-Type: application/json" \
-  -d '{"input_destination_id":"dst_…","drive_file_id":"…","count":8}'
-
-curl -sS "$VARIMO_BASE_URL/api/v1/packs/PACK_ID" \
+curl -sS "$VARIMO_BASE_URL/api/v1/drive/destinations" \
   -H "Authorization: Bearer $VARIMO_API_KEY"
+# pick Inbox by name, then:
+
+curl -sS "$VARIMO_BASE_URL/api/v1/drive/destinations/INBOX_ID/videos" \
+  -H "Authorization: Bearer $VARIMO_API_KEY"
+# pick a clip by name, then create_pack (count 8 or 20)
 ```
 
 4. Open Gallery in Studio to check the look.
-5. Export selected copies (`source_id` + `index`) to the output folder.
+5. After look, export selected copies (`source_id` + `index`) to Out.
 6. Point Repurpose.io / Buffer at that folder. We do not run those seats.
 
 A key spends the same Fast processing as Generate. There is no separate MCP
@@ -68,9 +69,10 @@ fee and no extra weekly cap to document here.
 
 Install extra `.[mcp]`. Executable `varimo-mcp`. Stdio only. Reads
 `VARIMO_BASE_URL` and `VARIMO_API_KEY`. Calls only `/api/v1`. Tools:
-`create_pack`, `get_pack`, `list_gallery`, `send_to_drive` (submit **or**
-`export_id` status — not both). HTTPS except localhost HTTP for Lab. Redirects
-are refused so the key is not forwarded. Logs go to stderr.
+`list_folders`, `list_clips`, `create_pack`, `get_pack`, `list_gallery`,
+`send_to_drive` (submit **or** `export_id` status — not both). HTTPS except
+localhost HTTP for Lab. Redirects are refused so the key is not forwarded.
+Logs go to stderr.
 
 ## Not in v1
 

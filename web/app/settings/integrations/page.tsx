@@ -182,7 +182,8 @@ export default function IntegrationsPage() {
 
         <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 18 }}>
           A key can generate billable Fast work and read the packs in this workspace.
-          Connect folders on <Link href="/settings/drive">Drive</Link> first.
+          Connect folders on <Link href="/settings/drive">Drive</Link> first, then give
+          the key to your AI — it lists Inbox / Out and the clips itself.
           Lost token? Revoke it and create another — we only show the secret once.
         </p>
 
@@ -299,8 +300,8 @@ export default function IntegrationsPage() {
         <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45, marginBottom: 10 }}>
           This key can use every folder already on{" "}
           <Link href="/settings/drive">Drive</Link> — Inbox, Out, and any others.
-          It is not locked to one folder. Copy is only so a bot can name which
-          folder a given job should use. You do not type a code.
+          Give the key to your AI. It lists these folders by name and picks a clip.
+          You do not copy inbox or clip ids.
         </p>
         <div
           style={{
@@ -329,14 +330,6 @@ export default function IntegrationsPage() {
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{d.name}</div>
-                <button
-                  type="button"
-                  onClick={() => void copyText(d.id, `dest:${d.id}`)}
-                  aria-label={`Copy ${d.name} for a job`}
-                  style={COPY_BTN}
-                >
-                  {copied === `dest:${d.id}` ? "Copied" : "Copy"}
-                </button>
               </div>
             ))
           )}

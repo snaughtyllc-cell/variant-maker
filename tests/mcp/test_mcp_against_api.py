@@ -47,9 +47,13 @@ def test_mcp_client_create_pack_hits_v1(tmp_path):
         api_key=token,
         transport=_StarletteTransport(app),
     )
+    inbox_id = next(f["id"] for f in client.list_folders()["folders"] if f["name"] == "Inbox")
+    clip_id = next(c["id"] for c in client.list_clips(inbox_id)["clips"] if c["name"] == "clip.mp4")
+    assert inbox_id == dest["id"]
+    assert clip_id == fid
     created = client.create_pack(
-        input_destination_id=dest["id"],
-        drive_file_id=fid,
+        input_destination_id=inbox_id,
+        drive_file_id=clip_id,
         count=8,
         request_id="mcp-pack-1",
     )
@@ -58,8 +62,8 @@ def test_mcp_client_create_pack_hits_v1(tmp_path):
     gallery = client.list_gallery(pack_id=created["pack_id"])
     assert gallery["items"][0]["pack_id"] == created["pack_id"]
     replay = client.create_pack(
-        input_destination_id=dest["id"],
-        drive_file_id=fid,
+        input_destination_id=inbox_id,
+        drive_file_id=clip_id,
         count=8,
         request_id="mcp-pack-1",
     )

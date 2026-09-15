@@ -20,7 +20,7 @@ def _server(handler):
     return build_server(client=client)
 
 
-def test_lists_the_four_loop_tools():
+def test_lists_the_six_loop_tools():
     def handler(request: httpx.Request) -> httpx.Response:
         raise AssertionError("list_tools is local")
 
@@ -55,6 +55,21 @@ def test_create_pack_tool_does_not_wait_for_ready():
     body = json.loads(text)
     assert body["pack_id"] == "p1"
     assert body["state"] == "running"
+
+
+def test_list_folders_and_clips_are_read_only():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/drive/destinations"):
+            return httpx.Response(200, json={"folders": [{"id": "dst_in", "name": "Inbox"}]})
+        return httpx.Response(200, json={"clips": [{"id": "file_1", "name": "clip.mp4"}]})
+
+    server = _server(handler)
+    folders = json.loads(_tool_text(asyncio.run(server.call_tool("list_folders", {}))))
+    clips = json.loads(_tool_text(asyncio.run(server.call_tool(
+        "list_clips", {"destination_id": "dst_in"},
+    ))))
+    assert folders["folders"][0]["name"] == "Inbox"
+    assert clips["clips"][0]["id"] == "file_1"
 
 
 def test_send_to_drive_schemas_are_exclusive():
