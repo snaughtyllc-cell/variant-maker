@@ -1,15 +1,60 @@
 import { previewTime } from "./media";
 
 const POSTER_MAX_EDGE = 360;
+const posterCache = new Map<string, string>();
+const posterInflight = new Map<string, Promise<string>>();
+let captureChain: Promise<unknown> = Promise.resolve();
+
+export function resetVideoPosterCache(): void {
+  posterCache.clear();
+  posterInflight.clear();
+  captureChain = Promise.resolve();
+}
+
+export function filePosterKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+/** Large phone recordings need longer than 4s to decode a first frame. */
+export function posterTimeoutMs(file: File): number {
+  const mb = Math.max(0, file.size / (1024 * 1024));
+  return Math.min(25_000, 8_000 + Math.ceil(mb) * 40);
+}
 
 /**
  * Decode one frame of a local File into a JPEG data URL.
- * iOS Safari often leaves a <video src=blob> black; a still image always paints.
+ * Source cards and caption cards share one in-flight capture per file.
  */
-export async function captureVideoPoster(
-  file: File,
-  timeoutMs = 4000,
-): Promise<string> {
+export function captureVideoPoster(file: File, timeoutMs?: number): Promise<string> {
+  const key = filePosterKey(file);
+  const cached = posterCache.get(key);
+  if (cached) return Promise.resolve(cached);
+  const existing = posterInflight.get(key);
+  if (existing) return existing;
+
+  const wait = timeoutMs ?? posterTimeoutMs(file);
+  const job = enqueue(() => captureVideoPosterOnce(file, wait))
+    .then((dataUrl) => {
+      posterCache.set(key, dataUrl);
+      return dataUrl;
+    })
+    .finally(() => {
+      posterInflight.delete(key);
+    });
+  posterInflight.set(key, job);
+  return job;
+}
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const run = captureChain.then(fn, fn);
+  captureChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+function captureVideoPosterOnce(file: File, timeoutMs: number): Promise<string> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;
@@ -24,6 +69,7 @@ export async function captureVideoPoster(
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
+    let seeking = false;
 
     const cleanup = () => {
       window.clearTimeout(timer);
@@ -69,33 +115,33 @@ export async function captureVideoPoster(
       }
     };
 
+    const seekToPreview = () => {
+      if (settled || seeking) return;
+      seeking = true;
+      const t = Math.min(previewTime(video.duration), 0.08);
+      video.addEventListener("seeked", snap, { once: true });
+      const rvfc = (
+        video as HTMLVideoElement & {
+          requestVideoFrameCallback?: (cb: () => void) => void;
+        }
+      ).requestVideoFrameCallback;
+      if (typeof rvfc === "function") {
+        rvfc.call(video, snap);
+      }
+      try {
+        if (Math.abs(video.currentTime - t) < 0.02) {
+          video.currentTime = t === 0 ? 0.01 : 0;
+        }
+        video.currentTime = t;
+      } catch {
+        snap();
+      }
+    };
+
     const timer = window.setTimeout(() => fail("timeout"), timeoutMs);
     video.addEventListener("error", () => fail("load"), { once: true });
-    video.addEventListener(
-      "loadeddata",
-      () => {
-        const t = previewTime(video.duration);
-        const onFrame = () => snap();
-        video.addEventListener("seeked", onFrame, { once: true });
-        const rvfc = (
-          video as HTMLVideoElement & {
-            requestVideoFrameCallback?: (cb: () => void) => void;
-          }
-        ).requestVideoFrameCallback;
-        if (typeof rvfc === "function") {
-          rvfc.call(video, onFrame);
-        }
-        try {
-          if (Math.abs(video.currentTime - t) < 0.02) {
-            video.currentTime = t === 0 ? 0.01 : 0;
-          }
-          video.currentTime = t;
-        } catch {
-          snap();
-        }
-      },
-      { once: true },
-    );
+    video.addEventListener("loadedmetadata", seekToPreview, { once: true });
+    video.addEventListener("loadeddata", seekToPreview, { once: true });
 
     document.body.appendChild(video);
     video.src = url;
