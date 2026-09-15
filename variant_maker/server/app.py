@@ -988,17 +988,33 @@ def create_app(
         csec = str(oauth_env.get(ENV_OAUTH_CLIENT_SECRET) or auth_env.get(ENV_OAUTH_CLIENT_SECRET) or "")
         return cid, csec
 
+    def _mint_from_workspace(workspace_token_path: str):
+        """Mint on the job thread. Close over the workspace file — no request ContextVar."""
+
+        def _mint() -> str:
+            cid, csec = _oauth_client_pair()
+            path = pick_oauth_token_path(data_dir, workspace_token_path, oauth_env) or workspace_token_path
+            store = OAuthTokenStore(path)
+            data = store.load() if store.exists() else {}
+            return mint_access_token(data, client_id=cid, client_secret=csec)["access_token"]
+
+        return _mint
+
     def _mint_drive_access_token() -> str:
-        """Job-scoped Drive access token — never the refresh token."""
+        """Request-thread helper. Job workers must use a bound ``_mint_from_workspace``."""
+        bundle = current_bundle()
+        if bundle is not None:
+            return _mint_from_workspace(bundle.oauth_token_store.path)()
         cid, csec = _oauth_client_pair()
         data = _oauth_tokens().load() if _oauth_tokens().exists() else {}
         return mint_access_token(data, client_id=cid, client_secret=csec)["access_token"]
 
-    fallback_store._drive_token_fn = _mint_drive_access_token
+    fallback_store._drive_token_fn = _mint_from_workspace(token_store.path)
     if hub is not None:
-        hub._drive_token_fn = _mint_drive_access_token
+        hub._drive_mint_factory = _mint_from_workspace
+        hub._drive_token_fn = _mint_from_workspace(token_store.path)
         for bundle in getattr(hub, "_bundles", {}).values():
-            bundle.store._drive_token_fn = _mint_drive_access_token
+            bundle.store._drive_token_fn = _mint_from_workspace(bundle.ws.oauth_token_path())
 
     def _off_volume_mailbox() -> bool:
         inner = getattr(store, "_inner", None)
@@ -1010,11 +1026,12 @@ def create_app(
 
     def _drive_export_runner() -> ExportRunner:
         deliver = getattr(store._runner, "deliver_drive", None)
+        workspace_path = _workspace_token_path()
         return ExportRunner(
             _drive(), app.state.exports,
             object_store=getattr(store, "_object_store", None),
             remote_deliver=deliver if callable(deliver) else None,
-            mint_token=_mint_drive_access_token if callable(deliver) else None,
+            mint_token=_mint_from_workspace(workspace_path) if callable(deliver) else None,
         )
 
     def _login_redirect_uri(request: Request) -> str:
