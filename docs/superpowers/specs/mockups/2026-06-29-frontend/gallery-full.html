@@ -1,0 +1,134 @@
+<h2>Gallery — browse results</h2>
+<p class="subtitle">Results grouped by source video, successful variants only. One full-delivery group (20/20) and one with a shortfall (18/20) so you can see when Regenerate appears.</p>
+
+<style>
+  .vs { --bg:#0a0a0e; --panel:#101018; --panel2:#15151f; --line:#23232f; --line2:#2c2c3a;
+        --text:#ececf4; --muted:#8a8aa0; --muted2:#62627a;
+        --violet:#7c5cff; --violetL:#a78bfa; --cyan:#22d3ee; --pink:#ff4d8d;
+        --green:#22c55e; --amber:#f59e0b;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        background:var(--bg); border-radius:14px; overflow:hidden; border:1px solid var(--line); color:var(--text); }
+  .vs * { box-sizing:border-box; }
+  .vs-top { display:flex; align-items:center; gap:18px; padding:12px 18px; border-bottom:1px solid var(--line);
+            background:linear-gradient(180deg,#101018,#0c0c12); }
+  .vs-logo { font-weight:800; display:flex; align-items:center; gap:8px; font-size:15px; }
+  .vs-logo .spark { width:18px; height:18px; border-radius:6px; background:linear-gradient(135deg,var(--violet),var(--pink)); box-shadow:0 0 12px #7c5cff66; }
+  .vs-nav { display:flex; gap:4px; margin-left:8px; }
+  .vs-nav a { font-size:13px; color:var(--muted); padding:6px 12px; border-radius:8px; text-decoration:none; }
+  .vs-nav a.on { color:#fff; background:#1b1b27; }
+  .vs-status { margin-left:auto; display:flex; gap:10px; font-size:11.5px; color:var(--muted); }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#14141d; border:1px solid var(--line); }
+  .dot { width:7px; height:7px; border-radius:50%; }
+
+  .toolbar { display:flex; align-items:center; padding:16px 20px 6px; gap:14px; }
+  .toolbar .count { font-size:12.5px; color:var(--muted); }
+  .toolbar .count b { color:var(--text); }
+  .toolbar .right { margin-left:auto; display:flex; gap:8px; }
+  .chip { font-size:12px; color:var(--muted); background:#14141d; border:1px solid var(--line); padding:6px 11px; border-radius:8px; }
+  .chip.on { color:#fff; border-color:#2f2a52; background:#191527; }
+
+  .scroll { padding:8px 20px 22px; }
+  .group { background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:16px; overflow:hidden; }
+  .g-head { display:flex; align-items:center; gap:13px; padding:14px 16px; border-bottom:1px solid var(--line); }
+  .g-head .chev { color:var(--muted2); font-size:12px; }
+  .g-head .thumb { width:46px; height:33px; border-radius:7px; flex:none; }
+  .g-head .name b { font-size:14px; }
+  .g-head .name span { display:block; font-size:11.5px; color:var(--muted); margin-top:1px; }
+  .deliver { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .deliver.full { color:#7bf2a8; background:#0c2c1a; border:1px solid #16502f; }
+  .deliver.short { color:#ffd08a; background:#2c2210; border:1px solid #5a4416; }
+  .g-head .right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+  .folder { font-size:12px; color:var(--violetL); text-decoration:none; }
+
+  .shortbar { display:flex; align-items:center; gap:12px; padding:10px 16px; background:#1c1608; border-bottom:1px solid #3a2c10;
+              font-size:12.5px; color:#ffd08a; }
+  .regen { margin-left:auto; font-size:12.5px; font-weight:700; color:#fff; background:linear-gradient(135deg,var(--violet),var(--pink));
+           border:none; padding:7px 14px; border-radius:9px; cursor:pointer; box-shadow:0 4px 14px #ff4d8d33; }
+
+  .grid { display:grid; grid-template-columns:repeat(8,1fr); gap:10px; padding:16px; }
+  @media (max-width:1100px){ .grid{ grid-template-columns:repeat(5,1fr);} }
+  .vcard { aspect-ratio:9/16; border-radius:9px; position:relative; overflow:hidden; cursor:pointer;
+           border:1px solid var(--line); transition:transform .1s ease, box-shadow .1s ease; }
+  .vcard:hover { transform:translateY(-2px); box-shadow:0 8px 20px #00000055; border-color:#2f2a52; }
+  .vcard .ov { position:absolute; inset:auto 0 0 0; padding:5px 6px; display:flex; align-items:center; gap:4px;
+               background:linear-gradient(transparent,#000000bb); }
+  .vbadge { font-size:9px; font-weight:800; padding:1px 5px; border-radius:5px; background:#0b3d1f; color:#7bf2a8; }
+  .sok { margin-left:auto; font-size:9px; color:#7bf2a8; }
+  .vidx { position:absolute; top:5px; left:6px; font-size:9px; color:#fff; opacity:.8; font-weight:700; text-shadow:0 1px 3px #000; }
+  .play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s; }
+  .vcard:hover .play { opacity:1; }
+  .play span { width:26px; height:26px; border-radius:50%; background:#000000aa; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; backdrop-filter:blur(2px); }
+</style>
+
+<div class="vs">
+  <div class="vs-top">
+    <div class="vs-logo"><span class="spark"></span> Variant Studio</div>
+    <nav class="vs-nav"><a href="#">Studio</a><a class="on" href="#">Gallery</a><a href="#">Diagnostics</a></nav>
+    <div class="vs-status"><span class="pill"><span class="dot" style="background:var(--green);box-shadow:0 0 8px #22c55e88;"></span> Engine ready</span></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="count"><b>2</b> sources · <b>38</b> variants delivered</div>
+    <div class="right">
+      <span class="chip on">All sources</span>
+      <span class="chip">Has shortfall</span>
+      <span class="chip">Sort: Newest ▾</span>
+    </div>
+  </div>
+
+  <div class="scroll">
+
+    <!-- GROUP 1: full delivery -->
+    <div class="group">
+      <div class="g-head">
+        <span class="chev">▾</span>
+        <div class="thumb" style="background:linear-gradient(135deg,#0ea5e9,#1f2937);"></div>
+        <div class="name"><b>beach_clip.mp4</b><span>0:18 · avg VMAF 93 · all spatial-checks passed</span></div>
+        <div class="right">
+          <span class="deliver full">✓ 20 / 20 delivered</span>
+          <a class="folder" href="#">⌅ Open source folder</a>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="vcard" style="background:linear-gradient(135deg,#0ea5e9,#1f2937);"><div class="vidx">v01</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">94</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#a78bfa,#3b0764);"><div class="vidx">v02</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">91</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#fb7185,#831843);"><div class="vidx">v03</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">96</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#34d399,#064e3b);"><div class="vidx">v04</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">93</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#22d3ee,#0e7490);"><div class="vidx">v05</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">92</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#f59e0b,#7c2d12);"><div class="vidx">v06</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">95</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#818cf8,#1e1b4b);"><div class="vidx">v07</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">90</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#2dd4bf,#134e4a);"><div class="vidx">v08</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">97</span><span class="sok">✓ spatial</span></div></div>
+      </div>
+    </div>
+
+    <!-- GROUP 2: shortfall -->
+    <div class="group">
+      <div class="g-head">
+        <span class="chev">▾</span>
+        <div class="thumb" style="background:linear-gradient(135deg,#7c3aed,#831843);"></div>
+        <div class="name"><b>city_drone.mp4</b><span>0:42 · avg VMAF 92 · 18 of 20 passed</span></div>
+        <div class="right">
+          <span class="deliver short">18 / 20 delivered</span>
+          <a class="folder" href="#">⌅ Open source folder</a>
+        </div>
+      </div>
+      <div class="shortbar">
+        ⚠ 2 variants fell short after auto-retry — they're in Diagnostics.
+        <button class="regen">↻ Regenerate 2</button>
+      </div>
+      <div class="grid">
+        <div class="vcard" style="background:linear-gradient(135deg,#7c3aed,#3b0764);"><div class="vidx">v01</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">92</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#22d3ee,#0e7490);"><div class="vidx">v02</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">95</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#f472b6,#831843);"><div class="vidx">v03</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">90</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#60a5fa,#1e3a8a);"><div class="vidx">v04</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">94</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#fbbf24,#7c2d12);"><div class="vidx">v05</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">91</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#a78bfa,#312e81);"><div class="vidx">v06</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">93</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#2dd4bf,#134e4a);"><div class="vidx">v07</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">96</span><span class="sok">✓ spatial</span></div></div>
+        <div class="vcard" style="background:linear-gradient(135deg,#fb7185,#7f1d1d);"><div class="vidx">v08</div><div class="play"><span>▶</span></div><div class="ov"><span class="vbadge">89</span><span class="sok">✓ spatial</span></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Each card is a 9:16 variant with its VMAF score + spatial-pass tick; hover shows a play affordance; click opens the detail side-panel (next). Full deliveries show a green <b>20/20</b> and no shortfall line; shortfalls show the amber count + the <b>Regenerate</b> button. Groups are collapsible. Good? Then I'll do the variant detail side-panel.</p>

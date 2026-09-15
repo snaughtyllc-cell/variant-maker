@@ -1,0 +1,117 @@
+# Two GitHubs — Lab vs Live
+
+**Status:** Lab is this GitHub. Live is `snaughtyllc-cell/varimo-live`
+(`main`, seeded from `9457585` + Live lane file). Production Studio tracks
+that repo. Do not merge the two.
+
+Same-repo branches (`tier1` vs `cursor/railway-runpod-split-c975`) are how
+Studio UI and engine work keep getting **dropped**. A merge is Git combining
+two histories; whichever side “wins” a file, the other side is gone. Two
+GitHubs means that merge is not a thing. Promotion is **copy chosen files**,
+commit on Live.
+
+## The two GitHubs
+
+| | **Lab** | **Live** |
+|---|---|---|
+| GitHub | `snaughtyllc-cell/variant-maker` | `snaughtyllc-cell/varimo-live` |
+| Default branch | `tier1` | `main` |
+| Who | Jeff + agents experimenting | Testers + production Studio |
+| Fast image | `variant-fast:lab` | digest-pinned `variant-fast:latest` |
+| Railway | lab / staging only | `varyforge-studio-production` |
+| Promote | — | copy files from Lab, never `git merge` |
+
+Machine-readable: `varimo-lane.json` (this checkout). Live template:
+`deploy/varimo-lane.live.json`.
+
+## What this changes (effects)
+
+1. **UI/engine stop getting overwritten by merges.** Lab can redesign. Live
+   stays on its own history until you copy a specific change over.
+2. **Live UI stays as it is until you redesign it on Live.** Lab design does
+   not flow over automatically. That is the point. Next step after cutover:
+   fix Live UI **in `varimo-live`**, not by merging Lab.
+3. **Two Cursor Cloud environments.** “Fix testers / live Studio” agents must
+   open **varimo-live**. Lab experiments stay here. One agent on this repo
+   cannot ship testers by merging a branch.
+4. **Railway production tracks Live.** Production Studio GitHub source is
+   `snaughtyllc-cell/varimo-live` / `main`. Lab Railway stays on this repo.
+   Do not point production at `variant-maker` again.
+5. **Two CI pipelines.** Lab Fast builds `:lab` only. There is no
+   `variant-fast:latest` workflow in this repo. Live Fast `:latest` belongs
+   on varimo-live. Do not push `:latest` from Lab.
+6. **A bugfix needed in both places is copied twice** (or
+   `scripts/promote-to-live.sh` then a Live commit). No automatic backport.
+7. **Open PRs on this repo that targeted the old Live branch**
+   (`cursor/railway-runpod-split-c975`) are not production. Cherry-pick onto
+   varimo-live if testers still need them. Do not merge Lab `tier1` into
+   Live to “sync.”
+8. **Secrets stay on Railway / RunPod**, not in git. GHCR images can stay
+   `ghcr.io/snaughtyllc-cell/variant-fast`. Grant the new repo `packages:
+   write` (or keep publishing from Live Actions).
+9. **Cursor GitHub App + Railway GitHub App** must be installed on
+   `varimo-live`. A token that can only see `variant-maker` cannot push
+   the seed.
+10. **Fast CPU endpoints do not change** just because GitHub split. Lab
+    Fast vs Live Fast is still `docs/ops/lab-fast.md`. Do not PATCH live
+    Fast to test Lab.
+
+## Cutover (done)
+
+Live GitHub exists and production Railway tracks `varimo-live` / `main`.
+Do not create another Live repo. Do not re-seed over testers. Promote with
+`scripts/promote-to-live.sh` (copy files, never merge).
+
+If Live GitHub is ever empty again (disaster only):
+
+```bash
+LIVE_REMOTE=https://github.com/snaughtyllc-cell/varimo-live.git ./scripts/seed-live-repo.sh
+```
+
+That still must **not** merge Lab `tier1`.
+
+## Copy something to Live (not merge)
+
+```bash
+./scripts/promote-to-live.sh web/app/page.tsx web/app/globals.css
+# unpack dist/promote-to-live.tgz on a varimo-live checkout, commit there
+```
+
+## Do not
+
+- `git merge tier1` into Live (or the old Live branch)
+- `git merge` Live into Lab to “get the design back”
+- Ship testers from `variant-maker`
+- Treat a Lab PR as a production deploy
+
+## Leftover PRs on this GitHub
+
+These are still open on `variant-maker`. They are **not** a merge of Lab into
+Live. Close or cherry-pick; do not use them to “sync” the two GitHubs.
+
+**Close after the lab-backlog PR lands on `tier1`** (already included there):
+#45, #46, #55, #57, #61, #62, #63, #65, #66, #67. #64 is the same crop-drift
+as #67. #56 is the older crop-drift PR. #71’s engine commit (natural
+talking audio) is included; testers still need that copy on `varimo-live`.
+#25’s Drive-export pin is already on Lab (`e81fb65`); cherry-pick onto Live.
+
+**Cherry-pick on `varimo-live`** (old Live branch `cursor/railway-runpod-split-c975`;
+do not merge these into Lab `tier1`):
+#72 captions before Generate, #71 preserve voice, #70 admin trial caps,
+#25 Drive export stuck, #9 second Fast CPU, #6 drops board spec,
+#4 operator onboarding. This Cloud Agent cannot push `varimo-live`.
+
+**Close as obsolete vs two GitHubs:** #16 (lab/live docs on the old Live
+branch), #23 (Lab Studio PR into the old Live branch).
+
+**Do not merge without a dedicated conflict pass:** #2 Create Mode, #47
+captions/Solo/mobile bar (conflicts with current Studio + Haiku 4.5), #60
+Lab redesign + HQ opt-in (DIRTY dump — use `cursor/lab-redesign-smoke-cdb6`
+to overlay `web/` onto current `tier1` instead of merging #60). See
+`docs/ops/bought-design.md`.
+
+**Do not merge (stacked look experiments / snow):** #20, #21, #22, #24, #26,
+#29. Uniqueness bits are not a look check.
+
+**Stacked on retired Studio branches — leave:** #34, #48, #49, #50, #51,
+#52, #53.

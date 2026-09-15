@@ -27,7 +27,7 @@ class SourceInfo:
     path: str
     sha256: str
     duration_s: float
-    width: int
+    width: int               # display size (iPhone rotate 90 swaps coded 3840×2160)
     height: int
     fps: float
     has_audio: bool
@@ -58,6 +58,33 @@ def _parse_fps(rate: str | None) -> float:
     return float(rate)
 
 
+def _rotation_deg(video: dict) -> float:
+    """iPhone HEVC often stores portrait as 3840×2160 plus a 90° tag / display matrix."""
+    tags = video.get("tags") if isinstance(video.get("tags"), dict) else {}
+    raw = tags.get("rotate")
+    if raw not in (None, "", "unknown"):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            pass
+    for sd in video.get("side_data_list") or []:
+        if not isinstance(sd, dict) or "rotation" not in sd:
+            continue
+        try:
+            return float(sd["rotation"])
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+def _display_size(width: int, height: int, rotation_deg: float) -> tuple[int, int]:
+    """Swap coded size when the clip is quarter-turned (player display size)."""
+    turns = int(round(float(rotation_deg) / 90.0)) % 4
+    if turns in (1, 3):
+        return height, width
+    return width, height
+
+
 def _parse_ffprobe(data: dict, path: str, sha: str) -> SourceInfo:
     """Pure: turn ffprobe JSON into SourceInfo. Unit-tested without ffmpeg."""
     streams = data.get("streams", [])
@@ -79,20 +106,30 @@ def _parse_ffprobe(data: dict, path: str, sha: str) -> SourceInfo:
         matrix=_norm(video.get("color_space")),
     )
 
+    width, height = _display_size(
+        int(video.get("width") or 0),
+        int(video.get("height") or 0),
+        _rotation_deg(video),
+    )
+
     return SourceInfo(
         path=path,
         sha256=sha,
         duration_s=duration,
-        width=int(video.get("width") or 0),
-        height=int(video.get("height") or 0),
+        width=width,
+        height=height,
         fps=_parse_fps(video.get("avg_frame_rate") or video.get("r_frame_rate")),
         has_audio=has_audio,
         color=color,
     )
 
 
-def probe(path: str) -> SourceInfo:
-    """Run ffprobe and return SourceInfo. Requires ffprobe on PATH."""
+def probe(path: str, *, hash_content: bool = True) -> SourceInfo:
+    """Run ffprobe and return SourceInfo. Requires ffprobe on PATH.
+
+    Set hash_content=False for ingest decisions (width/HDR). Hashing a 4K
+    iPhone file just to see if it needs a 1080 proxy is wasted I/O.
+    """
     cmd = [
         "ffprobe", "-v", "error",
         "-print_format", "json",
@@ -101,4 +138,5 @@ def probe(path: str) -> SourceInfo:
     ]
     out = subprocess.run(cmd, capture_output=True, text=True, check=True)
     data = json.loads(out.stdout)
-    return _parse_ffprobe(data, path, sha256_file(path))
+    sha = sha256_file(path) if hash_content else ""
+    return _parse_ffprobe(data, path, sha)

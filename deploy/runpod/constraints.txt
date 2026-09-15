@@ -1,0 +1,5 @@
+# The CUDA base is Python 3.10.  Without bounded Google client versions, pip 23's
+# resolver exhausts its backtracking limit while searching the current package history.
+google-api-python-client==2.158.0
+google-auth==2.38.0
+google-auth-oauthlib==1.2.1

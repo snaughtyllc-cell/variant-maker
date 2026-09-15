@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 724 250" width="724" height="250" role="img" aria-label="varimo — many originals from one master">
+  <title>varimo lockup</title>
+  <g font-family="Sora, sans-serif" font-weight="700" font-size="130" letter-spacing="-5.2">
+    <text x="40" y="150" fill="#FBFAFC">varim</text>
+    <text x="404" y="150" fill="#A473F5">o</text>
+    <text x="474" y="150" fill="#A473F5" opacity="0.5">o</text>
+    <text x="544" y="150" fill="#A473F5" opacity="0.24">o</text>
+    <text x="614" y="150" fill="#A473F5" opacity="0.1">o</text>
+  </g>
+  <text x="362" y="212" text-anchor="middle" font-family="'Space Grotesk', sans-serif"
+        font-weight="500" font-size="26" letter-spacing="8.8" fill="#A473F5">MANY ORIGINALS FROM ONE MASTER</text>
+</svg>
