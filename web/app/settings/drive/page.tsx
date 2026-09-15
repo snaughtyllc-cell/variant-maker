@@ -1,4 +1,5 @@
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
+import { DriveTopbar } from "@/components/drive/DriveTopbar";
 import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
 import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
 import { PasswordPanel } from "@/components/auth/PasswordPanel";
@@ -9,20 +10,7 @@ export default function DriveSettingsPage() {
     <main className="drive-shell">
       {/* Own 58px context bar — the integrator suppresses the global desktop
           header on this route so this is the only breadcrumb bar. */}
-      <div className="drive-topbar">
-        <span className="drive-topbar__section">DRIVE</span>
-        <span className="drive-topbar__sep">/</span>
-        <span className="drive-topbar__crumb">Delivery setup</span>
-        <div className="drive-topbar__spacer" />
-        <div className="drive-topbar__status">
-          <span className="drive-topbar__dot" />
-          Google connected
-        </div>
-        <button type="button" className="drive-topbar__test">
-          <span className="material-symbols-rounded" aria-hidden="true">bolt</span>
-          Test all access
-        </button>
-      </div>
+      <DriveTopbar />
 
       {/* Two numbered steps + a destinations table fill the left column; Drop
           Ledger, account and a workspace-vs-login callout stack in a fixed 340px
