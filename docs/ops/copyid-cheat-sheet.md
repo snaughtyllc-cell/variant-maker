@@ -11,6 +11,9 @@ That is a visual copy-id miss, not an audio fingerprint miss. Do not start
 with Demucs stem-swap. Uniform `atempo` 0.96–1.04 is locked to video speed
 and is not an audio lever.
 
+Jeff 2026-09-20: the product is an **unchanged video** (same shots, same
+order). Intercut / B-roll / freeze insert / title card is a recut — off.
+
 ## What we score today
 
 | Dial | What it is | What it is not |
@@ -49,12 +52,23 @@ a uniqueness score.
 - PATCH live Fast (lab `record` only)
 - Shade / 720 snow / face-zoom / Pixel AI scramble
 - Stem-swap as the first build (wrong flag type)
+- Intercut / B-roll / freeze insert / title card (recut; not this product)
+- Piecewise speed (same video to the eye, zero on this flag, fake local bits)
+- Cover / first-frame (thumbnail only; copy-id samples the whole clip)
 
-## Next visual lever (not this PR)
+## Next lab action
 
-**Intercut** (aligned-span B-roll / still / title card) — cheap structure
-change for duplicate/unoriginal. Piecewise ±3% speed is a later fork against
-the one-speed-factor invariant. Cover / first-frame is cheap. Flip is dead.
+Not a new transform. Score the **flagged** clip with SSCD: source vs identity
+re-encode vs unrelated vs the posted variant (`calibrate_paths` +
+`score_visual`). If the variant sits next to the re-encode, polish is not
+moving copy-id and the decision is product (unchanged video vs flagged), not
+presets.
+
+Fable 2026-09-20: under same-pictures/same-order, remaining Fast levers
+(crop, rebuild, warp, grain, trim, uniform speed, encode identity) sit inside
+the augmentation set an SSCD-class descriptor is trained to ignore. Canvas
+reframe is the only leftover with a non-trivial chance, and it is a framing
+product call, not polish — do not build it before the measurement.
 
 Heads must actually land on Fast: `ffmpeg` → wav → `fpcalc` (Debian libav
 cannot open our BtbN mp4s); autotune must keep `quality.heads`.

@@ -6,8 +6,10 @@ Cheat sheet: `docs/ops/copyid-cheat-sheet.md`.
 
 ## Flags (2026-09-20)
 
-Jeff: **duplicate / unoriginal**, not music / copyright. Next cheap lever is
-**visual** (intercut), not stem-swap.
+Jeff: **duplicate / unoriginal**, not music / copyright. Product is an
+**unchanged video** (same shots, same order) — intercut/recut is off. Stem-swap
+is the wrong flag type. Next lab action is SSCD measurement on the flagged
+clip, not a new transform.
 
 Calibrate on the **flagged clip**: identity re-encode vs an unrelated pair
 (`variant_maker.copyid.calibrate.calibrate_paths`). Do **not** keep using the
