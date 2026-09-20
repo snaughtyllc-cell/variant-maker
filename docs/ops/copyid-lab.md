@@ -8,14 +8,17 @@ Cheat sheet: `docs/ops/copyid-cheat-sheet.md`.
 
 Jeff: **duplicate / unoriginal**, not music / copyright. Product is an
 **unchanged video** posted **again on the same account** (another try).
-Intercut/recut is off. Stem-swap is the wrong flag type.
+Intercut/recut is off. Stem-swap is the wrong flag type. **Multiple sources**
+keep flagging — not one pack.
 
 First flagged pair (Drive `Flagged test`, 2026-09-20): same source v15/v16
 posted as that retry. Local 24 **pass** (30/28), 224px peer **14**, overlay
 **Home can wait** on both because it is in the original. Filenames share the
 UUID stem (caption if Repurpose uses the Drive name). Do not recut the title.
-Do not tell operators to skip the retry — that is the product. Distinct
-export names/captions are not a video change.
+
+Fable 2026-09-20: polish-only retry **cannot** pass this class. No new engine
+transform. Ops: archive original then retry. Caption hygiene is a side
+channel (fix names; do not expect the flag to clear).
 
 Calibrate on the **flagged clip**: identity re-encode vs an unrelated pair
 (`variant_maker.copyid.calibrate.calibrate_paths`). Do **not** keep using the

@@ -62,10 +62,12 @@ Not the old talking-head look packs. Same source, two Fast copies:
 
 The product **is** posting this again on the same account without recutting.
 v15 vs v16 flagged is the miss: local 24 passed, the platform still saw a
-copy. Do not rewrite **Home can wait** (it is in the source). Do not raise
-24. Distinct filenames/captions on export are not a video change — sequential
-`UUID_v15` / `UUID_v16` names are an extra same-post signal on top of the
-pixels.
+copy. Jeff: this is **not the only source** — another source keeps flagging
+too. Same class, not a one-pack fluke. Do not rewrite **Home can wait**.
+Do not raise 24. Distinct filenames/captions on export are not a video
+change — sequential `UUID_v15` / `UUID_v16` names are an extra same-post
+signal. Fable: that is a side channel, not the cause. Fix it; do not expect
+it to clear the flag.
 
 ## What we will not do this pass
 
@@ -77,20 +79,30 @@ pixels.
 - Intercut / B-roll / freeze insert / title card (recut; not this product)
 - Piecewise speed (same video to the eye, zero on this flag, fake local bits)
 - Cover / first-frame (thumbnail only; copy-id samples the whole clip)
+- Canvas reframe / letterbox (Meta lists aspect-ratio borders as immaterial;
+  also a visible framing change)
 
-## Next lab action
+## Fable 2026-09-20 (same-account retry, multiple sources)
 
-Not a new transform. Score the **flagged** clip with SSCD: source vs identity
-re-encode vs unrelated vs the posted variant (`calibrate_paths` +
-`score_visual`). If the variant sits next to the re-encode, polish is not
-moving copy-id and the decision is product (unchanged video vs flagged), not
-presets.
+Polish-only variants **cannot** pass this class. Fast medium (crop, rotate,
+grain, warp, rebuild, speed, trim, fresh encode) is Meta's "immaterial edits"
+list and the detector's training augmentations. Local 24 green + 224px
+collapse is the same property from both sides. Multiple sources flagging is
+the dial at ceiling, not a per-clip recipe miss. **No new engine transform
+for this flag.**
 
-Fable 2026-09-20: under same-pictures/same-order, remaining Fast levers
-(crop, rebuild, warp, grain, trim, uniform speed, encode identity) sit inside
-the augmentation set an SSCD-class descriptor is trained to ignore. Canvas
-reframe is the only leftover with a non-trivial chance, and it is a framing
-product call, not polish — do not build it before the measurement.
+Remaining:
+
+1. **Ops (only plausible movement):** archive the original (and the flagged
+   retry) before the next try, or wait until the original is no longer
+   "relatively new." Studio does not automate account actions. Label
+   `platform_result`. If that retry still flags, the class is closed on the
+   oracle.
+2. **Caption/filename hygiene (side channel, do now):** stop exporting
+   `{UUID}_v{NN}_{seed}` as the Repurpose caption. Expect **zero** flag
+   movement.
+3. Encode identity, stronger polish, cover, canvas reframe: **kill** as
+   levers for this flag.
 
 Heads must actually land on Fast: `ffmpeg` → wav → `fpcalc` (Debian libav
 cannot open our BtbN mp4s); autotune must keep `quality.heads`.
