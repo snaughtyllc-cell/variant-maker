@@ -2,6 +2,21 @@
 
 Local uniqueness heads that approximate copy detection. Not a platform verdict.
 
+Cheat sheet: `docs/ops/copyid-cheat-sheet.md`.
+
+## Flags (2026-09-20)
+
+Jeff: **duplicate / unoriginal**, not music / copyright. Next cheap lever is
+**visual** (intercut), not stem-swap.
+
+Calibrate on the **flagged clip**: identity re-encode vs an unrelated pair
+(`variant_maker.copyid.calibrate.calibrate_paths`). Do **not** keep using the
+old talking-head look packs (LOOK / DRIFT / compete) as the failing sample —
+those were look/SSIM-gate clips, not the files getting this flag.
+
+Stay **`record`** on lab Fast. Do not `gate`. Do not PATCH live. Do not raise
+the 24-bit SSIM gate.
+
 ## Lab first (2026-08-29)
 
 Jeff: **yes lab first.** Live Fast stays `copyid=off`. Do not PATCH live.
@@ -95,7 +110,7 @@ Audio: install Chromaprint `fpcalc` on PATH (`fpcalc -version`). Never hit Acous
 
 ```bash
 # CI / this repo — no weights
-pytest -q -m "not lab and not integration" tests/test_copyid_compare.py tests/test_copyid_fuse.py tests/test_copyid_chromaprint.py tests/test_copyid_visual.py tests/test_copyid_uniqueness.py tests/test_uniqueness.py
+pytest -q -m "not lab and not integration" tests/test_copyid_compare.py tests/test_copyid_fuse.py tests/test_copyid_chromaprint.py tests/test_copyid_visual.py tests/test_copyid_uniqueness.py tests/test_copyid_calibrate.py tests/test_uniqueness.py
 
 # Lab GPU/CPU box with weights + fpcalc
 COPYID_LAB=1 pytest -q -m lab tests/test_copyid_lab.py
