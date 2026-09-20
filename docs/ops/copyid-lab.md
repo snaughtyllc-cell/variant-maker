@@ -11,6 +11,12 @@ Jeff: **duplicate / unoriginal**, not music / copyright. Product is an
 is the wrong flag type. Next lab action is SSCD measurement on the flagged
 clip, not a new transform.
 
+First flagged pair (Drive `Flagged test`, 2026-09-20): same source v15/v16,
+local 24 **pass** (30/28), 224px peer **14**, overlay **Home can wait** on
+both because it is in the original. Filenames share the UUID stem (caption
+if Repurpose uses the Drive name). Do not recut the title. Rename before
+handoff; do not post two copies from the same pack as different videos.
+
 Calibrate on the **flagged clip**: identity re-encode vs an unrelated pair
 (`variant_maker.copyid.calibrate.calibrate_paths`). Do **not** keep using the
 old talking-head look packs (LOOK / DRIFT / compete) as the failing sample —

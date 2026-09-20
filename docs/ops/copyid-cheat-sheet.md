@@ -45,6 +45,25 @@ print(calibrate_paths("src.mp4", "reencode.mp4", "unrelated.mp4"))
 video. Mid-band Chromaprint (both controls ~0.74–0.77) is **collapsed**, not
 a uniqueness score.
 
+## First flagged pair (2026-09-20, Drive `Flagged test`)
+
+Not the old talking-head look packs. Same source, two Fast copies:
+
+- `A56531F9-…_v15_bd60ad9d.mp4` and `…_v16_0e3f8e2d.mp4` (pipeline names:
+  `{stem}_v{index}_{seed}.mp4`)
+- Original HEVC 1080×1920 ~6s. Both copies **pass** local 24 (30 / 28 bits).
+  Peer 27. At 224px they collapse (20 / 17 vs source, **14** peer).
+- Burned-in title **Home can wait** is in the original and unchanged on both
+  copies (same shots, same order — product).
+- Jeff: the **text names** are damn near the same. Two signals: that overlay,
+  and the engine filename stem. Repurpose/Buffer use the Drive filename as
+  the post caption (`web/lib/howTo.ts`).
+
+This is two posts of the same source, not a 24-bit miss. Do not rewrite the
+title (that is a recut). Do not raise 24. Rename before handoff; do not post
+two copies from the same pack onto the same account as if they were different
+videos.
+
 ## What we will not do this pass
 
 - Raise `TARGET_BITS` 24
