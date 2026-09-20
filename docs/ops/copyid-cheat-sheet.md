@@ -11,8 +11,9 @@ That is a visual copy-id miss, not an audio fingerprint miss. Do not start
 with Demucs stem-swap. Uniform `atempo` 0.96–1.04 is locked to video speed
 and is not an audio lever.
 
-Jeff 2026-09-20: the product is an **unchanged video** (same shots, same
-order). Intercut / B-roll / freeze insert / title card is a recut — off.
+Jeff 2026-09-20: the product is an **unchanged video** posted **again on
+the same account** (another try). Same shots, same order. Intercut / B-roll /
+freeze insert / title card is a recut — off.
 
 ## What we score today
 
@@ -59,10 +60,12 @@ Not the old talking-head look packs. Same source, two Fast copies:
   and the engine filename stem. Repurpose/Buffer use the Drive filename as
   the post caption (`web/lib/howTo.ts`).
 
-This is two posts of the same source, not a 24-bit miss. Do not rewrite the
-title (that is a recut). Do not raise 24. Rename before handoff; do not post
-two copies from the same pack onto the same account as if they were different
-videos.
+The product **is** posting this again on the same account without recutting.
+v15 vs v16 flagged is the miss: local 24 passed, the platform still saw a
+copy. Do not rewrite **Home can wait** (it is in the source). Do not raise
+24. Distinct filenames/captions on export are not a video change — sequential
+`UUID_v15` / `UUID_v16` names are an extra same-post signal on top of the
+pixels.
 
 ## What we will not do this pass
 
