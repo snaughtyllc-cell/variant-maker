@@ -1,0 +1,47 @@
+{
+  "tiktok-classic-box": {
+    "id": "tiktok-classic-box",
+    "font_file": "TikTokSans-Regular.ttf",
+    "font_name": "TikTok Sans",
+    "size_frac": 0.048,
+    "primary_ass": "&H00FFFFFF",
+    "outline_ass": "&H00000000",
+    "back_ass": "&H90000000",
+    "outline": 8,
+    "shadow": 0,
+    "box": true,
+    "max_lines": 3,
+    "max_width_frac": 0.80,
+    "bold": false
+  },
+  "edits-classic-outline": {
+    "id": "edits-classic-outline",
+    "font_file": "InstrumentSans-Regular.ttf",
+    "font_name": "Instrument Sans",
+    "size_frac": 0.052,
+    "primary_ass": "&H00FFFFFF",
+    "outline_ass": "&H00000000",
+    "back_ass": "&H00000000",
+    "outline": 6,
+    "shadow": 0,
+    "box": false,
+    "max_lines": 3,
+    "max_width_frac": 0.80,
+    "bold": true
+  },
+  "edits-strong": {
+    "id": "edits-strong",
+    "font_file": "Anton-Regular.ttf",
+    "font_name": "Anton",
+    "size_frac": 0.070,
+    "primary_ass": "&H00FFFFFF",
+    "outline_ass": "&H00000000",
+    "back_ass": "&H00000000",
+    "outline": 3,
+    "shadow": 0,
+    "box": false,
+    "max_lines": 1,
+    "max_width_frac": 0.78,
+    "bold": false
+  }
+}

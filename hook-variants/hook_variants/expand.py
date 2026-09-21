@@ -189,7 +189,7 @@ def _llm_openai(seed: str, n: int, key: str) -> list[str]:
 
 def _llm_anthropic(seed: str, n: int, key: str) -> list[str]:
     payload = {
-        "model": "claude-3-haiku-20240307",
+        "model": "claude-haiku-4-5-20251001",
         "max_tokens": 512,
         "messages": [
             {"role": "user", "content": _LLM_PROMPT.format(n=n, seed=seed)},

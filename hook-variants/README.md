@@ -70,10 +70,10 @@ hook-variants <video> --text "…" [-n 5] [--preset auto] [--lock-text] [--sourc
 | Flag | Default | Meaning |
 |---|---|---|
 | `--text` | required | Seed hook. The only copy input in v1. |
-| `-n` / `--count` | `5` | How many variants. Product range is 3–5; CLI allows 1–5 so tests can render one. |
+| `-n` / `--count` | `5` | How many variants. Product range is 3–5; CLI allows 1–8. |
 | `--preset` | `auto` | `auto` or one of the three style ids. `auto` assigns styles from the seeded plan. A named preset overwrites every hook’s `style_id` after planning. |
 | `--lock-text` | off | Every variant uses the normalized seed string. No expansion. |
-| `--source-text` | `none` | v1 only accepts `none`. No OCR, no second caption layer from the file. |
+| `--source-text` | `none` | Avoid stacking on an existing band: `none` \| `bottom` (only top/mid) \| `top` (only low/mid). No OCR. |
 | `--out` | `out/<stem>-hooks` | Run directory (plan JSON, ASS, MP4, stills). |
 | `--seed` | hash of `--text` | `master_seed` for the plan RNG. Same seed + same flags → same plan. |
 | `--allow-mid` | off | Let the default plan use the mid slot. Off: only `top` and `low`. |

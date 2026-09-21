@@ -44,7 +44,7 @@ be unit-tested without ffmpeg.
 
 ffmpeg is used only in `probe`, `render`, and (for a still preview) `place`.
 
-Default count is **5**. Product use is **3–5**. CLI accepts **1–5**.
+Default count is **5**. Product use is **3–5**. CLI accepts **1–8**.
 
 ---
 
@@ -278,7 +278,9 @@ Return a list of length `n`.
 
 `plan.plan_hooks(seed, count, master_seed, *, locked, source_text, allow_mid) -> OverlayPlan`
 
-1. Reject `source_text != "none"`.
+1. `source_text` must be `none`, `bottom`, or `top`. `bottom` keeps text off the
+   lower band (`top`, plus `mid` if allowed). `top` keeps text off the upper
+   band (`low`, plus `mid` if allowed). No OCR.
 2. Normalize seed (same rules as expand). Empty → `ValueError`.
 3. `rng = random.Random(int(hashlib.sha256(master_seed.encode()).hexdigest()[:16], 16))`
 4. `texts = expand_hooks(normalized, count, locked=locked, rng=rng)`
@@ -519,10 +521,10 @@ package.
 |---|---|
 | render entry | `hook-variants <video> --text "…"` |
 | `--text` | required on render |
-| `-n` / `--count` | default 5, min 1, max 5 |
+| `-n` / `--count` | default 5, min 1, max 8 |
 | `--preset` | `auto` (default) or a `StyleId` |
 | `--lock-text` | sets `locked=True` |
-| `--source-text` | default `none`; reject other values |
+| `--source-text` | `none` (default), `bottom`, or `top` |
 | `--out` | default `out/<stem>-hooks` |
 | `--seed` | optional `master_seed` |
 | `--allow-mid` | optional; plan only |
