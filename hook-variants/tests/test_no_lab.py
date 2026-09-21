@@ -14,6 +14,8 @@ def test_no_variant_maker_imports() -> None:
         if any(part in SKIP_DIRS for part in path.parts):
             continue
         text = path.read_text(encoding="utf-8")
+        if path.name == "test_no_lab.py":
+            continue
         if "import variant_maker" in text or "from variant_maker" in text:
             hits.append(str(path.relative_to(ROOT)))
     assert hits == []

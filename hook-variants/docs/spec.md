@@ -207,7 +207,7 @@ Canonical records (keep `styles/presets.json` in sync; do not invent a fourth id
 |---|---|---|---|---|---|---|---|---|---|---|
 | `tiktok-classic-box` | `TikTokSans-Regular.ttf` | TikTok Sans | 0.048 | 8 | 0 | true | 3 | 0.80 | false | `&H90000000` |
 | `edits-classic-outline` | `InstrumentSans-Regular.ttf` | Instrument Sans | 0.052 | 6 | 0 | false | 3 | 0.80 | true | `&H00000000` |
-| `edits-strong` | `Anton-Regular.ttf` | Anton | 0.070 | 3 | 0 | false | 1 | 0.78 | false | `&H00000000` |
+| `edits-strong` | `Anton-Regular.ttf` | Anton | 0.062 | 3 | 0 | false | 1 | 0.88 | false | `&H00000000` |
 
 All three: `primary_ass` `&H00FFFFFF`, `outline_ass` `&H00000000`.
 

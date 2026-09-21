@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 
+from dataclasses import replace
+
 from hook_variants.types import SLOT_Y, HookParams, Slot, StylePreset
 
 GLYPH_WIDTH = 0.55
@@ -19,8 +21,15 @@ def ass_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _glyph_width(style: StylePreset) -> float:
+    # Anton is condensed; the default sans guess is too wide and clips hooks.
+    if style.font_name.lower() == "anton":
+        return 0.42
+    return GLYPH_WIDTH
+
+
 def _max_chars(style: StylePreset, width: int, height: int) -> int:
-    denom = style.size_frac * height * GLYPH_WIDTH
+    denom = style.size_frac * height * _glyph_width(style)
     if denom <= 0:
         return 4
     return max(4, int(style.max_width_frac * width / denom))
@@ -69,6 +78,24 @@ def _cap_lines(lines: list[str], max_lines: int, max_chars: int) -> list[str]:
     head = lines[: max_lines - 1]
     rest = " ".join(lines[max_lines - 1 :])
     return [*head, _ellipsize(rest, max_chars)]
+
+
+def fit_wrap(text: str, style: StylePreset, width: int, height: int) -> tuple[StylePreset, str]:
+    """Shrink ``size_frac`` so the hook is not ellipsized. Box styles prefer one line."""
+    frac = float(style.size_frac)
+    min_frac = min(0.028, frac)
+    chosen = (style, wrap_text(text, style, width, height))
+    while frac >= min_frac - 1e-9:
+        trial = replace(style, size_frac=round(frac, 4))
+        wrapped = wrap_text(text, trial, width, height)
+        ellipsized = _ELLIPSIS in wrapped
+        multiline = "\\N" in wrapped
+        if not ellipsized and (not style.box or not multiline):
+            return trial, wrapped
+        if not ellipsized:
+            chosen = (trial, wrapped)
+        frac = round(frac - 0.003, 4)
+    return chosen
 
 
 def wrap_text(text: str, style: StylePreset, width: int, height: int) -> str:
@@ -122,13 +149,15 @@ def build_ass(
     duration_s: float,
 ) -> str:
     """Return a complete ASS script for one hook."""
+    fitted, wrapped_raw = fit_wrap(hook.text, style, width, height)
+    style = fitted
     fontsize = round(style.size_frac * height)
     border = 3 if style.box else 1
     bold = -1 if style.bold else 0
     ml = round((1 - style.max_width_frac) * width / 2)
     mr = ml
     mv = margin_v(hook.slot, height)
-    wrapped = escape_ass_text(wrap_text(hook.text, style, width, height))
+    wrapped = escape_ass_text(wrapped_raw)
     end = format_ass_time(duration_s)
     return (
         "[Script Info]\n"

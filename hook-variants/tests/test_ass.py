@@ -22,6 +22,19 @@ def test_strong_is_one_line() -> None:
     assert "\\N" not in text
 
 
+def test_fit_wrap_keeps_short_hook_on_720() -> None:
+    from hook_variants.ass import fit_wrap
+
+    style = get_style("edits-strong", package_root())
+    fitted, text = fit_wrap("this is why it hits", style, 720, 1280)
+    assert "…" not in text
+    assert "hits" in text
+    box = get_style("tiktok-classic-box", package_root())
+    fitted_box, boxed = fit_wrap("this is why it hits", box, 720, 1280)
+    assert "…" not in boxed
+    assert "\\N" not in boxed or fitted_box.size_frac < box.size_frac
+
+
 def test_build_ass_headers_and_event() -> None:
     style = get_style("tiktok-classic-box", package_root())
     hook = HookParams(0, "this is why it hits", "tiktok-classic-box", "low")
@@ -33,7 +46,7 @@ def test_build_ass_headers_and_event() -> None:
     assert "BorderStyle" in script
     assert ",3," in script  # boxed
     assert "Alignment" in script
-    assert "this is why it hits" in script
+    assert "this is why it" in script and "hits" in script
     assert format_ass_time(2.5) in script
     assert "{" not in script.split("[Events]")[-1].split(",,")[-1] or True
 

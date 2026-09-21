@@ -33,7 +33,7 @@
     "id": "edits-strong",
     "font_file": "Anton-Regular.ttf",
     "font_name": "Anton",
-    "size_frac": 0.070,
+    "size_frac": 0.062,
     "primary_ass": "&H00FFFFFF",
     "outline_ass": "&H00000000",
     "back_ass": "&H00000000",
@@ -41,7 +41,7 @@
     "shadow": 0,
     "box": false,
     "max_lines": 1,
-    "max_width_frac": 0.78,
+    "max_width_frac": 0.88,
     "bold": false
   }
 }
