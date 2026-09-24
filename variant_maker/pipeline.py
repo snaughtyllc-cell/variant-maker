@@ -38,6 +38,10 @@ DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 # Fast daily packs: one medium encode, then escalate. Five-step bisection on a
 # 720 talking-head that sits at 23 bits is how a Fast 20 hit executionTimeout.
 FAST_TUNE_MAX_ITERS = 1
+# Escalate-only vertical keystone. Positive-only, cap 0.06 (8% is the stretch
+# edge). Fires when source bits sit in the 19–23 band, then stops at the first
+# rung that clears 24. A miss restores the unstretched file.
+KEYSTONE_LADDER = (0.02, 0.04, 0.06)
 
 
 def use_face_protect(quality_mode: str | None) -> bool:
@@ -345,6 +349,46 @@ def run(config: dict, *, on_event=None) -> Manifest:
             }
             _emit_looking()
 
+        def _try_keystone_ladder() -> None:
+            """Nudge a 19–23 source miss with 2% → 4% → 6% tilt. Stop on 24.
+
+            Look review aborts and keeps the unstretched file. If no rung clears
+            the source gate, the unstretched file is restored. Peer distance is
+            not the reason to keep a tilt.
+            """
+            nonlocal r, u, look_info, keystone_escalated
+            bits = u.get("bits")
+            if r is None or bits is None or not (19 <= int(bits) <= 23):
+                return
+            if look.blocks_unattended_escalate(look_info.get("look_status")):
+                return
+            snap = _snapshot_medium()
+            base_params = r["params"]
+            for amount in KEYSTONE_LADDER:
+                video = dict(base_params.get("video") or {})
+                video["keystone_a"] = amount
+                params = {**base_params, "video": video}
+                emit("rendering", index=i, attempt=attempt_no)
+                _, cmd = render_variant(src, params, platform, path)
+                r = {**r, "params": params, "cmd": cmd, "vmaf": None, "passed": True}
+                u = _look_then_uniqueness()
+                if look.blocks_unattended_escalate(look_info.get("look_status")):
+                    _restore_medium_if_look_fail(snap)
+                    return
+                got = u.get("bits")
+                if (
+                    got is not None
+                    and uniqueness.status_for_bits(int(got), target=uniqueness_target) == "ok"
+                ):
+                    keystone_escalated = True
+                    if os.path.isfile(snap["path"]):
+                        os.remove(snap["path"])
+                    return
+            os.replace(snap["path"], path)
+            look_info = snap["look"]
+            u = snap["u"]
+            r = snap["r"]
+
         def _peer_bits(variant_path: str) -> int | None:
             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
 
@@ -393,6 +437,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         # under 19 is uniqueness_fail. Never fake a 24-bit score.
         preset_used = preset.name
         escalated = False
+        keystone_escalated = False
         r = None
         u = {
             "uniqueness": None, "uniqueness_status": "unknown",
@@ -480,6 +525,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 and tuned["uniqueness"] >= uniqueness_target
                 and tuned.get("peer_ok", True)
             )
+            if not cleared and allow_creative_escalate:
+                _try_keystone_ladder()
+                cleared = (
+                    bool(r and r.get("passed"))
+                    and u.get("uniqueness") is not None
+                    and u["uniqueness"] >= uniqueness_target
+                    and u.get("uniqueness_status") == "ok"
+                )
             if (
                 not cleared and allow_creative_escalate
                 and not look.blocks_unattended_escalate(look_info.get("look_status"))
@@ -506,7 +559,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
                     break
             else:
-                if (
+                if allow_creative_escalate:
+                    _try_keystone_ladder()
+                if r is not None and r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
+                    pass
+                elif (
                     allow_creative_escalate
                     and not look.blocks_unattended_escalate(look_info.get("look_status"))
                 ):
@@ -572,6 +629,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             },
             "vmaf_scope": "proxy_encode_quality",
             "heads": u.get("heads"),
+            "keystone_a": ((r.get("params") or {}).get("video") or {}).get("keystone_a"),
+            "keystone_escalated": bool(
+                keystone_escalated and ((r.get("params") or {}).get("video") or {}).get("keystone_a")
+            ),
         }
         # Lab diagnostic only. Never changes uniqueness_status / bits / escalate.
         if uniqueness.ssim_align_diag_wanted(config):
