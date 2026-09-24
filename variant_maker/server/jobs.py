@@ -1289,6 +1289,7 @@ class JobStore:
                             quality_mode=job.quality_mode,
                             cancel_token=token,
                         )
+                self._stamp_onscreen(job, out_dir, result)
                 source.variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,
@@ -1566,6 +1567,48 @@ class JobStore:
             self._pull_missing_outputs(source_id)
             return path if os.path.isfile(path) else None
         return None
+
+    def _stamp_onscreen(self, job: Job, out_dir: str, result) -> None:
+        """Burn text on Studio when the worker returned a file with no sticker.
+
+        Fast workers started before the on-screen image ignore the project and
+        still return a finished mp4. The words are applied here, then put back
+        on the same object key the gallery already serves.
+        """
+        if not job.onscreen or result is None:
+            return
+        from ..onscreen import (
+            OnScreenError,
+            burn_file,
+            fonts_ready,
+            placement_record,
+            plan_versions,
+        )
+        from ..probe import probe
+
+        if not fonts_ready():
+            raise OnScreenError("On-screen fonts are not installed.")
+        plan = {p["n"]: p for p in plan_versions(job.onscreen, len(result.variants))}
+        for v in result.variants:
+            quality = dict(v.quality or {})
+            if quality.get("onscreen"):
+                continue
+            placement = plan.get(v.index)
+            if placement is None:
+                continue
+            path = v.path or os.path.join(out_dir, v.filename)
+            key = v.object_key
+            missing = not os.path.isfile(path) or os.path.getsize(path) == 0
+            if missing and key and self._object_store is not None:
+                os.makedirs(os.path.dirname(path) or out_dir, exist_ok=True)
+                self._object_store.get(key, path)
+            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+                raise OnScreenError(f"On-screen text could not find {v.filename}.")
+            pre = probe(path)
+            burn_file(path, placement, pre.width, pre.height, pre.color)
+            if key and self._object_store is not None:
+                self._object_store.put(key, path)
+            v.quality = {**quality, "onscreen": placement_record(placement)}
 
     def _pull_named_outputs(self, source_id: str, names: list[str]) -> None:
         fetch = getattr(self._runner, "fetch_outputs", None)

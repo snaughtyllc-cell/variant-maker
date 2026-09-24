@@ -999,6 +999,68 @@ def test_create_job_stores_onscreen_and_passes_it(tmp_path):
     assert runner.last_kwargs["onscreen"]["captions"][0]["text"] == "on the frame"
 
 
+def test_studio_burns_onscreen_when_the_worker_skipped_it(tmp_path, monkeypatch):
+    burned = {}
+
+    def fake_burn(path, placement, width, height, color=None):
+        burned["path"] = path
+        burned["text"] = placement["text"]
+        burned["size"] = (width, height)
+        with open(path, "wb") as fh:
+            fh.write(b"burned")
+
+    class Probe:
+        width = 1080
+        height = 1920
+        color = None
+
+    monkeypatch.setattr("variant_maker.onscreen.burn_file", fake_burn)
+    monkeypatch.setattr("variant_maker.probe.probe", lambda path: Probe())
+
+    class _Runner(FakeRunner):
+        def run(self, source_path, *, count, out_dir, source_id, on_event,
+                allow_creative_escalate=True, quality_mode="fast",
+                cancel_token=None, **kwargs):
+            result = super().run(
+                source_path, count=count, out_dir=out_dir, source_id=source_id,
+                on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, cancel_token=cancel_token, **kwargs,
+            )
+            for v in result.variants:
+                with open(v.path, "wb") as fh:
+                    fh.write(b"plain")
+                v.object_key = f"outputs/{source_id}/{v.filename}"
+            return result
+
+    class _Store:
+        def __init__(self):
+            self.puts = []
+
+        def get(self, key, dest):
+            with open(dest, "wb") as fh:
+                fh.write(b"from-store")
+
+        def put(self, key, path):
+            with open(path, "rb") as fh:
+                self.puts.append((key, fh.read()))
+
+    runner = _Runner()
+    objects = _Store()
+    store = JobStore(Workspace(str(tmp_path)), runner, object_store=objects)
+    project = {
+        "captions": [{"text": "on the frame", "box_ids": ["A"]}],
+        "boxes": [{"id": "A", "x": 0.08, "y": 0.4, "w": 0.84, "h": 0.16}],
+        "look": {"style": "classic", "background": "solid"},
+    }
+    job = store.create_job([("a.mp4", b"x")], count=1, onscreen=project)
+    store.wait(job.job_id, timeout=5)
+    assert job.error is None
+    assert burned["text"] == "on the frame"
+    assert burned["size"] == (1080, 1920)
+    assert objects.puts and objects.puts[0][1] == b"burned"
+    assert job.sources[0].variants[0].quality["onscreen"]["text"] == "on the frame"
+
+
 def test_create_job_rejects_a_caption_with_no_box(tmp_path):
     store = _store(tmp_path)
     try:
