@@ -119,6 +119,15 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
   };
 }
 
+export function captionsWithNewBox(captions: OnScreenCaption[], boxId: string) {
+  const open = captions.findIndex((cap) => cap.box_ids.length === 0);
+  const index = open >= 0 ? open : captions.length === 1 ? 0 : -1;
+  if (index < 0) return captions;
+  return captions.map((cap, i) => (
+    i === index ? { ...cap, box_ids: [...cap.box_ids, boxId] } : cap
+  ));
+}
+
 function nextColor(boxes: OnScreenBox[]) {
   const used = new Set(boxes.map((box) => box.id));
   return BOX_COLORS.find((color) => !used.has(color.id)) ?? null;
@@ -310,6 +319,7 @@ export function StudioOnScreenBox({
         onChange({
           ...draft,
           boxes: [...draft.boxes, { id: color.id, color: color.hex, ...fitted }],
+          captions: captionsWithNewBox(draft.captions, color.id),
         });
         setSelected(color.id);
       }
@@ -492,9 +502,7 @@ export function StudioOnScreenBox({
                 </div>
               </div>
               <p className="studio-onscreen__hint">
-                {poster
-                  ? "Shaded edges are covered on a Reel. Draw in the clear middle."
-                  : "Add a clip and its frame shows here. Shaded edges are covered on a Reel."}
+                Drag on the phone to draw a box. It locks to the next open line. Drag the words to move them.
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">
@@ -554,7 +562,7 @@ export function StudioOnScreenBox({
                       );
                     })}
                     {draft.boxes.length === 0 && (
-                      <span className="studio-onscreen__hint">Draw a box first, then tap its color here.</span>
+                      <span className="studio-onscreen__hint">Drag a box on the phone. It locks to this line.</span>
                     )}
                   </div>
                 </div>

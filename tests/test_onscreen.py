@@ -1,6 +1,10 @@
 """On-screen text: caption/box locks, then a sticker on the finished frame."""
+import shutil
+import subprocess
+
 from variant_maker.onscreen import (
     OnScreenError,
+    burn_file,
     fonts_ready,
     normalize_project,
     plan_versions,
@@ -122,6 +126,42 @@ def test_placed_text_stays_at_the_dragged_spot():
     assert versions[1]["place"] == {"x": 0.2, "y": 0.8}
     layer = render_layer(versions[0], 200, 360)
     assert layer.getbbox() is not None
+
+
+def test_burn_puts_the_words_on_the_file(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        return
+    src = tmp_path / "in.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=360x640:d=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            str(src),
+        ],
+        check=True, capture_output=True,
+    )
+    placement = plan_versions(_project(
+        [{"text": "HELLO", "box_ids": ["A"], "place": {"A": {"x": 0.5, "y": 0.5}}}],
+        [_box("A", 0.35)],
+    ), 1)[0]
+    burn_file(str(src), placement, 360, 640, None)
+    frame = tmp_path / "frame.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(src), "-frames:v", "1", str(frame)],
+        check=True, capture_output=True,
+    )
+    from PIL import Image
+    gray = Image.open(frame).convert("L")
+    assert gray.getextrema()[1] > 200
+    audio = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a",
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(src),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    assert "audio" in audio.stdout
 
 
 def test_sticker_and_bar_paint_opaque_pixels():

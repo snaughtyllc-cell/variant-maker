@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import {
+  captionsWithNewBox,
   emptyOnScreen,
   projectFromDraft,
   rectFromPoints,
@@ -49,6 +50,23 @@ describe("on-screen project", () => {
     expect(projectFromDraft(draft)).toBe("Lock every colored box to a line.");
   });
 
+  it("locks a new box onto the first open line", () => {
+    const lines = captionsWithNewBox(
+      [
+        { id: "1", text: "one", box_ids: [] },
+        { id: "2", text: "two", box_ids: [] },
+      ],
+      "cyan",
+    );
+    expect(lines[0].box_ids).toEqual(["cyan"]);
+    expect(lines[1].box_ids).toEqual([]);
+    const extra = captionsWithNewBox(
+      [{ id: "1", text: "one", box_ids: ["cyan"] }],
+      "amber",
+    );
+    expect(extra[0].box_ids).toEqual(["cyan", "amber"]);
+  });
+
   it("turns a drag into a rectangle", () => {
     const rect = rectFromPoints(0.4, 0.5, 0.1, 0.2);
     expect(rect.x).toBeCloseTo(0.1);
@@ -80,7 +98,9 @@ describe("phone box drawer", () => {
     fireEvent.pointerDown(phone, { button: 0, pointerId: 1, clientX: 20, clientY: 80 });
     fireEvent.pointerMove(phone, { pointerId: 1, clientX: 120, clientY: 180 });
     fireEvent.pointerUp(phone, { pointerId: 1, clientX: 120, clientY: 180 });
-    expect(screen.getByRole("button", { name: "Add Cyan" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cyan, this line" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "sale" } });
+    expect(phone.querySelector("[data-role='text']")?.textContent).toBe("sale");
   });
 
   it("shows the clip still under the Reel safe edges", () => {
