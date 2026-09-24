@@ -1,0 +1,364 @@
+From 61235066cd2d01c97006e8bbbd86dac9902097b5 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Thu, 24 Sep 2026 14:21:55 +0000
+Subject: [PATCH] feat: everyday top or bottom tilt, raised to 6% when a copy
+ is short
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Each copy draws a 0.5–4% vertical keystone, either edge. A 19–23 source
+miss increases that same side through 4% and 6% and stops when the score
+clears 24. A miss or a look fail puts the everyday tilt back.
+---
+ tests/test_filtergraph.py         | 26 +++++++++++
+ tests/test_sampler.py             | 14 ++++++
+ tests/test_uniqueness_pipeline.py | 50 ++++++++++++++++++---
+ variant_maker/filtergraph.py      | 24 ++++++++++
+ variant_maker/pipeline.py         | 73 ++++++++++++++++++++++++++++++-
+ variant_maker/sampler.py          |  9 ++++
+ 6 files changed, 188 insertions(+), 8 deletions(-)
+
+diff --git a/tests/test_filtergraph.py b/tests/test_filtergraph.py
+index bda1afd..93efad9 100644
+--- a/tests/test_filtergraph.py
++++ b/tests/test_filtergraph.py
+@@ -240,6 +240,32 @@ def test_even_rebuild_size_talking_head_band_stays_sharp():
+     assert w >= 960
+ 
+ 
++def test_keystone_sits_after_rebuild_and_before_rotate():
++    p = make_params(video={
++        "keystone_a": 0.01,
++        "rotate_deg": 0.8,
++        "rebuild_scale": 0.75,
++        "warp_k1": 0.0,
++    })
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "perspective=" in vf
++    assert "x0=W*0.0100" in vf
++    assert vf.index("perspective=") < vf.index("rotate=")
++
++
++def test_bottom_keystone_insets_the_bottom_edge():
++    p = make_params(video={"keystone_a": -0.03, "rotate_deg": 0.0})
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "x0=W*0.0000" in vf
++    assert "x2=W*0.0300" in vf
++
++
++def test_keystone_under_two_thousandths_is_omitted():
++    p = make_params(video={"keystone_a": 0.001})
++    vf = filtergraph.build_video_filters(p, make_src(), REELS)
++    assert "perspective=" not in vf
++
++
+ def test_warp_emits_lenscorrection():
+     p = make_params(video={"warp_k1": 0.008})
+     vf = filtergraph.build_video_filters(p, make_src(), REELS)
+diff --git a/tests/test_sampler.py b/tests/test_sampler.py
+index fcab97a..35a7ea5 100644
+--- a/tests/test_sampler.py
++++ b/tests/test_sampler.py
+@@ -10,6 +10,8 @@ from variant_maker.sampler import (
+     CROP_Y_KEEP_BOTTOM_HI,
+     CROP_Y_KEEP_BOTTOM_LO,
+     FPS_CHOICES,
++    KEYSTONE_HI,
++    KEYSTONE_LO,
+     RESAMPLE_FLAGS,
+     RESAMPLE_PX_CHOICES,
+     _axis_distortion,
+@@ -398,6 +400,18 @@ def test_overbudget_shrink_is_encode_first_look_survives():
+     assert crop_off > 50, f"crop still showing on {crop_off}/200"
+ 
+ 
++def test_sample_draws_top_or_bottom_tilt_in_the_everyday_band():
++    """0.5–4%, either edge. 6% is a later raise, not the everyday draw."""
++    signs = set()
++    for i in range(80):
++        a = sample(MEDIUM, derive_seed(11, i))["video"]["keystone_a"]
++        assert KEYSTONE_LO - 1e-9 <= abs(a) <= KEYSTONE_HI + 1e-9
++        signs.add(1 if a > 0 else -1)
++        again = sample(MEDIUM, derive_seed(11, i))["video"]["keystone_a"]
++        assert again == a
++    assert signs == {1, -1}
++
++
+ def test_sample_draws_resample_fingerprint():
+     p = sample(MEDIUM, derive_seed(11, 2))
+     v = p["video"]
+diff --git a/tests/test_uniqueness_pipeline.py b/tests/test_uniqueness_pipeline.py
+index 6410f5a..f9b8c29 100644
+--- a/tests/test_uniqueness_pipeline.py
++++ b/tests/test_uniqueness_pipeline.py
+@@ -200,11 +200,12 @@ def test_look_fail_skips_escalate(monkeypatch, tmp_path):
+ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
+     """Strong blotch after a look-ok medium must not replace the medium file."""
+     _stub_common(monkeypatch)
++    calm = {
++        "look_status": "ok", "look_metric": "coarse_luma_v1",
++        "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
++    }
+     looks = iter([
+-        {
+-            "look_status": "ok", "look_metric": "coarse_luma_v1",
+-            "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
+-        },
++        calm, calm, calm,  # medium, then raise to 4% and 6%
+         {
+             "look_status": "fail", "look_metric": "coarse_luma_v1",
+             "look_mae": 40.0, "look_mae_max": 51.0, "look_target": 38.0,
+@@ -266,13 +267,47 @@ def test_twenty_bits_on_first_pass_still_escalates(monkeypatch, tmp_path):
+     manifest = pipeline.run(cfg)
+     record = manifest.variants[0]
+     assert n["scores"] == 2
+-    assert record.escalated is True
+-    assert record.preset_used == "strong"
++    assert record.escalated is False
++    assert record.preset_used == "medium"
++    assert record.quality.get("keystone_escalated") is True
++    assert record.params["video"]["keystone_a"] == 0.04
+     assert record.uniqueness_status == "ok"
+     assert record.status == "ok"
+     assert record.uniqueness == 24 / 64
+ 
+ 
++def test_bottom_tilt_raise_keeps_the_same_side(monkeypatch, tmp_path):
++    """A short score on a bottom tilt steps to -4%, not a top tilt."""
++    _stub_common(monkeypatch)
++    seen = []
++
++    def fake_sample(preset, seed, **_kw):
++        return {"video": {"rotate_deg": 0.0, "keystone_a": -0.02}, "audio": {}}
++
++    def fake_render(src, params, platform, path, dry_run=False):
++        seen.append(params["video"].get("keystone_a"))
++        open(path, "w").close()
++        return (path, "ffmpeg -y fake")
++
++    monkeypatch.setattr(pipeline, "sample", fake_sample)
++    monkeypatch.setattr(pipeline, "render_variant", fake_render)
++    n = {"scores": 0}
++
++    def fake_score(src_path, variant_path, target=None):
++        n["scores"] += 1
++        if n["scores"] == 1:
++            return _ok_score(22 / 64, bits=22, status="below_target")
++        return _ok_score(24 / 64, bits=24, status="ok")
++
++    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
++    manifest = pipeline.run(_cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True))
++    record = manifest.variants[0]
++    assert seen == [-0.02, -0.04]
++    assert record.params["video"]["keystone_a"] == -0.04
++    assert record.quality["keystone_escalated"] is True
++    assert record.escalated is False
++
++
+ def test_nineteen_after_escalate_ships(monkeypatch, tmp_path):
+     """Only after the 24-bit hunt: 19 bits (~30%) still ships as below_target."""
+     _stub_common(monkeypatch)
+@@ -289,9 +324,10 @@ def test_nineteen_after_escalate_ships(monkeypatch, tmp_path):
+     del cfg["auto_tune"]
+     manifest = pipeline.run(cfg)
+     record = manifest.variants[0]
+-    assert n["scores"] == 2
++    assert n["scores"] == 4
+     assert record.escalated is True
+     assert record.preset_used == "strong"
++    assert record.quality.get("keystone_escalated") is False
+     assert record.uniqueness_status == "below_target"
+     assert record.status == "ok"
+     assert record.uniqueness == 19 / 64
+diff --git a/variant_maker/filtergraph.py b/variant_maker/filtergraph.py
+index 56e2d99..a9ea32d 100644
+--- a/variant_maker/filtergraph.py
++++ b/variant_maker/filtergraph.py
+@@ -284,6 +284,24 @@ def _trim_expr(v: dict, duration_s: float) -> str:
+     return f"trim=end={duration_s - end_s:.3f}"
+ 
+ 
++def keystone_filter(amount: float) -> str:
++    """Vertical keystone. Positive amount insets the top edge; bottom stays full width."""
++    amount = float(amount or 0.0)
++    if abs(amount) < 0.002:
++        return ""
++    if amount >= 0:
++        x0, x1, x2, x3 = amount, 1.0 - amount, 0.0, 1.0
++    else:
++        aa = abs(amount)
++        x0, x1, x2, x3 = 0.0, 1.0, aa, 1.0 - aa
++    return (
++        "perspective="
++        f"x0=W*{x0:.4f}:y0=0:x1=W*{x1:.4f}:y1=0:"
++        f"x2=W*{x2:.4f}:y2=H:x3=W*{x3:.4f}:y3=H:"
++        "interpolation=cubic:sense=source"
++    )
++
++
+ def even_resample_size(target_w: int, target_h: int, px: int) -> tuple[int, int]:
+     """Even intermediate size: ``target_w + px`` (even), height follows AR, even.
+ 
+@@ -379,6 +397,12 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
+                 parts.append(f"scale={rw}:{rh}:flags={flags}")
+                 parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
+ 
++    # Vertical keystone after rebuild, before rotate. |A| < 0.002 is a no-op.
++    # Positive A magnifies the top. Negative A magnifies the bottom.
++    stone = keystone_filter(float(v.get("keystone_a") or 0.0))
++    if stone:
++        parts.append(stone)
++
+     # rotation (tiny angles; corner fill — proper inscribed-crop is a later refinement)
+     if abs(v.get("rotate_deg", 0.0)) >= _ROTATE_MIN_DEG:
+         parts.append(f"rotate={math.radians(v['rotate_deg']):.6f}:fillcolor=black")
+diff --git a/variant_maker/pipeline.py b/variant_maker/pipeline.py
+index 1ac81b6..0be26ba 100644
+--- a/variant_maker/pipeline.py
++++ b/variant_maker/pipeline.py
+@@ -39,6 +39,10 @@ DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
+ # Fast daily packs: one medium encode, then escalate. Five-step bisection on a
+ # 720 talking-head that sits at 23 bits is how a Fast 20 hit executionTimeout.
+ FAST_TUNE_MAX_ITERS = 1
++# Everyday tilt is sampled at 0.5–4%, top or bottom. A 19–23 source miss raises
++# that same side through these magnitudes and stops at the first that clears 24.
++# 6% is the cap. A miss restores the everyday tilt.
++KEYSTONE_RAISE = (0.04, 0.06)
+ 
+ 
+ def use_face_protect(quality_mode: str | None) -> bool:
+@@ -376,6 +380,56 @@ def run(config: dict, *, on_event=None) -> Manifest:
+             look_info = {**look_info, **_write_look_stills()}
+             _emit_looking()
+ 
++        def _try_keystone_ladder() -> None:
++            """Raise a 19–23 miss toward 6% on the same side. Stop on 24.
++
++            The everyday file already has a 0.5–4% top or bottom tilt. This only
++            increases that magnitude. Look fail, or a rung that still misses,
++            puts the everyday tilt back.
++            """
++            nonlocal r, u, look_info, keystone_escalated
++            bits = u.get("bits")
++            if r is None or bits is None or not (19 <= int(bits) <= 23):
++                return
++            if look_info.get("look_status") == "fail":
++                return
++            snap = _snapshot_medium()
++            base_params = r["params"]
++            current = float((base_params.get("video") or {}).get("keystone_a") or 0.0)
++            sign = -1.0 if current < 0 else 1.0
++            raised = False
++            for mag in KEYSTONE_RAISE:
++                if mag <= abs(current) + 1e-6:
++                    continue
++                raised = True
++                video = dict(base_params.get("video") or {})
++                video["keystone_a"] = sign * mag
++                params = {**base_params, "video": video}
++                emit("rendering", index=i, attempt=attempt_no)
++                _, cmd = render_variant(src, params, platform, path)
++                r = {**r, "params": params, "cmd": cmd, "vmaf": None, "passed": True}
++                u = _look_then_uniqueness()
++                if look_info.get("look_status") == "fail":
++                    _restore_medium_if_look_fail(snap)
++                    return
++                got = u.get("bits")
++                if (
++                    got is not None
++                    and uniqueness.status_for_bits(int(got), target=uniqueness_target) == "ok"
++                ):
++                    keystone_escalated = True
++                    if os.path.isfile(snap["path"]):
++                        os.remove(snap["path"])
++                    return
++            if not raised:
++                if os.path.isfile(snap["path"]):
++                    os.remove(snap["path"])
++                return
++            os.replace(snap["path"], path)
++            look_info = snap["look"]
++            u = snap["u"]
++            r = snap["r"]
++
+         def _peer_bits(variant_path: str) -> int | None:
+             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
+ 
+@@ -424,6 +478,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
+         # under 19 is uniqueness_fail. Never fake a 24-bit score.
+         preset_used = preset.name
+         escalated = False
++        keystone_escalated = False
+         r = None
+         u = {
+             "uniqueness": None, "uniqueness_status": "unknown",
+@@ -512,6 +567,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 and tuned["uniqueness"] >= uniqueness_target
+                 and tuned.get("peer_ok", True)
+             )
++            if not cleared and allow_creative_escalate:
++                _try_keystone_ladder()
++                cleared = (
++                    bool(r and r.get("passed"))
++                    and u.get("uniqueness") is not None
++                    and u["uniqueness"] >= uniqueness_target
++                    and u.get("uniqueness_status") == "ok"
++                )
+             if (
+                 not cleared and allow_creative_escalate
+                 and look_info.get("look_status") != "fail"
+@@ -538,7 +601,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
+                 if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
+                     break
+             else:
+-                if (
++                if allow_creative_escalate:
++                    _try_keystone_ladder()
++                if r is not None and r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
++                    pass
++                elif (
+                     allow_creative_escalate
+                     and look_info.get("look_status") != "fail"
+                 ):
+@@ -601,6 +668,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
+             "look_mae": look_info.get("look_mae"),
+             "look_mae_max": look_info.get("look_mae_max"),
+             "heads": u.get("heads"),
++            "keystone_a": ((r.get("params") or {}).get("video") or {}).get("keystone_a"),
++            "keystone_escalated": bool(
++                keystone_escalated and ((r.get("params") or {}).get("video") or {}).get("keystone_a")
++            ),
+         }
+         # Accept into the peer set only when we ship a usable file.
+         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):
+diff --git a/variant_maker/sampler.py b/variant_maker/sampler.py
+index 73cb86c..607f1c8 100644
+--- a/variant_maker/sampler.py
++++ b/variant_maker/sampler.py
+@@ -108,6 +108,12 @@ RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
+ # Per-copy output cadence. Instagram takes these. Not a second speed factor.
+ FPS_CHOICES = (30, 48, 60)
+ _EXTRA_AXES_XOR = 0xF95
++# Everyday vertical tilt. Positive magnifies the top; negative magnifies the
++# bottom. Separate RNG so crop and resample draws stay put.
++# 0.5–4% is the normal band. The pipeline may raise a short score toward 6%.
++_KEYSTONE_RNG_XOR = 0x71E7
++KEYSTONE_LO = 0.005
++KEYSTONE_HI = 0.040
+ _ROTATE_SAFE_MOTION = (0.7, 1.3)
+ _ROTATE_SAFE_HEAD = (0.35, 0.8)
+ 
+@@ -460,6 +466,9 @@ def sample(
+     extra = random.Random(int(seed) ^ _EXTRA_AXES_XOR)
+     video["vignette"] = extra.uniform(preset.vignette.lo, preset.vignette.hi)
+     video["out_fps"] = extra.choice(FPS_CHOICES)
++    ks_rng = random.Random(int(seed) ^ _KEYSTONE_RNG_XOR)
++    mag = ks_rng.uniform(KEYSTONE_LO, KEYSTONE_HI)
++    video["keystone_a"] = (-mag if ks_rng.random() < 0.5 else mag)
+ 
+     # Audio mirrors the single speed factor. Voice-safe default: no pitch / EQ /
+     # loudnorm (those make talking sound robotic). audio_uniqueness is the later
+-- 
+2.43.0
+
