@@ -1647,13 +1647,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__phone-wrap { display: flex; flex-direction: column; gap: 8px; }
 .studio-onscreen__device { background: #16181d; border-radius: 36px; box-shadow: inset 0 0 0 2px #2c3038, 0 16px 36px rgba(0, 0, 0, 0.28); padding: 16px 12px 18px; width: 100%; }
 .studio-onscreen__speaker { background: #2a2e36; border-radius: 99px; display: block; height: 8px; margin: 0 auto 10px; width: 72px; }
-.studio-onscreen__screen { aspect-ratio: 9 / 16; background: #1b242c; border-radius: 22px; overflow: hidden; position: relative; touch-action: none; width: 100%; }
+.studio-onscreen__screen { aspect-ratio: 9 / 16; background: #1b242c; border-radius: 22px; container-type: inline-size; overflow: hidden; position: relative; touch-action: none; width: 100%; }
+@font-face { font-family: "Onscreen Inter"; src: url("/fonts/Inter-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Onscreen Noto"; src: url("/fonts/NotoSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 .studio-onscreen__poster { height: 100%; inset: 0; object-fit: cover; pointer-events: none; position: absolute; width: 100%; }
 .studio-onscreen__safe { inset: 0; pointer-events: none; position: absolute; }
 .studio-onscreen__safe-top, .studio-onscreen__safe-bottom, .studio-onscreen__safe-right { color: #fff; font-size: 9px; font-weight: 760; letter-spacing: 0.08em; position: absolute; text-transform: uppercase; }
-.studio-onscreen__safe-top { align-items: flex-start; background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.05)); border-bottom: 1px dashed rgba(255, 255, 255, 0.85); display: flex; height: 14%; left: 0; padding: 8px 10px; right: 0; top: 0; }
-.studio-onscreen__safe-bottom { align-items: flex-end; background: linear-gradient(0deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05)); border-top: 1px dashed rgba(255, 255, 255, 0.85); bottom: 0; display: flex; height: 22%; left: 0; padding: 8px 10px; right: 0; }
-.studio-onscreen__safe-right { align-items: center; background: linear-gradient(270deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.02)); border-left: 1px dashed rgba(255, 255, 255, 0.85); bottom: 22%; display: flex; justify-content: center; right: 0; top: 14%; width: 14%; }
+.studio-onscreen__safe-top { align-items: flex-start; background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.05)); border-bottom: 1px dashed rgba(255, 255, 255, 0.85); display: flex; height: 8%; left: 0; padding: 8px 10px; right: 0; top: 0; }
+.studio-onscreen__safe-bottom { align-items: flex-end; background: linear-gradient(0deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05)); border-top: 1px dashed rgba(255, 255, 255, 0.85); bottom: 0; display: flex; height: 16%; left: 0; padding: 8px 10px; right: 0; }
+.studio-onscreen__safe-right { align-items: center; background: linear-gradient(270deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.02)); border-left: 1px dashed rgba(255, 255, 255, 0.85); bottom: 16%; display: flex; justify-content: center; right: 0; top: 8%; width: 14%; }
 .studio-onscreen__safe-right span { transform: rotate(90deg); }
 .studio-onscreen__clips { display: flex; flex-wrap: wrap; gap: 6px; }
 .studio-onscreen__clip { background: #fff; border: 1px solid var(--color-line); border-radius: 999px; color: var(--ink); cursor: pointer; font-size: 12px; max-width: 100%; overflow: hidden; padding: 4px 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1662,6 +1664,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__box[data-selected="true"] { box-shadow: inset 0 0 0 1px #fff; }
 .studio-onscreen__box--draft { pointer-events: none; }
 .studio-onscreen__box-name { color: #fff; font-size: 11px; font-weight: 760; left: 8px; pointer-events: none; position: absolute; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); top: 6px; }
+.studio-onscreen__type { cursor: grab; font-family: "Onscreen Inter", sans-serif; font-size: 6.2cqw; font-weight: 600; line-height: 1.3; max-width: 92%; padding: 0.18em 0.42em; position: absolute; text-align: center; transform: translate(-50%, -50%); user-select: none; white-space: pre-wrap; z-index: 3; }
+.studio-onscreen__type--solid { background: rgba(255, 255, 255, 0.92); border-radius: 0.35em; color: #111216; }
+.studio-onscreen__type--see-through { background: rgba(12, 12, 16, 0.63); border-radius: 0.35em; color: #fff; }
+.studio-onscreen__type--none { background: transparent; color: #fff; padding: 0; text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.55); }
+.studio-onscreen__type--bar { background: rgba(0, 0, 0, 0.55); border-radius: 0; color: #fff; font-family: "Onscreen Noto", sans-serif; font-size: 4.2cqw; font-weight: 700; left: 0; max-width: none; padding: 0.42em 8px; transform: translateY(-50%); width: 100%; }
 .studio-onscreen__handle { background: #fff; border: 2px solid var(--box); border-radius: 99px; height: 22px; position: absolute; width: 22px; }
 .studio-onscreen__handle--nw { left: 4px; top: 4px; }
 .studio-onscreen__handle--ne { right: 4px; top: 4px; }

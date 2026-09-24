@@ -108,6 +108,22 @@ def test_caption_bar_changes_band_height_inside_one_box():
     assert versions[0]["look"]["style"] == "caption-bar"
 
 
+def test_placed_text_stays_at_the_dragged_spot():
+    project = _project(
+        [{
+            "text": "parked",
+            "box_ids": ["A"],
+            "place": {"A": {"x": 0.2, "y": 0.8}},
+        }],
+        [_box("A")],
+    )
+    versions = plan_versions(project, 2)
+    assert versions[0]["place"] == {"x": 0.2, "y": 0.8}
+    assert versions[1]["place"] == {"x": 0.2, "y": 0.8}
+    layer = render_layer(versions[0], 200, 360)
+    assert layer.getbbox() is not None
+
+
 def test_sticker_and_bar_paint_opaque_pixels():
     assert fonts_ready()
     box = {"id": "A", "x": 0.08, "y": 0.4, "w": 0.84, "h": 0.18}

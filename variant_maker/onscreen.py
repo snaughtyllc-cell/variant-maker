@@ -82,7 +82,21 @@ def normalize_project(raw: dict | None) -> dict | None:
             if bid in used:
                 raise OnScreenError(f"Box {bid} is locked to more than one caption.")
             used.add(bid)
-        captions.append({"id": str(cap.get("id") or i + 1), "text": text, "box_ids": ids})
+        place = {}
+        raw_place = cap.get("place") if isinstance(cap.get("place"), dict) else {}
+        for bid in ids:
+            spot = raw_place.get(bid)
+            if isinstance(spot, dict) and "x" in spot and "y" in spot:
+                place[bid] = {
+                    "x": min(1.0, max(0.0, float(spot["x"]))),
+                    "y": min(1.0, max(0.0, float(spot["y"]))),
+                }
+        captions.append({
+            "id": str(cap.get("id") or i + 1),
+            "text": text,
+            "box_ids": ids,
+            "place": place,
+        })
 
     if len(used) != len(boxes):
         raise OnScreenError("Every box has to lock to a caption.")
@@ -119,6 +133,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
         cap = captions[n % len(captions)]
         take = n // len(captions)
         box_id = cap["box_ids"][take % len(cap["box_ids"])]
+        placed = (cap.get("place") or {}).get(box_id)
         if bar:
             step = SIZE_STEPS[take % len(SIZE_STEPS)]
             align, spot = "center", SPOTS[(take // len(SIZE_STEPS)) % len(SPOTS)]
@@ -135,6 +150,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "size_step": step,
             "align": align,
             "spot": spot,
+            "place": dict(placed) if placed else None,
             "look": dict(look),
         })
     return out
@@ -198,7 +214,11 @@ def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     if bar:
         pad_y = int(base * 0.42)
         bar_h = block_h + 2 * pad_y
-        if placement["spot"] == "top":
+        placed = placement.get("place")
+        if isinstance(placed, dict) and "y" in placed:
+            top = y0 + float(placed["y"]) * bh - bar_h / 2
+            top = min(max(y0, top), max(y0, y1 - bar_h))
+        elif placement["spot"] == "top":
             top = y0
         elif placement["spot"] == "bottom":
             top = max(y0, y1 - bar_h)
@@ -216,20 +236,28 @@ def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     pad_x, pad_y = int(base * 0.42), int(base * 0.18)
     block_w = int(longest + 2 * pad_x)
     block_h = int(line_h * len(lines) + 2 * pad_y)
-    align = placement["align"]
-    if align == "left":
-        left = x0
-    elif align == "right":
-        left = x1 - block_w
+    placed = placement.get("place")
+    pinned = isinstance(placed, dict) and "x" in placed and "y" in placed
+    align = "center" if pinned else placement["align"]
+    if pinned:
+        left = x0 + float(placed["x"]) * bw - block_w / 2
+        top = y0 + float(placed["y"]) * bh - block_h / 2
+        left = min(max(x0, left), max(x0, x1 - block_w))
+        top = min(max(y0, top), max(y0, y1 - block_h))
     else:
-        left = x0 + (bw - block_w) / 2
-    spot = placement["spot"]
-    if spot == "top":
-        top = y0
-    elif spot == "bottom":
-        top = y1 - block_h
-    else:
-        top = y0 + (bh - block_h) / 2
+        if align == "left":
+            left = x0
+        elif align == "right":
+            left = x1 - block_w
+        else:
+            left = x0 + (bw - block_w) / 2
+        spot = placement["spot"]
+        if spot == "top":
+            top = y0
+        elif spot == "bottom":
+            top = y1 - block_h
+        else:
+            top = y0 + (bh - block_h) / 2
     bg = look["background"]
     if bg == "solid":
         draw.rounded_rectangle(
@@ -304,6 +332,7 @@ def placement_record(placement: dict) -> dict:
         "size_step": placement.get("size_step"),
         "align": placement.get("align"),
         "spot": placement.get("spot"),
+        "place": placement.get("place"),
         "style": look.get("style"),
         "background": look.get("background"),
     }

@@ -11,6 +11,7 @@ export type OnScreenCaption = {
   id: string;
   text: string;
   box_ids: string[];
+  place?: Record<string, { x: number; y: number }>;
 };
 
 export type OnScreenBox = {
@@ -36,7 +37,7 @@ export const BOX_COLORS = [
 ] as const;
 
 const MIN_BOX = 0.06;
-export const REEL_SAFE = { top: 0.14, bottom: 0.22, right: 0.14 };
+export const REEL_SAFE = { top: 0.08, bottom: 0.16, right: 0.14 };
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 
 type Handle = (typeof HANDLES)[number];
@@ -44,7 +45,8 @@ type Handle = (typeof HANDLES)[number];
 type Drag =
   | { kind: "draw"; pointerId: number; x0: number; y0: number; x1: number; y1: number }
   | { kind: "move"; pointerId: number; id: string; dx: number; dy: number }
-  | { kind: "resize"; pointerId: number; id: string; handle: Handle };
+  | { kind: "resize"; pointerId: number; id: string; handle: Handle }
+  | { kind: "text"; pointerId: number; id: string };
 
 export function emptyOnScreen(): OnScreenProject {
   return {
@@ -90,11 +92,18 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
   });
   const known = new Set(boxes.map((box) => box.id));
   const captions = draft.captions
-    .map((cap, i) => ({
-      id: String(i + 1),
-      text: cap.text.trim(),
-      box_ids: cap.box_ids.filter((id) => known.has(id)),
-    }))
+    .map((cap, i) => {
+      const box_ids = cap.box_ids.filter((id) => known.has(id));
+      const place: Record<string, { x: number; y: number }> = {};
+      for (const id of box_ids) {
+        const spot = cap.place?.[id];
+        place[id] = {
+          x: Math.min(1, Math.max(0, spot?.x ?? 0.5)),
+          y: Math.min(1, Math.max(0, spot?.y ?? 0.5)),
+        };
+      }
+      return { id: String(i + 1), text: cap.text.trim(), box_ids, place };
+    })
     .filter((cap) => cap.text || cap.box_ids.length);
   if (captions.length === 0) return "Add one on-screen line.";
   if (captions.length > 4) return "At most 4 on-screen lines.";
@@ -207,6 +216,12 @@ export function StudioOnScreenBox({
     const target = event.target as HTMLElement;
     const handle = target.dataset.handle as Handle | undefined;
     const boxId = target.dataset.boxId;
+    if (target.dataset.role === "text" && boxId) {
+      setSelected(boxId);
+      setDrag({ kind: "text", pointerId: event.pointerId, id: boxId });
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      return;
+    }
     if (handle && boxId) {
       setSelected(boxId);
       setDrag({ kind: "resize", pointerId: event.pointerId, id: boxId, handle });
@@ -241,6 +256,16 @@ export function StudioOnScreenBox({
     const point = framePoint(event);
     if (drag.kind === "draw") {
       setDrag({ ...drag, x1: point.x, y1: point.y });
+      return;
+    }
+    if (drag.kind === "text") {
+      const box = draft.boxes.find((item) => item.id === drag.id);
+      const owner = draft.captions.findIndex((cap) => cap.box_ids.includes(drag.id));
+      if (!box || owner < 0 || box.w <= 0 || box.h <= 0) return;
+      const x = Math.min(0.92, Math.max(0.08, (point.x - box.x) / box.w));
+      const y = Math.min(0.92, Math.max(0.08, (point.y - box.y) / box.h));
+      const cap = draft.captions[owner];
+      patchCaption(owner, { place: { ...(cap.place || {}), [box.id]: { x, y } } });
       return;
     }
     const box = draft.boxes.find((item) => item.id === drag.id);
@@ -385,12 +410,18 @@ export function StudioOnScreenBox({
                     <img className="studio-onscreen__poster" src={poster} alt="" />
                   ) : null}
                   <div className="studio-onscreen__safe" aria-hidden="true">
-                    <div className="studio-onscreen__safe-top"><span>Header</span></div>
-                    <div className="studio-onscreen__safe-right"><span>Buttons</span></div>
-                    <div className="studio-onscreen__safe-bottom"><span>Caption</span></div>
+                    <div className="studio-onscreen__safe-top" style={{ height: `${REEL_SAFE.top * 100}%` }}><span>Header</span></div>
+                    <div className="studio-onscreen__safe-right" style={{ top: `${REEL_SAFE.top * 100}%`, bottom: `${REEL_SAFE.bottom * 100}%`, width: `${REEL_SAFE.right * 100}%` }}><span>Buttons</span></div>
+                    <div className="studio-onscreen__safe-bottom" style={{ height: `${REEL_SAFE.bottom * 100}%` }}><span>Caption</span></div>
                   </div>
                   {draft.boxes.map((box) => {
                     const meta = BOX_COLORS.find((color) => color.id === box.id);
+                    const owner = draft.captions.find((cap) => cap.box_ids.includes(box.id));
+                    const spot = owner?.place?.[box.id] ?? { x: 0.5, y: 0.5 };
+                    const shown = owner?.text
+                      ? (draft.look.style === "strong" ? owner.text.toUpperCase() : owner.text)
+                      : "";
+                    const bar = draft.look.style === "caption-bar";
                     return (
                       <div
                         key={box.id}
@@ -405,7 +436,19 @@ export function StudioOnScreenBox({
                           ["--box" as string]: colorOf(box),
                         }}
                       >
-                        <span className="studio-onscreen__box-name" data-box-id={box.id}>{meta?.label || box.id}</span>
+                        {!shown && (
+                          <span className="studio-onscreen__box-name" data-box-id={box.id}>{meta?.label || box.id}</span>
+                        )}
+                        {shown && !bar && (
+                          <span
+                            className={`studio-onscreen__type studio-onscreen__type--${draft.look.background}`}
+                            data-role="text"
+                            data-box-id={box.id}
+                            style={{ left: `${spot.x * 100}%`, top: `${spot.y * 100}%` }}
+                          >
+                            {shown}
+                          </span>
+                        )}
                         {selected === box.id && HANDLES.map((handle) => (
                           <span
                             key={handle}
@@ -415,6 +458,23 @@ export function StudioOnScreenBox({
                           />
                         ))}
                       </div>
+                    );
+                  })}
+                  {draft.look.style === "caption-bar" && draft.boxes.map((box) => {
+                    const owner = draft.captions.find((cap) => cap.box_ids.includes(box.id));
+                    const shown = owner?.text || "";
+                    if (!shown) return null;
+                    const spot = owner?.place?.[box.id] ?? { x: 0.5, y: 0.5 };
+                    return (
+                      <span
+                        key={`bar-${box.id}`}
+                        className="studio-onscreen__type studio-onscreen__type--bar"
+                        data-role="text"
+                        data-box-id={box.id}
+                        style={{ top: `${(box.y + spot.y * box.h) * 100}%` }}
+                      >
+                        {shown}
+                      </span>
                     );
                   })}
                 {preview && previewColor && preview.w > 0 && preview.h > 0 && (
@@ -472,19 +532,24 @@ export function StudioOnScreenBox({
                   <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
                     {draft.boxes.map((box) => {
                       const meta = BOX_COLORS.find((color) => color.id === box.id);
-                      const on = cap.box_ids.includes(box.id);
+                      const owner = draft.captions.findIndex((item) => item.box_ids.includes(box.id));
+                      if (owner >= 0 && owner !== index) return null;
+                      const on = owner === index;
+                      const label = meta?.label || box.id;
+                      const name = on ? `${label}, this line` : `Add ${label}`;
                       return (
                         <button
                           key={box.id}
                           type="button"
                           className="studio-onscreen__chip"
                           data-on={on}
-                          aria-label={`${meta?.label || box.id} box`}
+                          data-taken={owner >= 0 && !on}
+                          aria-label={name}
                           aria-pressed={on}
                           style={{ ["--box" as string]: colorOf(box) }}
                           onClick={() => lockColor(index, box.id)}
                         >
-                          <span>{meta?.label || box.id}</span>
+                          <span>{label}</span>
                         </button>
                       );
                     })}

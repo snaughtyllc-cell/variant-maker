@@ -80,7 +80,7 @@ describe("phone box drawer", () => {
     fireEvent.pointerDown(phone, { button: 0, pointerId: 1, clientX: 20, clientY: 80 });
     fireEvent.pointerMove(phone, { pointerId: 1, clientX: 120, clientY: 180 });
     fireEvent.pointerUp(phone, { pointerId: 1, clientX: 120, clientY: 180 });
-    expect(screen.getByRole("button", { name: "Cyan box" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add Cyan" })).toBeTruthy();
   });
 
   it("shows the clip still under the Reel safe edges", () => {
@@ -99,5 +99,34 @@ describe("phone box drawer", () => {
     expect(phone.textContent).toContain("Header");
     expect(phone.textContent).toContain("Buttons");
     expect(phone.textContent).toContain("Caption");
+  });
+
+  it("shows the typed line on the phone and keeps a box on one line", () => {
+    const draft = emptyOnScreen();
+    draft.boxes = [
+      { id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.2 },
+      { id: "amber", color: "#e39b12", x: 0.1, y: 0.55, w: 0.5, h: 0.2 },
+    ];
+    draft.captions = [
+      { id: "1", text: "hello there", box_ids: ["cyan"] },
+      { id: "2", text: "second line", box_ids: [] },
+    ];
+    render(
+      <StudioOnScreenBox
+        enabled
+        onEnabledChange={() => undefined}
+        draft={draft}
+        onChange={() => undefined}
+      />,
+    );
+    const phone = screen.getByTestId("onscreen-phone");
+    const sticker = phone.querySelector("[data-role='text']");
+    expect(sticker?.textContent).toBe("hello there");
+    expect(sticker?.className).toContain("studio-onscreen__type--solid");
+    const line1 = screen.getByRole("group", { name: "Colors for line 1" });
+    const line2 = screen.getByRole("group", { name: "Colors for line 2" });
+    expect(line1.querySelector("[aria-label='Cyan, this line']")).toBeTruthy();
+    expect(line2.querySelector("[aria-label='Cyan, this line']")).toBeNull();
+    expect(line2.querySelector("[aria-label='Add Amber']")).toBeTruthy();
   });
 });
