@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useState, useRef } from "react";
 
 export type OnScreenStyle = "classic" | "strong" | "caption-bar";
 export type OnScreenBackground = "solid" | "see-through" | "none";
@@ -130,6 +131,7 @@ export function StudioOnScreenBox({
   const frameRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [open, setOpen] = useState(enabled);
 
   function patchCaption(index: number, next: Partial<OnScreenCaption>) {
     const captions = draft.captions.map((cap, i) => (i === index ? { ...cap, ...next } : cap));
@@ -267,14 +269,29 @@ export function StudioOnScreenBox({
         <input
           type="checkbox"
           checked={enabled}
-          onChange={(e) => onEnabledChange(e.target.checked)}
+          onChange={(e) => {
+            onEnabledChange(e.target.checked);
+            if (e.target.checked) setOpen(true);
+          }}
         />
         <span className="studio-switch" data-on={enabled} aria-hidden="true">
           <span className="studio-switch__thumb" />
         </span>
       </label>
-      {enabled && (
-        <div className="studio-onscreen__body">
+      {enabled && !open && (
+        <button type="button" className="studio-onscreen__add" onClick={() => setOpen(true)}>
+          Edit boxes{draft.boxes.length > 0 ? ` · ${draft.boxes.length}` : ""}
+        </button>
+      )}
+      <Dialog.Root open={enabled && open} onOpenChange={setOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="studio-onscreen__overlay" />
+          <Dialog.Content className="studio-onscreen__sheet" aria-describedby={undefined}>
+            <div className="studio-onscreen__sheet-head">
+              <Dialog.Title className="studio-onscreen__title">Place on-screen text</Dialog.Title>
+              <Dialog.Close className="studio-onscreen__done" type="button">Done</Dialog.Close>
+            </div>
+            <div className="studio-onscreen__body">
           <div className="studio-onscreen__looks" role="group" aria-label="Look">
             {(
               [
@@ -317,39 +334,44 @@ export function StudioOnScreenBox({
           )}
           <div className="studio-onscreen__stage">
             <div className="studio-onscreen__phone-wrap">
-              <div
-                ref={frameRef}
-                className="studio-onscreen__phone"
-                data-testid="onscreen-phone"
-                onPointerDown={onFramePointerDown}
-                onPointerMove={onFramePointerMove}
-                onPointerUp={onFramePointerUp}
-              >
-                <span className="studio-onscreen__notch" />
-                {draft.boxes.map((box) => (
-                  <div
-                    key={box.id}
-                    className="studio-onscreen__box"
-                    data-box-id={box.id}
-                    data-selected={selected === box.id}
-                    style={{
-                      left: `${box.x * 100}%`,
-                      top: `${box.y * 100}%`,
-                      width: `${box.w * 100}%`,
-                      height: `${box.h * 100}%`,
-                      ["--box" as string]: colorOf(box),
-                    }}
-                  >
-                    {selected === box.id && HANDLES.map((handle) => (
-                      <span
-                        key={handle}
-                        className={`studio-onscreen__handle studio-onscreen__handle--${handle}`}
-                        data-handle={handle}
+              <div className="studio-onscreen__device">
+                <span className="studio-onscreen__speaker" />
+                <div
+                  ref={frameRef}
+                  className="studio-onscreen__screen"
+                  data-testid="onscreen-phone"
+                  onPointerDown={onFramePointerDown}
+                  onPointerMove={onFramePointerMove}
+                  onPointerUp={onFramePointerUp}
+                >
+                  {draft.boxes.map((box) => {
+                    const meta = BOX_COLORS.find((color) => color.id === box.id);
+                    return (
+                      <div
+                        key={box.id}
+                        className="studio-onscreen__box"
                         data-box-id={box.id}
-                      />
-                    ))}
-                  </div>
-                ))}
+                        data-selected={selected === box.id}
+                        style={{
+                          left: `${box.x * 100}%`,
+                          top: `${box.y * 100}%`,
+                          width: `${box.w * 100}%`,
+                          height: `${box.h * 100}%`,
+                          ["--box" as string]: colorOf(box),
+                        }}
+                      >
+                        <span className="studio-onscreen__box-name" data-box-id={box.id}>{meta?.label || box.id}</span>
+                        {selected === box.id && HANDLES.map((handle) => (
+                          <span
+                            key={handle}
+                            className={`studio-onscreen__handle studio-onscreen__handle--${handle}`}
+                            data-handle={handle}
+                            data-box-id={box.id}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
                 {preview && previewColor && preview.w > 0 && preview.h > 0 && (
                   <div
                     className="studio-onscreen__box studio-onscreen__box--draft"
@@ -362,6 +384,7 @@ export function StudioOnScreenBox({
                     }}
                   />
                 )}
+                </div>
               </div>
               <p className="studio-onscreen__hint">
                 {draft.boxes.length >= 4
@@ -428,8 +451,10 @@ export function StudioOnScreenBox({
               )}
             </div>
           </div>
-        </div>
-      )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </section>
   );
 }
