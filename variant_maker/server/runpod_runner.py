@@ -88,6 +88,9 @@ class RunPodServerlessRunner:
             "rubberband": False,
             "audio_uniqueness": False,
         }}
+        onscreen = _kwargs.get("onscreen")
+        if onscreen:
+            payload["input"]["onscreen"] = onscreen
         if output_prefix:
             payload["input"]["output_prefix"] = output_prefix
         if tenant_id:

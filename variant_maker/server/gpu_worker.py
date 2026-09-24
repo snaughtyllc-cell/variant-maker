@@ -134,6 +134,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "us_metadata": resolve_us_metadata(job_input),
         "copyid": resolve_copyid(job_input),
     }
+    if job_input.get("onscreen"):
+        config["onscreen"] = job_input["onscreen"]
 
     q: queue.Queue = queue.Queue()
     DONE = object()

@@ -189,6 +189,15 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "copyid": copyid_mode,
         "ssim_align_diag": uniqueness.ssim_align_diag_wanted(config),
     }
+    from . import onscreen as onscreen_mod
+
+    onscreen_project = onscreen_mod.normalize_project(config.get("onscreen"))
+    onscreen_plan = (
+        onscreen_mod.plan_versions(onscreen_project, count) if onscreen_project else []
+    )
+    if onscreen_project and not dry_run and not onscreen_mod.fonts_ready():
+        raise onscreen_mod.OnScreenError("On-screen fonts are not installed.")
+    run_meta["onscreen"] = onscreen_project
 
     def _prep(i: int):
         vseed = derive_seed(master_seed, i)
@@ -529,6 +538,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     os.remove(tmp)
             r = {**r, **g, "regen_count": r.get("regen_count") or 0}
 
+        placement = onscreen_plan[i - 1] if onscreen_plan else None
+        if placement and os.path.isfile(path):
+            pre = probe(path)
+            onscreen_mod.burn_file(path, placement, pre.width, pre.height, pre.color)
         info = probe(path)
 
         # Spatial-corruption guard: only tier-2 (upscaled) output can tile-seam; tier-1 is
@@ -572,6 +585,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             },
             "vmaf_scope": "proxy_encode_quality",
             "heads": u.get("heads"),
+            "onscreen": onscreen_mod.placement_record(placement) if placement else None,
         }
         # Lab diagnostic only. Never changes uniqueness_status / bits / escalate.
         if uniqueness.ssim_align_diag_wanted(config):

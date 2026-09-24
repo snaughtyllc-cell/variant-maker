@@ -103,6 +103,31 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
     assert captured["auto_tune"] is True
 
 
+def test_localrunner_forwards_onscreen(monkeypatch, tmp_path):
+    from variant_maker.server import runner as runner_mod
+    captured = {}
+
+    def fake_run(config, *, on_event=None):
+        captured.update(config)
+        open(f"{config['out']}/manifest.json", "w").close()
+
+        class M:
+            def __init__(self):
+                self.variants = []
+
+        return M()
+
+    monkeypatch.setattr(runner_mod.pipeline, "run", fake_run)
+    project = {"captions": [{"text": "hi", "box_ids": ["A"]}], "boxes": [
+        {"id": "A", "x": 0.1, "y": 0.4, "w": 0.8, "h": 0.16},
+    ]}
+    LocalRunner().run(
+        "src.mp4", count=1, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, onscreen=project,
+    )
+    assert captured["onscreen"]["captions"][0]["text"] == "hi"
+
+
 def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
     from variant_maker.server import runner as runner_mod
     captured = {}

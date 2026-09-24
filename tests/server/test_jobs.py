@@ -983,3 +983,30 @@ def test_queue_counts_reconstruct_first_as_hq_while_prep_runs(tmp_path):
     assert snap["jobs"][0]["prep_mode"] == "hq"
     assert snap["jobs"][0]["quality_mode"] == "fast"
     runner.gate.set()
+
+
+def test_create_job_stores_onscreen_and_passes_it(tmp_path):
+    runner = FakeRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    project = {
+        "captions": [{"text": "on the frame", "box_ids": ["A"]}],
+        "boxes": [{"id": "A", "x": 0.08, "y": 0.4, "w": 0.84, "h": 0.16}],
+        "look": {"style": "caption-bar"},
+    }
+    job = store.create_job([("a.mp4", b"x")], count=1, onscreen=project)
+    store.wait(job.job_id, timeout=5)
+    assert job.onscreen["look"]["style"] == "caption-bar"
+    assert runner.last_kwargs["onscreen"]["captions"][0]["text"] == "on the frame"
+
+
+def test_create_job_rejects_a_caption_with_no_box(tmp_path):
+    store = _store(tmp_path)
+    try:
+        store.create_job([("a.mp4", b"x")], count=1, onscreen={
+            "captions": [{"text": "loose"}],
+            "boxes": [{"id": "A", "x": 0.1, "y": 0.4, "w": 0.8, "h": 0.2}],
+        })
+    except ValueError as exc:
+        assert "box" in str(exc).lower()
+    else:
+        raise AssertionError("expected ValueError")

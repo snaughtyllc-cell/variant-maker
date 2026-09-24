@@ -28,6 +28,7 @@ class FakeRunner:
             cancel_token=None, **_kwargs) -> SourceResult:
         self.last_quality_mode = quality_mode
         self.last_allow_creative_escalate = allow_creative_escalate
+        self.last_kwargs = dict(_kwargs)
         self.calls.append((quality_mode, count, source_path))
         os.makedirs(out_dir, exist_ok=True)
         variants = []

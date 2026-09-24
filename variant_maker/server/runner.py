@@ -168,7 +168,7 @@ class LocalRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None, **_kwargs) -> SourceResult:
+            cancel_token=None, onscreen: dict | None = None, **_kwargs) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -219,6 +219,8 @@ class LocalRunner:
             "rubberband": False,
             "audio_uniqueness": False,
         }
+        if onscreen:
+            config["onscreen"] = onscreen
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [
             VariantResult(

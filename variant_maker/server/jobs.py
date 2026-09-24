@@ -229,6 +229,7 @@ class Job:
     tenant_id: str | None = None
     attempt_id: str | None = None
     fence: str | None = None
+    onscreen: dict | None = None
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -438,6 +439,7 @@ def _job_to_dict(job: Job) -> dict:
         "tenant_id": job.tenant_id,
         "attempt_id": job.attempt_id,
         "fence": job.fence,
+        "onscreen": job.onscreen,
         "sources": [
             {
                 "source_id": s.source_id,
@@ -506,6 +508,7 @@ def _job_from_dict(data: dict) -> Job:
         tenant_id=data.get("tenant_id"),
         attempt_id=data.get("attempt_id"),
         fence=data.get("fence"),
+        onscreen=data.get("onscreen") if isinstance(data.get("onscreen"), dict) else None,
     )
 
 
@@ -641,7 +644,8 @@ class JobStore:
                     prep_mode: str = "none",
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None,
-                    actor_email: str | None = None) -> Job:
+                    actor_email: str | None = None,
+                    onscreen: dict | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -659,7 +663,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
-            actor_email=actor_email,
+            actor_email=actor_email, onscreen=onscreen,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
@@ -669,7 +673,8 @@ class JobStore:
                                prep_mode: str = "none",
                                caption_prompt: str = "",
                                caption_prompts: list[str] | None = None,
-                               actor_email: str | None = None) -> Job:
+                               actor_email: str | None = None,
+                               onscreen: dict | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -687,7 +692,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
-            actor_email=actor_email,
+            actor_email=actor_email, onscreen=onscreen,
         )
 
     def create_job_from_object_keys(
@@ -699,6 +704,7 @@ class JobStore:
         caption_prompt: str = "",
         caption_prompts: list[str] | None = None,
         actor_email: str | None = None,
+        onscreen: dict | None = None,
     ) -> Job:
         """Create a job from object-storage keys: [(filename, object_key), ...].
 
@@ -739,7 +745,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
-            actor_email=actor_email,
+            actor_email=actor_email, onscreen=onscreen,
         )
 
     def create_job_from_drive_ids(
@@ -751,6 +757,7 @@ class JobStore:
         caption_prompt: str = "",
         caption_prompts: list[str] | None = None,
         actor_email: str | None = None,
+        onscreen: dict | None = None,
     ) -> Job:
         """Create a job from Drive file ids. RunPod downloads; Railway does not.
 
@@ -769,7 +776,7 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions, prep_mode=prep_mode,
             caption_prompt=caption_prompt, caption_prompts=caption_prompts,
-            actor_email=actor_email,
+            actor_email=actor_email, onscreen=onscreen,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
@@ -778,7 +785,14 @@ class JobStore:
                     prep_mode: str = "none",
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None,
-                    actor_email: str | None = None) -> Job:
+                    actor_email: str | None = None,
+                    onscreen: dict | None = None) -> Job:
+        from ..onscreen import OnScreenError, normalize_project
+
+        try:
+            clean_onscreen = normalize_project(onscreen)
+        except OnScreenError as exc:
+            raise ValueError(str(exc)) from exc
         briefs = briefs_for_sources(
             len(sources),
             caption_prompt=caption_prompt,
@@ -820,7 +834,8 @@ class JobStore:
                    prep_mode=prep,
                    telemetry=telemetry,
                    tenant_id=self._workspace_id,
-                   state="queued" if self._occupancy is not None else "running")
+                   state="queued" if self._occupancy is not None else "running",
+                   onscreen=clean_onscreen)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -1217,6 +1232,8 @@ class JobStore:
                     extra["tenant_id"] = job.tenant_id
                     extra["job_id"] = job.job_id
                     extra["attempt_id"] = job.attempt_id
+                if job.onscreen:
+                    extra["onscreen"] = job.onscreen
                 resume = getattr(self._runner, "resume_run", None)
                 if skip_finished and callable(resume) and source.runpod_job_id:
                     try:

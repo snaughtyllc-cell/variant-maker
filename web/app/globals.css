@@ -1633,6 +1633,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-caption-source__name { color: var(--ink); display: block; font-size: 13px; font-weight: 680; margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-caption-source .studio-caption-prompt { margin-top: 0; min-height: 96px; }
 .studio-captions-box { background: transparent; border: 0; border-radius: 0; margin-top: 0; padding: 0; width: 100%; }
+.studio-onscreen { width: 100%; }
+.studio-onscreen__body { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.studio-onscreen__looks { display: flex; flex-wrap: wrap; gap: 8px; }
+.studio-onscreen__look, .studio-onscreen__slot, .studio-onscreen__add { background: #fff; border: 1px solid var(--color-line); border-radius: 999px; color: var(--ink); cursor: pointer; font-size: 13px; padding: 6px 12px; }
+.studio-onscreen__look[data-on="true"], .studio-onscreen__slot[data-on="true"] { background: #e7fbfc; border-color: #16c8d3; }
+.studio-onscreen__slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-onscreen .studio-caption-prompt { margin-top: 0; min-height: 64px; }
 .studio-captions-box h2 { color: var(--ink); font-size: 16px; font-weight: 760; letter-spacing: -0.02em; margin: 0; }
 .studio-caption-prompt { background: #fff; border: 1px solid var(--color-line); border-radius: 10px; color: var(--ink); display: block; font-size: 14px; line-height: 1.45; margin-top: 12px; min-height: 120px; padding: 10px 12px; resize: vertical; width: 100%; }
 .studio-caption-prompt:focus { border-color: #16c8d3; box-shadow: 0 0 0 3px #cef4f6; outline: none; }

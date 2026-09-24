@@ -1746,6 +1746,20 @@ def create_app(
         )
         return resp
 
+    def _parse_onscreen_field(raw: str) -> dict | None:
+        text = (raw or "").strip()
+        if not text or text == "null":
+            return None
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="onscreen must be JSON") from exc
+        if data is None:
+            return None
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="onscreen must be an object")
+        return data
+
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(request: Request, files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
@@ -1753,16 +1767,21 @@ def create_app(
                           generate_captions: bool = Form(False),
                           caption_prompt: str = Form(""),
                           caption_prompts: str = Form(""),
-                          prep_mode: str = Form("none")) -> CreateJobResponse:
+                          prep_mode: str = Form("none"),
+                          onscreen: str = Form("")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
-        job = store.create_job(
-            uploads, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, generate_captions=generate_captions,
-            prep_mode=prep_mode,
-            caption_prompt=caption_prompt,
-            caption_prompts=parse_caption_prompts_field(caption_prompts),
-            actor_email=_actor_email(request),
-        )
+        try:
+            job = store.create_job(
+                uploads, count=count, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, generate_captions=generate_captions,
+                prep_mode=prep_mode,
+                caption_prompt=caption_prompt,
+                caption_prompts=parse_caption_prompts_field(caption_prompts),
+                actor_email=_actor_email(request),
+                onscreen=_parse_onscreen_field(onscreen),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -1857,6 +1876,7 @@ def create_app(
         caption_prompt: str = Form(""),
         caption_prompts: str = Form(""),
         prep_mode: str = Form("none"),
+        onscreen: str = Form(""),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1869,14 +1889,18 @@ def create_app(
             if meta["received"] <= 0 or not os.path.exists(meta["path"]):
                 raise HTTPException(status_code=400, detail=f"upload incomplete: {uid}")
             paths.append((meta["filename"], meta["path"]))
-        job = store.create_job_from_paths(
-            paths, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, generate_captions=generate_captions,
-            prep_mode=prep_mode,
-            caption_prompt=caption_prompt,
-            caption_prompts=parse_caption_prompts_field(caption_prompts),
-            actor_email=_actor_email(request),
-        )
+        try:
+            job = store.create_job_from_paths(
+                paths, count=count, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, generate_captions=generate_captions,
+                prep_mode=prep_mode,
+                caption_prompt=caption_prompt,
+                caption_prompts=parse_caption_prompts_field(caption_prompts),
+                actor_email=_actor_email(request),
+                onscreen=_parse_onscreen_field(onscreen),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         _pop_own_uploads(ids)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1888,16 +1912,20 @@ def create_app(
         if not items:
             raise HTTPException(status_code=400, detail="items required")
         claimed = [_claim_direct_upload_key(key) for _name, key in items]
-        job = store.create_job_from_object_keys(
-            items, count=body.count,
-            allow_creative_escalate=body.allow_creative_escalate,
-            quality_mode=body.quality_mode,
-            generate_captions=body.generate_captions,
-            prep_mode=body.prep_mode,
-            caption_prompt=body.caption_prompt,
-            caption_prompts=list(body.caption_prompts or []),
-            actor_email=_actor_email(request),
-        )
+        try:
+            job = store.create_job_from_object_keys(
+                items, count=body.count,
+                allow_creative_escalate=body.allow_creative_escalate,
+                quality_mode=body.quality_mode,
+                generate_captions=body.generate_captions,
+                prep_mode=body.prep_mode,
+                caption_prompt=body.caption_prompt,
+                caption_prompts=list(body.caption_prompts or []),
+                actor_email=_actor_email(request),
+                onscreen=body.onscreen,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         _pop_own_uploads(claimed)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
@@ -1923,16 +1951,20 @@ def create_app(
                 (os.path.basename(children[fid].name) or "clip.mp4", fid)
                 for fid in file_ids
             ]
-            job = store.create_job_from_drive_ids(
-                items, count=body.count,
-                allow_creative_escalate=body.allow_creative_escalate,
-                quality_mode=body.quality_mode,
-                generate_captions=body.generate_captions,
-                prep_mode=body.prep_mode,
-                caption_prompt=body.caption_prompt,
-                caption_prompts=list(body.caption_prompts or []),
-                actor_email=_actor_email(request),
-            )
+            try:
+                job = store.create_job_from_drive_ids(
+                    items, count=body.count,
+                    allow_creative_escalate=body.allow_creative_escalate,
+                    quality_mode=body.quality_mode,
+                    generate_captions=body.generate_captions,
+                    prep_mode=body.prep_mode,
+                    caption_prompt=body.caption_prompt,
+                    caption_prompts=list(body.caption_prompts or []),
+                    actor_email=_actor_email(request),
+                    onscreen=body.onscreen,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             return CreateJobResponse(job_id=job.job_id,
                                      sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                               for s in job.sources])
@@ -1954,7 +1986,10 @@ def create_app(
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
                 actor_email=_actor_email(request),
+                onscreen=body.onscreen,
             )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
