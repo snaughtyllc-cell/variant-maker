@@ -38,10 +38,10 @@ DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 # Fast daily packs: one medium encode, then escalate. Five-step bisection on a
 # 720 talking-head that sits at 23 bits is how a Fast 20 hit executionTimeout.
 FAST_TUNE_MAX_ITERS = 1
-# Escalate-only vertical keystone. Positive-only, cap 0.06 (8% is the stretch
-# edge). Fires when source bits sit in the 19–23 band, then stops at the first
-# rung that clears 24. A miss restores the unstretched file.
-KEYSTONE_LADDER = (0.02, 0.04, 0.06)
+# Everyday tilt is sampled at 0.5–4%, top or bottom. A 19–23 source miss raises
+# that same side through these magnitudes and stops at the first that clears 24.
+# 6% is the cap (8% is the stretch edge). A miss restores the everyday tilt.
+KEYSTONE_RAISE = (0.04, 0.06)
 
 
 def use_face_protect(quality_mode: str | None) -> bool:
@@ -350,11 +350,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
             _emit_looking()
 
         def _try_keystone_ladder() -> None:
-            """Nudge a 19–23 source miss with 2% → 4% → 6% tilt. Stop on 24.
+            """Raise a 19–23 miss toward 6% on the same side. Stop on 24.
 
-            Look review aborts and keeps the unstretched file. If no rung clears
-            the source gate, the unstretched file is restored. Peer distance is
-            not the reason to keep a tilt.
+            The everyday file already has a 0.5–4% top or bottom tilt. This only
+            increases that magnitude. Look review, or a rung that still misses,
+            puts the everyday tilt back.
             """
             nonlocal r, u, look_info, keystone_escalated
             bits = u.get("bits")
@@ -364,9 +364,15 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 return
             snap = _snapshot_medium()
             base_params = r["params"]
-            for amount in KEYSTONE_LADDER:
+            current = float((base_params.get("video") or {}).get("keystone_a") or 0.0)
+            sign = -1.0 if current < 0 else 1.0
+            raised = False
+            for mag in KEYSTONE_RAISE:
+                if mag <= abs(current) + 1e-6:
+                    continue
+                raised = True
                 video = dict(base_params.get("video") or {})
-                video["keystone_a"] = amount
+                video["keystone_a"] = sign * mag
                 params = {**base_params, "video": video}
                 emit("rendering", index=i, attempt=attempt_no)
                 _, cmd = render_variant(src, params, platform, path)
@@ -384,6 +390,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     if os.path.isfile(snap["path"]):
                         os.remove(snap["path"])
                     return
+            if not raised:
+                if os.path.isfile(snap["path"]):
+                    os.remove(snap["path"])
+                return
             os.replace(snap["path"], path)
             look_info = snap["look"]
             u = snap["u"]

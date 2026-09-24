@@ -116,6 +116,13 @@ ENCODE_CRF = {"fast": (17, 19), "medium": (19, 22)}
 AAC_KBPS_FAST = (128, 192)
 ARESAMPLE_RATES = (44100, 48000)
 _EXTRA_AXES_XOR = 0xF95
+# Everyday vertical tilt. Positive magnifies the top; negative magnifies the
+# bottom. Separate RNG so crop, resample, and encode draws stay put.
+# 0.5–4% is the normal phone-video band. The pipeline may raise a short score
+# toward 6%; it does not draw 6% here.
+_KEYSTONE_RNG_XOR = 0x71E7
+KEYSTONE_LO = 0.005
+KEYSTONE_HI = 0.040
 _ENCODE_RNG_XOR = 0xE0DE
 _IDENTITY_RNG_XOR = 0x1D07
 _IDENTITY_TRIM_EPS = 1e-4
@@ -546,7 +553,7 @@ def sample(
         eq_d = min(0.0 - preset.eq_gain_db.lo, preset.eq_gain_db.hi - 0.0)
         eq_gains = [rng.uniform(-eq_d, eq_d) for _ in range(preset.eq_bands)]
         loudnorm_i = rng.uniform(preset.loudnorm_i.lo, preset.loudnorm_i.hi)
-        aac_kbps = int(round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi)))
+        aac_kbps = round(rng.uniform(preset.aac_kbps.lo, preset.aac_kbps.hi))
         if rubberband:
             p_d = min(0.0 - preset.pitch_pct.lo, preset.pitch_pct.hi - 0.0)
             pitch_pct = rng.uniform(-p_d, p_d)
@@ -570,6 +577,10 @@ def sample(
             "aac_kbps": int(encode_rng.randint(AAC_KBPS_FAST[0], AAC_KBPS_FAST[1])),
         }
     audio["aresample_hz"] = encode_rng.choice(ARESAMPLE_RATES)
+
+    ks_rng = random.Random(int(seed) ^ _KEYSTONE_RNG_XOR)
+    mag = ks_rng.uniform(KEYSTONE_LO, KEYSTONE_HI)
+    video["keystone_a"] = (-mag if ks_rng.random() < 0.5 else mag)
 
     ident_rng = random.Random(int(seed) ^ _IDENTITY_RNG_XOR)
     break_identity_time(

@@ -256,6 +256,14 @@ def test_keystone_sits_after_rebuild_and_before_rotate():
     assert "x2=W*0.0000" in vf
 
 
+def test_bottom_keystone_insets_the_bottom_edge():
+    p = make_params(video={"keystone_a": -0.03, "rotate_deg": 0.0})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "x0=W*0.0000" in vf
+    assert "x2=W*0.0300" in vf
+    assert "x3=W*0.9700" in vf
+
+
 def test_keystone_under_two_thousandths_is_omitted():
     p = make_params(video={"keystone_a": 0.001})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)

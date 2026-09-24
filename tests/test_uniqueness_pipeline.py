@@ -162,7 +162,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
         "look_mae": 20.0, "look_mae_max": 22.0, "look_target": 38.0,
     }
     looks = iter([
-        calm, calm, calm, calm,  # medium, then keystone 2/4/6% (still a miss)
+        calm, calm, calm,  # medium, then raise to 4% and 6% (still a miss)
         {
             "look_status": "review_required", "look_metric": "coarse_luma_v1",
             "look_mae": 40.0, "look_mae_max": 51.0, "look_target": 38.0,
@@ -226,19 +226,19 @@ def test_twenty_bits_on_first_pass_still_escalates(monkeypatch, tmp_path):
     del cfg["auto_tune"]
     manifest = pipeline.run(cfg)
     record = manifest.variants[0]
-    # Medium miss, then the 2% keystone rung clears the source gate.
+    # Medium miss, then the 4% raise clears the source gate.
     assert n["scores"] == 2
     assert record.escalated is False
     assert record.preset_used == "medium"
     assert record.quality.get("keystone_escalated") is True
-    assert record.params["video"]["keystone_a"] == 0.02
+    assert record.params["video"]["keystone_a"] == 0.04
     assert record.uniqueness_status == "ok"
     assert record.status == "ok"
     assert record.uniqueness == 24 / 64
 
 
 def test_keystone_ladder_stops_at_first_clear_and_skips_strong(monkeypatch, tmp_path):
-    """4% clears a 22. Do not spend 6% or the strong preset."""
+    """4% stays short, 6% clears. Do not spend the strong preset."""
     _stub_common(monkeypatch)
     seen = []
 
@@ -260,13 +260,45 @@ def test_keystone_ladder_stops_at_first_clear_and_skips_strong(monkeypatch, tmp_
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
     manifest = pipeline.run(cfg)
     record = manifest.variants[0]
-    assert seen == [None, 0.02, 0.04]
+    assert seen == [None, 0.04, 0.06]
     assert record.escalated is False
     assert record.preset_used == "medium"
-    assert record.params["video"]["keystone_a"] == 0.04
+    assert record.params["video"]["keystone_a"] == 0.06
     assert record.quality["keystone_escalated"] is True
-    assert record.quality["keystone_a"] == 0.04
+    assert record.quality["keystone_a"] == 0.06
     assert record.uniqueness_status == "ok"
+
+
+def test_bottom_tilt_raise_keeps_the_same_side(monkeypatch, tmp_path):
+    """A short score on a bottom tilt steps to -4%, not a top tilt."""
+    _stub_common(monkeypatch)
+    seen = []
+
+    def fake_sample(preset, seed, **_kw):
+        return {"video": {"rotate_deg": 0.0, "keystone_a": -0.02}, "audio": {}}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        seen.append(params["video"].get("keystone_a"))
+        open(path, "w").close()
+        return (path, "ffmpeg -y fake")
+
+    monkeypatch.setattr(pipeline, "sample", fake_sample)
+    monkeypatch.setattr(pipeline, "render_variant", fake_render)
+    n = {"scores": 0}
+
+    def fake_score(src_path, variant_path, target=None):
+        n["scores"] += 1
+        if n["scores"] == 1:
+            return _ok_score(22 / 64, bits=22, status="below_target")
+        return _ok_score(24 / 64, bits=24, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True))
+    record = manifest.variants[0]
+    assert seen == [-0.02, -0.04]
+    assert record.params["video"]["keystone_a"] == -0.04
+    assert record.quality["keystone_escalated"] is True
+    assert record.escalated is False
 
 
 def test_keystone_miss_restores_file_then_strong(monkeypatch, tmp_path):
@@ -276,7 +308,7 @@ def test_keystone_miss_restores_file_then_strong(monkeypatch, tmp_path):
 
     def fake_score(src_path, variant_path, target=None):
         n["scores"] += 1
-        if n["scores"] <= 4:
+        if n["scores"] <= 3:
             return _ok_score(22 / 64, bits=22, status="below_target")
         return _ok_score(30 / 64, bits=30, status="ok")
 
@@ -284,7 +316,7 @@ def test_keystone_miss_restores_file_then_strong(monkeypatch, tmp_path):
     cfg = _cfg(tmp_path, uniq_strengths=[1.0], allow_creative_escalate=True)
     manifest = pipeline.run(cfg)
     record = manifest.variants[0]
-    assert n["scores"] == 5
+    assert n["scores"] == 4
     assert record.escalated is True
     assert record.preset_used == "strong"
     assert record.quality["keystone_escalated"] is False
@@ -356,8 +388,8 @@ def test_nineteen_after_escalate_ships(monkeypatch, tmp_path):
     del cfg["auto_tune"]
     manifest = pipeline.run(cfg)
     record = manifest.variants[0]
-    # Medium 20, three keystone rungs stay at 19, then strong still ships 19.
-    assert n["scores"] == 5
+    # Medium 20, 4% and 6% stay at 19, then strong still ships 19.
+    assert n["scores"] == 4
     assert record.escalated is True
     assert record.preset_used == "strong"
     assert record.quality.get("keystone_escalated") is False
