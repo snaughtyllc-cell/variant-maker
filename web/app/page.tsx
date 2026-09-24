@@ -362,6 +362,7 @@ export default function StudioPage() {
                   onEnabledChange={setOnScreenOn}
                   draft={onScreenDraft}
                   onChange={setOnScreenDraft}
+                  sources={captionSources}
                 />
 
                 <label

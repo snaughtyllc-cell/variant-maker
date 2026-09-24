@@ -82,4 +82,22 @@ describe("phone box drawer", () => {
     fireEvent.pointerUp(phone, { pointerId: 1, clientX: 120, clientY: 180 });
     expect(screen.getByRole("button", { name: "Cyan box" })).toBeTruthy();
   });
+
+  it("shows the clip still under the Reel safe edges", () => {
+    const draft = emptyOnScreen();
+    render(
+      <StudioOnScreenBox
+        enabled
+        onEnabledChange={() => undefined}
+        draft={draft}
+        onChange={() => undefined}
+        sources={[{ key: "a", name: "gym.mp4", src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" }]}
+      />,
+    );
+    const phone = screen.getByTestId("onscreen-phone");
+    expect(phone.querySelector("img")?.getAttribute("src")).toContain("data:image");
+    expect(phone.textContent).toContain("Header");
+    expect(phone.textContent).toContain("Buttons");
+    expect(phone.textContent).toContain("Caption");
+  });
 });

@@ -1,7 +1,8 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
+import { captureVideoPoster } from "@/lib/videoPoster";
 
 export type OnScreenStyle = "classic" | "strong" | "caption-bar";
 export type OnScreenBackground = "solid" | "see-through" | "none";
@@ -35,6 +36,7 @@ export const BOX_COLORS = [
 ] as const;
 
 const MIN_BOX = 0.06;
+export const REEL_SAFE = { top: 0.14, bottom: 0.22, right: 0.14 };
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 
 type Handle = (typeof HANDLES)[number];
@@ -117,21 +119,55 @@ function colorOf(box: OnScreenBox) {
   return BOX_COLORS.find((color) => color.id === box.id)?.hex || box.color;
 }
 
+export type OnScreenPreview = {
+  key: string;
+  name: string;
+  file?: File;
+  src?: string;
+};
+
 export function StudioOnScreenBox({
   enabled,
   onEnabledChange,
   draft,
   onChange,
+  sources = [],
 }: {
   enabled: boolean;
   onEnabledChange: (value: boolean) => void;
   draft: OnScreenProject;
   onChange: (next: OnScreenProject) => void;
+  sources?: OnScreenPreview[];
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [open, setOpen] = useState(enabled);
+  const [clipIndex, setClipIndex] = useState(0);
+  const [poster, setPoster] = useState("");
+  const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
+
+  useEffect(() => {
+    if (!clip) {
+      setPoster("");
+      return;
+    }
+    if (!clip.file) {
+      setPoster(clip.src || "");
+      return;
+    }
+    let cancel = false;
+    captureVideoPoster(clip.file)
+      .then((url) => {
+        if (!cancel) setPoster(url);
+      })
+      .catch(() => {
+        if (!cancel) setPoster(clip.src || "");
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [clip?.key, clip?.file, clip?.src]);
 
   function patchCaption(index: number, next: Partial<OnScreenCaption>) {
     const captions = draft.captions.map((cap, i) => (i === index ? { ...cap, ...next } : cap));
@@ -344,6 +380,15 @@ export function StudioOnScreenBox({
                   onPointerMove={onFramePointerMove}
                   onPointerUp={onFramePointerUp}
                 >
+                  {poster ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="studio-onscreen__poster" src={poster} alt="" />
+                  ) : null}
+                  <div className="studio-onscreen__safe" aria-hidden="true">
+                    <div className="studio-onscreen__safe-top"><span>Header</span></div>
+                    <div className="studio-onscreen__safe-right"><span>Buttons</span></div>
+                    <div className="studio-onscreen__safe-bottom"><span>Caption</span></div>
+                  </div>
                   {draft.boxes.map((box) => {
                     const meta = BOX_COLORS.find((color) => color.id === box.id);
                     return (
@@ -387,10 +432,25 @@ export function StudioOnScreenBox({
                 </div>
               </div>
               <p className="studio-onscreen__hint">
-                {draft.boxes.length >= 4
-                  ? "Four boxes is the limit. Drag a corner to resize."
-                  : "Drag on the phone to draw a box. Drag a corner to resize."}
+                {poster
+                  ? "Shaded edges are covered on a Reel. Draw in the clear middle."
+                  : "Add a clip and its frame shows here. Shaded edges are covered on a Reel."}
               </p>
+              {sources.length > 1 && (
+                <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">
+                  {sources.map((source, index) => (
+                    <button
+                      key={source.key}
+                      type="button"
+                      className="studio-onscreen__clip"
+                      data-on={index === Math.min(clipIndex, sources.length - 1)}
+                      onClick={() => setClipIndex(index)}
+                    >
+                      {source.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {selected && (
                 <button type="button" className="studio-onscreen__add" onClick={() => removeBox(selected)}>
                   Remove {BOX_COLORS.find((color) => color.id === selected)?.label || "box"}
