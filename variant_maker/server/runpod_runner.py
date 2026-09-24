@@ -152,6 +152,14 @@ class RunPodServerlessRunner:
         variants_meta: list[dict] = []
         manifest_key = None
         for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            kind = chunk.get("type")
+            err = chunk.get("error")
+            if kind == "error" or (err and kind not in ("progress", "submitted", "status", "result")):
+                raise RuntimeError(
+                    str(chunk.get("message") or err or "Fast worker error")
+                )
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 if e.get("state") == "looking":

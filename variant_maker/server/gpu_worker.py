@@ -8,6 +8,9 @@ from __future__ import annotations
 import os
 import queue
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections.abc import Iterator
 
 from .. import pipeline
@@ -88,6 +91,16 @@ def _put_named(store: ObjectStore, prefix: str, out_dir: str, name: str | None) 
 
 
 def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
+    try:
+        yield from _process_job(job_input, store, work_dir=work_dir)
+    except Exception as exc:  # stream the failure; RunPod otherwise completes 0/8
+        if type(exc).__name__ == "JobCancelled":
+            raise
+        yield {"type": "error", "message": str(exc)}
+        raise
+
+
+def _process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
     if str(job_input.get("action") or "") == "deliver_drive":
         yield from deliver_drive(job_input, store, work_dir=work_dir)
         return
@@ -199,8 +212,46 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
 
 
 def _download_drive_file(file_id: str, dest: str, access_token: str) -> None:
-    from variant_maker.farm.drive import GoogleDrive
-    GoogleDrive(access_token=access_token).download(file_id, dest)
+    """Fetch a Drive file over HTTPS. Fast CPU image has no google client."""
+    fid = str(file_id or "").strip()
+    token = str(access_token or "").strip()
+    if not fid or not token:
+        raise RuntimeError("Drive download needs file id and access token")
+    parent = os.path.dirname(dest)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    quoted = urllib.parse.quote(fid, safe="-_.~")
+    url = (
+        f"https://www.googleapis.com/drive/v3/files/{quoted}"
+        "?alt=media&supportsAllDrives=true"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp, open(dest, "wb") as out:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:400]
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass
+        raise RuntimeError(f"Drive download failed ({exc.code}): {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Drive download failed: {exc.reason}") from exc
+    if not os.path.isfile(dest) or os.path.getsize(dest) <= 0:
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass
+        raise RuntimeError("Drive download produced an empty file")
 
 
 def deliver_drive(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterator[dict]:
