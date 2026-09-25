@@ -224,6 +224,7 @@ class JobFromObjectIn(BaseModel):
     caption_prompts: list[str] = []
     prep_mode: str = "none"
     onscreen: dict | None = None
+    onscreens: list[dict] | None = None
 
 
 class DiagnosticsItem(BaseModel):
@@ -394,6 +395,7 @@ class JobFromDriveIn(BaseModel):
     caption_prompts: list[str] = []
     prep_mode: str = "none"
     onscreen: dict | None = None
+    onscreens: list[dict] | None = None
 
 
 class WorkflowSummaryOut(BaseModel):

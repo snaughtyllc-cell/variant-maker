@@ -182,17 +182,34 @@ export type OnScreenPreview = {
   height?: number;
 };
 
+export function projectsForSources(
+  sources: { key: string; name: string }[],
+  byKey: Record<string, OnScreenProject>,
+): OnScreenProject[] | string {
+  const out: OnScreenProject[] = [];
+  for (const source of sources) {
+    const built = projectFromDraft(byKey[source.key] ?? emptyOnScreen());
+    if (typeof built === "string") return `${source.name}: ${built}`;
+    out.push(built);
+  }
+  return out;
+}
+
 export function StudioOnScreenBox({
   enabled,
   onEnabledChange,
-  draft,
-  onChange,
+  draft: sharedDraft,
+  onChange: onSharedChange,
+  projects,
+  onProjectsChange,
   sources = [],
 }: {
   enabled: boolean;
   onEnabledChange: (value: boolean) => void;
   draft: OnScreenProject;
   onChange: (next: OnScreenProject) => void;
+  projects?: Record<string, OnScreenProject>;
+  onProjectsChange?: (next: Record<string, OnScreenProject>) => void;
   sources?: OnScreenPreview[];
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -204,6 +221,15 @@ export function StudioOnScreenBox({
   const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
   const [framePreset, setFramePreset] = useState<string | null>(null);
   const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
+  const draft = projects && clip ? (projects[clip.key] ?? emptyOnScreen()) : sharedDraft;
+
+  function onChange(next: OnScreenProject) {
+    if (projects && clip && onProjectsChange) {
+      onProjectsChange({ ...projects, [clip.key]: next });
+      return;
+    }
+    onSharedChange(next);
+  }
   const aspect = frameAspect(framePreset, sourceSize?.w, sourceSize?.h);
 
   useEffect(() => {
@@ -603,7 +629,7 @@ export function StudioOnScreenBox({
                 ))}
               </div>
               <p className="studio-onscreen__hint">
-                The frame follows the clip. Drag a box, type the line, then drag the words.
+                Each clip keeps its own boxes and lines. Drag a box, type, then drag the words.
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">

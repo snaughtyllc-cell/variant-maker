@@ -99,6 +99,21 @@ describe("on-screen project", () => {
   });
 });
 
+function MultiHarness() {
+  const [projects, setProjects] = useState<Record<string, OnScreenProject>>({});
+  return (
+    <StudioOnScreenBox
+      enabled
+      onEnabledChange={() => undefined}
+      draft={emptyOnScreen()}
+      onChange={() => undefined}
+      projects={projects}
+      onProjectsChange={setProjects}
+      sources={[{ key: "a", name: "one.mp4" }, { key: "b", name: "two.mp4" }]}
+    />
+  );
+}
+
 function Harness() {
   const [draft, setDraft] = useState<OnScreenProject>(emptyOnScreen());
   return (
@@ -112,6 +127,16 @@ function Harness() {
 }
 
 describe("phone box drawer", () => {
+  it("keeps a different line on each source", () => {
+    render(<MultiHarness />);
+    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "first" } });
+    fireEvent.click(screen.getByRole("button", { name: "two.mp4" }));
+    expect(screen.getByLabelText("On-screen line 1")).toHaveProperty("value", "");
+    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "second" } });
+    fireEvent.click(screen.getByRole("button", { name: "one.mp4" }));
+    expect(screen.getByLabelText("On-screen line 1")).toHaveProperty("value", "first");
+  });
+
   it("draws a colored box when you drag on the phone", () => {
     render(<Harness />);
     const phone = screen.getByTestId("onscreen-phone");

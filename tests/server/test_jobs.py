@@ -1061,6 +1061,26 @@ def test_studio_burns_onscreen_when_the_worker_skipped_it(tmp_path, monkeypatch)
     assert job.sources[0].variants[0].quality["onscreen"]["text"] == "on the frame"
 
 
+def test_each_source_keeps_its_own_onscreen_text(tmp_path):
+    store = _store(tmp_path)
+    one = {
+        "captions": [{"text": "first clip", "box_ids": ["A"]}],
+        "boxes": [{"id": "A", "x": 0.1, "y": 0.2, "w": 0.4, "h": 0.2}],
+        "look": {"style": "classic", "background": "plain"},
+    }
+    two = {
+        "captions": [{"text": "second clip", "box_ids": ["A"]}],
+        "boxes": [{"id": "A", "x": 0.2, "y": 0.5, "w": 0.5, "h": 0.2}],
+        "look": {"style": "classic", "background": "solid"},
+    }
+    job = store.create_job(
+        [("a.mp4", b"x"), ("b.mp4", b"y")], count=1, onscreens=[one, two],
+    )
+    assert job.sources[0].onscreen["captions"][0]["text"] == "first clip"
+    assert job.sources[1].onscreen["captions"][0]["text"] == "second clip"
+    assert job.sources[0].onscreen["look"]["background"] == "plain"
+
+
 def test_create_job_rejects_a_caption_with_no_box(tmp_path):
     store = _store(tmp_path)
     try:

@@ -1760,6 +1760,20 @@ def create_app(
             raise HTTPException(status_code=400, detail="onscreen must be an object")
         return data
 
+    def _parse_onscreens_field(raw: str) -> list | None:
+        text = (raw or "").strip()
+        if not text or text == "null":
+            return None
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="onscreens must be JSON") from exc
+        if data is None:
+            return None
+        if not isinstance(data, list):
+            raise HTTPException(status_code=400, detail="onscreens must be a list")
+        return data
+
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(request: Request, files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
@@ -1768,7 +1782,8 @@ def create_app(
                           caption_prompt: str = Form(""),
                           caption_prompts: str = Form(""),
                           prep_mode: str = Form("none"),
-                          onscreen: str = Form("")) -> CreateJobResponse:
+                          onscreen: str = Form(""),
+                          onscreens: str = Form("")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         try:
             job = store.create_job(
@@ -1779,6 +1794,7 @@ def create_app(
                 caption_prompts=parse_caption_prompts_field(caption_prompts),
                 actor_email=_actor_email(request),
                 onscreen=_parse_onscreen_field(onscreen),
+                onscreens=_parse_onscreens_field(onscreens),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1877,6 +1893,7 @@ def create_app(
         caption_prompts: str = Form(""),
         prep_mode: str = Form("none"),
         onscreen: str = Form(""),
+        onscreens: str = Form(""),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1898,6 +1915,7 @@ def create_app(
                 caption_prompts=parse_caption_prompts_field(caption_prompts),
                 actor_email=_actor_email(request),
                 onscreen=_parse_onscreen_field(onscreen),
+                onscreens=_parse_onscreens_field(onscreens),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1923,6 +1941,7 @@ def create_app(
                 caption_prompts=list(body.caption_prompts or []),
                 actor_email=_actor_email(request),
                 onscreen=body.onscreen,
+                onscreens=body.onscreens,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1962,6 +1981,7 @@ def create_app(
                     caption_prompts=list(body.caption_prompts or []),
                     actor_email=_actor_email(request),
                     onscreen=body.onscreen,
+                onscreens=body.onscreens,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1987,6 +2007,7 @@ def create_app(
                 caption_prompts=list(body.caption_prompts or []),
                 actor_email=_actor_email(request),
                 onscreen=body.onscreen,
+                onscreens=body.onscreens,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

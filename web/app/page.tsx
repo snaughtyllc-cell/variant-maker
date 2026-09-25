@@ -9,7 +9,7 @@ import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/StudioCaptionsBox";
 import {
   emptyOnScreen,
-  projectFromDraft,
+  projectsForSources,
   StudioOnScreenBox,
   type OnScreenProject,
 } from "@/components/studio/StudioOnScreenBox";
@@ -49,7 +49,7 @@ export default function StudioPage() {
   const [hqPrep, setHqPrep] = useState(false);
   const [generateCaptions, setGenerateCaptions] = useState(false);
   const [onScreenOn, setOnScreenOn] = useState(false);
-  const [onScreenDraft, setOnScreenDraft] = useState<OnScreenProject>(emptyOnScreen);
+  const [onScreenByKey, setOnScreenByKey] = useState<Record<string, OnScreenProject>>({});
   const [fileCaptions, setFileCaptions] = useState<string[]>([]);
   const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -179,14 +179,17 @@ export default function StudioPage() {
     const sendFileCaptions = fileCaptions;
     const sendDriveCaptions = driveCaptions;
     const sendGenerateCaptions = generateCaptions;
-    let onscreen: OnScreenProject | null = null;
+    const sendSources = sendFiles.length > 0
+      ? sendFiles.map((file, i) => ({ key: `file-${i}-${file.name}`, name: file.name }))
+      : sendPicks.map((pick) => ({ key: `drive-${pick.id}`, name: pick.name }));
+    let onscreens: OnScreenProject[] | null = null;
     if (onScreenOn) {
-      const built = projectFromDraft(onScreenDraft);
+      const built = projectsForSources(sendSources, onScreenByKey);
       if (typeof built === "string") {
         setError(built);
         return;
       }
-      onscreen = built;
+      onscreens = built;
     }
     const names = sendFiles.length > 0
       ? sendFiles.map((f) => f.name)
@@ -211,9 +214,9 @@ export default function StudioPage() {
               prepMode,
               captionPrompt: sendDriveCaptions,
               onProgress: setUpload,
-              onscreen,
+              onscreens,
             })
-          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload, onscreen);
+          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload, onscreens);
       if (cancelRequestedRef.current) {
         try {
           await cancelJob(resp.job_id);
@@ -360,8 +363,10 @@ export default function StudioPage() {
                 <StudioOnScreenBox
                   enabled={onScreenOn}
                   onEnabledChange={setOnScreenOn}
-                  draft={onScreenDraft}
-                  onChange={setOnScreenDraft}
+                  draft={emptyOnScreen()}
+                  onChange={() => undefined}
+                  projects={onScreenByKey}
+                  onProjectsChange={setOnScreenByKey}
                   sources={captionSources}
                 />
 
