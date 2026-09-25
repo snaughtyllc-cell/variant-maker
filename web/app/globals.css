@@ -1691,6 +1691,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__hint { color: var(--color-muted); font-size: 12px; line-height: 1.4; margin: 0; }
 .studio-onscreen .studio-caption-prompt, .studio-onscreen__prompt { font-size: 16px !important; margin-top: 0; min-height: 64px; }
 .studio-onscreen__fit { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-onscreen__seats { display: grid; gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .studio-onscreen__frames { display: flex; flex-wrap: wrap; gap: 6px; }
 .studio-captions-box h2 { color: var(--ink); font-size: 16px; font-weight: 760; letter-spacing: -0.02em; margin: 0; }
 .studio-caption-prompt { background: #fff; border: 1px solid var(--color-line); border-radius: 10px; color: var(--ink); display: block; font-size: 14px; line-height: 1.45; margin-top: 12px; min-height: 120px; padding: 10px 12px; resize: vertical; width: 100%; }

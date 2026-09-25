@@ -35,6 +35,18 @@ _INSIDE = (
     (0.18, 0.5),
     (0.82, 0.5),
 )
+SEATS = (
+    ("tl", 0.18, 0.18),
+    ("tc", 0.5, 0.18),
+    ("tr", 0.82, 0.18),
+    ("ml", 0.18, 0.5),
+    ("mc", 0.5, 0.5),
+    ("mr", 0.82, 0.5),
+    ("bl", 0.18, 0.82),
+    ("bc", 0.5, 0.82),
+    ("br", 0.82, 0.82),
+)
+_SEAT_XY = {seat_id: (x, y) for seat_id, x, y in SEATS}
 
 _FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 _CLASSIC_FONT = os.path.join(_FONT_DIR, "Inter-SemiBold.ttf")
@@ -74,7 +86,15 @@ def normalize_project(raw: dict | None) -> dict | None:
         x, y, w, h = (float(box["x"]), float(box["y"]), float(box["w"]), float(box["h"]))
         if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > 1.001 or y + h > 1.001:
             raise OnScreenError(f"Box {bid} sits outside the frame.")
-        boxes.append({"id": bid, "x": x, "y": y, "w": w, "h": h})
+        row = {"id": bid, "x": x, "y": y, "w": w, "h": h}
+        picked = []
+        for seat_id in list(box.get("seats") or []):
+            seat_id = str(seat_id)
+            if seat_id in _SEAT_XY and seat_id not in picked:
+                picked.append(seat_id)
+        if picked:
+            row["seats"] = picked
+        boxes.append(row)
 
     known = _boxes_by_id(boxes)
     captions = []
@@ -139,6 +159,23 @@ def normalize_project(raw: dict | None) -> dict | None:
     }
 
 
+def _chosen_place(take: int, liked: dict | None, seats: list[str]) -> dict:
+    """Cycle the seats the user turned on. The preview seat goes first."""
+    ordered: list[tuple[float, float]] = []
+    if liked:
+        for seat_id in seats:
+            x, y = _SEAT_XY[seat_id]
+            if abs(x - float(liked["x"])) <= 0.08 and abs(y - float(liked["y"])) <= 0.08:
+                ordered.append((x, y))
+                break
+    for seat_id in seats:
+        pair = _SEAT_XY[seat_id]
+        if pair not in ordered:
+            ordered.append(pair)
+    x, y = ordered[take % len(ordered)]
+    return {"x": x, "y": y}
+
+
 def _inside_box(take: int, liked: dict | None) -> dict:
     """First take keeps the spot the user is looking at. Later takes move."""
     if take == 0 and liked:
@@ -170,6 +207,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
         take = n // len(captions)
         box_id = cap["box_ids"][take % len(cap["box_ids"])]
         placed = (cap.get("place") or {}).get(box_id)
+        seats = list(boxes[box_id].get("seats") or [])
         locked_size = cap.get("size")
         if bar:
             step = SIZE_STEPS[take % len(SIZE_STEPS)]
@@ -189,7 +227,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "size_step": step,
             "align": align,
             "spot": spot,
-            "place": _inside_box(take, placed),
+            "place": _chosen_place(take, placed, seats) if seats else _inside_box(take, placed),
             "lines": cap.get("lines"),
             "look": dict(look),
         })

@@ -21,6 +21,18 @@ export function clampTextSize(value: number) {
   return Math.min(1.6, Math.max(0.55, stepped));
 }
 
+export const TEXT_SEATS = [
+  { id: "tl", label: "Top left", x: 0.18, y: 0.18 },
+  { id: "tc", label: "Top", x: 0.5, y: 0.18 },
+  { id: "tr", label: "Top right", x: 0.82, y: 0.18 },
+  { id: "ml", label: "Left", x: 0.18, y: 0.5 },
+  { id: "mc", label: "Center", x: 0.5, y: 0.5 },
+  { id: "mr", label: "Right", x: 0.82, y: 0.5 },
+  { id: "bl", label: "Bottom left", x: 0.18, y: 0.82 },
+  { id: "bc", label: "Bottom", x: 0.5, y: 0.82 },
+  { id: "br", label: "Bottom right", x: 0.82, y: 0.82 },
+] as const;
+
 export type OnScreenBox = {
   id: string;
   x: number;
@@ -28,11 +40,13 @@ export type OnScreenBox = {
   w: number;
   h: number;
   color: string;
+  seats?: string[];
 };
 
 export type OnScreenProject = {
   captions: OnScreenCaption[];
   boxes: OnScreenBox[];
+  chooseSeats?: boolean;
   look: { style: OnScreenStyle; background: OnScreenBackground; color: string };
 };
 
@@ -117,7 +131,10 @@ function pointInFrame(event: { clientX: number; clientY: number }, frame: DOMRec
 export function projectFromDraft(draft: OnScreenProject): OnScreenProject | string {
   const boxes = draft.boxes.slice(0, 4).map((box) => {
     const fitted = clampBox(box);
-    return { id: box.id, ...fitted, color: box.color };
+    const seats = draft.chooseSeats
+      ? (box.seats || []).filter((id, index, all) => TEXT_SEATS.some((seat) => seat.id === id) && all.indexOf(id) === index)
+      : [];
+    return { id: box.id, ...fitted, color: box.color, ...(seats.length ? { seats } : {}) };
   });
   const known = new Set(boxes.map((box) => box.id));
   const captions = draft.captions
@@ -150,7 +167,7 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
   if (boxes.some((box) => !used.includes(box.id))) return "Lock every colored box to a line.";
   return {
     captions,
-    boxes: boxes.map(({ id, x, y, w, h }) => ({ id, x, y, w, h, color: draft.boxes.find((b) => b.id === id)?.color || id })),
+    boxes,
     look: draft.look,
   };
 }
@@ -260,6 +277,28 @@ export function StudioOnScreenBox({
       cancel = true;
     };
   }, [clip?.key, clip?.file, clip?.src, clip?.width, clip?.height]);
+
+  function toggleSeat(seatId: string) {
+    const seat = TEXT_SEATS.find((item) => item.id === seatId);
+    const box = draft.boxes.find((item) => item.id === selected) || draft.boxes[0];
+    if (!seat || !box) return;
+    const current = box.seats || [];
+    const turningOff = current.includes(seatId);
+    const seats = turningOff ? current.filter((id) => id !== seatId) : [...current, seatId];
+    const nextSeat = TEXT_SEATS.find((item) => item.id === seats[0]);
+    onChange({
+      ...draft,
+      chooseSeats: true,
+      boxes: draft.boxes.map((item) => (item.id === box.id ? { ...item, seats } : item)),
+      captions: draft.captions.map((cap) => {
+        if (!cap.box_ids.includes(box.id)) return cap;
+        const place = { ...(cap.place || {}) };
+        if (!turningOff) place[box.id] = { x: seat.x, y: seat.y };
+        else if (nextSeat) place[box.id] = { x: nextSeat.x, y: nextSeat.y };
+        return { ...cap, place };
+      }),
+    });
+  }
 
   function setFit(next: Partial<OnScreenCaption>) {
     onChange({
@@ -485,6 +524,17 @@ export function StudioOnScreenBox({
               ))}
             </div>
           )}
+          <div className="studio-onscreen__fit" role="group" aria-label="Text seats">
+            <button
+              type="button"
+              className="studio-onscreen__look"
+              data-on={!!draft.chooseSeats}
+              aria-pressed={!!draft.chooseSeats}
+              onClick={() => onChange({ ...draft, chooseSeats: !draft.chooseSeats })}
+            >
+              Choose seats
+            </button>
+          </div>
           <div className="studio-onscreen__fit" role="group" aria-label="Text size">
             <button type="button" className="studio-onscreen__look" aria-label="Smaller" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) - 0.1) })}>Smaller</button>
             <span>{Math.round((draft.captions[0]?.size ?? 1) * 100)}%</span>
@@ -628,8 +678,30 @@ export function StudioOnScreenBox({
                   </button>
                 ))}
               </div>
+              {draft.chooseSeats && draft.boxes.length > 0 && (
+                <div className="studio-onscreen__seats" role="group" aria-label="Seats">
+                  {(draft.look.style === "caption-bar" ? TEXT_SEATS.filter((seat) => seat.id === "tc" || seat.id === "mc" || seat.id === "bc") : TEXT_SEATS).map((seat) => {
+                    const box = draft.boxes.find((item) => item.id === selected) || draft.boxes[0];
+                    const on = !!box?.seats?.includes(seat.id);
+                    return (
+                      <button
+                        key={seat.id}
+                        type="button"
+                        className="studio-onscreen__look"
+                        data-on={on}
+                        aria-pressed={on}
+                        onClick={() => toggleSeat(seat.id)}
+                      >
+                        {draft.look.style === "caption-bar" ? (seat.id === "tc" ? "Top" : seat.id === "mc" ? "Middle" : "Bottom") : seat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <p className="studio-onscreen__hint">
-                This is your clip. Drag the words and try a look here. The first variant matches this preview. The others keep that look and move inside the box.
+                {draft.chooseSeats
+                  ? "Tap the seats that look right on this clip. One seat keeps every variant there. Two or more take turns."
+                  : "This is your clip. Drag the words and try a look here. The first variant matches this preview. The others keep that look and move inside the box."}
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">

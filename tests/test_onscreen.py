@@ -172,6 +172,28 @@ def test_unpinned_text_still_moves_inside_the_box():
     assert len({(p["x"], p["y"]) for p in places}) == 3
 
 
+def test_one_chosen_seat_stays_put():
+    box = _box("A")
+    box["seats"] = ["bl"]
+    project = _project([{"text": "here", "box_ids": ["A"]}], [box])
+    places = [v["place"] for v in plan_versions(project, 4)]
+    assert places == [{"x": 0.18, "y": 0.82}] * 4
+
+
+def test_chosen_seats_take_turns():
+    box = _box("A")
+    box["seats"] = ["bl", "br"]
+    project = _project(
+        [{"text": "here", "box_ids": ["A"], "place": {"A": {"x": 0.18, "y": 0.82}}}],
+        [box],
+    )
+    places = [v["place"] for v in plan_versions(project, 8)]
+    assert places[0] == {"x": 0.18, "y": 0.82}
+    assert places[1] == {"x": 0.82, "y": 0.82}
+    assert places.count({"x": 0.18, "y": 0.82}) == 4
+    assert places.count({"x": 0.82, "y": 0.82}) == 4
+
+
 def test_burn_puts_the_words_on_the_file(tmp_path):
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         return

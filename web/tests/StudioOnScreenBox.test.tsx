@@ -52,6 +52,19 @@ describe("on-screen project", () => {
     expect(projectFromDraft(draft)).toBe("Lock every colored box to a line.");
   });
 
+  it("sends only the seats that are turned on", () => {
+    const draft = emptyOnScreen();
+    draft.chooseSeats = true;
+    draft.captions[0].text = "here";
+    draft.captions[0].box_ids = ["cyan"];
+    draft.captions[0].place = { cyan: { x: 0.18, y: 0.82 } };
+    draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.3, seats: ["bl", "br"] }];
+    const project = projectFromDraft(draft);
+    expect(typeof project).not.toBe("string");
+    if (typeof project === "string") return;
+    expect(project.boxes[0].seats).toEqual(["bl", "br"]);
+  });
+
   it("keeps a chosen text size and a one-line lock", () => {
     expect(clampTextSize(2)).toBe(1.6);
     const draft = emptyOnScreen();
@@ -135,6 +148,29 @@ describe("phone box drawer", () => {
     fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "second" } });
     fireEvent.click(screen.getByRole("button", { name: "one.mp4" }));
     expect(screen.getByLabelText("On-screen line 1")).toHaveProperty("value", "first");
+  });
+
+  it("turns on bottom left as a seat", () => {
+    function SeatHarness() {
+      const [draft, setDraft] = useState<OnScreenProject>(() => {
+        const next = emptyOnScreen();
+        next.captions[0].text = "here";
+        next.captions[0].box_ids = ["cyan"];
+        next.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.3 }];
+        return next;
+      });
+      const built = projectFromDraft(draft);
+      return (
+        <>
+          <StudioOnScreenBox enabled onEnabledChange={() => undefined} draft={draft} onChange={setDraft} />
+          <output data-testid="seats">{typeof built === "string" ? "" : (built.boxes[0].seats || []).join(",")}</output>
+        </>
+      );
+    }
+    render(<SeatHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose seats" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bottom left" }));
+    expect(screen.getByTestId("seats").textContent).toBe("bl");
   });
 
   it("draws a colored box when you drag on the phone", () => {
