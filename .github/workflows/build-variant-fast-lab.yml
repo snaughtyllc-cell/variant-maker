@@ -22,6 +22,7 @@ on:
       - cursor/copyid-lab-record-cdb6
       - cursor/lab-backlog-6cba
       - cursor/lab-fast-ffmpeg-btbn-ef2b
+      - cursor/lab-fast-env-pin-ef2b
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/install_btbn_ffmpeg.py
@@ -41,6 +42,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,22 +65,32 @@ jobs:
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Lab Fast digest $DIGEST"
 
+  pin-lab:
+    needs: build-and-push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: "VaryForge Studio / lab"
+    permissions:
+      contents: read
+    env:
+      RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      LAB_FAST_ENDPOINT: xar25v77v3j27u
+      LAB_FAST_DIGEST: ${{ needs.build-and-push.outputs.digest }}
+    steps:
       - name: Pin Lab Fast endpoint to this digest
-        env:
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
-          LAB_FAST_ENDPOINT: xar25v77v3j27u
-          LAB_FAST_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
           test "$LAB_FAST_ENDPOINT" = "xar25v77v3j27u"
           test "$LAB_FAST_ENDPOINT" != "j0b1q4iuunzhnq"
+          test -n "$LAB_FAST_DIGEST"
           IMAGE="ghcr.io/snaughtyllc-cell/variant-fast@${LAB_FAST_DIGEST}"
           echo "Pin $LAB_FAST_ENDPOINT to $IMAGE"
           if [ -z "${RUNPOD_API_KEY:-}" ]; then
-            echo "RUNPOD_API_KEY unset; :lab is on GHCR. Recycle lab by hand. Do not PATCH live."
+            echo "RUNPOD_API_KEY unset on VaryForge Studio / lab; :lab is on GHCR. Recycle lab by hand. Do not PATCH live."
             exit 0
           fi
           curl -sfS -X PATCH "https://api.runpod.io/v2/serverless/${LAB_FAST_ENDPOINT}" \
             -H "Authorization: Bearer ${RUNPOD_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "{\"image\":\"${IMAGE}\"}"
+          echo "Pinned lab $LAB_FAST_ENDPOINT. Did not PATCH live."
