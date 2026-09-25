@@ -27,6 +27,7 @@ from .api_keys import ApiKeyStore
 from .api_v1 import authorize_bearer, register_api_v1
 from .api_v1_limits import IdempotencyStore, SlidingWindow
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
+from .billing import billing_status_payload
 from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
 from .captions import CaptionError, CaptionStore, split_caption_bank
@@ -186,6 +187,7 @@ from .models import (
     SourceOut,
     SplitExportOut,
     TeamOut,
+    UsageMeterOut,
     VariantOut,
     WorkflowCreateIn,
     WorkflowOut,
@@ -1460,6 +1462,24 @@ def create_app(
         viewing_id = viewing_id or user.workspace_id
         ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
         fresh = tenants.get_user(user.email) or user
+        rec = tenants.get_billing(user.email) or tenants.get_billing_for_workspace(viewing_id)
+        ws_obj = None
+        jobs = None
+        if hub is not None and viewing_id:
+            bundle = hub.bundle(viewing_id)
+            ws_obj = bundle.ws
+            jobs = list(getattr(bundle.store, "_jobs", {}).values())
+        if ws_obj is None:
+            ws_obj = getattr(fallback_store, "_ws", None)
+            jobs = jobs or list(getattr(fallback_store, "_jobs", {}).values())
+        billed = billing_status_payload(
+            rec=rec,
+            workspace=ws_obj,
+            is_admin=is_admin_email(user.email, admin_email),
+            environ=billing_environ if billing_environ is not None else auth_env,
+            jobs=jobs,
+        )
+        usage_raw = billed.get("usage")
         return AuthMeOut(
             auth_required=True,
             email=user.email,
@@ -1475,6 +1495,7 @@ def create_app(
                 workspace_experience=getattr(ws, "experience", None) if ws else None,
                 email=user.email,
             ),
+            usage=UsageMeterOut.model_validate(usage_raw) if usage_raw else None,
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:

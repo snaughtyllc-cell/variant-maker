@@ -1,8 +1,8 @@
 From 883415a697548a40274ecb6761c872fe9912c54a Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
 Date: Thu, 10 Sep 2026 13:22:09 +0000
-Subject: [PATCH] =?UTF-8?q?feat(studio):=20Agency=20paywall=20on=20Live=20?=
- =?UTF-8?q?=E2=80=94=20$200,=2090=20Fast=20hours,=20no=20hard=20stop?=
+Subject: [PATCH 1/2] =?UTF-8?q?feat(studio):=20Agency=20paywall=20on=20Liv?=
+ =?UTF-8?q?e=20=E2=80=94=20$200,=2090=20Fast=20hours,=20no=20hard=20stop?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -2145,6 +2145,983 @@ index 0000000..662044b
 +    vi.unstubAllGlobals();
 +  });
 +});
+-- 
+2.43.0
+
+
+From 887d8ac3e8486d85f18bba46bd231ff34e399276 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Thu, 10 Sep 2026 13:33:44 +0000
+Subject: [PATCH 2/2] feat(studio): drain Agency Fast hours, then Usage
+
+Agency is not uncapped. The sidebar meter runs 90 Fast hours down to
+zero while generating, then shows an amber Usage tag. Generate keeps
+running. Fast seconds are written when a job finishes so Live usage
+matches the bar.
+---
+ tests/server/test_billing.py        |  23 +++++
+ tests/server/test_billing_api.py    |   8 ++
+ tests/server/test_plans.py          |   7 +-
+ tests/server/test_usage_ledger.py   |  62 +++++++++++++
+ variant_maker/server/app.py         |  32 +++++++
+ variant_maker/server/billing.py     | 134 ++++++++++++++++++++--------
+ variant_maker/server/billing_api.py |   2 +
+ variant_maker/server/jobs.py        |  22 ++++-
+ variant_maker/server/models.py      |   3 +
+ variant_maker/server/plans.py       |  12 +--
+ variant_maker/server/usage.py       | 109 ++++++++++++++++++++++
+ web/app/globals.css                 |   7 ++
+ web/components/nav/SideNav.tsx      |   9 +-
+ web/lib/__tests__/usage.test.ts     |  35 +++++++-
+ web/lib/types.ts                    |   3 +
+ web/lib/usage.ts                    |  31 ++++++-
+ web/lib/useAuthMe.ts                |   9 +-
+ web/tests/SideNav.test.tsx          |  36 ++++++++
+ 18 files changed, 492 insertions(+), 52 deletions(-)
+
+diff --git a/tests/server/test_billing.py b/tests/server/test_billing.py
+index fd943de..9097e21 100644
+--- a/tests/server/test_billing.py
++++ b/tests/server/test_billing.py
+@@ -6,6 +6,7 @@ from variant_maker.server.billing import (
+     AGENCY_OVERAGE_USD_PER_HOUR,
+     FAST_USD_PER_HOUR,
+     apply_stripe_event,
++    fast_hour_meter,
+     get_plan,
+     grant_paid_subscription,
+     overage_snapshot,
+@@ -51,6 +52,28 @@ def test_agency_hours_and_rate_are_env_overridable(monkeypatch):
+     assert snap.overage_usd == 0.80
+ 
+ 
++def test_fast_hour_meter_drains_to_zero_then_usage():
++    plan = get_plan("agency", environ={})
++    full = fast_hour_meter(plan, overage_snapshot(plan, 0))
++    assert full["uncapped"] is False
++    assert full["hard_stop"] is False
++    assert full["tone"] == "included"
++    assert full["remaining_pct"] == 100
++    assert full["meter_line"] == "90 of 90h left"
++    half = fast_hour_meter(plan, overage_snapshot(plan, 45 * 3600))
++    assert half["remaining_pct"] == 50
++    assert half["meter_line"] == "45 of 90h left"
++    floor = fast_hour_meter(plan, overage_snapshot(plan, 90 * 3600))
++    assert floor["remaining_pct"] == 0
++    assert floor["tone"] == "included"
++    assert floor["meter_line"] == "0 of 90h left"
++    over = fast_hour_meter(plan, overage_snapshot(plan, 91 * 3600))
++    assert over["tone"] == "usage"
++    assert over["remaining_pct"] == 0
++    assert over["meter_line"] == "Usage"
++    assert over["hard_stop"] is False
++
++
+ def test_under_included_fast_hours_has_no_overage():
+     snap = overage_snapshot(get_plan("agency"), 1000)
+     assert snap.overage_usd == 0
+diff --git a/tests/server/test_billing_api.py b/tests/server/test_billing_api.py
+index aac5002..35ee327 100644
+--- a/tests/server/test_billing_api.py
++++ b/tests/server/test_billing_api.py
+@@ -150,6 +150,14 @@ def test_paid_webhook_lets_them_set_a_password_without_jeff(tmp_path):
+     assert payload["status"] == "active"
+     assert payload["unlimited"] is False
+     assert payload["plan"]["id"] == "agency"
++    assert payload["usage"]["tone"] == "included"
++    assert payload["usage"]["remaining_pct"] == 100
++    assert payload["usage"]["meter_line"] == "90 of 90h left"
++    me = client.get("/api/auth/me")
++    assert me.status_code == 200
++    assert me.json()["usage"]["meter_line"] == "90 of 90h left"
++    assert me.json()["usage"]["uncapped"] is False
++    assert me.json()["usage"]["tone"] == "included"
+ 
+ 
+ def test_checkout_503_when_price_missing(tmp_path):
+diff --git a/tests/server/test_plans.py b/tests/server/test_plans.py
+index 9f6cd28..03b5d53 100644
+--- a/tests/server/test_plans.py
++++ b/tests/server/test_plans.py
+@@ -27,7 +27,8 @@ def test_ladder_matches_the_sell_sheet():
+     assert (studio.included_packs, studio.extra_pack_price, studio.monthly) == (32, 3.0, 79)
+     assert studio.included_variants == 256
+     assert agency.monthly == 200
+-    assert agency.uncapped is True
++    assert agency.uncapped is False
++    assert agency.hard_stop is False
+     assert get_plan("internal").uncapped is True
+ 
+ 
+@@ -57,7 +58,8 @@ def test_limit_copy_points_at_the_next_upgrade():
+     assert limit_message(get_plan("studio")) == (
+         "Studio includes 32 packs. Extra packs are $3.00, or Agency is $200/month."
+     )
+-    assert get_plan("agency").uncapped is True
++    assert get_plan("agency").uncapped is False
++    assert get_plan("agency").hard_stop is False
+ 
+ 
+ def test_meter_line_hides_internal_and_counts_packs():
+@@ -71,6 +73,7 @@ def test_meter_line_hides_internal_and_counts_packs():
+ 
+ def test_enforce_quota_allows_internal_and_blocks_over_included():
+     enforce_quota(get_plan("internal"), used_variants=10_000, requested=8)
++    enforce_quota(get_plan("agency"), used_variants=10_000, requested=8)
+     enforce_quota(get_plan("creator"), used_variants=88, requested=8)
+     with pytest.raises(UsageLimitError, match="Creator includes 12 packs"):
+         enforce_quota(get_plan("creator"), used_variants=96, requested=8)
+diff --git a/tests/server/test_usage_ledger.py b/tests/server/test_usage_ledger.py
+index 4cc99ba..cb41efb 100644
+--- a/tests/server/test_usage_ledger.py
++++ b/tests/server/test_usage_ledger.py
+@@ -46,6 +46,68 @@ def test_union_counts_gallery_copies_the_ledger_does_not_have(tmp_path):
+     assert count_ok_union(str(path), extra, month="2026-09") == 4
+ 
+ 
++def test_record_fast_job_is_once_per_job_and_skips_hq(tmp_path):
++    from variant_maker.server.usage import record_fast_job
++
++    path = tmp_path / "usage.jsonl"
++    assert record_fast_job(
++        str(path),
++        job_id="fast1",
++        quality_mode="fast",
++        real_work_s=90,
++        utc="2026-09-10T12:00:00Z",
++        submitted_utc="2026-09-10T11:58:30Z",
++        completed_utc="2026-09-10T12:00:00Z",
++    )
++    assert record_fast_job(
++        str(path), job_id="fast1", quality_mode="fast", real_work_s=12,
++    ) is False
++    assert record_fast_job(
++        str(path), job_id="hq1", quality_mode="hq", real_work_s=600,
++    ) is False
++    from datetime import UTC, datetime, timedelta
++    from types import SimpleNamespace
++
++    from variant_maker.server.billing import period_fast_seconds
++
++    ws = SimpleNamespace(usage_path=str(path))
++    now = datetime(2026, 9, 10, 13, tzinfo=UTC)
++    assert period_fast_seconds(ws, start=now - timedelta(days=1), end=now) == 90
++    assert count_ok_this_month(str(path), month="2026-09") == 0
++
++
++def test_period_fast_seconds_includes_running_fast_job(tmp_path):
++    from datetime import UTC, datetime, timedelta
++    from types import SimpleNamespace
++
++    from variant_maker.server.billing import period_fast_seconds
++    from variant_maker.server.usage import record_fast_job
++
++    now = datetime(2026, 9, 10, 12, tzinfo=UTC)
++    path = tmp_path / "usage.jsonl"
++    record_fast_job(
++        str(path),
++        job_id="done1",
++        quality_mode="fast",
++        real_work_s=90,
++        utc=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
++    )
++    running = SimpleNamespace(
++        quality_mode="fast",
++        state="running",
++        created_utc=(now - timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
++    )
++    ws = SimpleNamespace(usage_path=str(path))
++    seconds = period_fast_seconds(
++        ws,
++        start=now - timedelta(days=1),
++        end=now + timedelta(hours=1),
++        jobs=[running],
++        now=now,
++    )
++    assert seconds == 120
++
++
+ def test_remaining_pct_drains_from_100_to_0():
+     from variant_maker.server.plans import remaining_pct
+     assert remaining_pct(used_variants=0, included_variants=96) == 100
+diff --git a/variant_maker/server/app.py b/variant_maker/server/app.py
+index 151d019..eb22284 100644
+--- a/variant_maker/server/app.py
++++ b/variant_maker/server/app.py
+@@ -23,6 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
+ from variant_maker.farm.ledger import Ledger
+ 
+ from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
++from .billing import billing_status_payload
+ from .billing_api import register_billing_routes
+ from .caption_ai import parse_caption_prompts_field
+ from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
+@@ -1311,10 +1312,41 @@ def create_app(
+             included_variants=plan.included_variants,
+             extra_pack_price=plan.extra_pack_price,
+             uncapped=plan.uncapped,
++            hard_stop=plan.hard_stop,
+             meter_line=meter_line(plan, used),
+             label=plan.label,
+             remaining_pct=remaining,
+         )
++        rec = tenants.get_billing(user.email) or tenants.get_billing_for_workspace(viewing_id)
++        jobs = None
++        ws_obj = None
++        if hub is not None and viewing_id:
++            bundle = hub.bundle(viewing_id)
++            ws_obj = bundle.ws
++            jobs = list(getattr(bundle.store, "_jobs", {}).values())
++        billed = billing_status_payload(
++            rec=rec,
++            workspace=ws_obj,
++            is_admin=is_admin_email(user.email, admin_email),
++            environ=billing_environ if billing_environ is not None else auth_env,
++            jobs=jobs,
++        )
++        fast = billed.get("usage")
++        if fast:
++            usage = UsageOut(
++                month=month_key(),
++                used_variants=used,
++                included_packs=None,
++                included_variants=None,
++                extra_pack_price=None,
++                uncapped=False,
++                hard_stop=False,
++                tone=fast.get("tone"),
++                meter_line=fast.get("meter_line"),
++                label=fast.get("label") or plan.label,
++                remaining_pct=fast.get("remaining_pct"),
++                included_fast_hours=fast.get("included_fast_hours"),
++            )
+         return AuthMeOut(
+             auth_required=True,
+             email=user.email,
+diff --git a/variant_maker/server/billing.py b/variant_maker/server/billing.py
+index ec13259..c9f38f3 100644
+--- a/variant_maker/server/billing.py
++++ b/variant_maker/server/billing.py
+@@ -7,7 +7,7 @@ from __future__ import annotations
+ 
+ import json
+ import os
+-from collections.abc import Mapping
++from collections.abc import Iterable, Mapping
+ from dataclasses import dataclass
+ from datetime import UTC, datetime, timedelta
+ from typing import Any
+@@ -17,6 +17,7 @@ from variant_maker.server.tenants import (
+     TenantStore,
+     normalize_email,
+ )
++from variant_maker.server.usage import in_flight_fast_seconds
+ 
+ # Internal Fast COGS. Do not put this number on the marketing site.
+ FAST_USD_PER_HOUR = 0.58
+@@ -95,15 +96,26 @@ def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str
+     return (env.get(plan.stripe_price_env) or "").strip()
+ 
+ 
+-def period_fast_seconds(workspace: Any, *, start: datetime | None = None, end: datetime | None = None) -> float:
++def period_fast_seconds(
++    workspace: Any,
++    *,
++    start: datetime | None = None,
++    end: datetime | None = None,
++    jobs: Iterable[Any] | None = None,
++    now: datetime | None = None,
++) -> float:
+     """Fast worker-seconds in [start, end). Live copy-ledger rows without Fast
+-    telemetry count as 0 — overage stays recorded, Generate is not blocked.
++    telemetry count as 0. In-flight Fast jobs add elapsed wall time so the
++    Agency meter runs down while generating.
+     """
+-    path = getattr(workspace, "usage_path", None)
++    live_now = now or datetime.now(UTC)
++    if live_now.tzinfo is None:
++        live_now = live_now.replace(tzinfo=UTC)
++    else:
++        live_now = live_now.astimezone(UTC)
++    path = getattr(workspace, "usage_path", None) if workspace is not None else None
+     path = path() if callable(path) else path
+-    if not path or not os.path.isfile(path):
+-        return 0.0
+-    when_end = end or datetime.now(UTC)
++    when_end = end or live_now
+     if when_end.tzinfo is None:
+         when_end = when_end.replace(tzinfo=UTC)
+     when_end = when_end.astimezone(UTC)
+@@ -114,38 +126,40 @@ def period_fast_seconds(workspace: Any, *, start: datetime | None = None, end: d
+     else:
+         when_start = start.astimezone(UTC)
+     total = 0.0
+-    try:
+-        with open(path, encoding="utf-8") as f:
+-            lines = f.readlines()
+-    except OSError:
+-        return 0.0
+-    for line in lines:
+-        line = line.strip()
+-        if not line:
+-            continue
++    if path and os.path.isfile(path):
+         try:
+-            row = json.loads(line)
+-        except json.JSONDecodeError:
+-            continue
+-        if not isinstance(row, dict):
+-            continue
+-        if str(row.get("quality_mode") or "").strip().lower() != "fast":
+-            continue
+-        ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
+-        if ts is None or ts < when_start or ts >= when_end:
+-            continue
+-        billed = row.get("billed")
+-        if isinstance(billed, dict) and billed.get("real_work_s") is not None:
++            with open(path, encoding="utf-8") as f:
++                lines = f.readlines()
++        except OSError:
++            lines = []
++        for line in lines:
++            line = line.strip()
++            if not line:
++                continue
+             try:
+-                total += max(0.0, float(billed["real_work_s"]))
++                row = json.loads(line)
++            except json.JSONDecodeError:
++                continue
++            if not isinstance(row, dict):
+                 continue
+-            except (TypeError, ValueError):
+-                pass
+-        submitted = _parse_utc(str(row.get("submitted_utc") or ""))
+-        finished = _parse_utc(str(row.get("completed_utc") or row.get("utc") or ""))
+-        if submitted is None or finished is None:
+-            continue
+-        total += max(0.0, (finished - submitted).total_seconds())
++            if str(row.get("quality_mode") or "").strip().lower() != "fast":
++                continue
++            ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
++            if ts is None or ts < when_start or ts >= when_end:
++                continue
++            billed = row.get("billed")
++            if isinstance(billed, dict) and billed.get("real_work_s") is not None:
++                try:
++                    total += max(0.0, float(billed["real_work_s"]))
++                    continue
++                except (TypeError, ValueError):
++                    pass
++            submitted = _parse_utc(str(row.get("submitted_utc") or ""))
++            finished = _parse_utc(str(row.get("completed_utc") or row.get("utc") or ""))
++            if submitted is None or finished is None:
++                continue
++            total += max(0.0, (finished - submitted).total_seconds())
++    total += in_flight_fast_seconds(jobs, now=live_now, start=when_start)
+     return total
+ 
+ 
+@@ -162,6 +176,45 @@ def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
+     return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
+ 
+ 
++def _hours_label(seconds: float) -> str:
++    hours = max(0.0, float(seconds or 0.0)) / 3600.0
++    if abs(hours - round(hours)) < 0.05:
++        return str(round(hours))
++    return f"{hours:.1f}"
++
++
++def fast_hour_meter(plan: Plan, snap: OverageSnapshot) -> dict[str, Any]:
++    included = snap.included_fast_seconds
++    remaining_pct = 0 if included <= 0 else round(100.0 * snap.remaining_fast_seconds / included)
++    remaining_pct = max(0, min(100, remaining_pct))
++    if snap.overage_fast_seconds > 0:
++        return {
++            "uncapped": False,
++            "hard_stop": False,
++            "tone": "usage",
++            "remaining_pct": 0,
++            "meter_line": "Usage",
++            "label": "Usage",
++            "included_fast_hours": plan.included_fast_hours,
++            "remaining_fast_seconds": snap.remaining_fast_seconds,
++            "overage_fast_seconds": snap.overage_fast_seconds,
++        }
++    total = _hours_label(plan.included_fast_hours * 3600.0)
++    left = _hours_label(snap.remaining_fast_seconds)
++    line = f"{left} of {total}h left"
++    return {
++        "uncapped": False,
++        "hard_stop": False,
++        "tone": "included",
++        "remaining_pct": remaining_pct,
++        "meter_line": line,
++        "label": line,
++        "included_fast_hours": plan.included_fast_hours,
++        "remaining_fast_seconds": snap.remaining_fast_seconds,
++        "overage_fast_seconds": snap.overage_fast_seconds,
++    }
++
++
+ def overage_snapshot(plan: Plan, fast_seconds: float) -> OverageSnapshot:
+     used = max(0.0, float(fast_seconds or 0.0))
+     included = max(0.0, float(plan.included_fast_hours) * 3600.0)
+@@ -398,6 +451,8 @@ def billing_status_payload(
+     workspace: Any,
+     is_admin: bool,
+     environ: Mapping[str, str] | None = None,
++    jobs: Iterable[Any] | None = None,
++    now: datetime | None = None,
+ ) -> dict[str, Any]:
+     """Usage readout. Never blocks Generate — overage is recorded, not a hard stop."""
+     if is_admin and (rec is None or rec.status not in ACTIVE_STATUSES):
+@@ -413,6 +468,7 @@ def billing_status_payload(
+             "period_start_utc": None,
+             "period_end_utc": None,
+             "collects_overage": False,
++            "usage": None,
+         }
+     if rec is None or rec.status not in ACTIVE_STATUSES:
+         return {
+@@ -427,11 +483,14 @@ def billing_status_payload(
+             "period_start_utc": rec.period_start_utc if rec is not None else None,
+             "period_end_utc": rec.period_end_utc if rec is not None else None,
+             "collects_overage": False,
++            "usage": None,
+         }
+     plan = get_plan(rec.plan, environ)
+     start = _parse_utc(rec.period_start_utc)
+     end = _parse_utc(rec.period_end_utc)
+-    seconds = period_fast_seconds(workspace, start=start, end=end) if workspace is not None else 0.0
++    seconds = period_fast_seconds(
++        workspace, start=start, end=end, jobs=jobs, now=now,
++    )
+     snap = overage_snapshot(plan, seconds)
+     return {
+         "plan": plan_public_dict(plan),
+@@ -445,4 +504,5 @@ def billing_status_payload(
+         "period_start_utc": rec.period_start_utc,
+         "period_end_utc": rec.period_end_utc,
+         "collects_overage": True,
++        "usage": fast_hour_meter(plan, snap),
+     }
+diff --git a/variant_maker/server/billing_api.py b/variant_maker/server/billing_api.py
+index d14e172..660caeb 100644
+--- a/variant_maker/server/billing_api.py
++++ b/variant_maker/server/billing_api.py
+@@ -141,9 +141,11 @@ def register_billing_routes(
+         if rec is None:
+             rec = tenants.get_billing_for_workspace(user.workspace_id)
+         ws = getattr(store, "_ws", None)
++        jobs = list(getattr(store, "_jobs", {}).values())
+         return billing_status_payload(
+             rec=rec,
+             workspace=ws,
+             is_admin=is_admin(user.email, admin_email),
+             environ=billing_env,
++            jobs=jobs,
+         )
+diff --git a/variant_maker/server/jobs.py b/variant_maker/server/jobs.py
+index 5995bc5..1ca79b4 100644
+--- a/variant_maker/server/jobs.py
++++ b/variant_maker/server/jobs.py
+@@ -23,7 +23,7 @@ from .caption_ai import (
+ )
+ from .events import VariantEvent, event_to_dict
+ from .runner import Runner, normalize_quality_mode
+-from .usage import month_key, record_ok_copies
++from .usage import month_key, record_fast_job, record_ok_copies
+ from .workspace import Workspace
+ 
+ GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
+@@ -450,6 +450,25 @@ class JobStore:
+         if copies:
+             record_ok_copies(self._ws.usage_path(), copies)
+ 
++    def _record_fast_hours(self, job: Job) -> None:
++        if str(job.quality_mode or "").strip().lower() != "fast":
++            return
++        finished = _now()
++        start = _parse_utc(job.created_utc)
++        end = _parse_utc(finished)
++        real = 0.0
++        if start is not None and end is not None:
++            real = max(0.0, (end - start).total_seconds())
++        record_fast_job(
++            self._ws.usage_path(),
++            job_id=job.job_id,
++            quality_mode=job.quality_mode,
++            real_work_s=real,
++            utc=finished,
++            submitted_utc=job.created_utc,
++            completed_utc=finished,
++        )
++
+     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
+                     allow_creative_escalate: bool = True,
+                     quality_mode: str = "fast",
+@@ -827,6 +846,7 @@ class JobStore:
+                 for source in job.sources:
+                     self._pull_missing_outputs(source.source_id)
+                 self._refresh_copy_error(job)
++            self._record_fast_hours(job)
+             self._persist(job)
+             self.prune_finished_jobs()
+             ev = self._done.get(job.job_id)
+diff --git a/variant_maker/server/models.py b/variant_maker/server/models.py
+index 687434a..1b491ae 100644
+--- a/variant_maker/server/models.py
++++ b/variant_maker/server/models.py
+@@ -465,9 +465,12 @@ class UsageOut(BaseModel):
+     included_variants: int | None = None
+     extra_pack_price: float | None = None
+     uncapped: bool = False
++    hard_stop: bool = True
++    tone: Literal["included", "usage"] | None = None
+     meter_line: str | None = None
+     label: str
+     remaining_pct: int | None = None
++    included_fast_hours: float | None = None
+ 
+ 
+ class AuthMeOut(BaseModel):
+diff --git a/variant_maker/server/plans.py b/variant_maker/server/plans.py
+index bf9b1ff..fc638aa 100644
+--- a/variant_maker/server/plans.py
++++ b/variant_maker/server/plans.py
+@@ -1,8 +1,9 @@
+ """Varimo subscription plans: packs of 8, billed monthly.
+ 
+ Pay as you go / Creator / Studio / Agency are the sell ladder. Internal is
+-Jeff's uncapped operator studio. Missing/unknown plan ids stay internal so
+-existing live workspaces are not capped on deploy.
++Jeff's uncapped operator studio. Agency is $200 / 90 Fast hours, no hard
++stop — the meter drains to 0, then Usage. Missing/unknown plan ids stay
++internal so existing live workspaces are not capped on deploy.
+ """
+ from __future__ import annotations
+ 
+@@ -36,6 +37,7 @@ class Plan:
+     extra_pack_price: float
+     experience: Experience
+     uncapped: bool = False
++    hard_stop: bool = True
+ 
+     @property
+     def included_variants(self) -> int:
+@@ -46,8 +48,8 @@ PLANS: dict[str, Plan] = {
+     "payg": Plan("payg", "Pay as you go", 0, 0, 5.0, "solo"),
+     "creator": Plan("creator", "Creator", 35, 12, 3.5, "solo"),
+     "studio": Plan("studio", "Studio", 79, 32, 3.0, "agency"),
+-    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=True),
+-    "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True),
++    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=False, hard_stop=False),
++    "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True, hard_stop=False),
+ }
+ 
+ 
+@@ -135,7 +137,7 @@ def remaining_pct(used_variants: int, included_variants: int) -> int:
+ 
+ 
+ def enforce_quota(plan: Plan, used_variants: int, requested: int) -> None:
+-    if plan.uncapped:
++    if plan.uncapped or not plan.hard_stop:
+         return
+     if used_variants + max(0, int(requested)) > plan.included_variants:
+         raise UsageLimitError(limit_message(plan))
+diff --git a/variant_maker/server/usage.py b/variant_maker/server/usage.py
+index 4cf905c..4dc15e9 100644
+--- a/variant_maker/server/usage.py
++++ b/variant_maker/server/usage.py
+@@ -5,8 +5,13 @@ import datetime as _dt
+ import json
+ import os
+ import threading
++from collections.abc import Iterable
++from typing import Any
+ 
+ _lock = threading.Lock()
++_IN_FLIGHT_STATES = frozenset({
++    "queued", "reserved", "starting", "running", "uploading", "cancel_requested",
++})
+ 
+ 
+ def month_key(now: _dt.datetime | None = None) -> str:
+@@ -52,6 +57,10 @@ def count_ok_union(
+     seen: set[str] = set()
+     total = 0
+     for row in _iter_rows(path):
++        if str(row.get("kind") or "") == "fast_job":
++            continue
++        if row.get("source_id") is None:
++            continue
+         if str(row.get("month") or "") != target:
+             continue
+         key = _row_key(row)
+@@ -83,6 +92,8 @@ def record_ok_copies(
+     with _lock:
+         seen: set[str] = set()
+         for row in _iter_rows(path):
++            if str(row.get("kind") or "") == "fast_job":
++                continue
+             if str(row.get("month") or "") == target:
+                 seen.add(_row_key(row))
+         new_rows: list[str] = []
+@@ -103,3 +114,101 @@ def record_ok_copies(
+         with open(path, "a", encoding="utf-8") as f:
+             f.write("\n".join(new_rows) + "\n")
+         return len(new_rows)
++
++
++def _parse_utc(value: str | None) -> _dt.datetime | None:
++    raw = (value or "").strip()
++    if not raw:
++        return None
++    if raw.endswith("Z"):
++        raw = raw[:-1] + "+00:00"
++    try:
++        dt = _dt.datetime.fromisoformat(raw)
++    except ValueError:
++        return None
++    if dt.tzinfo is None:
++        dt = dt.replace(tzinfo=_dt.UTC)
++    return dt.astimezone(_dt.UTC)
++
++
++def _job_ids(path: str) -> set[str]:
++    ids: set[str] = set()
++    for row in _iter_rows(path):
++        job_id = str(row.get("job_id") or "").strip()
++        if job_id:
++            ids.add(job_id)
++    return ids
++
++
++def record_fast_job(
++    path: str,
++    *,
++    job_id: str,
++    quality_mode: str,
++    real_work_s: float,
++    utc: str | None = None,
++    submitted_utc: str | None = None,
++    completed_utc: str | None = None,
++) -> bool:
++    """One Fast-hour row per job. Copy-ledger rows stay pack counts."""
++    if str(quality_mode or "").strip().lower() != "fast":
++        return False
++    key = str(job_id or "").strip()
++    if not key:
++        return False
++    try:
++        seconds = max(0.0, float(real_work_s or 0.0))
++    except (TypeError, ValueError):
++        return False
++    when = utc or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
++    with _lock:
++        if key in _job_ids(path):
++            return False
++        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
++        row = {
++            "kind": "fast_job",
++            "job_id": key,
++            "quality_mode": "fast",
++            "utc": when,
++            "submitted_utc": submitted_utc or when,
++            "completed_utc": completed_utc or when,
++            "billed": {"real_work_s": seconds},
++        }
++        with open(path, "a", encoding="utf-8") as f:
++            f.write(json.dumps(row, separators=(",", ":")) + "\n")
++    return True
++
++
++def in_flight_fast_seconds(
++    jobs: Iterable[Any] | None,
++    *,
++    now: _dt.datetime | None = None,
++    start: _dt.datetime | None = None,
++) -> float:
++    """Elapsed Fast time on jobs that are still generating."""
++    when = now if now is not None else _dt.datetime.now(_dt.UTC)
++    if when.tzinfo is None:
++        when = when.replace(tzinfo=_dt.UTC)
++    else:
++        when = when.astimezone(_dt.UTC)
++    when_start = start
++    if when_start is not None:
++        if when_start.tzinfo is None:
++            when_start = when_start.replace(tzinfo=_dt.UTC)
++        else:
++            when_start = when_start.astimezone(_dt.UTC)
++    total = 0.0
++    for job in jobs or ():
++        if str(getattr(job, "quality_mode", "") or "").strip().lower() != "fast":
++            continue
++        if str(getattr(job, "state", "") or "") not in _IN_FLIGHT_STATES:
++            continue
++        started = _parse_utc(str(getattr(job, "created_utc", "") or ""))
++        if started is None:
++            continue
++        if when_start is not None and started < when_start:
++            started = when_start
++        if started >= when:
++            continue
++        total += (when - started).total_seconds()
++    return max(0.0, total)
+diff --git a/web/app/globals.css b/web/app/globals.css
+index 904d4a6..2814b53 100644
+--- a/web/app/globals.css
++++ b/web/app/globals.css
+@@ -141,6 +141,7 @@ input, select, textarea { font-size: 16px; }
+   background: var(--color-cyan);
+   border-radius: inherit;
+   height: 100%;
++  transition: width 240ms ease, background 240ms ease;
+ }
+ .vf-sidenav-usage-label {
+   color: #6e888e;
+@@ -149,6 +150,12 @@ input, select, textarea { font-size: 16px; }
+   line-height: 1.3;
+   margin-top: 6px;
+ }
++.vf-sidenav-usage[data-tone="usage"] .vf-sidenav-usage-fill {
++  background: var(--color-amber2);
++}
++.vf-sidenav-usage[data-tone="usage"] .vf-sidenav-usage-label {
++  color: var(--color-amber2);
++}
+ .vf-sidenav-account { align-items: center; display: flex; gap: 10px; padding: 14px 8px 0; }
+ .vf-sidenav-avatar {
+   align-items: center;
+diff --git a/web/components/nav/SideNav.tsx b/web/components/nav/SideNav.tsx
+index 8ae8731..f867198 100644
+--- a/web/components/nav/SideNav.tsx
++++ b/web/components/nav/SideNav.tsx
+@@ -92,8 +92,15 @@ export function SideNav() {
+       {usageBar ? (
+         <div
+           className="vf-sidenav-usage"
++          data-tone={usageBar.tone}
+           role="progressbar"
+-          aria-label="Monthly packs remaining"
++          aria-label={
++            usageBar.tone === "usage"
++              ? "Fast hour usage"
++              : usageBar.label.endsWith("h left")
++                ? "Fast hours remaining"
++                : "Monthly packs remaining"
++          }
+           aria-valuemin={0}
+           aria-valuemax={100}
+           aria-valuenow={usageBar.pct}
+diff --git a/web/lib/__tests__/usage.test.ts b/web/lib/__tests__/usage.test.ts
+index c8735b1..76a6aec 100644
+--- a/web/lib/__tests__/usage.test.ts
++++ b/web/lib/__tests__/usage.test.ts
+@@ -51,7 +51,7 @@ describe("sidebarUsage", () => {
+         included_packs: 12,
+         remaining_pct: 100,
+       }),
+-    ).toEqual({ pct: 100, label: "12 of 12 left" });
++    ).toEqual({ pct: 100, label: "12 of 12 left", tone: "included" });
+     expect(
+       sidebarUsage({
+         uncapped: false,
+@@ -60,10 +60,11 @@ describe("sidebarUsage", () => {
+         included_packs: 12,
+         remaining_pct: 0,
+       }),
+-    ).toEqual({ pct: 0, label: "0 of 12 left" });
++    ).toEqual({ pct: 0, label: "0 of 12 left", tone: "included" });
+     expect(sidebarUsage({ uncapped: true, used_variants: 8, included_packs: 0 })).toEqual({
+       pct: 100,
+       label: "uncapped",
++      tone: "included",
+     });
+     expect(
+       sidebarUsage({
+@@ -74,6 +75,36 @@ describe("sidebarUsage", () => {
+       }),
+     ).toBeNull();
+   });
++
++  it("drains Agency Fast hours and flips to Usage after the included block", () => {
++    expect(
++      sidebarUsage({
++        uncapped: false,
++        tone: "included",
++        remaining_pct: 100,
++        meter_line: "90 of 90h left",
++        included_fast_hours: 90,
++      }),
++    ).toEqual({ pct: 100, label: "90 of 90h left", tone: "included" });
++    expect(
++      sidebarUsage({
++        uncapped: false,
++        tone: "included",
++        remaining_pct: 0,
++        meter_line: "0 of 90h left",
++        included_fast_hours: 90,
++      }),
++    ).toEqual({ pct: 0, label: "0 of 90h left", tone: "included" });
++    expect(
++      sidebarUsage({
++        uncapped: false,
++        tone: "usage",
++        remaining_pct: 0,
++        meter_line: "Usage",
++        included_fast_hours: 90,
++      }),
++    ).toEqual({ pct: 0, label: "Usage", tone: "usage" });
++  });
+ });
+ 
+ describe("monthMeterCopy", () => {
+diff --git a/web/lib/types.ts b/web/lib/types.ts
+index 04babfe..4969bb2 100644
+--- a/web/lib/types.ts
++++ b/web/lib/types.ts
+@@ -352,9 +352,12 @@ export interface UsageMeter {
+   included_variants?: number | null;
+   extra_pack_price?: number | null;
+   uncapped: boolean;
++  hard_stop?: boolean;
++  tone?: "included" | "usage" | null;
+   meter_line: string | null;
+   label?: string;
+   remaining_pct?: number | null;
++  included_fast_hours?: number | null;
+ }
+ 
+ export interface AuthMe {
+diff --git a/web/lib/usage.ts b/web/lib/usage.ts
+index 1719e0f..658cc6a 100644
+--- a/web/lib/usage.ts
++++ b/web/lib/usage.ts
+@@ -41,21 +41,46 @@ export function remainingPct(
+   return Math.round((100 * left) / included);
+ }
+ 
++export type UsageTone = "included" | "usage";
++
++export type SidebarUsage = { pct: number; label: string; tone: UsageTone };
++
+ export function sidebarUsage(
+   usage:
+     | {
+         uncapped?: boolean;
++        tone?: UsageTone | string | null;
+         used_variants?: number;
+         included_variants?: number | null;
+         included_packs?: number | null;
++        included_fast_hours?: number | null;
+         remaining_pct?: number | null;
++        meter_line?: string | null;
++        label?: string | null;
+       }
+     | null
+     | undefined,
+-): { pct: number; label: string } | null {
++): SidebarUsage | null {
+   if (!usage) return null;
++  const meter = (usage.meter_line || "").trim();
++  const isFastHours =
++    !usage.uncapped &&
++    (usage.tone === "usage" ||
++      usage.tone === "included" ||
++      usage.included_fast_hours != null ||
++      meter === "Usage" ||
++      /h left$/.test(meter));
++  if (isFastHours) {
++    const tone: UsageTone = usage.tone === "usage" ? "usage" : "included";
++    const label = (meter || usage.label || "").trim();
++    const pct = Math.max(
++      0,
++      Math.min(100, Math.round(usage.remaining_pct ?? (tone === "usage" ? 0 : 100))),
++    );
++    return { pct, label: label || (tone === "usage" ? "Usage" : "0h left"), tone };
++  }
+   if (usage.uncapped) {
+-    return { pct: usage.remaining_pct ?? 100, label: "uncapped" };
++    return { pct: usage.remaining_pct ?? 100, label: "uncapped", tone: "included" };
+   }
+   const includedPacks = usage.included_packs ?? 0;
+   const includedVariants = usage.included_variants ?? includedPacks * 8;
+@@ -65,5 +90,5 @@ export function sidebarUsage(
+   const leftPacks = Math.max(0, includedVariants - (usage.used_variants ?? 0)) / 8;
+   const shown =
+     leftPacks === Math.floor(leftPacks) ? String(leftPacks) : leftPacks.toFixed(1);
+-  return { pct, label: `${shown} of ${includedPacks} left` };
++  return { pct, label: `${shown} of ${includedPacks} left`, tone: "included" };
+ }
+diff --git a/web/lib/useAuthMe.ts b/web/lib/useAuthMe.ts
+index 8f95da5..f3b76fd 100644
+--- a/web/lib/useAuthMe.ts
++++ b/web/lib/useAuthMe.ts
+@@ -7,7 +7,14 @@ export function useAuthMe() {
+   const { data, mutate, isLoading, error } = useSWR<AuthMe>(
+     "/api/auth/me",
+     getAuthMe,
+-    { revalidateOnFocus: true },
++    {
++      revalidateOnFocus: true,
++      refreshInterval: (latest) => {
++        const usage = latest?.usage;
++        if (!usage || usage.uncapped) return 0;
++        return 4000;
++      },
++    },
+   );
+   return { data, mutate, isLoading, error };
+ }
+diff --git a/web/tests/SideNav.test.tsx b/web/tests/SideNav.test.tsx
+index 25f44a1..80fb298 100644
+--- a/web/tests/SideNav.test.tsx
++++ b/web/tests/SideNav.test.tsx
+@@ -222,4 +222,40 @@ describe("SideNav", () => {
+     );
+     expect(screen.getByText("0 of 12 left")).toBeInTheDocument();
+   });
++
++  it("drains Agency Fast hours and flips to Usage after the included block", () => {
++    me.data = {
++      ...BASE,
++      plan: "agency",
++      usage: {
++        uncapped: false,
++        hard_stop: false,
++        tone: "included",
++        used_variants: 0,
++        included_fast_hours: 90,
++        remaining_pct: 50,
++        meter_line: "45 of 90h left",
++      },
++    };
++    const { rerender } = render(<SideNav />);
++    const bar = screen.getByRole("progressbar", { name: "Fast hours remaining" });
++    expect(bar).toHaveAttribute("aria-valuenow", "50");
++    expect(bar).toHaveAttribute("data-tone", "included");
++    expect(screen.getByText("45 of 90h left")).toBeInTheDocument();
++    me.data = {
++      ...me.data,
++      usage: {
++        ...me.data.usage!,
++        tone: "usage",
++        remaining_pct: 0,
++        meter_line: "Usage",
++      },
++    };
++    rerender(<SideNav />);
++    expect(screen.getByRole("progressbar", { name: "Fast hour usage" })).toHaveAttribute(
++      "aria-valuenow",
++      "0",
++    );
++    expect(screen.getByText("Usage")).toBeInTheDocument();
++  });
+ });
 -- 
 2.43.0
 
