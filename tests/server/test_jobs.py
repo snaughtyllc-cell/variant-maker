@@ -1014,7 +1014,12 @@ def test_studio_burns_onscreen_when_the_worker_skipped_it(tmp_path, monkeypatch)
         height = 1920
         color = None
 
+    def fake_poster(video_path, out_path):
+        with open(out_path, "wb") as fh:
+            fh.write(b"poster")
+
     monkeypatch.setattr("variant_maker.onscreen.burn_file", fake_burn)
+    monkeypatch.setattr("variant_maker.onscreen.write_text_poster", fake_poster)
     monkeypatch.setattr("variant_maker.probe.probe", lambda path: Probe())
 
     class _Runner(FakeRunner):
@@ -1058,7 +1063,9 @@ def test_studio_burns_onscreen_when_the_worker_skipped_it(tmp_path, monkeypatch)
     assert burned["text"] == "on the frame"
     assert burned["size"] == (1080, 1920)
     assert objects.puts and objects.puts[0][1] == b"burned"
+    assert any(key.endswith("look_text_v01.jpg") and body == b"poster" for key, body in objects.puts)
     assert job.sources[0].variants[0].quality["onscreen"]["text"] == "on the frame"
+    assert job.sources[0].variants[0].quality["onscreen_poster"] == "look_text_v01.jpg"
 
 
 def test_each_source_keeps_its_own_onscreen_text(tmp_path):

@@ -27,6 +27,7 @@ class VariantOut(BaseModel):
     look_mae_max: float | None = None
     look_src_url: str | None = None
     look_var_url: str | None = None
+    text_poster_url: str | None = None
     look_frames: list = Field(default_factory=list)
     look_artifact_sha256: str | None = None
     look_approved_sha256: str | None = None

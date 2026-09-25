@@ -274,6 +274,7 @@ def _variant_out(source_id: str, v, *, include_insights: bool, file_ready: bool 
         look_mae_max=mae_max,
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
+        text_poster_url=_look_file_url(source_id, quality.get("onscreen_poster") if isinstance(quality.get("onscreen_poster"), str) else None),
         look_frames=frames,
         look_artifact_sha256=artifact,
         look_approved_sha256=approved,

@@ -7,7 +7,7 @@ Rules:
 - Every caption owns at least one box.
 - At most four captions and four boxes.
 - One caption may use every box. Extra captions each need their own box.
-- Takes of a caption shift inside its boxes (size, alignment, spot).
+- The first take uses the spot the user previewed. Later takes move inside that box.
 """
 from __future__ import annotations
 
@@ -23,6 +23,18 @@ MAX_CHARS = 120
 SIZE_STEPS = (1.0, 0.9, 0.8)
 ALIGNS = ("center", "left", "right")
 SPOTS = ("middle", "top", "bottom")
+# Inside the box the user drew. First spot matches the untouched preview.
+_INSIDE = (
+    (0.5, 0.5),
+    (0.18, 0.18),
+    (0.82, 0.82),
+    (0.82, 0.18),
+    (0.18, 0.82),
+    (0.5, 0.18),
+    (0.5, 0.82),
+    (0.18, 0.5),
+    (0.82, 0.5),
+)
 
 _FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 _CLASSIC_FONT = os.path.join(_FONT_DIR, "Inter-SemiBold.ttf")
@@ -127,6 +139,22 @@ def normalize_project(raw: dict | None) -> dict | None:
     }
 
 
+def _inside_box(take: int, liked: dict | None) -> dict:
+    """First take keeps the spot the user is looking at. Later takes move."""
+    if take == 0 and liked:
+        return {"x": float(liked["x"]), "y": float(liked["y"])}
+    spots = list(_INSIDE)
+    if liked:
+        spots = [
+            pair for pair in spots
+            if abs(pair[0] - float(liked["x"])) > 0.12 or abs(pair[1] - float(liked["y"])) > 0.12
+        ] or list(_INSIDE)
+        pair = spots[(take - 1) % len(spots)]
+    else:
+        pair = spots[take % len(spots)]
+    return {"x": pair[0], "y": pair[1]}
+
+
 def plan_versions(project: dict, count: int) -> list[dict]:
     """One placement per variant index, in order. Same project → same pack."""
     clean = normalize_project(project)
@@ -161,7 +189,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "size_step": step,
             "align": align,
             "spot": spot,
-            "place": dict(placed) if placed else None,
+            "place": _inside_box(take, placed),
             "lines": cap.get("lines"),
             "look": dict(look),
         })
@@ -339,6 +367,30 @@ def burn_file(video_path: str, placement: dict, width: int, height: int, color=N
             os.remove(png)
         if os.path.exists(out):
             os.remove(out)
+
+
+def text_poster_name(index: int) -> str:
+    return f"look_text_v{int(index):02d}.jpg"
+
+
+def write_text_poster(video_path: str, out_path: str) -> None:
+    """One frame of the finished file, after the words are on it."""
+    if os.path.exists(out_path):
+        os.remove(out_path)
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-ss", "0.4", "-i", video_path,
+            "-frames:v", "1",
+            "-vf", "scale=480:-2",
+            "-q:v", "3",
+            out_path,
+        ],
+        check=True,
+        capture_output=True,
+    )
+    if not os.path.isfile(out_path) or os.path.getsize(out_path) <= 0:
+        raise OnScreenError("On-screen poster was empty.")
 
 
 def placement_record(placement: dict) -> dict:

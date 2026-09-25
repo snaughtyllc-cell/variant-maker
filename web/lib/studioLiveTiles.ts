@@ -50,19 +50,22 @@ export function liveTileLabel(
 
 /** Source poster while copies are still rendering. Prep ids have no file yet. */
 export function liveTilePreviewSrc(source: SourceProgress): string | null {
-  const poster = source.variants.find((v) => v.look_var_url)?.look_var_url
+  const poster = source.variants.find((v) => v.text_poster_url)?.text_poster_url
+    ?? source.variants.find((v) => v.look_var_url)?.look_var_url
     ?? source.lookPreview?.var;
   return poster ?? null;
 }
 
 export function liveTileMediaSrc(tile: LiveTile, source: SourceProgress): string | null {
   if (tile.kind === "done") {
-    return tile.variant?.look_var_url ?? liveTilePreviewSrc(source);
+    return tile.variant?.text_poster_url ?? tile.variant?.look_var_url ?? liveTilePreviewSrc(source);
   }
   return liveTilePreviewSrc(source);
 }
 
 export function liveRowThumbSrc(source: SourceProgress | undefined): string | null {
   if (!source) return null;
-  return source.variants.find((v) => v.look_var_url)?.look_var_url ?? liveTilePreviewSrc(source);
+  return source.variants.find((v) => v.text_poster_url)?.text_poster_url
+    ?? source.variants.find((v) => v.look_var_url)?.look_var_url
+    ?? liveTilePreviewSrc(source);
 }

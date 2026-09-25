@@ -230,7 +230,7 @@ export function VariantSheet({
                 aria-current={i === index}
               >
                 {isFileReady(v) ? (
-                  <PosterThumb src={v.look_var_url} className="variant-sheet__filmstrip-thumb" fill />
+                  <PosterThumb src={v.text_poster_url || v.look_var_url} className="variant-sheet__filmstrip-thumb" fill />
                 ) : null}
                 <span>{String(v.index).padStart(2, "0")}</span>
               </button>

@@ -90,7 +90,7 @@ function DoneThumb({ variant }: { variant: VariantTile }) {
   const uniquenessMiss = variant.status === "uniqueness_fail";
   return (
     <PosterThumb
-      src={variant.look_var_url}
+      src={variant.text_poster_url || variant.look_var_url}
       badge={
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
           {vmafRounded != null && (

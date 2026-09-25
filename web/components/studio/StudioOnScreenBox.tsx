@@ -629,7 +629,7 @@ export function StudioOnScreenBox({
                 ))}
               </div>
               <p className="studio-onscreen__hint">
-                Each clip keeps its own boxes and lines. Drag a box, type, then drag the words.
+                This is your clip. Drag the words and try a look here. The first variant matches this preview. The others keep that look and move inside the box.
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">

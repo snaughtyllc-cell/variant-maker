@@ -37,6 +37,7 @@ export interface VariantOut {
   look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  text_poster_url?: string | null;
   look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
   look_artifact_sha256?: string | null;
   look_approved_sha256?: string | null;
@@ -68,6 +69,7 @@ export interface LookPreviewOut {
   look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  text_poster_url?: string | null;
   look_review_t?: number | null;
 }
 export interface SourceOut {
@@ -156,6 +158,7 @@ export interface VariantEvent {
   look_var?: string | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  text_poster_url?: string | null;
   look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
   look_artifact_sha256?: string | null;
   look_review_t?: number | null;

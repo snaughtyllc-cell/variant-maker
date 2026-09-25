@@ -18,6 +18,7 @@ export interface VariantTile {
   look_mae?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  text_poster_url?: string | null;
 }
 export interface SourceProgress {
   source_id: string; filename: string; requested: number; delivered: number; done: number;
@@ -116,6 +117,7 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
               look_mae: e.look_mae ?? v.look_mae,
               look_src_url: lookStillUrl(e.source_id, e.look_src, e.look_src_url) || v.look_src_url,
               look_var_url: lookStillUrl(e.source_id, e.look_var, e.look_var_url) || v.look_var_url,
+              text_poster_url: e.text_poster_url || v.text_poster_url,
             }
           : v,
       );
@@ -133,6 +135,7 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
         look_mae: e.look_mae ?? null,
         look_src_url: lookStillUrl(e.source_id, e.look_src, e.look_src_url) || null,
         look_var_url: lookStillUrl(e.source_id, e.look_var, e.look_var_url) || null,
+        text_poster_url: e.text_poster_url || null,
       }];
       next.done = prev.done + 1;
       if (e.status === "ok") next.delivered = prev.delivered + 1;

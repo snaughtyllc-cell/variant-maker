@@ -1601,6 +1601,8 @@ class JobStore:
             fonts_ready,
             placement_record,
             plan_versions,
+            text_poster_name,
+            write_text_poster,
         )
         from ..probe import probe
 
@@ -1609,8 +1611,6 @@ class JobStore:
         plan = {p["n"]: p for p in plan_versions(project, len(result.variants))}
         for v in result.variants:
             quality = dict(v.quality or {})
-            if quality.get("onscreen"):
-                continue
             placement = plan.get(v.index)
             if placement is None:
                 continue
@@ -1622,11 +1622,20 @@ class JobStore:
                 self._object_store.get(key, path)
             if not os.path.isfile(path) or os.path.getsize(path) == 0:
                 raise OnScreenError(f"On-screen text could not find {v.filename}.")
-            pre = probe(path)
-            burn_file(path, placement, pre.width, pre.height, pre.color)
+            if not quality.get("onscreen"):
+                pre = probe(path)
+                burn_file(path, placement, pre.width, pre.height, pre.color)
+                if key and self._object_store is not None:
+                    self._object_store.put(key, path)
+                quality["onscreen"] = placement_record(placement)
+            poster = text_poster_name(v.index)
+            poster_path = os.path.join(out_dir, poster)
+            write_text_poster(path, poster_path)
             if key and self._object_store is not None:
-                self._object_store.put(key, path)
-            v.quality = {**quality, "onscreen": placement_record(placement)}
+                prefix = str(key).rsplit("/", 1)[0]
+                self._object_store.put(f"{prefix}/{poster}", poster_path)
+            quality["onscreen_poster"] = poster
+            v.quality = quality
 
     def _pull_named_outputs(self, source_id: str, names: list[str]) -> None:
         fetch = getattr(self._runner, "fetch_outputs", None)

@@ -95,7 +95,7 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
         <div className="gallery-tile__media">
           {ready ? (
             <PosterThumb
-              src={variant.look_var_url}
+              src={variant.text_poster_url || variant.look_var_url}
               className="gallery-tile__thumb"
               fill
               label={`v${String(variant.index).padStart(2, "0")}`}

@@ -26,7 +26,7 @@ function PackRow({
 }) {
   const thumbReady = isFileReady(source.variants[0] ?? {});
   const thumbUrl = thumbReady
-    ? source.variants[0]?.look_var_url || source.poster_url
+    ? source.variants[0]?.text_poster_url || source.variants[0]?.look_var_url || source.poster_url
     : undefined;
   const pct = avgOriginalityPct(source);
   const delivered = filesReadyCount(source);

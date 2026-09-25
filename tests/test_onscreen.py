@@ -147,7 +147,7 @@ def test_locked_size_stays_one_line():
     assert (single[3] - single[1]) < (wrapped[3] - wrapped[1])
 
 
-def test_placed_text_stays_at_the_dragged_spot():
+def test_preview_spot_is_the_first_variant_and_the_rest_move():
     project = _project(
         [{
             "text": "parked",
@@ -156,11 +156,20 @@ def test_placed_text_stays_at_the_dragged_spot():
         }],
         [_box("A")],
     )
-    versions = plan_versions(project, 2)
+    versions = plan_versions(project, 3)
     assert versions[0]["place"] == {"x": 0.2, "y": 0.8}
-    assert versions[1]["place"] == {"x": 0.2, "y": 0.8}
+    later = [v["place"] for v in versions[1:]]
+    assert all(p != versions[0]["place"] for p in later)
+    assert later[0] != later[1]
     layer = render_layer(versions[0], 200, 360)
     assert layer.getbbox() is not None
+
+
+def test_unpinned_text_still_moves_inside_the_box():
+    project = _project([{"text": "move", "box_ids": ["A"]}], [_box("A")])
+    places = [v["place"] for v in plan_versions(project, 3)]
+    assert places[0] == {"x": 0.5, "y": 0.5}
+    assert len({(p["x"], p["y"]) for p in places}) == 3
 
 
 def test_burn_puts_the_words_on_the_file(tmp_path):

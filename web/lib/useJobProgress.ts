@@ -27,6 +27,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
         look_mae: v.look_mae ?? null,
         look_src_url: v.look_src_url ?? null,
         look_var_url: v.look_var_url ?? null,
+        text_poster_url: v.text_poster_url ?? null,
       };
       next = reduceEvent(next, ev);
     }
