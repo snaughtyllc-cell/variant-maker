@@ -112,6 +112,30 @@ def test_caption_bar_changes_band_height_inside_one_box():
     assert versions[0]["look"]["style"] == "caption-bar"
 
 
+def test_locked_size_stays_one_line():
+    project = _project(
+        [{"text": "one two three four five six seven", "box_ids": ["A"], "size": 0.7, "lines": 1}],
+        [_box("A", 0.4)],
+    )
+    versions = plan_versions(project, 2)
+    assert versions[0]["size_step"] == 0.7
+    assert versions[1]["size_step"] == 0.7
+    assert versions[0]["lines"] == 1
+    narrow = {"id": "A", "x": 0.3, "y": 0.3, "w": 0.25, "h": 0.4}
+    common = {
+        "text": "one two three four five six seven",
+        "box": narrow,
+        "size_step": 1.0,
+        "align": "center",
+        "spot": "middle",
+        "look": {"style": "classic", "background": "solid", "color": "#FFFFFF"},
+    }
+    wrapped = render_layer(common, 400, 700).getbbox()
+    single = render_layer({**common, "lines": 1}, 400, 700).getbbox()
+    assert wrapped and single
+    assert (single[3] - single[1]) < (wrapped[3] - wrapped[1])
+
+
 def test_placed_text_stays_at_the_dragged_spot():
     project = _project(
         [{

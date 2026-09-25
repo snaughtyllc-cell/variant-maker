@@ -12,7 +12,14 @@ export type OnScreenCaption = {
   text: string;
   box_ids: string[];
   place?: Record<string, { x: number; y: number }>;
+  size?: number;
+  lines?: 1 | 2;
 };
+
+export function clampTextSize(value: number) {
+  const stepped = Math.round(value * 10) / 10;
+  return Math.min(1.6, Math.max(0.55, stepped));
+}
 
 export type OnScreenBox = {
   id: string;
@@ -124,7 +131,14 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
           y: Math.min(1, Math.max(0, spot?.y ?? 0.5)),
         };
       }
-      return { id: String(i + 1), text: cap.text.trim(), box_ids, place };
+      return {
+        id: String(i + 1),
+        text: cap.text.trim(),
+        box_ids,
+        place,
+        ...(cap.size ? { size: clampTextSize(cap.size) } : {}),
+        ...(cap.lines === 1 || cap.lines === 2 ? { lines: cap.lines } : {}),
+      };
     })
     .filter((cap) => cap.text || cap.box_ids.length);
   if (captions.length === 0) return "Add one on-screen line.";
@@ -496,7 +510,12 @@ export function StudioOnScreenBox({
                             className={`studio-onscreen__type studio-onscreen__type--${draft.look.background}`}
                             data-role="text"
                             data-box-id={box.id}
-                            style={{ left: `${spot.x * 100}%`, top: `${spot.y * 100}%` }}
+                            data-lines={owner?.lines || undefined}
+                            style={{
+                              left: `${spot.x * 100}%`,
+                              top: `${spot.y * 100}%`,
+                              fontSize: `calc(6.2cqw * ${owner?.size ?? 1})`,
+                            }}
                           >
                             {shown}
                           </span>
@@ -523,7 +542,11 @@ export function StudioOnScreenBox({
                         className="studio-onscreen__type studio-onscreen__type--bar"
                         data-role="text"
                         data-box-id={box.id}
-                        style={{ top: `${(box.y + spot.y * box.h) * 100}%` }}
+                        data-lines={owner?.lines || undefined}
+                        style={{
+                          top: `${(box.y + spot.y * box.h) * 100}%`,
+                          fontSize: `calc(4.2cqw * ${owner?.size ?? 1})`,
+                        }}
                       >
                         {shown}
                       </span>
@@ -592,15 +615,22 @@ export function StudioOnScreenBox({
               {draft.captions.map((cap, index) => (
                 <div key={cap.id} className="studio-onscreen__line" data-testid="studio-onscreen-line">
                   <textarea
-                    className="studio-caption-prompt"
+                    className="studio-caption-prompt studio-onscreen__prompt"
                     rows={2}
                     maxLength={120}
                     value={cap.text}
                     aria-label={`On-screen line ${index + 1}`}
                     placeholder="Line on the video"
-                    onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest" })}
+                    style={{ fontSize: 16 }}
                     onChange={(e) => patchCaption(index, { text: e.target.value })}
                   />
+                  <div className="studio-onscreen__fit" role="group" aria-label={`Fit for line ${index + 1}`}>
+                    <button type="button" className="studio-onscreen__look" aria-label={`Smaller line ${index + 1}`} onClick={() => patchCaption(index, { size: clampTextSize((cap.size ?? 1) - 0.1) })}>Smaller</button>
+                    <span>{Math.round((cap.size ?? 1) * 100)}%</span>
+                    <button type="button" className="studio-onscreen__look" aria-label={`Larger line ${index + 1}`} onClick={() => patchCaption(index, { size: clampTextSize((cap.size ?? 1) + 0.1) })}>Larger</button>
+                    <button type="button" className="studio-onscreen__look" data-on={cap.lines === 1} aria-pressed={cap.lines === 1} onClick={() => patchCaption(index, { lines: cap.lines === 1 ? undefined : 1, size: cap.size ?? 1 })}>1 line</button>
+                    <button type="button" className="studio-onscreen__look" data-on={cap.lines === 2} aria-pressed={cap.lines === 2} onClick={() => patchCaption(index, { lines: cap.lines === 2 ? undefined : 2, size: cap.size ?? 1 })}>2 lines</button>
+                  </div>
                   <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
                     {draft.boxes.map((box) => {
                       const meta = BOX_COLORS.find((color) => color.id === box.id);

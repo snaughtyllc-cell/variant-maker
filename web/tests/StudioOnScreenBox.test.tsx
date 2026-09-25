@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import {
   captionsWithNewBox,
+  clampTextSize,
   emptyOnScreen,
   frameAspect,
   projectFromDraft,
@@ -49,6 +50,21 @@ describe("on-screen project", () => {
       { id: "amber", color: "#e39b12", x: 0.1, y: 0.5, w: 0.4, h: 0.2 },
     ];
     expect(projectFromDraft(draft)).toBe("Lock every colored box to a line.");
+  });
+
+  it("keeps a chosen text size and a one-line lock", () => {
+    expect(clampTextSize(2)).toBe(1.6);
+    const draft = emptyOnScreen();
+    draft.captions[0].text = "hello";
+    draft.captions[0].box_ids = ["cyan"];
+    draft.captions[0].size = 0.8;
+    draft.captions[0].lines = 1;
+    draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.2 }];
+    const project = projectFromDraft(draft);
+    expect(typeof project).not.toBe("string");
+    if (typeof project === "string") return;
+    expect(project.captions[0].size).toBe(0.8);
+    expect(project.captions[0].lines).toBe(1);
   });
 
   it("locks a new box onto the first open line", () => {
@@ -108,6 +124,11 @@ describe("phone box drawer", () => {
     expect(screen.getByRole("button", { name: "Cyan, this line" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "sale" } });
     expect(phone.querySelector("[data-role='text']")?.textContent).toBe("sale");
+    fireEvent.click(screen.getByRole("button", { name: "1 line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Smaller line 1" }));
+    const sticker = phone.querySelector("[data-role='text']");
+    expect(sticker?.getAttribute("data-lines")).toBe("1");
+    expect(screen.getByText("90%")).toBeTruthy();
   });
 
   it("shows the clip still under the Reel safe edges", () => {

@@ -91,12 +91,20 @@ def normalize_project(raw: dict | None) -> dict | None:
                     "x": min(1.0, max(0.0, float(spot["x"]))),
                     "y": min(1.0, max(0.0, float(spot["y"]))),
                 }
-        captions.append({
+        row = {
             "id": str(cap.get("id") or i + 1),
             "text": text,
             "box_ids": ids,
             "place": place,
-        })
+        }
+        if cap.get("size") is not None:
+            try:
+                row["size"] = min(1.6, max(0.55, float(cap["size"])))
+            except (TypeError, ValueError):
+                pass
+        if str(cap.get("lines")) in ("1", "2"):
+            row["lines"] = int(cap["lines"])
+        captions.append(row)
 
     if len(used) != len(boxes):
         raise OnScreenError("Every box has to lock to a caption.")
@@ -134,6 +142,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
         take = n // len(captions)
         box_id = cap["box_ids"][take % len(cap["box_ids"])]
         placed = (cap.get("place") or {}).get(box_id)
+        locked_size = cap.get("size")
         if bar:
             step = SIZE_STEPS[take % len(SIZE_STEPS)]
             align, spot = "center", SPOTS[(take // len(SIZE_STEPS)) % len(SPOTS)]
@@ -141,6 +150,8 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             step = SIZE_STEPS[take % len(SIZE_STEPS)]
             align = ALIGNS[(take // len(SIZE_STEPS)) % len(ALIGNS)]
             spot = SPOTS[(take // (len(SIZE_STEPS) * len(ALIGNS))) % len(SPOTS)]
+        if locked_size is not None:
+            step = float(locked_size)
         out.append({
             "n": n + 1,
             "caption_id": cap["id"],
@@ -151,6 +162,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "align": align,
             "spot": spot,
             "place": dict(placed) if placed else None,
+            "lines": cap.get("lines"),
             "look": dict(look),
         })
     return out
@@ -208,7 +220,13 @@ def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     base = int((0.042 if bar else 0.062) * short * float(placement["size_step"]))
     font = _font(font_path, base)
     max_w = width - 2 * margin if bar else int(bw * 0.92)
-    lines = _wrap(draw, text, font, max_w)
+    lock = placement.get("lines")
+    if lock == 1:
+        lines = [" ".join(text.split()) or text]
+    else:
+        lines = _wrap(draw, text, font, max_w)
+        if lock == 2 and len(lines) > 2:
+            lines = [lines[0], " ".join(lines[1:])]
     line_h = int(base * (1.22 if bar else 1.30))
     block_h = line_h * len(lines)
     if bar:
