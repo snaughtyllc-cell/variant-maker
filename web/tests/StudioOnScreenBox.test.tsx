@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   captionsWithNewBox,
   emptyOnScreen,
+  frameAspect,
   projectFromDraft,
   rectFromPoints,
   StudioOnScreenBox,
@@ -67,6 +68,12 @@ describe("on-screen project", () => {
     expect(extra[0].box_ids).toEqual(["cyan", "amber"]);
   });
 
+  it("uses the clip shape until a format is picked", () => {
+    expect(frameAspect(null, 1920, 1080).css).toBe("1920 / 1080");
+    expect(frameAspect("4:5", 1920, 1080).css).toBe("4 / 5");
+    expect(frameAspect(null).css).toBe("9 / 16");
+  });
+
   it("turns a drag into a rectangle", () => {
     const rect = rectFromPoints(0.4, 0.5, 0.1, 0.2);
     expect(rect.x).toBeCloseTo(0.1);
@@ -119,6 +126,30 @@ describe("phone box drawer", () => {
     expect(phone.textContent).toContain("Header");
     expect(phone.textContent).toContain("Buttons");
     expect(phone.textContent).toContain("Caption");
+  });
+
+  it("shows a wide clip as wide until you pick a tall frame", () => {
+    render(
+      <StudioOnScreenBox
+        enabled
+        onEnabledChange={() => undefined}
+        draft={emptyOnScreen()}
+        onChange={() => undefined}
+        sources={[{
+          key: "wide",
+          name: "wide.mp4",
+          src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+          width: 1920,
+          height: 1080,
+        }]}
+      />,
+    );
+    const phone = screen.getByTestId("onscreen-phone");
+    expect(phone.style.aspectRatio).toBe("1920 / 1080");
+    expect(phone.textContent).not.toContain("Header");
+    fireEvent.click(screen.getByRole("button", { name: "9:16" }));
+    expect(phone.style.aspectRatio).toBe("9 / 16");
+    expect(phone.textContent).toContain("Header");
   });
 
   it("shows the typed line on the phone and keeps a box on one line", () => {

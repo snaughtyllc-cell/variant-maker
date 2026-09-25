@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState, useRef } from "react";
-import { captureVideoPoster } from "@/lib/videoPoster";
+import { captureVideoFrame } from "@/lib/videoPoster";
 
 export type OnScreenStyle = "classic" | "strong" | "caption-bar";
 export type OnScreenBackground = "solid" | "see-through" | "none";
@@ -35,6 +35,28 @@ export const BOX_COLORS = [
   { id: "pink", label: "Pink", hex: "#e85d8c" },
   { id: "violet", label: "Violet", hex: "#7c5cff" },
 ] as const;
+
+export const FRAME_PRESETS = [
+  { id: "9:16", w: 9, h: 16 },
+  { id: "3:4", w: 3, h: 4 },
+  { id: "4:5", w: 4, h: 5 },
+  { id: "1:1", w: 1, h: 1 },
+  { id: "4:3", w: 4, h: 3 },
+  { id: "16:9", w: 16, h: 9 },
+] as const;
+
+export function frameAspect(
+  preset: string | null,
+  width?: number,
+  height?: number,
+): { css: string; w: number; h: number } {
+  const picked = FRAME_PRESETS.find((item) => item.id === preset);
+  if (picked) return { css: `${picked.w} / ${picked.h}`, w: picked.w, h: picked.h };
+  if (width && height && width > 0 && height > 0) {
+    return { css: `${Math.round(width)} / ${Math.round(height)}`, w: width, h: height };
+  }
+  return { css: "9 / 16", w: 9, h: 16 };
+}
 
 const MIN_BOX = 0.06;
 export const REEL_SAFE = { top: 0.08, bottom: 0.16, right: 0.14 };
@@ -142,6 +164,8 @@ export type OnScreenPreview = {
   name: string;
   file?: File;
   src?: string;
+  width?: number;
+  height?: number;
 };
 
 export function StudioOnScreenBox({
@@ -163,29 +187,39 @@ export function StudioOnScreenBox({
   const [open, setOpen] = useState(enabled);
   const [clipIndex, setClipIndex] = useState(0);
   const [poster, setPoster] = useState("");
+  const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
+  const [framePreset, setFramePreset] = useState<string | null>(null);
   const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
+  const aspect = frameAspect(framePreset, sourceSize?.w, sourceSize?.h);
 
   useEffect(() => {
     if (!clip) {
       setPoster("");
+      setSourceSize(null);
       return;
     }
     if (!clip.file) {
       setPoster(clip.src || "");
+      setSourceSize(clip.width && clip.height ? { w: clip.width, h: clip.height } : null);
       return;
     }
     let cancel = false;
-    captureVideoPoster(clip.file)
-      .then((url) => {
-        if (!cancel) setPoster(url);
+    captureVideoFrame(clip.file)
+      .then((frame) => {
+        if (cancel) return;
+        setPoster(frame.poster);
+        setSourceSize({ w: frame.width, h: frame.height });
       })
       .catch(() => {
-        if (!cancel) setPoster(clip.src || "");
+        if (!cancel) {
+          setPoster(clip.src || "");
+          setSourceSize(null);
+        }
       });
     return () => {
       cancel = true;
     };
-  }, [clip?.key, clip?.file, clip?.src]);
+  }, [clip?.key, clip?.file, clip?.src, clip?.width, clip?.height]);
 
   function patchCaption(index: number, next: Partial<OnScreenCaption>) {
     const captions = draft.captions.map((cap, i) => (i === index ? { ...cap, ...next } : cap));
@@ -411,6 +445,12 @@ export function StudioOnScreenBox({
                   ref={frameRef}
                   className="studio-onscreen__screen"
                   data-testid="onscreen-phone"
+                  data-portrait={aspect.h >= aspect.w}
+                  style={{
+                    aspectRatio: aspect.css,
+                    ["--frame-w" as string]: String(aspect.w),
+                    ["--frame-h" as string]: String(aspect.h),
+                  }}
                   onPointerDown={onFramePointerDown}
                   onPointerMove={onFramePointerMove}
                   onPointerUp={onFramePointerUp}
@@ -419,11 +459,13 @@ export function StudioOnScreenBox({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img className="studio-onscreen__poster" src={poster} alt="" />
                   ) : null}
+                  {aspect.h >= aspect.w && (
                   <div className="studio-onscreen__safe" aria-hidden="true">
                     <div className="studio-onscreen__safe-top" style={{ height: `${REEL_SAFE.top * 100}%` }}><span>Header</span></div>
                     <div className="studio-onscreen__safe-right" style={{ top: `${REEL_SAFE.top * 100}%`, bottom: `${REEL_SAFE.bottom * 100}%`, width: `${REEL_SAFE.right * 100}%` }}><span>Buttons</span></div>
                     <div className="studio-onscreen__safe-bottom" style={{ height: `${REEL_SAFE.bottom * 100}%` }}><span>Caption</span></div>
                   </div>
+                  )}
                   {draft.boxes.map((box) => {
                     const meta = BOX_COLORS.find((color) => color.id === box.id);
                     const owner = draft.captions.find((cap) => cap.box_ids.includes(box.id));
@@ -501,8 +543,29 @@ export function StudioOnScreenBox({
                 )}
                 </div>
               </div>
+              <div className="studio-onscreen__frames" role="group" aria-label="Frame shape">
+                <button
+                  type="button"
+                  className="studio-onscreen__clip"
+                  data-on={framePreset === null}
+                  onClick={() => setFramePreset(null)}
+                >
+                  Source
+                </button>
+                {FRAME_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className="studio-onscreen__clip"
+                    data-on={framePreset === preset.id}
+                    onClick={() => setFramePreset(preset.id)}
+                  >
+                    {preset.id}
+                  </button>
+                ))}
+              </div>
               <p className="studio-onscreen__hint">
-                Drag on the phone to draw a box. It locks to the next open line. Drag the words to move them.
+                The frame follows the clip. Drag a box, type the line, then drag the words.
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">
@@ -535,6 +598,7 @@ export function StudioOnScreenBox({
                     value={cap.text}
                     aria-label={`On-screen line ${index + 1}`}
                     placeholder="Line on the video"
+                    onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest" })}
                     onChange={(e) => patchCaption(index, { text: e.target.value })}
                   />
                   <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
