@@ -1,0 +1,262 @@
+diff --git a/tests/server/test_captions.py b/tests/server/test_captions.py
+index 06467b4..87e7e86 100644
+--- a/tests/server/test_captions.py
++++ b/tests/server/test_captions.py
+@@ -49,6 +49,13 @@ def test_caption_filename_strips_copy_n_of_m():
+     assert caption_filename(None, "v01.mp4") == "v01.mp4"
+ 
+ 
++def test_caption_filename_does_not_invent_text_for_untitled_engine_name():
++    engine = "A56531F9-75C2-48A0-B7F2-47A84244E81D_v15_c0ffee01.mp4"
++    assert caption_filename(None, engine) == "clip_c0ffee01.mp4"
++    assert caption_filename("   ", engine) == "clip_c0ffee01.mp4"
++    assert caption_filename("Home can wait #reels", engine) == "Home can wait #reels.mp4"
++
++
+ def test_store_peek_does_not_advance_take_does(tmp_path):
+     store = CaptionStore(str(tmp_path / "captions.json"))
+     store.add("one")
+diff --git a/tests/server/test_drive_exports.py b/tests/server/test_drive_exports.py
+index ffa426c..9f7ccca 100644
+--- a/tests/server/test_drive_exports.py
++++ b/tests/server/test_drive_exports.py
+@@ -60,6 +60,28 @@ def test_build_export_files_uses_caption_as_drive_name(tmp_path):
+     assert files[0].filename == "POV: she said #reels.mp4"
+ 
+ 
++def test_build_export_files_untitled_uuid_engine_names_are_regular_clips(tmp_path):
++    store, ws = _store_with_ok(tmp_path)
++    job = store.get("j1")
++    src = job.sources[0]
++    uuid = "A56531F9-75C2-48A0-B7F2-47A84244E81D"
++    a = f"{uuid}_v15_c0ffee01.mp4"
++    b = f"{uuid}_v16_c0ffee02.mp4"
++    out = Path(ws.source_out_dir("j1", "s1"))
++    (out / a).write_bytes(b"a")
++    (out / b).write_bytes(b"b")
++    src.variants[0].filename = a
++    src.variants.append(VariantInfo(
++        source_id="s1", index=2, filename=b, status="ok", quality={"vmaf": 95},
++    ))
++    untitled = build_export_files(store, [VariantRef("s1", 1), VariantRef("s1", 2)])
++    assert [f.filename for f in untitled] == ["clip_c0ffee01.mp4", "clip_c0ffee02.mp4"]
++    captioned = build_export_files(
++        store, [VariantRef("s1", 1, caption="Home can wait #reels")],
++    )
++    assert captioned[0].filename == "Home can wait #reels.mp4"
++
++
+ def test_build_export_files_empty_raises(tmp_path):
+     store, _ = _store_with_ok(tmp_path)
+     with pytest.raises(ExportError, match="No ok videos"):
+diff --git a/tests/test_uniqueness_pipeline.py b/tests/test_uniqueness_pipeline.py
+index 10dda09..6410f5a 100644
+--- a/tests/test_uniqueness_pipeline.py
++++ b/tests/test_uniqueness_pipeline.py
+@@ -122,6 +122,26 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
+     assert record.uniqueness_status == "ok"
+ 
+ 
++def test_pipeline_untitled_names_are_clip_seed_not_source_stem(monkeypatch, tmp_path):
++    class UuidSrc(FakeSrc):
++        path = "A56531F9-75C2-48A0-B7F2-47A84244E81D.MOV"
++
++    _stub_common(monkeypatch)
++    monkeypatch.setattr(pipeline, "probe", lambda p: UuidSrc())
++    monkeypatch.setattr(
++        pipeline.uniqueness, "score_uniqueness",
++        lambda src_path, variant_path, target=None: _ok_score(0.6, bits=38),
++    )
++    manifest = pipeline.run(_cfg(tmp_path, count=2))
++    names = [v.filename for v in manifest.variants]
++    assert all(n.startswith("clip_") and n.endswith(".mp4") for n in names)
++    assert names[0] != names[1]
++    for v in manifest.variants:
++        assert v.filename == f"clip_{v.seed & 0xFFFFFFFF:08x}.mp4"
++        assert "_v0" not in v.filename
++        assert "A56531F9" not in v.filename
++
++
+ def test_score_look_receives_video_params(monkeypatch, tmp_path):
+     """Crop/trim MAE needs the variant's sampled video dict, including auto-tune."""
+     _stub_common(monkeypatch)
+diff --git a/tests/test_variant_names.py b/tests/test_variant_names.py
+new file mode 100644
+index 0000000..c1012ba
+--- /dev/null
++++ b/tests/test_variant_names.py
+@@ -0,0 +1,34 @@
++"""Untitled copies get a regular unique name — never camera UUID _v15/_v16 stems."""
++from __future__ import annotations
++
++from variant_maker.variant_names import clip_filename, regularize_variant_filename
++
++UUID = "A56531F9-75C2-48A0-B7F2-47A84244E81D"
++
++
++def test_clip_filename_is_regular_unique_mp4():
++    assert clip_filename(0xC0FFEE01) == "clip_c0ffee01.mp4"
++    assert clip_filename(0x1FFFFFFFF) == "clip_ffffffff.mp4"
++
++
++def test_engine_uuid_siblings_become_distinct_clip_names():
++    a = f"{UUID}_v15_c0ffee01.mp4"
++    b = f"{UUID}_v16_c0ffee02.mp4"
++    assert regularize_variant_filename(a) == "clip_c0ffee01.mp4"
++    assert regularize_variant_filename(b) == "clip_c0ffee02.mp4"
++    assert regularize_variant_filename(a) != regularize_variant_filename(b)
++
++
++def test_camera_uuid_alone_is_not_shipped():
++    name = f"{UUID}.mp4"
++    out = regularize_variant_filename(name)
++    assert out.startswith("clip_")
++    assert out.endswith(".mp4")
++    assert UUID not in out
++    assert "_v1" not in out
++
++
++def test_already_regular_names_stay_put():
++    assert regularize_variant_filename("v01.mp4") == "v01.mp4"
++    assert regularize_variant_filename("clip_abcd1234.mp4") == "clip_abcd1234.mp4"
++    assert regularize_variant_filename("Wait for it #reels.mp4") == "Wait for it #reels.mp4"
+diff --git a/variant_maker/pipeline.py b/variant_maker/pipeline.py
+index f0f8e4b..1ac81b6 100644
+--- a/variant_maker/pipeline.py
++++ b/variant_maker/pipeline.py
+@@ -21,6 +21,7 @@ from .presets import get_preset
+ from .probe import probe
+ from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+ from .shot import classify_shot
++from .variant_names import clip_filename
+ 
+ # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
+ # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
+@@ -155,7 +156,6 @@ def run(config: dict, *, on_event=None) -> Manifest:
+     # HQ Real-ESRGAN is the true upscaler and still targets the full social canvas.
+     if not hq:
+         platform = fit_platform_to_source(platform, src.width, src.height)
+-    stem = os.path.splitext(os.path.basename(input_path))[0]
+     shot_info = classify_shot(src.path, src.duration_s)
+     shot_kind = shot_info.get("kind")
+     # Talking-head copies of a still face land ~13–17 peer bits even with
+@@ -166,8 +166,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
+     # peer floor. MIN_PEER_BITS stays 24.
+     peer_gate = shot_kind != "talking_head"
+ 
+-    def _name(i: int, vseed: int) -> str:
+-        return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
++    def _name(vseed: int) -> str:
++        return clip_filename(vseed)
+ 
+     run_meta = {
+         "master_seed": master_seed,
+@@ -191,7 +191,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
+ 
+     def _prep(i: int):
+         vseed = derive_seed(master_seed, i)
+-        return vseed, _name(i, vseed), os.path.join(out_dir, _name(i, vseed))
++        fname = _name(vseed)
++        return vseed, fname, os.path.join(out_dir, fname)
+ 
+     # --dry-run: print the plan + commands, render nothing, write nothing.
+     if dry_run:
+diff --git a/variant_maker/server/captions.py b/variant_maker/server/captions.py
+index 26ee6e7..ecbeff7 100644
+--- a/variant_maker/server/captions.py
++++ b/variant_maker/server/captions.py
+@@ -9,6 +9,8 @@ import tempfile
+ import threading
+ from dataclasses import asdict, dataclass
+ 
++from variant_maker.variant_names import regularize_variant_filename
++
+ MAX_STEM = 240
+ _ILLEGAL = re.compile(r"[/\\\x00-\x1f]")
+ _DASH_SPLIT = re.compile(r"(?m)^\s*---\s*$")
+@@ -68,7 +70,7 @@ def sanitize_caption_stem(text: str) -> str:
+ def caption_filename(caption: str | None, fallback: str) -> str:
+     stem = sanitize_caption_stem(caption or "")
+     if not stem:
+-        return fallback
++        return regularize_variant_filename(fallback)
+     return f"{stem}.mp4"
+ 
+ 
+diff --git a/variant_maker/variant_names.py b/variant_maker/variant_names.py
+new file mode 100644
+index 0000000..4fb6420
+--- /dev/null
++++ b/variant_maker/variant_names.py
+@@ -0,0 +1,34 @@
++"""Regular unique names for untitled copies.
++
++Drive plugins (Repurpose/Buffer) use the filename as the post caption. A real
++caption stays the filename. If nobody added one on Drive import or in Studio,
++the file is still an ordinary unique clip name — never a camera UUID or a
++`{stem}_v15_{seed}.mp4` / `{stem}_v16_{seed}.mp4` sibling pair.
++"""
++from __future__ import annotations
++
++import os
++import re
++
++ENGINE_NAME_RE = re.compile(
++    r"^(?P<stem>.+)_v(?P<index>\d{2})_(?P<seed>[0-9a-fA-F]{8})\.mp4$",
++)
++UUID_RE = re.compile(
++    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
++)
++
++
++def clip_filename(seed: int) -> str:
++    return f"clip_{seed & 0xFFFFFFFF:08x}.mp4"
++
++
++def regularize_variant_filename(name: str) -> str:
++    """Rewrite engine/UUID stems; leave captions and already-regular names."""
++    base = os.path.basename(name or "") or "clip.mp4"
++    match = ENGINE_NAME_RE.match(base)
++    if match:
++        return clip_filename(int(match.group("seed"), 16))
++    stem, ext = os.path.splitext(base)
++    if ext.lower() == ".mp4" and UUID_RE.match(stem):
++        return f"clip_{stem.replace('-', '')[:8].lower()}.mp4"
++    return base
+diff --git a/web/lib/__tests__/howTo.test.ts b/web/lib/__tests__/howTo.test.ts
+index ede9081..9d2d99a 100644
+--- a/web/lib/__tests__/howTo.test.ts
++++ b/web/lib/__tests__/howTo.test.ts
+@@ -24,6 +24,8 @@ describe("howTo copy", () => {
+     expect(text).toMatch(/Drive in, Drive out/);
+     expect(text).toMatch(/Drive filenames/);
+     expect(text).toMatch(/Plugins like Repurpose\.io and Buffer use the Drive filename/);
++    expect(text).toMatch(/ordinary unique clip name/);
++    expect(text).toMatch(/Do not invent a caption/);
+     expect(text).toMatch(/Plugins/);
+     expect(text).not.toMatch(/caption bank/i);
+     expect(text).not.toMatch(/we do not run those seats/i);
+diff --git a/web/lib/howTo.ts b/web/lib/howTo.ts
+index 4398a52..b49dac1 100644
+--- a/web/lib/howTo.ts
++++ b/web/lib/howTo.ts
+@@ -82,6 +82,7 @@ export const HOW_TO_CATEGORIES: HowToCategory[] = [
+         title: "Drive filenames",
+         paragraphs: [
+           "Plugins like Repurpose.io and Buffer use the Drive filename as the post caption. Name the file before you hand the folder off.",
++          "If you skip a caption on Drive import and in Studio, the file is still an ordinary unique clip name — not the camera UUID or engine v15 / v16 stem. Do not invent a caption just to fill the name.",
+         ],
+       },
+       {
+diff --git a/web/tests/HowToPage.test.tsx b/web/tests/HowToPage.test.tsx
+index a1b20d0..6e61796 100644
+--- a/web/tests/HowToPage.test.tsx
++++ b/web/tests/HowToPage.test.tsx
+@@ -19,6 +19,7 @@ describe("HowToPage", () => {
+     fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
+     expect(screen.getByRole("heading", { name: /^workflows$/i })).toBeInTheDocument();
+     expect(screen.getByRole("heading", { name: /drive filenames/i })).toBeInTheDocument();
++    expect(screen.getByText(/ordinary unique clip name/i)).toBeInTheDocument();
+     expect(screen.getByRole("heading", { name: /^plugins$/i })).toBeInTheDocument();
+     expect(screen.queryByText(/caption bank/i)).not.toBeInTheDocument();
+     expect(screen.queryByText(/we do not run those seats/i)).not.toBeInTheDocument();
