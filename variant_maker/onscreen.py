@@ -134,7 +134,9 @@ def normalize_project(raw: dict | None) -> dict | None:
                 row["size"] = min(1.6, max(0.55, float(cap["size"])))
             except (TypeError, ValueError):
                 pass
-        if str(cap.get("lines")) in ("1", "2"):
+        if str(cap.get("lines")) == "both":
+            row["lines"] = "both"
+        elif str(cap.get("lines")) in ("1", "2"):
             row["lines"] = int(cap["lines"])
         captions.append(row)
 
@@ -218,6 +220,11 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             spot = SPOTS[(take // (len(SIZE_STEPS) * len(ALIGNS))) % len(SPOTS)]
         if locked_size is not None:
             step = float(locked_size)
+        chosen_lines = cap.get("lines")
+        if chosen_lines == "both":
+            line_lock = 1 if take % 2 == 0 else 2
+        else:
+            line_lock = chosen_lines
         out.append({
             "n": n + 1,
             "caption_id": cap["id"],
@@ -228,7 +235,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "align": align,
             "spot": spot,
             "place": _chosen_place(take, placed, seats) if seats else _inside_box(take, placed),
-            "lines": cap.get("lines"),
+            "lines": line_lock,
             "look": dict(look),
         })
     return out

@@ -197,6 +197,15 @@ def test_wide_line_on_a_side_seat_stays_inside_the_box():
         assert bbox[3] <= y1 + 2
 
 
+def test_both_line_counts_take_turns():
+    project = _project(
+        [{"text": "one two three four five", "box_ids": ["A"], "lines": "both"}],
+        [_box("A", 0.3)],
+    )
+    versions = plan_versions(project, 4)
+    assert [v["lines"] for v in versions] == [1, 2, 1, 2]
+
+
 def test_one_chosen_seat_stays_put():
     box = _box("A")
     box["seats"] = ["bl"]

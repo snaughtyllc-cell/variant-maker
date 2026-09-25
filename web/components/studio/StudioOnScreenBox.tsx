@@ -13,7 +13,7 @@ export type OnScreenCaption = {
   box_ids: string[];
   place?: Record<string, { x: number; y: number }>;
   size?: number;
-  lines?: 1 | 2;
+  lines?: 1 | 2 | "both";
 };
 
 export function seatStyle(x: number, y: number): {
@@ -48,6 +48,11 @@ export function seatStyle(x: number, y: number): {
   } else if (row === "center") style.top = "50%";
   else style.top = "4%";
   return style;
+}
+
+export function textFitWarning(textWidth: number, boxWidth: number): string {
+  if (boxWidth <= 0 || textWidth <= boxWidth * 0.92) return "";
+  return "This line is too big for that seat. Make it smaller so it stays inside the box.";
 }
 
 export function clampTextSize(value: number) {
@@ -188,7 +193,7 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
         box_ids,
         place,
         ...(cap.size ? { size: clampTextSize(cap.size) } : {}),
-        ...(cap.lines === 1 || cap.lines === 2 ? { lines: cap.lines } : {}),
+        ...(cap.lines === 1 || cap.lines === 2 || cap.lines === "both" ? { lines: cap.lines } : {}),
       };
     })
     .filter((cap) => cap.text || cap.box_ids.length);
@@ -269,6 +274,7 @@ export function StudioOnScreenBox({
   const [open, setOpen] = useState(enabled);
   const [clipIndex, setClipIndex] = useState(0);
   const [poster, setPoster] = useState("");
+  const [fitWarning, setFitWarning] = useState("");
   const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
   const [framePreset, setFramePreset] = useState<string | null>(null);
   const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
@@ -312,6 +318,16 @@ export function StudioOnScreenBox({
     };
   }, [clip?.key, clip?.file, clip?.src, clip?.width, clip?.height]);
 
+  useEffect(() => {
+    const node = frameRef.current?.querySelector("[data-role='text']") as HTMLElement | null;
+    const box = node?.closest(".studio-onscreen__box") as HTMLElement | null;
+    if (!node || !box) {
+      setFitWarning("");
+      return;
+    }
+    setFitWarning(textFitWarning(node.scrollWidth, box.clientWidth));
+  }, [draft, poster]);
+
   function toggleSeat(seatId: string) {
     const seat = TEXT_SEATS.find((item) => item.id === seatId);
     const box = draft.boxes.find((item) => item.id === selected) || draft.boxes[0];
@@ -332,6 +348,16 @@ export function StudioOnScreenBox({
         return { ...cap, place };
       }),
     });
+  }
+
+  function toggleLine(which: 1 | 2) {
+    const current = draft.captions[0]?.lines;
+    const has1 = current === 1 || current === "both";
+    const has2 = current === 2 || current === "both";
+    const next1 = which === 1 ? !has1 : has1;
+    const next2 = which === 2 ? !has2 : has2;
+    const lines = next1 && next2 ? "both" as const : next1 ? 1 : next2 ? 2 : undefined;
+    setFit({ lines, size: draft.captions[0]?.size ?? 1 });
   }
 
   function setFit(next: Partial<OnScreenCaption>) {
@@ -573,8 +599,8 @@ export function StudioOnScreenBox({
             <button type="button" className="studio-onscreen__look" aria-label="Smaller" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) - 0.1) })}>Smaller</button>
             <span>{Math.round((draft.captions[0]?.size ?? 1) * 100)}%</span>
             <button type="button" className="studio-onscreen__look" aria-label="Larger" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) + 0.1) })}>Larger</button>
-            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 1} aria-pressed={draft.captions[0]?.lines === 1} onClick={() => setFit({ lines: draft.captions[0]?.lines === 1 ? undefined : 1, size: draft.captions[0]?.size ?? 1 })}>1 line</button>
-            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 2} aria-pressed={draft.captions[0]?.lines === 2} onClick={() => setFit({ lines: draft.captions[0]?.lines === 2 ? undefined : 2, size: draft.captions[0]?.size ?? 1 })}>2 lines</button>
+            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 1 || draft.captions[0]?.lines === "both"} aria-pressed={draft.captions[0]?.lines === 1 || draft.captions[0]?.lines === "both"} onClick={() => toggleLine(1)}>1 line</button>
+            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 2 || draft.captions[0]?.lines === "both"} aria-pressed={draft.captions[0]?.lines === 2 || draft.captions[0]?.lines === "both"} onClick={() => toggleLine(2)}>2 lines</button>
           </div>
           <div className="studio-onscreen__stage">
             <div className="studio-onscreen__phone-wrap">
@@ -731,10 +757,12 @@ export function StudioOnScreenBox({
                   })}
                 </div>
               )}
+              {fitWarning ? <p className="studio-onscreen__hint" role="status">{fitWarning}</p> : null}
               <p className="studio-onscreen__hint">
                 {draft.chooseSeats
                   ? "Tap the seats that look right on this clip. One seat keeps every variant there. Two or more take turns."
                   : "This is your clip. Drag the words and try a look here. The first variant matches this preview. The others keep that look and move inside the box."}
+                {draft.captions[0]?.lines === "both" ? " This pack uses both a one-line and a two-line version." : ""}
               </p>
               {sources.length > 1 && (
                 <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">

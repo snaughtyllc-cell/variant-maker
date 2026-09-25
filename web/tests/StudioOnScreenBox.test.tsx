@@ -9,6 +9,7 @@ import {
   projectFromDraft,
   rectFromPoints,
   seatStyle,
+  textFitWarning,
   StudioOnScreenBox,
   type OnScreenProject,
 } from "@/components/studio/StudioOnScreenBox";
@@ -59,6 +60,23 @@ describe("on-screen project", () => {
     expect(seatStyle(0.82, 0.82).right).toBe("4%");
     expect(seatStyle(0.82, 0.82).bottom).toBe("4%");
     expect(seatStyle(0.5, 0.5).transform).toBe("translate(-50%, -50%)");
+  });
+
+  it("warns when the line is wider than the box", () => {
+    expect(textFitWarning(200, 100)).toMatch(/smaller/i);
+    expect(textFitWarning(80, 100)).toBe("");
+  });
+
+  it("can send both one line and two lines", () => {
+    const draft = emptyOnScreen();
+    draft.captions[0].text = "here";
+    draft.captions[0].box_ids = ["cyan"];
+    draft.captions[0].lines = "both";
+    draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.3 }];
+    const project = projectFromDraft(draft);
+    expect(typeof project).not.toBe("string");
+    if (typeof project === "string") return;
+    expect(project.captions[0].lines).toBe("both");
   });
 
   it("sends only the seats that are turned on", () => {
