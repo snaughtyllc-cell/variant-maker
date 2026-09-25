@@ -172,6 +172,31 @@ def test_unpinned_text_still_moves_inside_the_box():
     assert len({(p["x"], p["y"]) for p in places}) == 3
 
 
+def test_wide_line_on_a_side_seat_stays_inside_the_box():
+    text = "Luck day luck year this line fills the box edge to edge"
+    box = {"id": "A", "x": 0.08, "y": 0.2, "w": 0.7, "h": 0.45}
+    common = {
+        "text": text,
+        "box": box,
+        "size_step": 1.2,
+        "align": "center",
+        "spot": "middle",
+        "lines": 1,
+        "look": {"style": "classic", "background": "plain", "color": "#FFFFFF"},
+    }
+    width, height = 360, 640
+    x0, x1 = int(box["x"] * width), int((box["x"] + box["w"]) * width)
+    y0, y1 = int(box["y"] * height), int((box["y"] + box["h"]) * height)
+    for place in ({"x": 0.18, "y": 0.18}, {"x": 0.82, "y": 0.82}):
+        layer = render_layer({**common, "place": place}, width, height)
+        bbox = layer.getbbox()
+        assert bbox
+        assert bbox[0] >= x0 - 2
+        assert bbox[2] <= x1 + 2
+        assert bbox[1] >= y0 - 2
+        assert bbox[3] <= y1 + 2
+
+
 def test_one_chosen_seat_stays_put():
     box = _box("A")
     box["seats"] = ["bl"]

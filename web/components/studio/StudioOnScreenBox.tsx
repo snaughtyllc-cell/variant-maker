@@ -16,6 +16,40 @@ export type OnScreenCaption = {
   lines?: 1 | 2;
 };
 
+export function seatStyle(x: number, y: number): {
+  left?: string;
+  right?: string;
+  top?: string;
+  bottom?: string;
+  transform: string;
+  transformOrigin: string;
+} {
+  const col = x <= 0.34 ? "start" : x >= 0.66 ? "end" : "center";
+  const row = y <= 0.34 ? "start" : y >= 0.66 ? "end" : "center";
+  const style: {
+    left?: string;
+    right?: string;
+    top?: string;
+    bottom?: string;
+    transform: string;
+    transformOrigin: string;
+  } = {
+    transform: `translate(${col === "center" ? "-50%" : "0"}, ${row === "center" ? "-50%" : "0"})`,
+    transformOrigin: `${col === "end" ? "right" : col === "start" ? "left" : "center"} ${row === "end" ? "bottom" : row === "start" ? "top" : "center"}`,
+  };
+  if (col === "end") {
+    style.right = "4%";
+    style.left = "auto";
+  } else if (col === "center") style.left = "50%";
+  else style.left = "4%";
+  if (row === "end") {
+    style.bottom = "4%";
+    style.top = "auto";
+  } else if (row === "center") style.top = "50%";
+  else style.top = "4%";
+  return style;
+}
+
 export function clampTextSize(value: number) {
   const stepped = Math.round(value * 10) / 10;
   return Math.min(1.6, Math.max(0.55, stepped));
@@ -603,8 +637,7 @@ export function StudioOnScreenBox({
                             data-box-id={box.id}
                             data-lines={owner?.lines || undefined}
                             style={{
-                              left: `${spot.x * 100}%`,
-                              top: `${spot.y * 100}%`,
+                              ...seatStyle(spot.x, spot.y),
                               fontSize: `calc(6.2cqw * ${owner?.size ?? 1})`,
                             }}
                           >

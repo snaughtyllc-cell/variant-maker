@@ -265,6 +265,19 @@ def _hex(color: str) -> tuple[int, int, int]:
     return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
 
 
+def _edge_start(anchor: float, start: int, end: int, size: int) -> float:
+    """Park the block on the near edge of a side seat, and keep it inside."""
+    room = max(1, end - start)
+    if size >= room:
+        return float(start)
+    if anchor <= 0.34:
+        return float(start)
+    if anchor >= 0.66:
+        return float(end - size)
+    pos = start + anchor * room - size / 2
+    return float(min(max(start, pos), end - size))
+
+
 def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     """Transparent full-frame sticker. Overlay it at 0,0."""
     img = Image.new("RGBA", (int(width), int(height)), (0, 0, 0, 0))
@@ -284,16 +297,28 @@ def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     bar = look["style"] == "caption-bar"
     font_path = _BAR_FONT if bar else _CLASSIC_FONT
     base = int((0.042 if bar else 0.062) * short * float(placement["size_step"]))
-    font = _font(font_path, base)
-    max_w = width - 2 * margin if bar else int(bw * 0.92)
+    max_w = width - 2 * margin if bar else max(8, int(bw * 0.92))
     lock = placement.get("lines")
-    if lock == 1:
-        lines = [" ".join(text.split()) or text]
-    else:
-        lines = _wrap(draw, text, font, max_w)
-        if lock == 2 and len(lines) > 2:
-            lines = [lines[0], " ".join(lines[1:])]
-    line_h = int(base * (1.22 if bar else 1.30))
+    font = _font(font_path, base)
+    lines = [text]
+    while True:
+        font = _font(font_path, base)
+        if lock == 1:
+            lines = [" ".join(text.split()) or text]
+        else:
+            lines = _wrap(draw, text, font, max_w)
+            if lock == 2 and len(lines) > 2:
+                lines = [lines[0], " ".join(lines[1:])]
+        longest = max(draw.textlength(line, font=font) for line in lines)
+        line_h = int(base * (1.22 if bar else 1.30))
+        pad_x, pad_y = int(base * 0.42), int(base * 0.18)
+        fits = longest + 2 * pad_x <= bw and line_h * len(lines) + 2 * pad_y <= bh
+        if bar or fits or base <= 8:
+            break
+        nxt = max(8, int(base * 0.86))
+        if nxt == base:
+            break
+        base = nxt
     block_h = line_h * len(lines)
     if bar:
         pad_y = int(base * 0.42)
@@ -324,10 +349,8 @@ def render_layer(placement: dict, width: int, height: int) -> Image.Image:
     pinned = isinstance(placed, dict) and "x" in placed and "y" in placed
     align = "center" if pinned else placement["align"]
     if pinned:
-        left = x0 + float(placed["x"]) * bw - block_w / 2
-        top = y0 + float(placed["y"]) * bh - block_h / 2
-        left = min(max(x0, left), max(x0, x1 - block_w))
-        top = min(max(y0, top), max(y0, y1 - block_h))
+        left = _edge_start(float(placed["x"]), x0, x1, block_w)
+        top = _edge_start(float(placed["y"]), y0, y1, block_h)
     else:
         if align == "left":
             left = x0

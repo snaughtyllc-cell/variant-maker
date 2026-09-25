@@ -8,6 +8,7 @@ import {
   frameAspect,
   projectFromDraft,
   rectFromPoints,
+  seatStyle,
   StudioOnScreenBox,
   type OnScreenProject,
 } from "@/components/studio/StudioOnScreenBox";
@@ -50,6 +51,14 @@ describe("on-screen project", () => {
       { id: "amber", color: "#e39b12", x: 0.1, y: 0.5, w: 0.4, h: 0.2 },
     ];
     expect(projectFromDraft(draft)).toBe("Lock every colored box to a line.");
+  });
+
+  it("parks a side seat on the edge instead of the middle of the line", () => {
+    expect(seatStyle(0.18, 0.18).transform).toBe("translate(0, 0)");
+    expect(seatStyle(0.18, 0.18).left).toBe("4%");
+    expect(seatStyle(0.82, 0.82).right).toBe("4%");
+    expect(seatStyle(0.82, 0.82).bottom).toBe("4%");
+    expect(seatStyle(0.5, 0.5).transform).toBe("translate(-50%, -50%)");
   });
 
   it("sends only the seats that are turned on", () => {
