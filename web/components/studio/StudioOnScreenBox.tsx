@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { captureVideoFrame } from "@/lib/videoPoster";
 
 export type OnScreenStyle = "classic" | "strong" | "caption-bar";
-export type OnScreenBackground = "solid" | "see-through" | "none";
+export type OnScreenBackground = "solid" | "see-through" | "none" | "plain";
 
 export type OnScreenCaption = {
   id: string;
@@ -66,7 +66,7 @@ export function frameAspect(
 }
 
 const MIN_BOX = 0.06;
-export const REEL_SAFE = { top: 0.08, bottom: 0.16, right: 0.14 };
+export const REEL_SAFE = { top: 0.08, bottom: 0.08, right: 0.14 };
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 
 type Handle = (typeof HANDLES)[number];
