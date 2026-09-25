@@ -1,0 +1,213 @@
+<h2>Studio — the run cockpit</h2>
+<p class="subtitle">Studio Dark + a dash of Creator energy. Shown mid-run: 2 clips dropped, 20 variants each, generating now. Left = the two-input cockpit. Right = live progress that survives leaving the page.</p>
+
+<style>
+  .vs { --bg:#0a0a0e; --panel:#101018; --panel2:#15151f; --line:#23232f; --line2:#2c2c3a;
+        --text:#ececf4; --muted:#8a8aa0; --muted2:#62627a;
+        --violet:#7c5cff; --violetL:#a78bfa; --cyan:#22d3ee; --pink:#ff4d8d;
+        --green:#22c55e; --amber:#f59e0b;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        background:var(--bg); border-radius:14px; overflow:hidden; border:1px solid var(--line);
+        color:var(--text); }
+  .vs * { box-sizing:border-box; }
+  /* top bar */
+  .vs-top { display:flex; align-items:center; gap:18px; padding:12px 18px; border-bottom:1px solid var(--line);
+            background:linear-gradient(180deg,#101018,#0c0c12); }
+  .vs-logo { font-weight:800; letter-spacing:.2px; display:flex; align-items:center; gap:8px; font-size:15px; }
+  .vs-logo .spark { width:18px; height:18px; border-radius:6px; background:linear-gradient(135deg,var(--violet),var(--pink));
+                    display:inline-block; box-shadow:0 0 12px #7c5cff66; }
+  .vs-nav { display:flex; gap:4px; margin-left:8px; }
+  .vs-nav a { font-size:13px; color:var(--muted); padding:6px 12px; border-radius:8px; text-decoration:none; }
+  .vs-nav a.on { color:#fff; background:#1b1b27; }
+  .vs-status { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:11.5px; color:var(--muted); }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+          background:#14141d; border:1px solid var(--line); }
+  .dot { width:7px; height:7px; border-radius:50%; }
+  /* body */
+  .vs-body { display:grid; grid-template-columns: 0.95fr 1.05fr; gap:0; min-height:560px; }
+  .vs-left { padding:22px; border-right:1px solid var(--line); }
+  .vs-right { padding:18px 20px; background:#0c0c11; }
+  .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted2); margin:0 0 8px; font-weight:700; }
+  /* drop zone */
+  .drop { border:1.6px dashed var(--line2); border-radius:14px; padding:26px 18px; text-align:center;
+          background:radial-gradient(120% 120% at 50% 0%, #14141e, #0e0e15); }
+  .drop .ic { width:44px; height:44px; border-radius:12px; margin:0 auto 10px;
+              background:linear-gradient(135deg,#1c1430,#241a44); display:flex; align-items:center; justify-content:center;
+              font-size:20px; border:1px solid #2e2350; }
+  .drop b { font-size:14px; }
+  .drop span { display:block; font-size:12px; color:var(--muted); margin-top:4px; }
+  .browse { margin-top:12px; display:inline-block; font-size:12px; color:var(--violetL); border:1px solid #2c2748;
+            padding:6px 12px; border-radius:8px; background:#15101f; }
+  /* file list */
+  .files { margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+  .file { display:flex; align-items:center; gap:11px; background:var(--panel2); border:1px solid var(--line);
+          border-radius:10px; padding:9px 11px; }
+  .file .thumb { width:42px; height:30px; border-radius:6px; flex:none; }
+  .file .meta { flex:1; min-width:0; }
+  .file .meta b { font-size:13px; }
+  .file .meta span { display:block; font-size:11px; color:var(--muted); }
+  .file .x { color:var(--muted2); font-size:14px; }
+  /* count + generate */
+  .ctrl-row { display:flex; gap:12px; align-items:stretch; margin-top:20px; }
+  .stepper { flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:10px 14px; }
+  .stepper .lbl { margin:0 0 6px; }
+  .stepper .val { display:flex; align-items:center; justify-content:space-between; }
+  .stepper .num { font-size:26px; font-weight:800; }
+  .stepper .pm { display:flex; gap:6px; }
+  .stepper .pm b { width:28px; height:28px; border-radius:8px; background:#1c1c28; border:1px solid var(--line);
+                   display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--text); }
+  .stepper .hint { font-size:10.5px; color:var(--muted2); margin-top:6px; }
+  .gen { flex:1; border:none; border-radius:11px; color:#fff; font-size:15px; font-weight:800; cursor:pointer;
+         background:linear-gradient(135deg,var(--violet),var(--pink)); box-shadow:0 6px 22px #ff4d8d33, 0 2px 10px #7c5cff44;
+         display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  .gen small { font-size:10.5px; font-weight:600; opacity:.85; }
+  /* advanced */
+  .adv { margin-top:16px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:8px;
+         border-top:1px solid var(--line); padding-top:14px; }
+  .adv .chev { color:var(--muted2); }
+  .adv .fmt { margin-left:auto; color:var(--text); background:#14141d; border:1px solid var(--line);
+              padding:4px 10px; border-radius:999px; font-size:11.5px; }
+  /* progress */
+  .run-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .run-head .big { font-size:14px; font-weight:700; }
+  .run-head .sub { font-size:11.5px; color:var(--muted); }
+  .pcard { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:14px; margin-bottom:13px; }
+  .pcard.active { border-color:#2f2a52; box-shadow:0 0 0 1px #7c5cff22, 0 8px 26px #00000040; }
+  .pc-top { display:flex; align-items:center; gap:11px; }
+  .pc-top .thumb { width:48px; height:34px; border-radius:7px; flex:none; }
+  .pc-top .name { flex:1; min-width:0; }
+  .pc-top .name b { font-size:13.5px; }
+  .pc-top .name span { display:block; font-size:11px; color:var(--muted); }
+  .pc-top .cnt { font-size:13px; font-weight:800; }
+  .pc-top .cnt small { color:var(--muted); font-weight:600; }
+  .bar { height:7px; border-radius:99px; background:#1b1b26; margin:11px 0 9px; overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--violet),var(--cyan)); }
+  .statusline { font-size:11.5px; color:var(--muted); display:flex; gap:14px; flex-wrap:wrap; }
+  .statusline .live { color:var(--cyan); }
+  .statusline .roll { color:var(--amber); }
+  .vthumbs { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:11px; }
+  .vth { aspect-ratio:9/16; border-radius:6px; position:relative; overflow:hidden; }
+  .vth .q { position:absolute; bottom:3px; left:3px; font-size:8px; font-weight:800; padding:1px 4px; border-radius:4px;
+            background:#0b3d1f; color:#7bf2a8; }
+  .vth.work { background:#14141d !important; border:1px dashed var(--line2); display:flex; align-items:center; justify-content:center; }
+  .vth.work span { font-size:8px; color:var(--muted2); }
+  .toast { margin-top:6px; font-size:11px; color:var(--muted2); display:flex; align-items:center; gap:6px; }
+</style>
+
+<div class="vs">
+  <!-- TOP BAR -->
+  <div class="vs-top">
+    <div class="vs-logo"><span class="spark"></span> Variant Studio</div>
+    <nav class="vs-nav">
+      <a class="on" href="#">Studio</a>
+      <a href="#">Gallery</a>
+      <a href="#">Diagnostics</a>
+    </nav>
+    <div class="vs-status">
+      <span class="pill"><span class="dot" style="background:var(--green);box-shadow:0 0 8px #22c55e88;"></span> Engine ready</span>
+      <span class="pill">Local · CPU&nbsp;<b style="color:var(--text)">fast</b></span>
+    </div>
+  </div>
+
+  <div class="vs-body">
+    <!-- LEFT: cockpit -->
+    <div class="vs-left">
+      <p class="lbl">1 · Source videos</p>
+      <div class="drop">
+        <div class="ic">⬆</div>
+        <b>Drop video(s) here</b>
+        <span>MP4 / MOV — drop several to batch them</span>
+        <div class="browse">or browse files</div>
+      </div>
+
+      <div class="files">
+        <div class="file">
+          <div class="thumb" style="background:linear-gradient(135deg,#0ea5e9,#1f2937);"></div>
+          <div class="meta"><b>beach_clip.mp4</b><span>0:18 · 1080×1920</span></div>
+          <div class="x">✕</div>
+        </div>
+        <div class="file">
+          <div class="thumb" style="background:linear-gradient(135deg,#7c3aed,#831843);"></div>
+          <div class="meta"><b>city_drone.mp4</b><span>0:42 · 3840×2160</span></div>
+          <div class="x">✕</div>
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <div class="stepper">
+          <p class="lbl">2 · Variants each</p>
+          <div class="val">
+            <div class="num">20</div>
+            <div class="pm"><b>–</b><b>+</b></div>
+          </div>
+          <div class="hint">per video · 2 clips → 40 total</div>
+        </div>
+        <button class="gen">Generate<small>40 variants</small></button>
+      </div>
+
+      <div class="adv">
+        <span class="chev">▸</span> Advanced
+        <span class="fmt">Output: Vertical 1080×1920 ▾</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: live progress -->
+    <div class="vs-right">
+      <div class="run-head">
+        <div>
+          <div class="big">Generating…</div>
+          <div class="sub">Started 14s ago · the AI is auto-tuning each variant</div>
+        </div>
+        <span class="pill"><span class="dot" style="background:var(--cyan);box-shadow:0 0 8px #22d3ee99;"></span> live</span>
+      </div>
+
+      <!-- source 1: nearly done -->
+      <div class="pcard active">
+        <div class="pc-top">
+          <div class="thumb" style="background:linear-gradient(135deg,#0ea5e9,#1f2937);"></div>
+          <div class="name"><b>beach_clip.mp4</b><span>0:18</span></div>
+          <div class="cnt">14<small> / 20</small></div>
+        </div>
+        <div class="bar"><i style="width:70%"></i></div>
+        <div class="statusline">
+          <span class="live">● v16 rendering…</span>
+          <span class="roll">↻ v15 re-rolling 2/3</span>
+          <span>14 passed</span>
+        </div>
+        <div class="vthumbs">
+          <div class="vth" style="background:linear-gradient(135deg,#0ea5e9,#1f2937);"><span class="q">94</span></div>
+          <div class="vth" style="background:linear-gradient(135deg,#a78bfa,#3b0764);"><span class="q">91</span></div>
+          <div class="vth" style="background:linear-gradient(135deg,#fb7185,#831843);"><span class="q">96</span></div>
+          <div class="vth" style="background:linear-gradient(135deg,#34d399,#064e3b);"><span class="q">93</span></div>
+          <div class="vth work"><span>↻ 2/3</span></div>
+          <div class="vth work"><span>render</span></div>
+        </div>
+        <div class="toast">✦ 14 variants streamed to Gallery</div>
+      </div>
+
+      <!-- source 2: queued/starting -->
+      <div class="pcard">
+        <div class="pc-top">
+          <div class="thumb" style="background:linear-gradient(135deg,#7c3aed,#831843);"></div>
+          <div class="name"><b>city_drone.mp4</b><span>0:42</span></div>
+          <div class="cnt">3<small> / 20</small></div>
+        </div>
+        <div class="bar"><i style="width:15%"></i></div>
+        <div class="statusline">
+          <span class="live">● v04 rendering…</span>
+          <span>3 passed</span>
+        </div>
+        <div class="vthumbs">
+          <div class="vth" style="background:linear-gradient(135deg,#7c3aed,#3b0764);"><span class="q">92</span></div>
+          <div class="vth" style="background:linear-gradient(135deg,#22d3ee,#0e7490);"><span class="q">95</span></div>
+          <div class="vth" style="background:linear-gradient(135deg,#f59e0b,#7c2d12);"><span class="q">90</span></div>
+          <div class="vth work"><span>render</span></div>
+          <div class="vth work"><span></span></div>
+          <div class="vth work"><span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Notice: two inputs only (drop + count), AI auto-tunes (no strength/color knobs), re-rolls are visible (<span style="color:#f59e0b">↻ v15 re-rolling 2/3</span>), finished variants stream to Gallery live, and an engine/GPU status strip sits top-right. Does this layout + density feel right? Anything you'd move, add, or cut before I do Gallery?</p>
