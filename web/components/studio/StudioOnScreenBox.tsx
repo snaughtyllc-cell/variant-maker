@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { captureVideoFrame } from "@/lib/videoPoster";
 
 export type OnScreenStyle = "classic" | "strong" | "caption-bar";
-export type OnScreenBackground = "solid" | "see-through" | "none";
+export type OnScreenBackground = "solid" | "see-through" | "plain" | "none";
 
 export type OnScreenCaption = {
   id: string;
