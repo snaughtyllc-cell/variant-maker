@@ -112,6 +112,17 @@ def test_caption_bar_changes_band_height_inside_one_box():
     assert versions[0]["look"]["style"] == "caption-bar"
 
 
+def test_plain_text_has_no_shadow_block():
+    clean = normalize_project(_project(
+        [{"text": "plain", "box_ids": ["A"]}],
+        [_box("A")],
+        background="plain",
+    ))
+    assert clean["look"]["background"] == "plain"
+    layer = render_layer(plan_versions(clean, 1)[0], 200, 360)
+    assert layer.getbbox() is not None
+
+
 def test_locked_size_stays_one_line():
     project = _project(
         [{"text": "one two three four five six seven", "box_ids": ["A"], "size": 0.7, "lines": 1}],

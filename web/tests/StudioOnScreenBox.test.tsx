@@ -125,7 +125,7 @@ describe("phone box drawer", () => {
     fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "sale" } });
     expect(phone.querySelector("[data-role='text']")?.textContent).toBe("sale");
     fireEvent.click(screen.getByRole("button", { name: "1 line" }));
-    fireEvent.click(screen.getByRole("button", { name: "Smaller line 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Smaller" }));
     const sticker = phone.querySelector("[data-role='text']");
     expect(sticker?.getAttribute("data-lines")).toBe("1");
     expect(screen.getByText("90%")).toBeTruthy();

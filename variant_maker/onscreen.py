@@ -114,7 +114,7 @@ def normalize_project(raw: dict | None) -> dict | None:
     if style not in ("classic", "strong", "caption-bar"):
         raise OnScreenError(f"Unknown on-screen look {style}.")
     background = str(look.get("background") or "solid")
-    if style != "caption-bar" and background not in ("none", "solid", "see-through"):
+    if style != "caption-bar" and background not in ("none", "plain", "solid", "see-through"):
         raise OnScreenError(f"Unknown background {background}.")
     return {
         "captions": captions,

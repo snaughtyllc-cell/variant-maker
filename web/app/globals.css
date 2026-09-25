@@ -1669,6 +1669,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__type--solid { background: rgba(255, 255, 255, 0.92); border-radius: 0.35em; color: #111216; }
 .studio-onscreen__type--see-through { background: rgba(12, 12, 16, 0.63); border-radius: 0.35em; color: #fff; }
 .studio-onscreen__type--none { background: transparent; color: #fff; padding: 0; text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.55); }
+.studio-onscreen__type--plain { background: transparent; color: #fff; padding: 0; }
 .studio-onscreen__type--bar { background: rgba(0, 0, 0, 0.55); border-radius: 0; color: #fff; font-family: "Onscreen Noto", sans-serif; font-size: 4.2cqw; font-weight: 700; left: 0; max-width: none; padding: 0.42em 8px; transform: translateY(-50%); width: 100%; }
 .studio-onscreen__handle { background: #fff; border: 2px solid var(--box); border-radius: 99px; height: 22px; position: absolute; width: 22px; }
 .studio-onscreen__handle--nw { left: 4px; top: 4px; }

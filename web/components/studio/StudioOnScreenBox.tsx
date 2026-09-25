@@ -235,6 +235,13 @@ export function StudioOnScreenBox({
     };
   }, [clip?.key, clip?.file, clip?.src, clip?.width, clip?.height]);
 
+  function setFit(next: Partial<OnScreenCaption>) {
+    onChange({
+      ...draft,
+      captions: draft.captions.map((cap) => ({ ...cap, ...next })),
+    });
+  }
+
   function patchCaption(index: number, next: Partial<OnScreenCaption>) {
     const captions = draft.captions.map((cap, i) => (i === index ? { ...cap, ...next } : cap));
     onChange({ ...draft, captions });
@@ -436,7 +443,8 @@ export function StudioOnScreenBox({
                 [
                   ["solid", "Solid"],
                   ["see-through", "See-through"],
-                  ["none", "Text only"],
+                  ["plain", "No shadow"],
+                  ["none", "Shadow"],
                 ] as const
               ).map(([background, label]) => (
                 <button
@@ -451,6 +459,13 @@ export function StudioOnScreenBox({
               ))}
             </div>
           )}
+          <div className="studio-onscreen__fit" role="group" aria-label="Text size">
+            <button type="button" className="studio-onscreen__look" aria-label="Smaller" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) - 0.1) })}>Smaller</button>
+            <span>{Math.round((draft.captions[0]?.size ?? 1) * 100)}%</span>
+            <button type="button" className="studio-onscreen__look" aria-label="Larger" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) + 0.1) })}>Larger</button>
+            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 1} aria-pressed={draft.captions[0]?.lines === 1} onClick={() => setFit({ lines: draft.captions[0]?.lines === 1 ? undefined : 1, size: draft.captions[0]?.size ?? 1 })}>1 line</button>
+            <button type="button" className="studio-onscreen__look" data-on={draft.captions[0]?.lines === 2} aria-pressed={draft.captions[0]?.lines === 2} onClick={() => setFit({ lines: draft.captions[0]?.lines === 2 ? undefined : 2, size: draft.captions[0]?.size ?? 1 })}>2 lines</button>
+          </div>
           <div className="studio-onscreen__stage">
             <div className="studio-onscreen__phone-wrap">
               <div className="studio-onscreen__device">
@@ -624,13 +639,6 @@ export function StudioOnScreenBox({
                     style={{ fontSize: 16 }}
                     onChange={(e) => patchCaption(index, { text: e.target.value })}
                   />
-                  <div className="studio-onscreen__fit" role="group" aria-label={`Fit for line ${index + 1}`}>
-                    <button type="button" className="studio-onscreen__look" aria-label={`Smaller line ${index + 1}`} onClick={() => patchCaption(index, { size: clampTextSize((cap.size ?? 1) - 0.1) })}>Smaller</button>
-                    <span>{Math.round((cap.size ?? 1) * 100)}%</span>
-                    <button type="button" className="studio-onscreen__look" aria-label={`Larger line ${index + 1}`} onClick={() => patchCaption(index, { size: clampTextSize((cap.size ?? 1) + 0.1) })}>Larger</button>
-                    <button type="button" className="studio-onscreen__look" data-on={cap.lines === 1} aria-pressed={cap.lines === 1} onClick={() => patchCaption(index, { lines: cap.lines === 1 ? undefined : 1, size: cap.size ?? 1 })}>1 line</button>
-                    <button type="button" className="studio-onscreen__look" data-on={cap.lines === 2} aria-pressed={cap.lines === 2} onClick={() => patchCaption(index, { lines: cap.lines === 2 ? undefined : 2, size: cap.size ?? 1 })}>2 lines</button>
-                  </div>
                   <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
                     {draft.boxes.map((box) => {
                       const meta = BOX_COLORS.find((color) => color.id === box.id);
