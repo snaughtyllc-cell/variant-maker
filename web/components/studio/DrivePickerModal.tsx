@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { getDriveStatus, listDestinationVideos, listDestinations } from "@/lib/api";
+import { createDestination, getDriveStatus, listDestinationVideos, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, DriveVideo } from "@/lib/types";
 
 export interface DrivePick {
@@ -26,6 +26,10 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pasteName, setPasteName] = useState("");
+  const [pasteUrl, setPasteUrl] = useState("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [addingFolder, setAddingFolder] = useState(false);
 
   const driveNotReady = status != null && status.status !== "ready";
 
@@ -80,6 +84,27 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
       cancelled = true;
     };
   }, [destinationId, driveNotReady]);
+
+  async function handlePasteFolder(e: FormEvent) {
+    e.preventDefault();
+    if (addingFolder) return;
+    setPasteError(null);
+    setAddingFolder(true);
+    try {
+      const created = await createDestination(
+        pasteName.trim() || "Drive folder",
+        pasteUrl.trim(),
+      );
+      setDestinations((prev) => [...prev, created]);
+      setDestinationId(created.id);
+      setPasteName("");
+      setPasteUrl("");
+    } catch (err) {
+      setPasteError(err instanceof Error ? err.message : "Failed to add destination");
+    } finally {
+      setAddingFolder(false);
+    }
+  }
 
   function toggleVideo(id: string) {
     setSelected((prev) => {
@@ -164,7 +189,10 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
 
           {!loadingMeta && driveNotReady && (
             <div style={{ fontSize: 12.5, color: "#8e6119", lineHeight: 1.5 }}>
-              <div style={{ marginBottom: 10 }}>{status?.message ?? "Google Drive is not connected."}</div>
+              <div style={{ marginBottom: 10 }}>
+                {status?.message ??
+                  "Go to Drive and paste a folder shared with the studio email."}
+              </div>
               <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
                 Go to Settings → Drive
               </Link>
@@ -173,9 +201,28 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
 
           {!loadingMeta && !driveNotReady && destinations.length === 0 && (
             <div style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.5 }}>
-              <div style={{ marginBottom: 10 }}>No saved Drive folders yet.</div>
+              <div style={{ marginBottom: 10 }}>No saved Drive folders yet. Paste a folder link shared as Editor with the studio email.</div>
+              <form onSubmit={handlePasteFolder} className="drive-step2-form" style={{ marginBottom: 12 }}>
+                <input
+                  value={pasteName}
+                  onChange={(e) => setPasteName(e.target.value)}
+                  placeholder="Name"
+                  className="drive-input drive-input--name"
+                />
+                <input
+                  value={pasteUrl}
+                  onChange={(e) => setPasteUrl(e.target.value)}
+                  placeholder="Paste Drive folder link"
+                  required
+                  className="drive-input drive-input--url"
+                />
+                <button type="submit" disabled={addingFolder} className="drive-btn drive-btn--dark">
+                  {addingFolder ? "Adding…" : "Add"}
+                </button>
+              </form>
+              {pasteError && <div className="drive-form-error" style={{ marginBottom: 10 }}>{pasteError}</div>}
               <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
-                Add a destination in Settings → Drive
+                Or open Settings → Drive
               </Link>
             </div>
           )}
