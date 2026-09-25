@@ -338,12 +338,19 @@ def diagnose_ssim_alignment(
     }
 
 
-def mean_ssim(path_a: str, path_b: str) -> float:
-    """Mean SSIM across the three TikFusion-aligned sample points."""
+def mean_ssim(
+    path_a: str, path_b: str, *, canvas: tuple[int, int] | None = None,
+) -> float:
+    """Mean SSIM across the three TikFusion-aligned sample points.
+
+    Default canvas follows source orientation (576×1024 portrait). Pass
+    ``canvas`` for CopyID calibration (e.g. 224×224 platform proxy). The
+    uniqueness gate still uses the default.
+    """
     from .probe import probe
 
     info = probe(path_a, hash_content=False)
-    canvas = ssim_canvas(info.width, info.height)
+    used = canvas if canvas is not None else ssim_canvas(info.width, info.height)
     dur_a = max(float(info.duration_s or 0.0), 0.1)
     dur_b = _probe_duration(path_b)
     with tempfile.TemporaryDirectory(prefix="vm-ssim-") as tmp:
@@ -351,15 +358,17 @@ def mean_ssim(path_a: str, path_b: str) -> float:
         for i, frac in enumerate(FRAME_FRACS):
             fa = os.path.join(tmp, f"a_{i}.png")
             fb = os.path.join(tmp, f"b_{i}.png")
-            _extract_frame(path_a, frac * dur_a, fa, canvas=canvas)
-            _extract_frame(path_b, frac * dur_b, fb, canvas=canvas)
+            _extract_frame(path_a, frac * dur_a, fa, canvas=used)
+            _extract_frame(path_b, frac * dur_b, fb, canvas=used)
             scores.append(_ssim_pair(fa, fb))
         return sum(scores) / len(scores)
 
 
-def bits_vs(path_a: str, path_b: str) -> int:
+def bits_vs(
+    path_a: str, path_b: str, *, canvas: tuple[int, int] | None = None,
+) -> int:
     """SSIM bits between two videos (TikFusion-style). Raises on probe/ffmpeg failure."""
-    return bits_from_ssim(mean_ssim(path_a, path_b))
+    return bits_from_ssim(mean_ssim(path_a, path_b, canvas=canvas))
 
 
 def score_uniqueness(
