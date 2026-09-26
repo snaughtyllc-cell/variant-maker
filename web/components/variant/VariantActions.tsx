@@ -91,8 +91,9 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
   }
 
   const currentResult = variant.platform_result ?? "unknown";
-  const isStuck = currentResult === "flagged" || currentResult === "duplicate_reject";
-  const isPassActive = !isStuck;
+  const isFlagged = currentResult === "flagged" || currentResult === "duplicate_reject";
+  const isPassed = currentResult === "passed";
+  const passBusy = resultBusy === "passed";
   const flagBusy = resultBusy === "flagged";
 
   const segmentBase: React.CSSProperties = {
@@ -119,9 +120,7 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
 
   return (
     <div style={{ marginTop: 20 }}>
-      {/* RESULT — Pass is unlabeled. Flag is the one miss action, for a live
-          post that is stuck and not moving in views. Duplicate rejected lives
-          on Drops / the ledger, not this sheet. */}
+      {/* RESULT — Pass and Flag are saved marks. Unlabeled is neither. */}
       <div
         style={{
           display: "flex",
@@ -131,20 +130,14 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
         }}
       >
         <div style={EYEBROW_STYLE}>Result</div>
-        {isStuck && (
-          <span
-            data-testid="platform-result-badge"
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "2px 8px",
-              borderRadius: 999,
-              color: "var(--color-orange)",
-              background: "#fcf0e4",
-              border: "1px solid #f0d3ae",
-            }}
-          >
-            Stuck
+        {isPassed && (
+          <span data-testid="platform-result-badge" style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "var(--color-green)", background: "#e7f6ef", border: "1px solid #b7e0c8" }}>
+            Passed
+          </span>
+        )}
+        {isFlagged && (
+          <span data-testid="platform-result-badge" style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "var(--color-orange)", background: "#fcf0e4", border: "1px solid #f0d3ae" }}>
+            Flagged
           </span>
         )}
       </div>
@@ -158,18 +151,30 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
           background: "var(--color-panel2)",
         }}
       >
-        <div style={{ ...segmentBase, ...(isPassActive ? segmentActive : segmentInactive) }}>
+        <button
+          type="button"
+          aria-pressed={isPassed}
+          onClick={() => handleSetResult("passed")}
+          disabled={!!resultBusy}
+          style={{
+            ...segmentBase,
+            ...(isPassed ? segmentActive : segmentInactive),
+            cursor: resultBusy ? "not-allowed" : "pointer",
+            opacity: resultBusy && !passBusy ? 0.6 : 1,
+          }}
+        >
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--color-green)", flexShrink: 0 }} />
-          Pass
-        </div>
+          {passBusy ? "Saving…" : "Pass"}
+        </button>
 
         <button
           type="button"
+          aria-pressed={isFlagged}
           onClick={() => handleSetResult("flagged")}
           disabled={!!resultBusy}
           style={{
             ...segmentBase,
-            ...(isStuck ? segmentActive : segmentInactive),
+            ...(isFlagged ? segmentActive : segmentInactive),
             cursor: resultBusy ? "not-allowed" : "pointer",
             opacity: resultBusy && !flagBusy ? 0.6 : 1,
           }}
@@ -189,7 +194,7 @@ export function VariantActions({ sourceId, variant, onRegenerate, onSendToDrive 
           color: "var(--color-muted2)",
         }}
       >
-        Unlabeled = pass. Flag when a live post is stuck and views aren't moving.
+        Mark Pass when the post stays up. Flag when it posted, then got flagged.
       </div>
 
       <div style={{ marginTop: 20 }}>
