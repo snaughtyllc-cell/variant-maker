@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
 import type { AuthMe, DriveStatus } from "@/lib/types";
 
@@ -19,7 +19,7 @@ vi.mock("@/lib/useAuthMe", () => ({
   useAuthMe: () => me,
 }));
 
-import { getDriveStatus, listDestinations } from "@/lib/api";
+import { createDestination, getDriveStatus, listDestinations } from "@/lib/api";
 
 const MEMBER: AuthMe = {
   auth_required: true,
@@ -106,5 +106,27 @@ describe("DestinationsPanel share email", () => {
     });
     expect(screen.queryByRole("button", { name: /disconnect/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Google account")).not.toBeInTheDocument();
+  });
+
+  it("lets an invited partner paste a folder link when Drive is not connected", async () => {
+    vi.mocked(getDriveStatus).mockResolvedValue(notConfigured);
+    vi.mocked(createDestination).mockRejectedValue(new Error("Drive not connected"));
+    render(<DestinationsPanel />);
+    const url = await screen.findByPlaceholderText(/paste drive folder link/i);
+    expect(url).toBeEnabled();
+    expect(screen.getByPlaceholderText("Name")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
+    fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "Reels" } });
+    fireEvent.change(url, {
+      target: { value: "https://drive.google.com/drive/folders/1Xr5BFioBkYJuGFyuXkUIUl6ynpYqvcOj" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(createDestination).toHaveBeenCalledWith(
+        "Reels",
+        "https://drive.google.com/drive/folders/1Xr5BFioBkYJuGFyuXkUIUl6ynpYqvcOj",
+      );
+    });
+    expect(await screen.findByText("Drive not connected")).toBeTruthy();
   });
 });
