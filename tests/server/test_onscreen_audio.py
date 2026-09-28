@@ -1,5 +1,7 @@
 """On-screen sounds and saved setups stay on the workspace that uploaded them."""
 import json
+import shutil
+import subprocess
 
 from fastapi.testclient import TestClient
 
@@ -200,3 +202,133 @@ def test_stamp_mixes_the_sound_after_the_words(tmp_path, monkeypatch):
     audio = job.sources[0].variants[0].quality["onscreen_audio"]
     assert audio["name"] == "Trend"
     assert job.sources[0].variants[0].quality["onscreen"]["text"] == "hello"
+
+
+def _tone_mp4(path, *, silent=False):
+    cmd = [
+        "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.4",
+    ]
+    if silent:
+        cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(path)]
+    else:
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4",
+            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.4",
+            "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            str(path),
+        ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
+def _has_stream(path, kind):
+    spec = "a" if kind == "audio" else "v"
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", f"{spec}:0",
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path),
+        ],
+        check=False, capture_output=True, text=True,
+    )
+    return kind in (probe.stdout or "")
+
+
+def test_a_video_sound_keeps_only_its_audio(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        return
+    clip = tmp_path / "trend.mp4"
+    _tone_mp4(clip)
+    client, store = _client(tmp_path)
+    project = _project(audios=[{"name": "Trend", "file": "trend.mp4", "volume": 0.4, "mode": "under"}])
+    resp = client.post(
+        "/api/jobs",
+        files=[
+            ("files", ("a.mp4", b"x", "video/mp4")),
+            ("audio_files", ("trend.mp4", clip.read_bytes(), "video/mp4")),
+        ],
+        data={"count": "1", "onscreen": json.dumps(project)},
+    )
+    assert resp.status_code == 201, resp.text
+    audio = store.get(resp.json()["job_id"]).onscreen["audios"][0]
+    row = lookup(str(tmp_path), bed_id=audio["bed_id"])
+    assert row["path"].endswith("trend.m4a")
+    assert _has_stream(row["path"], "audio")
+    assert not _has_stream(row["path"], "video")
+
+
+def test_direct_upload_video_keeps_only_the_audio(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        return
+    clip = tmp_path / "trend.mp4"
+    _tone_mp4(clip)
+
+    class _Store:
+        def __init__(self):
+            self.copied = []
+            self.objects = {"uploads/up1/trend.mp4": clip.read_bytes()}
+
+        def size(self, key):
+            body = self.objects.get(key)
+            return len(body) if body is not None else None
+
+        def copy(self, src, dst):
+            self.copied.append((src, dst))
+            self.objects[dst] = self.objects[src]
+
+        def get(self, key, dest):
+            with open(dest, "wb") as fh:
+                fh.write(self.objects[key])
+
+        def put(self, key, path):
+            with open(path, "rb") as fh:
+                self.objects[key] = fh.read()
+
+    blob = _Store()
+    project = retain_project(
+        _project(audios=[{"name": "Trend", "key": "uploads/up1/trend.mp4"}]),
+        root=str(tmp_path),
+        workspace_id="ws_lab",
+        object_store=blob,
+        claim_upload=lambda key: "up1",
+        files={},
+    )
+    audio = project["audios"][0]
+    assert blob.copied == []
+    assert audio["key"].endswith("trend.m4a")
+    row = lookup(str(tmp_path), bed_id=audio["bed_id"])
+    assert _has_stream(row["path"], "audio")
+    assert not _has_stream(row["path"], "video")
+
+
+def test_a_silent_video_is_refused(tmp_path):
+    if not shutil.which("ffmpeg"):
+        return
+    clip = tmp_path / "silent.mp4"
+    _tone_mp4(clip, silent=True)
+    client, _store = _client(tmp_path)
+    project = _project(audios=[{"name": "Quiet", "file": "silent.mp4"}])
+    resp = client.post(
+        "/api/jobs",
+        files=[
+            ("files", ("a.mp4", b"x", "video/mp4")),
+            ("audio_files", ("silent.mp4", clip.read_bytes(), "video/mp4")),
+        ],
+        data={"count": "1", "onscreen": json.dumps(project)},
+    )
+    assert resp.status_code == 400
+    assert "sound" in resp.json()["detail"].lower()
+
+
+def test_a_large_video_sound_is_not_capped_like_an_audio_file(tmp_path):
+    client, _store = _client(tmp_path)
+    project = _project(audios=[{"name": "Clip", "file": "clip.mp4"}])
+    resp = client.post(
+        "/api/jobs",
+        files=[
+            ("files", ("a.mp4", b"x", "video/mp4")),
+            ("audio_files", ("clip.mp4", b"\0" * (21 * 1024 * 1024), "video/mp4")),
+        ],
+        data={"count": "1", "onscreen": json.dumps(project)},
+    )
+    assert resp.status_code != 413
+    assert "20 MB" not in resp.json().get("detail", "")

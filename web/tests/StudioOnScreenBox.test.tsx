@@ -14,6 +14,7 @@ import {
   StudioOnScreenBox,
   type OnScreenProject,
 } from "@/components/studio/StudioOnScreenBox";
+import { soundFileKind, soundSizeNote } from "@/lib/api";
 
 describe("on-screen project", () => {
   it("keeps a drawn box locked by its color", () => {
@@ -83,6 +84,24 @@ describe("on-screen project", () => {
     if (typeof project === "string") return;
     expect(project.audios?.map((audio) => audio.name)).toEqual(["B", "A"]);
     expect(project.audios?.[0].mode).toBe("replace");
+  });
+
+  it("treats a video as a sound and keeps audio files on the small cap", () => {
+    const video = new File([new Uint8Array(8)], "trend.mp4", { type: "video/mp4" });
+    const audio = new File([new Uint8Array(8)], "trend.mp3", { type: "audio/mpeg" });
+    expect(soundFileKind(video)).toBe("video");
+    expect(soundFileKind(audio)).toBe("audio");
+    expect(soundSizeNote(video)).toBeNull();
+    const huge = new File([new Uint8Array(8)], "big.mp3", { type: "audio/mpeg" });
+    Object.defineProperty(huge, "size", { value: 21 * 1024 * 1024 });
+    expect(soundSizeNote(huge)).toMatch(/20 MB/);
+  });
+
+  it("lets add sound pick a video", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("tab", { name: "Sound" }));
+    const input = screen.getByLabelText("Add a sound", { selector: "input", hidden: true });
+    expect(input.getAttribute("accept")).toContain("video");
   });
 
   it("caps a printed pack at forty variants", () => {

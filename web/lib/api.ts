@@ -37,6 +37,7 @@ import {
   WorkspaceApiKeysPage,
 } from "./types";
 import type { JobUploadProgress } from "./jobUpload";
+import { MAX_UPLOAD_BYTES } from "./files";
 
 /**
  * FastAPI error bodies are `{"detail": string | Array<{msg: string, ...}>}`.
@@ -249,15 +250,45 @@ export type OnScreenTemplate = {
 };
 
 const MAX_SOUND_BYTES = 20 * 1024 * 1024;
+const VIDEO_SOUND = /\.(mp4|mov|m4v|webm|mkv|avi)$/i;
+const AUDIO_SOUND = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
+
+export function soundFileKind(file: File): "audio" | "video" | null {
+  const name = file.name || "";
+  if (file.type.startsWith("video/") || VIDEO_SOUND.test(name)) return "video";
+  if (file.type.startsWith("audio/") || AUDIO_SOUND.test(name)) return "audio";
+  return null;
+}
+
+export function soundSizeNote(file: File): string | null {
+  const kind = soundFileKind(file);
+  if (kind === "video") return file.size > MAX_UPLOAD_BYTES ? "That video is too big." : null;
+  if (kind === "audio") return file.size > MAX_SOUND_BYTES ? "Sound files stay under 20 MB." : null;
+  return null;
+}
+
+function namedSound(file: File): File {
+  const name = file.name || "sound";
+  if (soundFileKind(file) === "video" && !VIDEO_SOUND.test(name)) {
+    const ext = file.type === "video/quicktime" ? ".mov" : ".mp4";
+    return new File([file], `${name}${ext}`, { type: file.type || "video/mp4" });
+  }
+  if (soundFileKind(file) === "audio" && !AUDIO_SOUND.test(name)) {
+    return new File([file], `${name}.m4a`, { type: file.type || "audio/mp4" });
+  }
+  return file;
+}
 
 async function uploadSound(file: File): Promise<{ key?: string; local?: File }> {
-  if (file.size > MAX_SOUND_BYTES) throw new Error("Sound files stay under 20 MB.");
-  const init = await initDirectUpload(file);
+  const note = soundSizeNote(file);
+  if (note) throw new Error(note);
+  const named = namedSound(file);
+  const init = await initDirectUpload(named);
   if (init.mode === "direct" && init.url && init.key) {
-    await putDirectObject(file, init);
+    await putDirectObject(named, init);
     return { key: init.key };
   }
-  return { local: file };
+  return { local: named };
 }
 
 async function prepareProject(project: OnScreenTemplate["project"] | null | undefined, files: File[]) {

@@ -6,6 +6,8 @@ import {
   deleteOnScreenTemplate,
   listOnScreenTemplates,
   saveOnScreenTemplate,
+  soundFileKind,
+  soundSizeNote,
   type OnScreenTemplate,
 } from "@/lib/api";
 import { captureVideoFrame } from "@/lib/videoPoster";
@@ -36,7 +38,6 @@ export type OnScreenCaption = {
 export const MAX_SOUNDS = 4;
 export const MAX_PRINTS = 5;
 export const MAX_PACK = 40;
-const MAX_SOUND_BYTES = 20 * 1024 * 1024;
 
 export function cleanAudios(audios: OnScreenAudio[] | undefined, previewId?: string): OnScreenAudio[] {
   const rows = (audios || []).slice(0, MAX_SOUNDS).flatMap((audio) => {
@@ -363,7 +364,7 @@ export function StudioOnScreenBox({
   const [selectedSound, setSelectedSound] = useState("");
   const soundInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef("");
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLMediaElement | null>(null);
   const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
   const [framePreset, setFramePreset] = useState<string | null>(null);
   const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
@@ -483,13 +484,11 @@ export function StudioOnScreenBox({
   }
 
   function addSounds(list: FileList | null) {
-    const incoming = Array.from(list || []).filter((file) => (
-      file.type.startsWith("audio/") || /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(file.name)
-    ));
+    const incoming = Array.from(list || []).filter((file) => soundFileKind(file));
     if (!incoming.length) return;
-    const tooBig = incoming.find((file) => file.size > MAX_SOUND_BYTES);
+    const tooBig = incoming.find((file) => soundSizeNote(file));
     if (tooBig) {
-      setSetupNote("Sound files stay under 20 MB.");
+      setSetupNote(soundSizeNote(tooBig) || "That file is too big.");
       return;
     }
     const room = MAX_SOUNDS - (draft.audios || []).length;
@@ -529,7 +528,7 @@ export function StudioOnScreenBox({
   }
 
   function playSound(audio: OnScreenAudio) {
-    const el = previewAudioRef.current || new Audio();
+    const el = previewAudioRef.current || document.createElement("video");
     previewAudioRef.current = el;
     setSelectedSound(audio.id);
     if (playing === audio.id) {
@@ -1110,7 +1109,7 @@ export function StudioOnScreenBox({
                 {tool === "sound" && (
                   <>
                     <p className="studio-onscreen__hint">
-                      Add up to 4 sounds you are allowed to use. The pack takes turns. Variant 1 uses the one you play. Under the voice keeps the talking. Replace drops the original audio.
+                      Add up to 4 sounds you are allowed to use. A video works too — only its sound is kept. The pack takes turns. Variant 1 uses the one you play. Under the voice keeps the talking. Replace drops the original audio.
                     </p>
                     <div className="studio-onscreen__looks" role="listbox" aria-label="Sounds">
                       {audios.map((audio) => (
@@ -1173,7 +1172,7 @@ export function StudioOnScreenBox({
                         </div>
                       </div>
                     ) : (
-                      <p className="studio-onscreen__hint">Add a sound you are allowed to use.</p>
+                      <p className="studio-onscreen__hint">Add a sound, or a video that already has the sound you want.</p>
                     )}
                   </>
                 )}
@@ -1232,7 +1231,7 @@ export function StudioOnScreenBox({
                 ref={soundInputRef}
                 className="studio-onscreen__file"
                 type="file"
-                accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac"
+                accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,.mp4,.mov,.m4v,.webm,.mkv,.avi"
                 multiple
                 aria-label="Add a sound"
                 onChange={(event) => {

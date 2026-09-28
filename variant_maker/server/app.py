@@ -194,7 +194,14 @@ from .models import (
     WorkspaceExperienceIn,
     WorkspaceInviteIn,
 )
-from .onscreen_beds import MAX_BED_BYTES, BedError, lookup as lookup_bed, retain_project
+from .onscreen_beds import (
+    BedError,
+    audio_media_type,
+    lookup as lookup_bed,
+    retain_project,
+    source_byte_limit,
+    source_too_big_detail,
+)
 from .onscreen_templates import TemplateError, delete_template, list_templates, save_template
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from .post_url import normalize_post_url
@@ -1794,9 +1801,9 @@ def create_app(
                     if not chunk:
                         break
                     size += len(chunk)
-                    if size > MAX_BED_BYTES:
+                    if size > source_byte_limit(name):
                         shutil.rmtree(tmp, ignore_errors=True)
-                        raise HTTPException(status_code=413, detail="Sound files stay under 20 MB.")
+                        raise HTTPException(status_code=413, detail=source_too_big_detail(name))
                     fh.write(chunk)
             mapping[name] = dest
         return mapping, tmp
@@ -1882,7 +1889,9 @@ def create_app(
             raise HTTPException(status_code=404, detail="sound not found")
         path = row.get("path")
         if isinstance(path, str) and os.path.isfile(path):
-            return FileResponse(path, media_type="audio/mpeg", filename=os.path.basename(path))
+            return FileResponse(
+                path, media_type=audio_media_type(path), filename=os.path.basename(path),
+            )
         key = row.get("key")
         blob = getattr(store, "_object_store", None)
         presign = getattr(blob, "presign_get", None) if blob is not None else None

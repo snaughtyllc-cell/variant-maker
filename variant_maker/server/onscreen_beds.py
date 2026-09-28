@@ -8,13 +8,24 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import threading
 import uuid
 
 from .media_links import is_direct_upload_key
 
 MAX_BED_BYTES = 20 * 1024 * 1024
+MAX_SOUND_VIDEO_BYTES = 1024 * 1024 * 1024
 _AUDIO_EXT = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"}
+_VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+_AUDIO_TYPES = {
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+}
 _LOCK = threading.Lock()
 
 
@@ -112,6 +123,62 @@ def _ext_ok(name: str) -> bool:
     return os.path.splitext(name)[1].lower() in _AUDIO_EXT
 
 
+def _is_video(name: str) -> bool:
+    return os.path.splitext(name)[1].lower() in _VIDEO_EXT
+
+
+def source_byte_limit(name: str) -> int:
+    return MAX_SOUND_VIDEO_BYTES if _is_video(name) else MAX_BED_BYTES
+
+
+def source_too_big_detail(name: str) -> str:
+    if _is_video(name):
+        return "That video is too big."
+    return "Sound files stay under 20 MB."
+
+
+def audio_media_type(name: str) -> str:
+    return _AUDIO_TYPES.get(os.path.splitext(name)[1].lower(), "audio/mpeg")
+
+
+def _stored_name(filename: str) -> str:
+    base = os.path.basename(filename) or "sound.m4a"
+    if not _is_video(base):
+        return base
+    stem = os.path.splitext(base)[0] or "sound"
+    return f"{stem}.m4a"
+
+
+def pull_audio(src: str, dest: str) -> None:
+    """Keep the soundtrack and drop the picture."""
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", src,
+        ],
+        check=False, capture_output=True, text=True,
+    )
+    heard = probe.stdout or ""
+    if probe.returncode != 0 and "audio" not in heard:
+        raise BedError("Could not use the sound from that video.")
+    if "audio" not in heard:
+        raise BedError("That video has no sound.")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-v", "error", "-i", src, "-vn",
+                "-c:a", "aac", "-b:a", "160k", dest,
+            ],
+            check=True, capture_output=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        if os.path.exists(dest):
+            os.remove(dest)
+        raise BedError("Could not use the sound from that video.") from exc
+    if not os.path.isfile(dest) or os.path.getsize(dest) <= 0:
+        raise BedError("That video has no sound.")
+
+
 def _local_path(root: str, bed_id: str, filename: str) -> str:
     folder = os.path.join(root, "beds", bed_id)
     os.makedirs(folder, exist_ok=True)
@@ -173,17 +240,21 @@ def retain_project(
         return row
 
     def ingest_bytes(raw: dict, src: str, filename: str, cache_key: str) -> dict:
-        if not _ext_ok(filename):
+        video = _is_video(filename)
+        if not video and not _ext_ok(filename):
             raise BedError("Sounds need to be audio files.")
-        if os.path.getsize(src) > MAX_BED_BYTES:
-            raise BedError("Sound files stay under 20 MB.")
+        if os.path.getsize(src) > source_byte_limit(filename):
+            raise BedError(source_too_big_detail(filename))
         bed_id = uuid.uuid4().hex[:12]
-        dest = _local_path(root, bed_id, filename)
-        if os.path.realpath(src) != os.path.realpath(dest):
+        stored = _stored_name(filename)
+        dest = _local_path(root, bed_id, stored)
+        if video:
+            pull_audio(src, dest)
+        elif os.path.realpath(src) != os.path.realpath(dest):
             shutil.copyfile(src, dest)
         durable = None
         if object_store is not None:
-            durable = bed_object_key(workspace_id, bed_id, filename)
+            durable = bed_object_key(workspace_id, bed_id, stored)
             object_store.put(durable, dest)
         _remember(root, {"id": bed_id, "name": raw.get("name") or filename, "key": durable, "path": dest})
         row = base_of(raw)
@@ -194,28 +265,40 @@ def retain_project(
         return row
 
     def ingest_key(raw: dict, key: str) -> dict:
-        if not _ext_ok(os.path.basename(key)):
+        filename = os.path.basename(key)
+        video = _is_video(filename)
+        if not video and not _ext_ok(filename):
             raise BedError("Sounds need to be audio files.")
         claim_upload(key)
         if object_store is None:
             raise BedError("That sound is not ready yet.")
         size = object_store.size(key) if hasattr(object_store, "size") else None
-        if size is not None and int(size) > MAX_BED_BYTES:
-            raise BedError("Sound files stay under 20 MB.")
+        if size is not None and int(size) > source_byte_limit(filename):
+            raise BedError(source_too_big_detail(filename))
         bed_id = uuid.uuid4().hex[:12]
-        filename = os.path.basename(key)
-        durable = bed_object_key(workspace_id, bed_id, filename)
-        copy = getattr(object_store, "copy", None)
-        local = _local_path(root, bed_id, filename)
-        if callable(copy):
-            copy(key, durable)
+        stored = _stored_name(filename)
+        durable = bed_object_key(workspace_id, bed_id, stored)
+        local = _local_path(root, bed_id, stored)
+        if video:
+            src = local + ".src"
             try:
-                object_store.get(durable, local)
-            except _local_get_errors():
-                local = None
-        else:
-            object_store.get(key, local)
+                object_store.get(key, src)
+                pull_audio(src, local)
+            finally:
+                if os.path.exists(src):
+                    os.remove(src)
             object_store.put(durable, local)
+        else:
+            copy = getattr(object_store, "copy", None)
+            if callable(copy):
+                copy(key, durable)
+                try:
+                    object_store.get(durable, local)
+                except _local_get_errors():
+                    local = None
+            else:
+                object_store.get(key, local)
+                object_store.put(durable, local)
         _remember(root, {
             "id": bed_id,
             "name": raw.get("name") or filename,
