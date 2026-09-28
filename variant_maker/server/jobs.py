@@ -1599,15 +1599,15 @@ class JobStore:
             OnScreenError,
             burn_file,
             fonts_ready,
+            mix_audio,
             placement_record,
             plan_versions,
             text_poster_name,
             write_text_poster,
         )
         from ..probe import probe
+        from .onscreen_beds import BedError, resolve_bed_file
 
-        if not fonts_ready():
-            raise OnScreenError("On-screen fonts are not installed.")
         plan = {p["n"]: p for p in plan_versions(project, len(result.variants))}
         for v in result.variants:
             quality = dict(v.quality or {})
@@ -1622,12 +1622,34 @@ class JobStore:
                 self._object_store.get(key, path)
             if not os.path.isfile(path) or os.path.getsize(path) == 0:
                 raise OnScreenError(f"On-screen text could not find {v.filename}.")
+            changed = False
             if not quality.get("onscreen"):
+                if not fonts_ready():
+                    raise OnScreenError("On-screen fonts are not installed.")
                 pre = probe(path)
                 burn_file(path, placement, pre.width, pre.height, pre.color)
-                if key and self._object_store is not None:
-                    self._object_store.put(key, path)
                 quality["onscreen"] = placement_record(placement)
+                changed = True
+            audio = placement.get("audio") if isinstance(placement.get("audio"), dict) else None
+            if audio and not quality.get("onscreen_audio"):
+                try:
+                    bed = resolve_bed_file(self._ws.root, audio, self._object_store, out_dir)
+                except BedError as exc:
+                    raise OnScreenError(str(exc)) from exc
+                mix_audio(
+                    path, bed,
+                    mode=str(audio.get("mode") or "under"),
+                    volume=float(audio.get("volume") if audio.get("volume") is not None else 0.25),
+                    start=float(audio.get("start") or 0),
+                )
+                quality["onscreen_audio"] = {
+                    "name": audio.get("name"),
+                    "mode": audio.get("mode"),
+                    "volume": audio.get("volume"),
+                }
+                changed = True
+            if changed and key and self._object_store is not None:
+                self._object_store.put(key, path)
             poster = text_poster_name(v.index)
             poster_path = os.path.join(out_dir, poster)
             write_text_poster(path, poster_path)

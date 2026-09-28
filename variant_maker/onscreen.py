@@ -8,6 +8,7 @@ Rules:
 - At most four captions and four boxes.
 - One caption may use every box. Extra captions each need their own box.
 - The first take uses the spot the user previewed. Later takes move inside that box.
+- Up to four sounds take turns. The first variant uses the sound listed first.
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 MAX_CAPTIONS = 4
 MAX_BOXES = 4
+MAX_AUDIOS = 4
+MAX_PRINTS = 5
 MAX_CHARS = 120
 SIZE_STEPS = (1.0, 0.9, 0.8)
 ALIGNS = ("center", "left", "right")
@@ -61,7 +64,60 @@ def _boxes_by_id(boxes: list[dict]) -> dict[str, dict]:
     return {str(b["id"]): b for b in boxes}
 
 
-def normalize_project(raw: dict | None) -> dict | None:
+def _normalize_audios(raw) -> list[dict]:
+    """Keep at most four sounds. The first one is what variant 1 plays."""
+    out = []
+    for i, item in enumerate(list(raw or [])[:MAX_AUDIOS]):
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        bed_id = str(item.get("bed_id") or "").strip()
+        if key and (".." in key.split("/") or key.startswith("/") or "\\" in key):
+            key = ""
+        if bed_id != os.path.basename(bed_id) or ".." in bed_id:
+            bed_id = ""
+        if not key and not bed_id:
+            continue
+        try:
+            volume = float(item.get("volume", 0.25))
+        except (TypeError, ValueError):
+            volume = 0.25
+        try:
+            start = float(item.get("start") or 0)
+        except (TypeError, ValueError):
+            start = 0.0
+        mode = str(item.get("mode") or "under")
+        if mode not in ("under", "replace"):
+            mode = "under"
+        row = {
+            "id": str(item.get("id") or i + 1)[:24],
+            "name": (str(item.get("name") or "Sound").strip() or "Sound")[:80],
+            "volume": round(min(1.0, max(0.0, volume)), 4),
+            "mode": mode,
+            "start": round(min(30.0, max(0.0, start)), 3),
+        }
+        if key:
+            row["key"] = key[:240]
+        if bed_id:
+            row["bed_id"] = bed_id[:32]
+        out.append(row)
+    return out
+
+
+def _normalize_prints(raw) -> list[dict]:
+    prints = []
+    for item in list(raw or [])[:MAX_PRINTS]:
+        if not isinstance(item, dict):
+            continue
+        inner = dict(item)
+        inner.pop("prints", None)
+        cleaned = normalize_project(inner, nested=True)
+        if cleaned:
+            prints.append(cleaned)
+    return prints
+
+
+def normalize_project(raw: dict | None, *, nested: bool = False) -> dict | None:
     """Return a clean project, or None when on-screen text is off."""
     if not raw:
         return None
@@ -143,6 +199,7 @@ def normalize_project(raw: dict | None) -> dict | None:
     if len(used) != len(boxes):
         raise OnScreenError("Every box has to lock to a caption.")
 
+    audios = _normalize_audios(raw.get("audios"))
     look = dict(raw.get("look") or {})
     style = str(look.get("style") or "classic")
     if style not in ("classic", "strong", "caption-bar"):
@@ -150,7 +207,7 @@ def normalize_project(raw: dict | None) -> dict | None:
     background = str(look.get("background") or "solid")
     if style != "caption-bar" and background not in ("none", "plain", "solid", "see-through"):
         raise OnScreenError(f"Unknown background {background}.")
-    return {
+    result = {
         "captions": captions,
         "boxes": boxes,
         "look": {
@@ -159,6 +216,13 @@ def normalize_project(raw: dict | None) -> dict | None:
             "color": str(look.get("color") or "#FFFFFF"),
         },
     }
+    if audios:
+        result["audios"] = audios
+    if not nested:
+        prints = _normalize_prints(raw.get("prints"))
+        if prints:
+            result["prints"] = prints
+    return result
 
 
 def _chosen_place(take: int, liked: dict | None, seats: list[str]) -> dict:
@@ -199,9 +263,23 @@ def plan_versions(project: dict, count: int) -> list[dict]:
     clean = normalize_project(project)
     if clean is None:
         return []
+    prints = clean.get("prints") or []
+    if prints:
+        total = max(0, int(count))
+        base, extra = divmod(total, len(prints))
+        out = []
+        for i, item in enumerate(prints):
+            share = base + (1 if i < extra else 0)
+            for placement in plan_versions(item, share):
+                placement = dict(placement)
+                placement["n"] = len(out) + 1
+                placement["print"] = i + 1
+                out.append(placement)
+        return out
     captions = clean["captions"]
     boxes = _boxes_by_id(clean["boxes"])
     look = clean["look"]
+    audios = list(clean.get("audios") or [])
     bar = look["style"] == "caption-bar"
     out = []
     for n in range(max(0, int(count))):
@@ -225,7 +303,7 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             line_lock = 1 if take % 2 == 0 else 2
         else:
             line_lock = chosen_lines
-        out.append({
+        row = {
             "n": n + 1,
             "caption_id": cap["id"],
             "text": cap["text"],
@@ -237,7 +315,10 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "place": _chosen_place(take, placed, seats) if seats else _inside_box(take, placed),
             "lines": line_lock,
             "look": dict(look),
-        })
+        }
+        if audios:
+            row["audio"] = dict(audios[n % len(audios)])
+        out.append(row)
     return out
 
 
@@ -461,9 +542,86 @@ def write_text_poster(video_path: str, out_path: str) -> None:
         raise OnScreenError("On-screen poster was empty.")
 
 
+def _has_audio(path: str) -> bool:
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", path,
+        ],
+        check=False, capture_output=True, text=True,
+    )
+    return "audio" in (probe.stdout or "")
+
+
+def _media_duration(path: str) -> float:
+    probe = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "csv=p=0", path,
+        ],
+        check=False, capture_output=True, text=True,
+    )
+    try:
+        return max(0.1, float((probe.stdout or "").strip() or "0"))
+    except ValueError:
+        return 30.0
+
+
+def mix_audio(
+    video_path: str, bed_path: str, *, mode: str = "under",
+    volume: float = 0.25, start: float = 0.0,
+) -> None:
+    """Lay a bed under the original voice, or replace that voice.
+
+    ``under`` keeps the video's audio and adds the bed at ``volume``.
+    A clip with no audio is treated as replace. ``start`` skips into the bed.
+    """
+    picked = "replace" if str(mode) == "replace" else "under"
+    if picked == "under" and not _has_audio(video_path):
+        picked = "replace"
+    level = min(1.0, max(0.0, float(volume)))
+    offset = min(30.0, max(0.0, float(start)))
+    dur = _media_duration(video_path)
+    out = video_path + ".bed.mp4"
+    # Leave the voice's channel layout alone. Forcing stereo ducks a mono
+    # talking track by about 3 dB before the bed is even added.
+    bed = (
+        f"[1:a]volume={level:.4f},atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,"
+        f"apad=whole_dur={dur:.3f}[bed]"
+    )
+    if picked == "replace":
+        graph = bed
+        audio_map = "[bed]"
+    else:
+        graph = (
+            bed
+            + ";[0:a][bed]amix=inputs=2:duration=first:dropout_transition=0:"
+            + "normalize=0:weights=1 1[a]"
+        )
+        audio_map = "[a]"
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-i", video_path,
+        "-ss", f"{offset:.3f}", "-i", bed_path,
+        "-filter_complex", graph,
+        "-map", "0:v:0", "-map", audio_map,
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
+        "-movflags", "+faststart",
+        out,
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        os.replace(out, video_path)
+    except subprocess.CalledProcessError as exc:
+        raise OnScreenError("Could not mix that sound onto the video.") from exc
+    finally:
+        if os.path.exists(out):
+            os.remove(out)
+
+
 def placement_record(placement: dict) -> dict:
     look = placement.get("look") or {}
-    return {
+    record = {
         "caption_id": placement.get("caption_id"),
         "box_id": placement.get("box_id"),
         "text": placement.get("text"),
@@ -474,6 +632,14 @@ def placement_record(placement: dict) -> dict:
         "style": look.get("style"),
         "background": look.get("background"),
     }
+    audio = placement.get("audio") if isinstance(placement.get("audio"), dict) else None
+    if audio:
+        record["audio"] = {
+            "name": audio.get("name"),
+            "mode": audio.get("mode"),
+            "volume": audio.get("volume"),
+        }
+    return record
 
 
 @lru_cache(maxsize=1)

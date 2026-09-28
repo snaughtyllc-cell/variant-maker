@@ -227,6 +227,120 @@ function captionFields(generate: boolean, captionPrompt: string | string[]): {
   };
 }
 
+export type OnScreenTemplate = {
+  id: string;
+  name: string;
+  project: {
+    captions: { id?: string; text: string; box_ids: string[]; place?: Record<string, { x: number; y: number }>; size?: number; lines?: 1 | 2 | "both" }[];
+    boxes: { id: string; x: number; y: number; w: number; h: number; color?: string; seats?: string[] }[];
+    look: { style: string; background: string; color: string };
+    audios?: {
+      id?: string;
+      name: string;
+      volume: number;
+      mode: "under" | "replace";
+      start: number;
+      key?: string;
+      bed_id?: string;
+      file?: File;
+    }[];
+    prints?: unknown[];
+  };
+};
+
+const MAX_SOUND_BYTES = 20 * 1024 * 1024;
+
+async function uploadSound(file: File): Promise<{ key?: string; local?: File }> {
+  if (file.size > MAX_SOUND_BYTES) throw new Error("Sound files stay under 20 MB.");
+  const init = await initDirectUpload(file);
+  if (init.mode === "direct" && init.url && init.key) {
+    await putDirectObject(file, init);
+    return { key: init.key };
+  }
+  return { local: file };
+}
+
+async function prepareProject(project: OnScreenTemplate["project"] | null | undefined, files: File[]) {
+  if (!project) return project;
+  const audios = [];
+  for (const audio of project.audios || []) {
+    const row: Record<string, unknown> = {
+      id: audio.id,
+      name: audio.name,
+      volume: audio.volume,
+      mode: audio.mode,
+      start: audio.start,
+    };
+    if (audio.bed_id) row.bed_id = audio.bed_id;
+    if (audio.key) row.key = audio.key;
+    else if (audio.file instanceof File) {
+      const uploaded = await uploadSound(audio.file);
+      if (uploaded.key) row.key = uploaded.key;
+      else if (uploaded.local) {
+        const safe = `bed-${files.length}-${uploaded.local.name}`.replace(/[^\w.\-]+/g, "_");
+        files.push(new File([uploaded.local], safe, { type: uploaded.local.type || "audio/mpeg" }));
+        row.file = safe;
+      }
+    }
+    if (row.key || row.bed_id || row.file) audios.push(row);
+  }
+  const prints = [];
+  for (const child of project.prints || []) {
+    prints.push(await prepareProject(child as OnScreenTemplate["project"], files));
+  }
+  const next: Record<string, unknown> = { ...project };
+  delete next.audios;
+  delete next.prints;
+  delete next.previewAudio;
+  delete next.chooseSeats;
+  if (audios.length) next.audios = audios;
+  if (prints.length) next.prints = prints;
+  return next;
+}
+
+async function prepareOnScreen(input: OnScreenTemplate["project"] | OnScreenTemplate["project"][] | null | undefined) {
+  const files: File[] = [];
+  if (!input) return { payload: input ?? null, files };
+  if (Array.isArray(input)) {
+    const payload = [];
+    for (const item of input) payload.push(await prepareProject(item, files));
+    return { payload, files };
+  }
+  return { payload: await prepareProject(input, files), files };
+}
+
+function appendSounds(fd: FormData, files: File[]) {
+  for (const file of files) fd.append("audio_files", file, file.name);
+}
+
+export function listOnScreenTemplates(): Promise<OnScreenTemplate[]> {
+  return fetch("/api/onscreen/templates", { cache: "no-store" })
+    .then(json<{ templates: OnScreenTemplate[] }>)
+    .then((body) => body.templates || []);
+}
+
+export async function saveOnScreenTemplate(name: string, project: OnScreenTemplate["project"]): Promise<OnScreenTemplate> {
+  const prepared = await prepareOnScreen(project);
+  const saved = prepared.payload as OnScreenTemplate["project"];
+  if (prepared.files.length) {
+    const fd = new FormData();
+    fd.append("name", name);
+    fd.append("project", JSON.stringify(saved));
+    appendSounds(fd, prepared.files);
+    return fetch("/api/onscreen/templates", { method: "POST", body: fd }).then(json<OnScreenTemplate>);
+  }
+  return fetch("/api/onscreen/templates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, project: saved }),
+  }).then(json<OnScreenTemplate>);
+}
+
+export async function deleteOnScreenTemplate(id: string): Promise<void> {
+  const res = await fetch(`/api/onscreen/templates/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 export async function createJob(
   files: File[],
   count: number,
@@ -236,7 +350,7 @@ export async function createJob(
   prepMode: "none" | "hq" = "none",
   captionPrompt: string | string[] = "",
   onProgress?: (p: JobUploadProgress) => void,
-  onscreen?: { captions: unknown[]; boxes: unknown[]; look: unknown } | { captions: unknown[]; boxes: unknown[]; look: unknown }[] | null,
+  onscreen?: OnScreenTemplate["project"] | OnScreenTemplate["project"][] | null,
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
   const prompts = captionFields(generateCaptions, captionPrompt);
@@ -256,10 +370,13 @@ export async function createJob(
       total,
     });
   };
+  const prepared = await prepareOnScreen(onscreen);
+  const onscreenPayload = prepared.payload;
+  const soundFiles = prepared.files;
   const first = files[0];
   if (first) report("direct", 0, first, 0, first.size || 1);
   const direct = first ? await initDirectUpload(first) : { mode: "local" as const };
-  if (direct.mode === "direct") {
+  if (direct.mode === "direct" && soundFiles.length === 0) {
     try {
       const items: Array<{ filename: string; key: string }> = [];
       for (let i = 0; i < files.length; i++) {
@@ -284,7 +401,7 @@ export async function createJob(
           prep_mode: prepMode,
           caption_prompt: prompts.caption_prompt,
           caption_prompts: JSON.parse(prompts.caption_prompts) as string[],
-          ...(Array.isArray(onscreen) ? { onscreens: onscreen } : onscreen ? { onscreen } : {}),
+          ...(Array.isArray(onscreenPayload) ? { onscreens: onscreenPayload } : onscreenPayload ? { onscreen: onscreenPayload } : {}),
         }),
       }).then(json<CreateJobResponse>);
     } catch {
@@ -303,8 +420,9 @@ export async function createJob(
     fd.append("caption_prompt", prompts.caption_prompt);
     fd.append("caption_prompts", prompts.caption_prompts);
     fd.append("prep_mode", prepMode);
-    if (Array.isArray(onscreen)) fd.append("onscreens", JSON.stringify(onscreen));
-    else if (onscreen) fd.append("onscreen", JSON.stringify(onscreen));
+    if (Array.isArray(onscreenPayload)) fd.append("onscreens", JSON.stringify(onscreenPayload));
+    else if (onscreenPayload) fd.append("onscreen", JSON.stringify(onscreenPayload));
+    appendSounds(fd, soundFiles);
     for (const f of files) fd.append("files", f, f.name);
     report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
@@ -325,8 +443,9 @@ export async function createJob(
   fd.append("caption_prompt", prompts.caption_prompt);
   fd.append("caption_prompts", prompts.caption_prompts);
   fd.append("prep_mode", prepMode);
-  if (Array.isArray(onscreen)) fd.append("onscreens", JSON.stringify(onscreen));
-  else if (onscreen) fd.append("onscreen", JSON.stringify(onscreen));
+  if (Array.isArray(onscreenPayload)) fd.append("onscreens", JSON.stringify(onscreenPayload));
+  else if (onscreenPayload) fd.append("onscreen", JSON.stringify(onscreenPayload));
+  appendSounds(fd, soundFiles);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -562,7 +681,7 @@ export const retryDriveExport = (exportId: string) =>
 export const listDestinationVideos = (destinationId: string) =>
   fetch(`/api/drive/destinations/${destinationId}/videos`).then(json<{ videos: DriveVideo[] }>);
 
-export function createJobFromDrive(opts: {
+export async function createJobFromDrive(opts: {
   destinationId: string;
   fileIds: string[];
   count: number;
@@ -572,7 +691,7 @@ export function createJobFromDrive(opts: {
   prepMode?: "none" | "hq";
   captionPrompt?: string | string[];
   onProgress?: (p: JobUploadProgress) => void;
-  onscreens?: { captions: unknown[]; boxes: unknown[]; look: unknown }[] | null;
+  onscreens?: OnScreenTemplate["project"][] | null;
 }): Promise<CreateJobResponse> {
   opts.onProgress?.({
     phase: "create",
@@ -583,6 +702,11 @@ export function createJobFromDrive(opts: {
     total: 1,
   });
   const packed = captionFields(opts.generateCaptions ?? false, opts.captionPrompt ?? "");
+  const prepared = await prepareOnScreen(opts.onscreens || null);
+  if (prepared.files.length) {
+    throw new Error("Could not upload that sound. Try again.");
+  }
+  const onscreens = prepared.payload;
   return fetch("/api/jobs/from-drive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -596,7 +720,7 @@ export function createJobFromDrive(opts: {
       prep_mode: opts.prepMode ?? "none",
       caption_prompt: packed.caption_prompt,
       caption_prompts: JSON.parse(packed.caption_prompts) as string[],
-      ...(opts.onscreens ? { onscreens: opts.onscreens } : {}),
+      ...(Array.isArray(onscreens) && onscreens.length ? { onscreens } : {}),
     }),
   }).then(json<CreateJobResponse>);
 }

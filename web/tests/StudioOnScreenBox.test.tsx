@@ -6,6 +6,7 @@ import {
   clampTextSize,
   emptyOnScreen,
   frameAspect,
+  printPlan,
   projectFromDraft,
   rectFromPoints,
   seatStyle,
@@ -65,6 +66,28 @@ describe("on-screen project", () => {
   it("warns when the line is wider than the box", () => {
     expect(textFitWarning(200, 100)).toMatch(/smaller/i);
     expect(textFitWarning(80, 100)).toBe("");
+  });
+
+  it("puts the preview sound first", () => {
+    const draft = emptyOnScreen();
+    draft.captions[0].text = "hi";
+    draft.captions[0].box_ids = ["cyan"];
+    draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.4, h: 0.2 }];
+    draft.previewAudio = "b";
+    draft.audios = [
+      { id: "a", name: "A", volume: 0.25, mode: "under", start: 0, bed_id: "1" },
+      { id: "b", name: "B", volume: 1, mode: "replace", start: 2, bed_id: "2" },
+    ];
+    const project = projectFromDraft(draft);
+    expect(typeof project).not.toBe("string");
+    if (typeof project === "string") return;
+    expect(project.audios?.map((audio) => audio.name)).toEqual(["B", "A"]);
+    expect(project.audios?.[0].mode).toBe("replace");
+  });
+
+  it("caps a printed pack at forty variants", () => {
+    expect(printPlan(8, 2)).toEqual({ each: 8, total: 16 });
+    expect(printPlan(10, 5)).toEqual({ each: 8, total: 40 });
   });
 
   it("can send both one line and two lines", () => {
@@ -259,6 +282,17 @@ describe("phone box drawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "9:16" }));
     expect(phone.style.aspectRatio).toBe("9 / 16");
     expect(phone.textContent).toContain("Header");
+  });
+
+  it("keeps text tools up and opens sound from the dock", () => {
+    render(<Harness />);
+    expect(screen.getByLabelText("On-screen line 1")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add a sound" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Sound" }));
+    expect(screen.queryByLabelText("On-screen line 1")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add a sound" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    expect(screen.getByLabelText("On-screen line 1")).toBeTruthy();
   });
 
   it("shows the typed line on the phone and keeps a box on one line", () => {

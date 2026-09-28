@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import quote
 
 import anyio
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from sse_starlette.sse import EventSourceResponse
 from starlette.requests import ClientDisconnect
@@ -194,6 +194,8 @@ from .models import (
     WorkspaceExperienceIn,
     WorkspaceInviteIn,
 )
+from .onscreen_beds import MAX_BED_BYTES, BedError, lookup as lookup_bed, retain_project
+from .onscreen_templates import TemplateError, delete_template, list_templates, save_template
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from .post_url import normalize_post_url
 from .runner import LocalRunner
@@ -1775,6 +1777,119 @@ def create_app(
             raise HTTPException(status_code=400, detail="onscreens must be a list")
         return data
 
+    def _audio_file_map(uploads: list[UploadFile] | None) -> tuple[dict[str, str], str | None]:
+        mapping: dict[str, str] = {}
+        if not uploads:
+            return mapping, None
+        tmp = tempfile.mkdtemp(prefix="onscreen-audio-")
+        for upload in uploads:
+            name = os.path.basename(upload.filename or "")
+            if not name or name in (".", "..") or name in mapping:
+                continue
+            dest = os.path.join(tmp, name)
+            size = 0
+            with open(dest, "wb") as fh:
+                while True:
+                    chunk = upload.file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > MAX_BED_BYTES:
+                        shutil.rmtree(tmp, ignore_errors=True)
+                        raise HTTPException(status_code=413, detail="Sound files stay under 20 MB.")
+                    fh.write(chunk)
+            mapping[name] = dest
+        return mapping, tmp
+
+    def _bind_onscreen(onscreen, onscreens, audio_map: dict[str, str]):
+        claimed: list[str] = []
+
+        def claim(key: str) -> str:
+            uid = _claim_direct_upload_key(key)
+            claimed.append(uid)
+            return uid
+
+        retain_args = {
+            "root": store._ws.root,
+            "workspace_id": getattr(store, "_workspace_id", None),
+            "object_store": getattr(store, "_object_store", None),
+            "claim_upload": claim,
+            "files": audio_map,
+            "cache": {},
+        }
+        try:
+            if isinstance(onscreens, list):
+                onscreens = [
+                    retain_project(item, **retain_args) if isinstance(item, dict) else item
+                    for item in onscreens
+                ]
+            if isinstance(onscreen, dict):
+                onscreen = retain_project(onscreen, **retain_args)
+        except BedError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return onscreen, onscreens, claimed
+
+    @app.get("/api/onscreen/templates")
+    def get_onscreen_templates() -> dict:
+        return {"templates": list_templates(store._ws.root)}
+
+    @app.post("/api/onscreen/templates", status_code=201)
+    async def create_onscreen_template(request: Request):
+        ctype = request.headers.get("content-type") or ""
+        audio_map: dict[str, str] = {}
+        tmp = None
+        try:
+            if "application/json" in ctype:
+                body = await request.json()
+                name = str((body or {}).get("name") or "")
+                project = (body or {}).get("project")
+            else:
+                form = await request.form()
+                name = str(form.get("name") or "")
+                raw = form.get("project")
+                try:
+                    project = json.loads(raw) if isinstance(raw, str) and raw else None
+                except json.JSONDecodeError as exc:
+                    raise HTTPException(status_code=400, detail="project must be JSON") from exc
+                uploads = [
+                    item for item in form.getlist("audio_files")
+                    if hasattr(item, "file")
+                ]
+                audio_map, tmp = _audio_file_map(uploads)
+            if not isinstance(project, dict):
+                raise HTTPException(status_code=400, detail="project must be an object")
+            bound, _many, _claimed = _bind_onscreen(project, None, audio_map)
+            try:
+                return save_template(store._ws.root, name, bound)
+            except TemplateError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            if tmp:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+    @app.delete("/api/onscreen/templates/{template_id}", status_code=204)
+    def remove_onscreen_template(template_id: str) -> Response:
+        try:
+            delete_template(store._ws.root, template_id)
+        except TemplateError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(status_code=204)
+
+    @app.get("/api/onscreen/beds/{bed_id}")
+    def get_onscreen_bed(bed_id: str):
+        row = lookup_bed(store._ws.root, bed_id=bed_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="sound not found")
+        path = row.get("path")
+        if isinstance(path, str) and os.path.isfile(path):
+            return FileResponse(path, media_type="audio/mpeg", filename=os.path.basename(path))
+        key = row.get("key")
+        blob = getattr(store, "_object_store", None)
+        presign = getattr(blob, "presign_get", None) if blob is not None else None
+        if key and callable(presign):
+            return RedirectResponse(presign(key, expires=900), status_code=302)
+        raise HTTPException(status_code=404, detail="sound not found")
+
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(request: Request, files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
@@ -1784,9 +1899,17 @@ def create_app(
                           caption_prompts: str = Form(""),
                           prep_mode: str = Form("none"),
                           onscreen: str = Form(""),
-                          onscreens: str = Form("")) -> CreateJobResponse:
+                          onscreens: str = Form(""),
+                          audio_files: list[UploadFile] = File(default=[]),  # noqa: B008
+                          ) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
+        audio_map, tmp = _audio_file_map(audio_files)
         try:
+            bound, bound_many, _claimed = _bind_onscreen(
+                _parse_onscreen_field(onscreen),
+                _parse_onscreens_field(onscreens),
+                audio_map,
+            )
             job = store.create_job(
                 uploads, count=count, allow_creative_escalate=allow_creative_escalate,
                 quality_mode=quality_mode, generate_captions=generate_captions,
@@ -1794,11 +1917,14 @@ def create_app(
                 caption_prompt=caption_prompt,
                 caption_prompts=parse_caption_prompts_field(caption_prompts),
                 actor_email=_actor_email(request),
-                onscreen=_parse_onscreen_field(onscreen),
-                onscreens=_parse_onscreens_field(onscreens),
+                onscreen=bound,
+                onscreens=bound_many,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            if tmp:
+                shutil.rmtree(tmp, ignore_errors=True)
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -1895,6 +2021,7 @@ def create_app(
         prep_mode: str = Form("none"),
         onscreen: str = Form(""),
         onscreens: str = Form(""),
+        audio_files: list[UploadFile] = File(default=[]),  # noqa: B008
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1907,7 +2034,13 @@ def create_app(
             if meta["received"] <= 0 or not os.path.exists(meta["path"]):
                 raise HTTPException(status_code=400, detail=f"upload incomplete: {uid}")
             paths.append((meta["filename"], meta["path"]))
+        audio_map, tmp = _audio_file_map(audio_files)
         try:
+            bound, bound_many, claimed_audio = _bind_onscreen(
+                _parse_onscreen_field(onscreen),
+                _parse_onscreens_field(onscreens),
+                audio_map,
+            )
             job = store.create_job_from_paths(
                 paths, count=count, allow_creative_escalate=allow_creative_escalate,
                 quality_mode=quality_mode, generate_captions=generate_captions,
@@ -1915,12 +2048,15 @@ def create_app(
                 caption_prompt=caption_prompt,
                 caption_prompts=parse_caption_prompts_field(caption_prompts),
                 actor_email=_actor_email(request),
-                onscreen=_parse_onscreen_field(onscreen),
-                onscreens=_parse_onscreens_field(onscreens),
+                onscreen=bound,
+                onscreens=bound_many,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        _pop_own_uploads(ids)
+        finally:
+            if tmp:
+                shutil.rmtree(tmp, ignore_errors=True)
+        _pop_own_uploads([*ids, *claimed_audio])
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -1931,6 +2067,7 @@ def create_app(
         if not items:
             raise HTTPException(status_code=400, detail="items required")
         claimed = [_claim_direct_upload_key(key) for _name, key in items]
+        bound, bound_many, claimed_audio = _bind_onscreen(body.onscreen, body.onscreens, {})
         try:
             job = store.create_job_from_object_keys(
                 items, count=body.count,
@@ -1941,12 +2078,12 @@ def create_app(
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
                 actor_email=_actor_email(request),
-                onscreen=body.onscreen,
-                onscreens=body.onscreens,
+                onscreen=bound,
+                onscreens=bound_many,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        _pop_own_uploads(claimed)
+        _pop_own_uploads([*claimed, *claimed_audio])
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, include_insights=_can_see_instagram_insights(request), job=job, ws=store._ws, object_store=getattr(store, "_object_store", None))
                                           for s in job.sources])
@@ -1966,6 +2103,7 @@ def create_app(
         missing = [fid for fid in file_ids if fid not in children]
         if missing:
             raise HTTPException(status_code=400, detail="file is not a video in that folder")
+        bound, bound_many, _claimed_audio = _bind_onscreen(body.onscreen, body.onscreens, {})
         if _off_volume_mailbox():
             items = [
                 (os.path.basename(children[fid].name) or "clip.mp4", fid)
@@ -1981,8 +2119,8 @@ def create_app(
                     caption_prompt=body.caption_prompt,
                     caption_prompts=list(body.caption_prompts or []),
                     actor_email=_actor_email(request),
-                    onscreen=body.onscreen,
-                onscreens=body.onscreens,
+                    onscreen=bound,
+                    onscreens=bound_many,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -2007,8 +2145,8 @@ def create_app(
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
                 actor_email=_actor_email(request),
-                onscreen=body.onscreen,
-                onscreens=body.onscreens,
+                onscreen=bound,
+                onscreens=bound_many,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

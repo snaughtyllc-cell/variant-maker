@@ -9,7 +9,9 @@ import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/StudioCaptionsBox";
 import {
   emptyOnScreen,
+  printPlan,
   projectsForSources,
+  projectWithPrints,
   StudioOnScreenBox,
   type OnScreenProject,
 } from "@/components/studio/StudioOnScreenBox";
@@ -50,6 +52,7 @@ export default function StudioPage() {
   const [generateCaptions, setGenerateCaptions] = useState(false);
   const [onScreenOn, setOnScreenOn] = useState(false);
   const [onScreenByKey, setOnScreenByKey] = useState<Record<string, OnScreenProject>>({});
+  const [onScreenPrints, setOnScreenPrints] = useState<OnScreenProject[]>([]);
   const [fileCaptions, setFileCaptions] = useState<string[]>([]);
   const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -73,6 +76,9 @@ export default function StudioPage() {
       : "No clips yet";
 
   const prepMode = hqPrep ? "hq" : "none";
+  const packCount = onScreenOn && onScreenPrints.length
+    ? printPlan(perVideo, onScreenPrints.length).total
+    : perVideo;
   const captionSources: CaptionSource[] = studioCaptionSources(files, drivePicks);
   const captionPrompts = [...fileCaptions, ...driveCaptions];
 
@@ -183,7 +189,9 @@ export default function StudioPage() {
       ? sendFiles.map((file, i) => ({ key: `file-${i}-${file.name}`, name: file.name }))
       : sendPicks.map((pick) => ({ key: `drive-${pick.id}`, name: pick.name }));
     let onscreens: OnScreenProject[] | null = null;
-    if (onScreenOn) {
+    if (onScreenOn && onScreenPrints.length) {
+      onscreens = sendSources.map(() => projectWithPrints(onScreenPrints));
+    } else if (onScreenOn) {
       const built = projectsForSources(sendSources, onScreenByKey);
       if (typeof built === "string") {
         setError(built);
@@ -197,7 +205,7 @@ export default function StudioPage() {
     beginPrepare(names.map((filename, i) => ({
       source_id: `prep-${i}`,
       filename,
-      requested: perVideo,
+      requested: packCount,
     })));
     clearSourceDraft();
     setBusy(true);
@@ -207,7 +215,7 @@ export default function StudioPage() {
           ? await createJobFromDrive({
               destinationId: sendPicks[0].destinationId,
               fileIds: sendPicks.map((p) => p.id),
-              count: perVideo,
+              count: packCount,
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions: sendGenerateCaptions,
@@ -216,7 +224,7 @@ export default function StudioPage() {
               onProgress: setUpload,
               onscreens,
             })
-          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload, onscreens);
+          : await createJob(sendFiles, packCount, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload, onscreens);
       if (cancelRequestedRef.current) {
         try {
           await cancelJob(resp.job_id);
@@ -368,6 +376,8 @@ export default function StudioPage() {
                   projects={onScreenByKey}
                   onProjectsChange={setOnScreenByKey}
                   sources={captionSources}
+                  perVideo={perVideo}
+                  onPrintsChange={setOnScreenPrints}
                 />
 
                 <label
@@ -402,7 +412,7 @@ export default function StudioPage() {
                     onAllowCreativeEscalateChange={setAllowCreativeEscalate}
                     qualityMode={qualityMode}
                     onQualityModeChange={setQualityMode}
-                    totalVariants={totalVariants(sourceCount, perVideo)}
+                    totalVariants={totalVariants(sourceCount, packCount)}
                   />
                 ) : (
                   <div className="studio-option-row studio-option-row--static studio-option-row--last">

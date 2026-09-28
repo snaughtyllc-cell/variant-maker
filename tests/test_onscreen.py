@@ -6,6 +6,7 @@ from variant_maker.onscreen import (
     OnScreenError,
     burn_file,
     fonts_ready,
+    mix_audio,
     normalize_project,
     plan_versions,
     render_layer,
@@ -262,6 +263,111 @@ def test_burn_puts_the_words_on_the_file(tmp_path):
         check=True, capture_output=True, text=True,
     )
     assert "audio" in audio.stdout
+
+
+def _sound(name, bed_id, mode="under", volume=0.25):
+    return {"name": name, "bed_id": bed_id, "mode": mode, "volume": volume, "start": 0}
+
+
+def test_sounds_take_turns_and_the_first_is_the_preview():
+    project = _project(
+        [{"text": "hello", "box_ids": ["A"]}],
+        [_box("A")],
+    )
+    project["audios"] = [
+        {
+            "name": "Preview", "bed_id": "bed-a", "mode": "sideways",
+            "volume": 9, "start": 80, "key": "../secret",
+        },
+        _sound("Second", "bed-b", volume=0.4),
+        _sound("Third", "bed-c", mode="replace", volume=1),
+        _sound("Fourth", "bed-d"),
+        _sound("Fifth", "bed-e"),
+    ]
+    versions = plan_versions(project, 4)
+    assert [v["audio"]["name"] for v in versions] == ["Preview", "Second", "Third", "Fourth"]
+    assert versions[0]["audio"]["mode"] == "under"
+    assert versions[0]["audio"]["volume"] == 1
+    assert versions[0]["audio"]["start"] == 30
+    assert "key" not in versions[0]["audio"]
+    assert versions[1]["audio"]["volume"] == 0.4
+    clean = normalize_project(project)
+    assert len(clean["audios"]) == 4
+    assert clean["audios"][2]["mode"] == "replace"
+
+
+def test_prints_split_the_pack_in_order():
+    first = _project([{"text": "alpha", "box_ids": ["A"]}], [_box("A")])
+    second = _project([{"text": "beta", "box_ids": ["A"]}], [_box("A", 0.6)])
+    first["audios"] = [_sound("One", "bed-a"), _sound("Two", "bed-b")]
+    outer = _project([{"text": "alpha", "box_ids": ["A"]}], [_box("A")])
+    outer["prints"] = [first, second]
+    versions = plan_versions(outer, 4)
+    assert [v["text"] for v in versions] == ["alpha", "alpha", "beta", "beta"]
+    assert [v["print"] for v in versions] == [1, 1, 2, 2]
+    assert [v["audio"]["name"] for v in versions[:2]] == ["One", "Two"]
+    assert "audio" not in versions[2]
+
+
+def _mean_db(path):
+    probe = subprocess.run(
+        ["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+        check=False, capture_output=True, text=True,
+    )
+    for line in (probe.stderr or "").splitlines():
+        if "mean_volume:" in line:
+            return float(line.split("mean_volume:")[1].split("dB")[0].strip())
+    raise AssertionError(probe.stderr)
+
+
+def test_under_mix_keeps_the_voice_and_replace_uses_the_bed(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        return
+    video = tmp_path / "voice.mp4"
+    bed = tmp_path / "bed.m4a"
+    silent = tmp_path / "silent.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            str(video),
+        ],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=880:duration=1",
+            "-c:a", "aac", str(bed),
+        ],
+        check=True, capture_output=True,
+    )
+    before = _mean_db(video)
+    mixed = tmp_path / "mixed.mp4"
+    shutil.copy(video, mixed)
+    mix_audio(str(mixed), str(bed), mode="under", volume=0.0, start=0)
+    after = _mean_db(mixed)
+    assert abs(after - before) < 3
+    replaced = tmp_path / "replaced.mp4"
+    shutil.copy(video, replaced)
+    mix_audio(str(replaced), str(bed), mode="replace", volume=1, start=0)
+    assert _mean_db(replaced) > -40
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(silent),
+        ],
+        check=True, capture_output=True,
+    )
+    mix_audio(str(silent), str(bed), mode="under", volume=1, start=0)
+    heard = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(silent),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    assert "audio" in heard.stdout
 
 
 def test_sticker_and_bar_paint_opaque_pixels():
