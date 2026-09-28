@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" width="900" height="220">
+  
+  <rect width="900" height="220" fill="#FBFAFC"></rect>
+  <g font-family="Sora, sans-serif" font-weight="700" font-size="130" letter-spacing="-5.2">
+    <text x="40" y="150" fill="#1B1A22">varim</text>
+    <text x="404" y="150" fill="#7C4FCC">o</text>
+    <text x="474" y="150" fill="#7C4FCC" opacity="0.5">o</text>
+    <text x="544" y="150" fill="#7C4FCC" opacity="0.24">o</text>
+    <text x="614" y="150" fill="#7C4FCC" opacity="0.1">o</text>
+  </g>
+</svg>

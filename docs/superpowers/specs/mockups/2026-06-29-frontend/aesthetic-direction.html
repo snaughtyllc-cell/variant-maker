@@ -1,0 +1,133 @@
+<h2>What should it feel like?</h2>
+<p class="subtitle">Same screens (Studio · Gallery · Diagnostics), three different skins. Each card is a tiny live mockup of the Studio screen so you can feel the personality. Click the one you're drawn to — we'll refine from there.</p>
+
+<style>
+  .vibe-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:18px; margin-top:8px; }
+  @media (max-width: 1100px){ .vibe-grid{ grid-template-columns:1fr; } }
+  .vibe { border-radius:14px; overflow:hidden; cursor:pointer; border:2px solid transparent;
+          transition:transform .12s ease, box-shadow .12s ease; background:#0d0d12; }
+  .vibe:hover { transform:translateY(-3px); box-shadow:0 12px 30px rgba(0,0,0,.45); }
+  .vibe.selected { border-color:#7c5cff; box-shadow:0 0 0 3px rgba(124,92,255,.35); }
+  .vibe-cap { padding:12px 14px; color:#e7e7ee; }
+  .vibe-cap h3 { margin:0 0 4px; font-size:15px; }
+  .vibe-cap p { margin:0; font-size:12.5px; line-height:1.45; color:#a6a6b5; }
+  .badge-rec { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.5px;
+               background:#7c5cff; color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; vertical-align:middle; }
+  /* generic mini-mockup frame */
+  .mm { height:260px; padding:12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; position:relative; }
+  .mm-top { display:flex; align-items:center; gap:6px; font-size:10px; margin-bottom:10px; }
+  .mm-dot { width:7px; height:7px; border-radius:50%; }
+  .mm-nav { margin-left:auto; display:flex; gap:10px; font-size:9.5px; }
+  .mm-drop { border-radius:9px; padding:14px 10px; text-align:center; font-size:10.5px; margin-bottom:9px; }
+  .mm-row { display:flex; gap:8px; align-items:center; margin-bottom:9px; }
+  .mm-count { flex:1; border-radius:7px; padding:7px 9px; font-size:10px; display:flex; justify-content:space-between; align-items:center; }
+  .mm-btn { border-radius:7px; padding:7px 12px; font-size:10px; font-weight:700; }
+  .mm-prog { border-radius:8px; padding:9px; font-size:9.5px; }
+  .mm-bar { height:5px; border-radius:99px; margin:6px 0; overflow:hidden; }
+  .mm-bar > i { display:block; height:100%; }
+  .mm-thumbs { display:flex; gap:6px; margin-top:8px; }
+  .mm-th { flex:1; height:46px; border-radius:6px; position:relative; overflow:hidden; }
+  .mm-vmaf { position:absolute; bottom:3px; left:3px; font-size:7.5px; padding:1px 4px; border-radius:4px; font-weight:700; }
+</style>
+
+<div class="vibe-grid">
+
+  <!-- A: Studio Dark -->
+  <div class="vibe" data-choice="studio-dark" onclick="toggleSelect(this)">
+    <div class="mm" style="background:#0b0b0f;">
+      <div class="mm-top" style="color:#6f6f84;">
+        <span class="mm-dot" style="background:#ff5f57;"></span>
+        <span class="mm-dot" style="background:#febc2e;"></span>
+        <span class="mm-dot" style="background:#28c840;"></span>
+        <span style="margin-left:6px;color:#cfcfe6;font-weight:600;">Variant Studio</span>
+        <span class="mm-nav"><b style="color:#a78bfa;">Studio</b><span>Gallery</span><span>Diagnostics</span></span>
+      </div>
+      <div class="mm-drop" style="border:1.5px dashed #2c2c3a; background:#121219; color:#8a8aa0;">⬆ Drop video(s) here</div>
+      <div class="mm-row">
+        <div class="mm-count" style="background:#15151f; color:#cfcfe0; border:1px solid #24243140;">Variants each <b style="color:#fff;">20</b></div>
+        <div class="mm-btn" style="background:linear-gradient(135deg,#7c5cff,#a78bfa); color:#fff;">Generate</div>
+      </div>
+      <div class="mm-prog" style="background:#121219; border:1px solid #20202c;">
+        <div style="display:flex;justify-content:space-between;color:#cfcfe0;"><span>beach_clip.mp4</span><span style="color:#a78bfa;">14 / 20</span></div>
+        <div class="mm-bar" style="background:#22222e;"><i style="width:70%;background:linear-gradient(90deg,#7c5cff,#22d3ee);"></i></div>
+        <div style="color:#6f6f84;">v15 re-rolling 2/3 · v16 rendering…</div>
+        <div class="mm-thumbs">
+          <div class="mm-th" style="background:linear-gradient(135deg,#1f2937,#0ea5e9);"><span class="mm-vmaf" style="background:#0b3; color:#fff;">94</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#3b0764,#a78bfa);"><span class="mm-vmaf" style="background:#0b3; color:#fff;">91</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#831843,#fb7185);"><span class="mm-vmaf" style="background:#0b3; color:#fff;">96</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="vibe-cap">
+      <h3>A · Studio Dark <span class="badge-rec">Recommended</span></h3>
+      <p>Dark "creative cockpit." Near-black canvas makes the video thumbnails pop, one electric‑violet accent, pro-tool focus. Reads like CapCut / DaVinci / Linear-dark.</p>
+    </div>
+  </div>
+
+  <!-- B: Clean Light SaaS -->
+  <div class="vibe" data-choice="light-saas" onclick="toggleSelect(this)">
+    <div class="mm" style="background:#f6f7f9;">
+      <div class="mm-top" style="color:#9aa0aa;">
+        <span class="mm-dot" style="background:#ff5f57;"></span>
+        <span class="mm-dot" style="background:#febc2e;"></span>
+        <span class="mm-dot" style="background:#28c840;"></span>
+        <span style="margin-left:6px;color:#1f2430;font-weight:700;">Variant Studio</span>
+        <span class="mm-nav"><b style="color:#4f46e5;">Studio</b><span style="color:#6b7280;">Gallery</span><span style="color:#6b7280;">Diagnostics</span></span>
+      </div>
+      <div class="mm-drop" style="border:1.5px dashed #cdd2db; background:#fff; color:#6b7280;">⬆ Drop video(s) here</div>
+      <div class="mm-row">
+        <div class="mm-count" style="background:#fff; color:#374151; border:1px solid #e5e7eb;">Variants each <b style="color:#111827;">20</b></div>
+        <div class="mm-btn" style="background:#4f46e5; color:#fff;">Generate</div>
+      </div>
+      <div class="mm-prog" style="background:#fff; border:1px solid #e5e7eb;">
+        <div style="display:flex;justify-content:space-between;color:#374151;"><span>beach_clip.mp4</span><span style="color:#4f46e5;">14 / 20</span></div>
+        <div class="mm-bar" style="background:#eef0f3;"><i style="width:70%;background:#4f46e5;"></i></div>
+        <div style="color:#9aa0aa;">v15 re-rolling 2/3 · v16 rendering…</div>
+        <div class="mm-thumbs">
+          <div class="mm-th" style="background:linear-gradient(135deg,#dbeafe,#60a5fa);"><span class="mm-vmaf" style="background:#16a34a; color:#fff;">94</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#ede9fe,#a78bfa);"><span class="mm-vmaf" style="background:#16a34a; color:#fff;">91</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#fce7f3,#f472b6);"><span class="mm-vmaf" style="background:#16a34a; color:#fff;">96</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="vibe-cap">
+      <h3>B · Clean Light SaaS</h3>
+      <p>Bright, airy, approachable. White canvas, soft grays, calm indigo accent. Trustworthy and simple — leans into the zero-config promise. Reads like Vercel / Linear-light.</p>
+    </div>
+  </div>
+
+  <!-- C: Bold Creator Energy -->
+  <div class="vibe" data-choice="creator-bold" onclick="toggleSelect(this)">
+    <div class="mm" style="background:radial-gradient(120% 120% at 0% 0%, #14021f, #05060f);">
+      <div class="mm-top" style="color:#8a7fb0;">
+        <span class="mm-dot" style="background:#ff2e63;"></span>
+        <span class="mm-dot" style="background:#08fdd8;"></span>
+        <span class="mm-dot" style="background:#fee440;"></span>
+        <span style="margin-left:6px;color:#fff;font-weight:800;letter-spacing:.3px;">VARIANT STUDIO</span>
+        <span class="mm-nav"><b style="color:#08fdd8;">Studio</b><span>Gallery</span><span>Diag</span></span>
+      </div>
+      <div class="mm-drop" style="border:1.5px solid #ff2e6355; background:linear-gradient(135deg,#ff2e6322,#08fdd822); color:#ffd; font-weight:600;">⬆ Drop video(s) here</div>
+      <div class="mm-row">
+        <div class="mm-count" style="background:#10081c; color:#d8c9ff; border:1px solid #ff2e6340;">Variants each <b style="color:#08fdd8;">20</b></div>
+        <div class="mm-btn" style="background:linear-gradient(135deg,#ff2e63,#ff7eb3); color:#fff; box-shadow:0 4px 14px #ff2e6355;">Generate ✦</div>
+      </div>
+      <div class="mm-prog" style="background:#0c0718; border:1px solid #2a1840;">
+        <div style="display:flex;justify-content:space-between;color:#e7deff;"><span>beach_clip.mp4</span><span style="color:#08fdd8;font-weight:700;">14 / 20</span></div>
+        <div class="mm-bar" style="background:#23163b;"><i style="width:70%;background:linear-gradient(90deg,#ff2e63,#08fdd8);"></i></div>
+        <div style="color:#8a7fb0;">v15 re-rolling 2/3 · v16 rendering…</div>
+        <div class="mm-thumbs">
+          <div class="mm-th" style="background:linear-gradient(135deg,#ff2e63,#7c3aed);"><span class="mm-vmaf" style="background:#08fdd8; color:#04201c;">94</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#06b6d4,#3b82f6);"><span class="mm-vmaf" style="background:#08fdd8; color:#04201c;">91</span></div>
+          <div class="mm-th" style="background:linear-gradient(135deg,#f59e0b,#ef4444);"><span class="mm-vmaf" style="background:#08fdd8; color:#04201c;">96</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="vibe-cap">
+      <h3>C · Bold Creator Energy</h3>
+      <p>High-contrast, neon gradients, TikTok-adjacent punch. Fun and loud — feels like a creator toy. Risk: color can fight the actual video content for attention.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:18px;">My take: <b>A (Studio Dark)</b> — for a tool whose whole point is judging video quality side-by-side, a dark neutral canvas lets the footage be the brightest thing on screen, and a single accent keeps the eye on progress + scores. B is the safe, friendly alternative; C looks great in a screenshot but the neon competes with the videos. Tell me which direction (or mix) feels right.</p>

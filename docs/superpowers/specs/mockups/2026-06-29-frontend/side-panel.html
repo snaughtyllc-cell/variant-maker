@@ -1,0 +1,156 @@
+<h2>Variant detail — side panel</h2>
+<p class="subtitle">Click a variant card and this slides in from the right; the Gallery stays visible (dimmed) behind it. Before/after compare slider + scrub bar, quality readout, and per-variant actions. prev/next steps through the group without closing.</p>
+
+<style>
+  .vs { --bg:#0a0a0e; --panel:#101018; --panel2:#15151f; --line:#23232f; --line2:#2c2c3a;
+        --text:#ececf4; --muted:#8a8aa0; --muted2:#62627a;
+        --violet:#7c5cff; --violetL:#a78bfa; --cyan:#22d3ee; --pink:#ff4d8d;
+        --green:#22c55e; --amber:#f59e0b;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        background:var(--bg); border-radius:14px; overflow:hidden; border:1px solid var(--line); color:var(--text);
+        position:relative; }
+  .vs * { box-sizing:border-box; }
+  /* faded gallery behind */
+  .behind { padding:16px; filter:saturate(.6) brightness(.45); pointer-events:none; }
+  .behind .row { display:grid; grid-template-columns:repeat(8,1fr); gap:10px; }
+  .behind .vc { aspect-ratio:9/16; border-radius:9px; border:1px solid var(--line); }
+  .behind .bhead { display:flex; align-items:center; gap:10px; margin:4px 0 12px; }
+  .behind .bthumb { width:40px; height:28px; border-radius:6px; background:linear-gradient(135deg,#7c3aed,#831843); }
+  .behind .bname { font-size:13px; font-weight:700; }
+  .scrim { position:absolute; inset:0; background:#05050880; backdrop-filter:blur(1px); }
+
+  /* the panel */
+  .panel { position:absolute; top:0; right:0; bottom:0; width:430px; background:linear-gradient(180deg,#0e0e15,#0b0b11);
+           border-left:1px solid var(--line2); box-shadow:-20px 0 50px #000000aa; display:flex; flex-direction:column;
+           animation:slidein .25s ease; }
+  @keyframes slidein { from{ transform:translateX(40px); opacity:.6 } to{ transform:none; opacity:1 } }
+  .p-head { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); }
+  .p-head .nav { width:30px; height:30px; border-radius:8px; background:#16161f; border:1px solid var(--line);
+                 display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; }
+  .p-head .title { flex:1; }
+  .p-head .title b { font-size:14.5px; }
+  .p-head .title span { display:block; font-size:11px; color:var(--muted); }
+  .p-head .x { color:var(--muted); font-size:18px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; }
+
+  .p-body { overflow:auto; padding:16px; }
+  /* compare */
+  .compare { position:relative; aspect-ratio:9/16; max-height:300px; margin:0 auto; width:auto; border-radius:12px; overflow:hidden;
+             border:1px solid var(--line); }
+  .layer { position:absolute; inset:0; }
+  .after  { background:linear-gradient(150deg,#7c3aed,#22d3ee); }
+  .before { background:linear-gradient(150deg,#3b3b46,#6b6b76); width:54%; border-right:2px solid #fff; }
+  .tag { position:absolute; top:8px; font-size:10px; font-weight:800; letter-spacing:.5px; padding:2px 7px; border-radius:6px; color:#fff; background:#00000080; }
+  .tag.l { left:8px; } .tag.r { right:8px; }
+  .handle { position:absolute; top:0; bottom:0; left:54%; width:2px; background:#fff; }
+  .handle .grip { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:30px; height:30px; border-radius:50%;
+                  background:#fff; color:#111; display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 2px 10px #000; }
+  /* scrub */
+  .scrub { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .scrub .play { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,var(--violet),var(--pink));
+                 display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; flex:none; }
+  .scrub .track { flex:1; height:5px; border-radius:99px; background:#20202c; position:relative; }
+  .scrub .track > i { position:absolute; left:0; top:0; bottom:0; width:33%; border-radius:99px; background:linear-gradient(90deg,var(--violet),var(--cyan)); }
+  .scrub .track > b { position:absolute; left:33%; top:50%; transform:translate(-50%,-50%); width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 6px #000; }
+  .scrub .t { font-size:11px; color:var(--muted); flex:none; }
+
+  /* quality */
+  .sec-label { font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted2); font-weight:700; margin:20px 0 10px; }
+  .qrow { display:flex; align-items:center; gap:12px; padding:11px 12px; background:var(--panel2); border:1px solid var(--line);
+          border-radius:10px; margin-bottom:8px; }
+  .qrow .k { font-size:13px; flex:none; width:104px; color:var(--text); }
+  .qrow .meter { flex:1; height:6px; border-radius:99px; background:#20202c; overflow:hidden; }
+  .qrow .meter > i { display:block; height:100%; border-radius:99px; }
+  .qrow .v { font-size:12.5px; font-weight:800; flex:none; }
+  .tagok { font-size:10px; font-weight:800; color:#7bf2a8; background:#0c2c1a; border:1px solid #16502f; padding:2px 7px; border-radius:6px; }
+  .qrow.locked { opacity:.5; }
+  .qrow.locked .k::after { content:" 🔒"; font-size:10px; }
+  .parknote { font-size:11px; color:var(--muted2); margin:-2px 2px 0; }
+
+  /* actions */
+  .actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:18px; }
+  .act { display:flex; align-items:center; justify-content:center; gap:7px; font-size:12.5px; font-weight:700; padding:11px;
+         border-radius:10px; background:#16161f; border:1px solid var(--line); color:var(--text); cursor:pointer; }
+  .act.primary { background:linear-gradient(135deg,var(--violet),var(--pink)); border:none; color:#fff; box-shadow:0 4px 14px #ff4d8d33; }
+  .act.span2 { grid-column:span 2; }
+</style>
+
+<div class="vs">
+  <!-- dimmed gallery behind -->
+  <div class="behind">
+    <div class="bhead"><span style="color:#62627a">▾</span><div class="bthumb"></div><div class="bname">city_drone.mp4 &nbsp;·&nbsp; 18/20</div></div>
+    <div class="row">
+      <div class="vc" style="background:linear-gradient(135deg,#7c3aed,#3b0764)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#22d3ee,#0e7490)"></div>
+      <div class="vc" style="outline:2px solid var(--violet); background:linear-gradient(135deg,#f472b6,#831843)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#60a5fa,#1e3a8a)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#fbbf24,#7c2d12)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#a78bfa,#312e81)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#2dd4bf,#134e4a)"></div>
+      <div class="vc" style="background:linear-gradient(135deg,#fb7185,#7f1d1d)"></div>
+    </div>
+  </div>
+  <div class="scrim"></div>
+
+  <!-- side panel -->
+  <div class="panel">
+    <div class="p-head">
+      <div class="nav">‹</div>
+      <div class="title"><b>city_drone · v03</b><span>variant 3 of 18 · clip_v03_a4f1.mp4</span></div>
+      <div class="nav">›</div>
+      <div class="x">✕</div>
+    </div>
+
+    <div class="p-body">
+      <div class="compare">
+        <div class="layer after"></div>
+        <div class="layer before"></div>
+        <span class="tag l">SOURCE</span>
+        <span class="tag r">VARIANT</span>
+        <div class="handle"><div class="grip">⇄</div></div>
+      </div>
+      <div class="scrub">
+        <div class="play">▶</div>
+        <div class="track"><i></i><b></b></div>
+        <div class="t">0:06 / 0:42</div>
+      </div>
+
+      <div class="sec-label">Quality</div>
+      <div class="qrow">
+        <span class="k">VMAF</span>
+        <div class="meter"><i style="width:94%;background:linear-gradient(90deg,#22c55e,#7bf2a8)"></i></div>
+        <span class="v" style="color:#7bf2a8">94.0</span>
+      </div>
+      <div class="qrow">
+        <span class="k">Spatial guard</span>
+        <div class="meter"><i style="width:88%;background:linear-gradient(90deg,#22c55e,#7bf2a8)"></i></div>
+        <span class="tagok">✓ no corruption</span>
+      </div>
+      <div class="qrow">
+        <span class="k">Histogram</span>
+        <div class="meter"><i style="width:100%;background:linear-gradient(90deg,#22c55e,#7bf2a8)"></i></div>
+        <span class="tagok">✓ OK</span>
+      </div>
+      <div class="qrow">
+        <span class="k">Re-rolls</span>
+        <div class="meter"><i style="width:33%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></i></div>
+        <span class="v" style="color:#fbbf24">1 / 3</span>
+      </div>
+      <div class="qrow locked">
+        <span class="k">Similarity</span>
+        <div class="meter"><i style="width:35%;background:#3a3a4a"></i></div>
+        <span class="v" style="color:var(--muted)">— %</span>
+      </div>
+      <div class="parknote">Similarity readout arrives with the auto-tune brain (target ≤35%). Parked for now.</div>
+
+      <div class="sec-label">Actions</div>
+      <div class="actions">
+        <div class="act primary span2">⬇ Download variant</div>
+        <div class="act">⌅ Reveal in Finder</div>
+        <div class="act">↻ Regenerate this one</div>
+        <div class="act span2">{ } View manifest entry</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Compare slider (drag the ⇄ handle: left = source, right = variant) with a scrub bar under it. Quality shows VMAF, spatial-guard, histogram, and re-roll count from the manifest. <b>Similarity</b> is shown but locked/greyed — the seam for the Path-B auto-tune brain. prev/next arrows + filename up top; actions at the bottom. Good, or adjust? One call: keep the locked Similarity row visible (shows the roadmap) or hide it entirely until Path B?</p>

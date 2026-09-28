@@ -1,0 +1,129 @@
+<h2>Diagnostics — why a few didn't make it</h2>
+<p class="subtitle">Only variants that exhausted the auto-retry cap (3 re-rolls) land here, with the reason. Out of the main workflow's way — you visit it only when a Gallery shortfall makes you curious.</p>
+
+<style>
+  .vs { --bg:#0a0a0e; --panel:#101018; --panel2:#15151f; --line:#23232f; --line2:#2c2c3a;
+        --text:#ececf4; --muted:#8a8aa0; --muted2:#62627a;
+        --violet:#7c5cff; --violetL:#a78bfa; --cyan:#22d3ee; --pink:#ff4d8d;
+        --green:#22c55e; --amber:#f59e0b; --red:#f87171;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        background:var(--bg); border-radius:14px; overflow:hidden; border:1px solid var(--line); color:var(--text); }
+  .vs * { box-sizing:border-box; }
+  .vs-top { display:flex; align-items:center; gap:18px; padding:12px 18px; border-bottom:1px solid var(--line);
+            background:linear-gradient(180deg,#101018,#0c0c12); }
+  .vs-logo { font-weight:800; display:flex; align-items:center; gap:8px; font-size:15px; }
+  .vs-logo .spark { width:18px; height:18px; border-radius:6px; background:linear-gradient(135deg,var(--violet),var(--pink)); box-shadow:0 0 12px #7c5cff66; }
+  .vs-nav { display:flex; gap:4px; margin-left:8px; }
+  .vs-nav a { font-size:13px; color:var(--muted); padding:6px 12px; border-radius:8px; text-decoration:none; }
+  .vs-nav a.on { color:#fff; background:#1b1b27; }
+  .vs-status { margin-left:auto; display:flex; gap:10px; font-size:11.5px; color:var(--muted); }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#14141d; border:1px solid var(--line); }
+  .dot { width:7px; height:7px; border-radius:50%; }
+
+  .head { padding:18px 20px 4px; display:flex; align-items:flex-end; gap:14px; }
+  .head .big { font-size:16px; font-weight:800; }
+  .head .sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .head .summary { margin-left:auto; display:flex; gap:8px; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 13px; text-align:center; }
+  .stat b { font-size:17px; display:block; }
+  .stat span { font-size:10.5px; color:var(--muted); }
+
+  .list { padding:14px 20px 22px; }
+  .src-h { font-size:12px; color:var(--muted); margin:10px 2px 9px; display:flex; align-items:center; gap:8px; }
+  .src-h b { color:var(--text); }
+  .drow { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--line);
+          border-radius:12px; padding:12px 14px; margin-bottom:9px; }
+  .drow .vthumb { width:38px; height:54px; border-radius:7px; flex:none; position:relative; overflow:hidden; }
+  .drow .vthumb.dead { background:#141019; border:1px dashed #3a2630; display:flex; align-items:center; justify-content:center; color:#7a4a55; font-size:14px; }
+  .drow .vid { flex:none; width:54px; font-weight:800; font-size:13px; }
+  .badge { font-size:10px; font-weight:800; padding:3px 9px; border-radius:999px; flex:none; }
+  .badge.short { color:#ffd08a; background:#2c2210; border:1px solid #5a4416; }
+  .badge.corrupt { color:#fca5a5; background:#2c1212; border:1px solid #5a1f1f; }
+  .reason { flex:1; min-width:0; }
+  .reason .r1 { font-size:13px; }
+  .reason .r2 { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .reason .metric { color:#fca5a5; font-weight:700; }
+  .reason .metric.amber { color:#ffd08a; }
+  .rolls { font-size:11px; color:var(--muted2); flex:none; }
+  .dact { display:flex; gap:7px; flex:none; }
+  .btn { font-size:11.5px; font-weight:700; padding:7px 11px; border-radius:8px; border:1px solid var(--line);
+         background:#16161f; color:var(--text); cursor:pointer; }
+  .btn.primary { background:linear-gradient(135deg,var(--violet),var(--pink)); border:none; color:#fff; box-shadow:0 3px 12px #ff4d8d33; }
+
+  .empty { margin-top:14px; padding:14px 16px; border:1px dashed var(--line2); border-radius:12px; color:var(--muted);
+           font-size:12.5px; display:flex; align-items:center; gap:10px; background:#0d0d13; }
+</style>
+
+<div class="vs">
+  <div class="vs-top">
+    <div class="vs-logo"><span class="spark"></span> Variant Studio</div>
+    <nav class="vs-nav"><a href="#">Studio</a><a href="#">Gallery</a><a class="on" href="#">Diagnostics</a></nav>
+    <div class="vs-status"><span class="pill"><span class="dot" style="background:var(--green);box-shadow:0 0 8px #22c55e88;"></span> Engine ready</span></div>
+  </div>
+
+  <div class="head">
+    <div>
+      <div class="big">Diagnostics</div>
+      <div class="sub">3 variants exhausted the 3-reroll cap across all runs. Everything else delivered.</div>
+    </div>
+    <div class="summary">
+      <div class="stat"><b style="color:#ffd08a">2</b><span>below floor</span></div>
+      <div class="stat"><b style="color:#fca5a5">1</b><span>corrupt</span></div>
+    </div>
+  </div>
+
+  <div class="list">
+    <div class="src-h">▾ <b>city_drone.mp4</b> · 18/20 delivered · 2 failed</div>
+
+    <div class="drow">
+      <div class="vthumb" style="background:linear-gradient(135deg,#3b3b46,#6b6b76)"></div>
+      <div class="vid">v19</div>
+      <span class="badge short">BELOW FLOOR</span>
+      <div class="reason">
+        <div class="r1">Quality stayed under the floor after 3 re-rolls</div>
+        <div class="r2">VMAF <span class="metric amber">84.2</span> &lt; floor 90 · histogram OK · spatial OK</div>
+      </div>
+      <div class="rolls">↻ 3/3</div>
+      <div class="dact">
+        <button class="btn">Inspect</button>
+        <button class="btn primary">↻ Regenerate</button>
+      </div>
+    </div>
+
+    <div class="drow">
+      <div class="vthumb dead">⚠</div>
+      <div class="vid">v07</div>
+      <span class="badge corrupt">CORRUPT</span>
+      <div class="reason">
+        <div class="r1">Neural upscale tore the frame (spatial-corruption guard)</div>
+        <div class="r2">Spatial VMAF <span class="metric">22.0</span> &lt; corruption floor · rejected before delivery</div>
+      </div>
+      <div class="rolls">↻ 3/3</div>
+      <div class="dact">
+        <button class="btn">{ } Manifest</button>
+        <button class="btn primary">↻ Regenerate</button>
+      </div>
+    </div>
+
+    <div class="src-h" style="margin-top:18px;">▾ <b>skyline.mp4</b> · 11/12 delivered · 1 failed</div>
+
+    <div class="drow">
+      <div class="vthumb" style="background:linear-gradient(135deg,#4b3b2e,#6b5b4a)"></div>
+      <div class="vid">v11</div>
+      <span class="badge short">BELOW FLOOR</span>
+      <div class="reason">
+        <div class="r1">Quality stayed under the floor after 3 re-rolls</div>
+        <div class="r2">VMAF <span class="metric amber">88.6</span> &lt; floor 90 · histogram OK · spatial OK</div>
+      </div>
+      <div class="rolls">↻ 3/3</div>
+      <div class="dact">
+        <button class="btn">Inspect</button>
+        <button class="btn primary">↻ Regenerate</button>
+      </div>
+    </div>
+
+    <div class="empty">✓ The usual state of this page: empty. When a run delivers everything, you'll see "Nothing failed — all variants delivered."</div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Failed variants only (best_effort = below VMAF floor, corrupt = spatial-guard reject), grouped by source, each with a plain-language reason + the exact metric, the exhausted re-roll count (↻ 3/3), and per-row actions (Inspect / Manifest / Regenerate). Summary chips up top. This is the full screen set — Studio · Gallery · Side-panel · Diagnostics. Anything to change on Diagnostics? If it's good, I'll write the frontend spec.</p>

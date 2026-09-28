@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 724 220" width="724" height="220" role="img" aria-label="varimo">
+  <title>varimo wordmark</title>
+  <g font-family="Sora, sans-serif" font-weight="700" font-size="130" letter-spacing="-5.2">
+    <text x="40" y="150" fill="#FBFAFC">varim</text>
+    <text x="404" y="150" fill="#A473F5">o</text>
+    <text x="474" y="150" fill="#A473F5" opacity="0.5">o</text>
+    <text x="544" y="150" fill="#A473F5" opacity="0.24">o</text>
+    <text x="614" y="150" fill="#A473F5" opacity="0.1">o</text>
+  </g>
+</svg>
