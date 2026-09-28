@@ -4,6 +4,13 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Partner / frontend agents (read this first)
+
+If you are Jeff’s frontend partner or an AI working for them: read
+[`docs/ops/partner-frontend.md`](../docs/ops/partner-frontend.md) **before
+any edit**. Lab only (`tier1` PRs). No merge to `varimo-live`. No engine
+files unless Jeff asked. Sitting prompt is in that doc — paste it every session.
+
 # Studio IA (read this before a redesign)
 
 The product is **not** the v1 four-screen list (Studio / Gallery /
