@@ -114,6 +114,18 @@ def test_bits_vs_helper():
         assert uniqueness.bits_vs(a, b) >= uniqueness.TARGET_BITS
 
 
+def test_bits_vs_canvas_override_keeps_default_gate(tmp_path):
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    pattern = "testsrc=size=320x180:rate=25:duration=1"
+    _tiny_mp4(str(a), lavfi=pattern)
+    _tiny_mp4(str(b), lavfi=pattern)
+    default = uniqueness.bits_vs(str(a), str(b))
+    oriented = uniqueness.bits_vs(str(a), str(b), canvas=uniqueness.ssim_canvas(320, 180))
+    assert default == oriented
+    assert default < 8
+
+
 def test_ssim_canvas_matches_source_orientation():
     assert uniqueness.ssim_canvas(1080, 1920) == (576, 1024)
     assert uniqueness.ssim_canvas(3840, 2160) == (1024, 576)
