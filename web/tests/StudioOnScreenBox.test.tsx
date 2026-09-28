@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
@@ -132,6 +134,26 @@ describe("on-screen project", () => {
     expect(typeof project).not.toBe("string");
     if (typeof project === "string") return;
     expect(project.boxes[0].seats).toEqual(["bl", "br"]);
+  });
+
+  it("sends when a line comes in and when it leaves", () => {
+    const draft = emptyOnScreen();
+    draft.captions[0].text = "hello";
+    draft.captions[0].box_ids = ["cyan"];
+    draft.captions[0].show = 1.5;
+    draft.captions[0].hide = 4;
+    draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.2 }];
+    const project = projectFromDraft(draft);
+    expect(typeof project).not.toBe("string");
+    if (typeof project === "string") return;
+    expect(project.captions[0].show).toBe(1.5);
+    expect(project.captions[0].hide).toBe(4);
+    draft.captions[0].hide = 1;
+    const dropped = projectFromDraft(draft);
+    expect(typeof dropped).not.toBe("string");
+    if (typeof dropped === "string") return;
+    expect(dropped.captions[0].show).toBe(1.5);
+    expect(dropped.captions[0].hide).toBeUndefined();
   });
 
   it("keeps a chosen text size and a one-line lock", () => {
@@ -301,6 +323,19 @@ describe("phone box drawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "9:16" }));
     expect(phone.style.aspectRatio).toBe("9 / 16");
     expect(phone.textContent).toContain("Header");
+  });
+
+  it("keeps Snapchat, shadow, and caption timing on the text tool", () => {
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Instagram sticker" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Snapchat bar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "No shadow" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Shadow" })).toBeTruthy();
+    expect(screen.getByLabelText("Line 1 on from")).toBeTruthy();
+    expect(screen.getByLabelText("Line 1 until")).toBeTruthy();
+    const css = readFileSync(resolve(__dirname, "../app/globals.css"), "utf8");
+    expect(css).toMatch(/\.studio-onscreen__panel > \* \{[^}]*flex:\s*0 0 auto/s);
+    expect(css).toMatch(/\.studio-onscreen__styles \{[^}]*position:\s*sticky/s);
   });
 
   it("keeps text tools up and opens sound from the dock", () => {

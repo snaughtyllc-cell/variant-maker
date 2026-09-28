@@ -33,6 +33,8 @@ export type OnScreenCaption = {
   place?: Record<string, { x: number; y: number }>;
   size?: number;
   lines?: 1 | 2 | "both";
+  show?: number;
+  hide?: number;
 };
 
 export const MAX_SOUNDS = 4;
@@ -112,6 +114,25 @@ export function textFitWarning(textWidth: number, boxWidth: number): string {
 export function clampTextSize(value: number) {
   const stepped = Math.round(value * 10) / 10;
   return Math.min(1.6, Math.max(0.55, stepped));
+}
+
+function cueSeconds(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return undefined;
+  return Math.round(Math.min(180, Math.max(0, number)) * 1000) / 1000;
+}
+
+export function captionWindow(show: unknown, hide: unknown): { show?: number; hide?: number } {
+  const start = cueSeconds(show);
+  let end = cueSeconds(hide);
+  if (start === undefined && end === undefined) return {};
+  const from = start ?? 0;
+  if (end !== undefined && end <= from) end = undefined;
+  return {
+    ...(from > 0 ? { show: from } : {}),
+    ...(end !== undefined ? { hide: end } : {}),
+  };
 }
 
 export const TEXT_SEATS = [
@@ -268,6 +289,7 @@ export function projectFromDraft(draft: OnScreenProject): OnScreenProject | stri
         place,
         ...(cap.size ? { size: clampTextSize(cap.size) } : {}),
         ...(cap.lines === 1 || cap.lines === 2 || cap.lines === "both" ? { lines: cap.lines } : {}),
+        ...captionWindow(cap.show, cap.hide),
       };
     })
     .filter((cap) => cap.text || cap.box_ids.length);
@@ -623,6 +645,16 @@ export function StudioOnScreenBox({
     });
   }
 
+  function setCue(index: number, key: "show" | "hide", raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      patchCaption(index, { [key]: undefined });
+      return;
+    }
+    const number = Number(trimmed);
+    patchCaption(index, { [key]: Number.isFinite(number) ? number : undefined });
+  }
+
   function patchCaption(index: number, next: Partial<OnScreenCaption>) {
     const captions = draft.captions.map((cap, i) => (i === index ? { ...cap, ...next } : cap));
     onChange({ ...draft, captions });
@@ -956,6 +988,7 @@ export function StudioOnScreenBox({
               <div className="studio-onscreen__panel" role="tabpanel">
                 {tool === "text" && (
                   <>
+                    <div className="studio-onscreen__styles">
                     <div className="studio-onscreen__looks" role="group" aria-label="Look">
                       {(
                         [
@@ -997,6 +1030,7 @@ export function StudioOnScreenBox({
                         ))}
                       </div>
                     )}
+                    </div>
                     <div className="studio-onscreen__fit" role="group" aria-label="Text size">
                       <button type="button" className="studio-onscreen__look" aria-label="Smaller" onClick={() => setFit({ size: clampTextSize((draft.captions[0]?.size ?? 1) - 0.1) })}>Smaller</button>
                       <span>{Math.round((draft.captions[0]?.size ?? 1) * 100)}%</span>
@@ -1039,6 +1073,7 @@ export function StudioOnScreenBox({
                         ? "Tap the seats that look right on this clip. One seat keeps every variant there. Two or more take turns."
                         : "Drag the words on the clip. The first variant matches this preview. The others keep that look and move inside the box."}
                       {draft.captions[0]?.lines === "both" ? " This pack uses both a one-line and a two-line version." : ""}
+                      {" On from and until set when the line is on the video. Leave until empty and it stays to the end. The preview keeps the words so you can place them."}
                     </p>
                     <div className="studio-onscreen__lines">
                       {draft.captions.map((cap, index) => (
@@ -1053,6 +1088,36 @@ export function StudioOnScreenBox({
                             style={{ fontSize: 16 }}
                             onChange={(e) => patchCaption(index, { text: e.target.value })}
                           />
+                          <div className="studio-onscreen__timing">
+                            <label className="studio-onscreen__start">
+                              On from
+                              <input
+                                type="number"
+                                min={0}
+                                max={180}
+                                step={0.1}
+                                inputMode="decimal"
+                                aria-label={`Line ${index + 1} on from`}
+                                placeholder="0"
+                                value={cap.show ?? ""}
+                                onChange={(e) => setCue(index, "show", e.target.value)}
+                              />
+                            </label>
+                            <label className="studio-onscreen__start">
+                              until
+                              <input
+                                type="number"
+                                min={0}
+                                max={180}
+                                step={0.1}
+                                inputMode="decimal"
+                                aria-label={`Line ${index + 1} until`}
+                                placeholder="end"
+                                value={cap.hide ?? ""}
+                                onChange={(e) => setCue(index, "hide", e.target.value)}
+                              />
+                            </label>
+                          </div>
                           <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
                             {draft.boxes.map((box) => {
                               const meta = BOX_COLORS.find((color) => color.id === box.id);

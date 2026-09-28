@@ -232,7 +232,7 @@ export type OnScreenTemplate = {
   id: string;
   name: string;
   project: {
-    captions: { id?: string; text: string; box_ids: string[]; place?: Record<string, { x: number; y: number }>; size?: number; lines?: 1 | 2 | "both" }[];
+    captions: { id?: string; text: string; box_ids: string[]; place?: Record<string, { x: number; y: number }>; size?: number; lines?: 1 | 2 | "both"; show?: number; hide?: number }[];
     boxes: { id: string; x: number; y: number; w: number; h: number; color?: string; seats?: string[] }[];
     look: { style: string; background: string; color: string };
     audios?: {

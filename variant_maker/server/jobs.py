@@ -1602,6 +1602,7 @@ class JobStore:
             mix_audio,
             placement_record,
             plan_versions,
+            poster_at,
             text_poster_name,
             write_text_poster,
         )
@@ -1652,7 +1653,7 @@ class JobStore:
                 self._object_store.put(key, path)
             poster = text_poster_name(v.index)
             poster_path = os.path.join(out_dir, poster)
-            write_text_poster(path, poster_path)
+            write_text_poster(path, poster_path, at=poster_at(placement))
             if key and self._object_store is not None:
                 prefix = str(key).rsplit("/", 1)[0]
                 self._object_store.put(f"{prefix}/{poster}", poster_path)

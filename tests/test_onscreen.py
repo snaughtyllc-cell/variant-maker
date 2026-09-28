@@ -8,7 +8,11 @@ from variant_maker.onscreen import (
     fonts_ready,
     mix_audio,
     normalize_project,
+    overlay_enable,
+    overlay_graph,
+    placement_record,
     plan_versions,
+    poster_at,
     render_layer,
 )
 
@@ -368,6 +372,98 @@ def test_under_mix_keeps_the_voice_and_replace_uses_the_bed(tmp_path):
         check=True, capture_output=True, text=True,
     )
     assert "audio" in heard.stdout
+
+
+def test_caption_timing_stays_on_the_line():
+    project = _project(
+        [{"text": "hello", "box_ids": ["A"], "show": 1.25, "hide": 4, "size": 1}],
+        [_box("A")],
+    )
+    clean = normalize_project(project)
+    assert clean["captions"][0]["show"] == 1.25
+    assert clean["captions"][0]["hide"] == 4
+    versions = plan_versions(project, 3)
+    assert [v["show"] for v in versions] == [1.25, 1.25, 1.25]
+    assert versions[2]["hide"] == 4
+    assert versions[0]["place"] != versions[1]["place"]
+    record = placement_record(versions[0])
+    assert record["show"] == 1.25
+    assert record["hide"] == 4
+
+
+def test_a_window_that_is_not_later_is_dropped():
+    blank = normalize_project(_project(
+        [{"text": "hello", "box_ids": ["A"], "show": "nope", "hide": 0}],
+        [_box("A")],
+    ))
+    assert "show" not in blank["captions"][0]
+    assert "hide" not in blank["captions"][0]
+    tied = normalize_project(_project(
+        [{"text": "hello", "box_ids": ["A"], "show": 2, "hide": 2}],
+        [_box("A")],
+    ))
+    assert tied["captions"][0]["show"] == 2
+    assert "hide" not in tied["captions"][0]
+    capped = normalize_project(_project(
+        [{"text": "hello", "box_ids": ["A"], "show": 200, "hide": 10}],
+        [_box("A")],
+    ))
+    assert capped["captions"][0]["show"] == 180
+    assert "hide" not in capped["captions"][0]
+
+
+def test_overlay_covers_the_clip_unless_a_window_is_set():
+    assert overlay_enable(None, None) is None
+    assert overlay_enable(0, None) is None
+    assert overlay_graph(None, None) == "[0:v][1:v]overlay=0:0[v]"
+    assert overlay_enable(1.5, None) == "gte(t,1.5)"
+    assert overlay_enable(1, 4) == "between(t,1,4)"
+    assert overlay_enable(0, 4) == "between(t,0,4)"
+    assert overlay_enable(1, 1) == "gte(t,1)"
+    assert overlay_graph(1, 4) == "[0:v][1:v]overlay=0:0:enable='between(t,1,4)'[v]"
+    assert poster_at({}) == 0.4
+    assert poster_at({"show": 5}) == 5.2
+    assert poster_at({"show": 1, "hide": 3}) == 1.2
+    assert poster_at({"show": 1, "hide": 1.1}) == 1.05
+
+
+def test_burn_shows_the_words_only_inside_the_window(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        return
+    src = tmp_path / "in.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=180x320:d=2",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+            "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            str(src),
+        ],
+        check=True, capture_output=True,
+    )
+    placement = plan_versions(_project(
+        [{
+            "text": "HELLO",
+            "box_ids": ["A"],
+            "show": 1,
+            "hide": 1.5,
+            "place": {"A": {"x": 0.5, "y": 0.5}},
+        }],
+        [_box("A", 0.35)],
+    ), 1)[0]
+    burn_file(str(src), placement, 180, 320, None)
+
+    def peak(at: str) -> int:
+        frame = tmp_path / f"{at}.png"
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", at, "-i", str(src), "-frames:v", "1", str(frame)],
+            check=True, capture_output=True,
+        )
+        from PIL import Image
+        return Image.open(frame).convert("L").getextrema()[1]
+
+    assert peak("0.2") < 40
+    assert peak("1.2") > 200
+    assert peak("1.8") < 40
 
 
 def test_sticker_and_bar_paint_opaque_pixels():

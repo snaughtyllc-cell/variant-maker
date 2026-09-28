@@ -1640,7 +1640,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__title { color: #f5f7fa; font-size: 16px; font-weight: 700; margin: 0; }
 .studio-onscreen__done { background: #fff; border: 0; border-radius: 999px; color: #111; cursor: pointer; font-size: 13px; font-weight: 700; margin-left: auto; padding: 7px 14px; }
 .studio-onscreen__body { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; }
-.studio-onscreen__looks { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
+.studio-onscreen__looks { display: flex; flex: none; flex-wrap: nowrap; gap: 8px; min-height: 34px; overflow-x: auto; }
+.studio-onscreen__styles { background: #181a1f; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; z-index: 2; }
+.studio-onscreen__timing { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.studio-onscreen__panel > * { flex: 0 0 auto; }
 .studio-onscreen__look, .studio-onscreen__add { background: #fff; border: 1px solid var(--color-line); border-radius: 999px; color: var(--ink); cursor: pointer; font-size: 13px; padding: 6px 12px; }
 .studio-onscreen__look[data-on="true"] { background: #e7fbfc; border-color: #16c8d3; }
 .studio-onscreen__stage { align-items: center; display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; width: 100%; }
@@ -1685,7 +1688,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__chip::before { background: var(--box); border-radius: 99px; content: ""; height: 18px; width: 18px; }
 .studio-onscreen__chip[data-on="true"] { border-color: var(--box); box-shadow: 0 0 0 2px color-mix(in srgb, var(--box) 35%, transparent); }
 .studio-onscreen__hint { color: #a7b0ba; font-size: 12px; line-height: 1.4; margin: 0; }
-.studio-onscreen__panel { background: #181a1f; border-radius: 16px; display: flex; flex: 0 1 42%; flex-direction: column; gap: 8px; max-height: 46%; min-height: 132px; overflow: auto; padding: 10px; }
+.studio-onscreen__panel { background: #181a1f; border-radius: 16px; display: flex; flex: 0 1 48%; flex-direction: column; gap: 8px; max-height: 52%; min-height: 168px; overflow: auto; padding: 10px; }
 .studio-onscreen__dock { display: grid; flex: none; gap: 4px; grid-template-columns: repeat(3, 1fr); }
 .studio-onscreen__tool { align-items: center; background: transparent; border: 0; color: #9aa3ad; cursor: pointer; display: flex; flex-direction: column; font-size: 11px; font-weight: 650; gap: 2px; padding: 2px 0 0; }
 .studio-onscreen__tool .material-symbols-rounded { font-size: 22px; }

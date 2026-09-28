@@ -9,9 +9,11 @@ Rules:
 - One caption may use every box. Extra captions each need their own box.
 - The first take uses the spot the user previewed. Later takes move inside that box.
 - Up to four sounds take turns. The first variant uses the sound listed first.
+- A line can name when it comes in and when it leaves. Blank timing stays on the whole clip.
 """
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 from functools import lru_cache
@@ -23,6 +25,7 @@ MAX_BOXES = 4
 MAX_AUDIOS = 4
 MAX_PRINTS = 5
 MAX_CHARS = 120
+_MAX_CUE = 180.0
 SIZE_STEPS = (1.0, 0.9, 0.8)
 ALIGNS = ("center", "left", "right")
 SPOTS = ("middle", "top", "bottom")
@@ -102,6 +105,64 @@ def _normalize_audios(raw) -> list[dict]:
             row["bed_id"] = bed_id[:32]
         out.append(row)
     return out
+
+
+def _cue(value) -> float | None:
+    """Seconds from 0 to 180, or None when the field is blank."""
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return round(min(_MAX_CUE, max(0.0, number)), 3)
+
+
+def _cue_text(number: float) -> str:
+    rendered = f"{number:.3f}".rstrip("0").rstrip(".")
+    return rendered or "0"
+
+
+def _window(show, hide) -> tuple[float, float | None]:
+    start = _cue(show)
+    end = _cue(hide)
+    if start is None:
+        start = 0.0
+    if end is not None and end <= start:
+        end = None
+    return start, end
+
+
+def overlay_enable(show, hide) -> str | None:
+    """FFmpeg enable expression. None keeps the words on for the whole clip."""
+    start, end = _window(show, hide)
+    if start <= 0 and end is None:
+        return None
+    if end is None:
+        return f"gte(t,{_cue_text(start)})"
+    return f"between(t,{_cue_text(start)},{_cue_text(end)})"
+
+
+def overlay_graph(show=None, hide=None) -> str:
+    enable = overlay_enable(show, hide)
+    if not enable:
+        return "[0:v][1:v]overlay=0:0[v]"
+    return f"[0:v][1:v]overlay=0:0:enable='{enable}'[v]"
+
+
+def poster_at(placement: dict | None) -> float:
+    """Pick a frame that still has the words, so the gallery thumb is not blank."""
+    start, end = _window(
+        None if not placement else placement.get("show"),
+        None if not placement else placement.get("hide"),
+    )
+    if end is not None:
+        return round(min(start + 0.2, (start + end) / 2), 3)
+    if start > 0:
+        return round(start + 0.2, 3)
+    return 0.4
 
 
 def _normalize_prints(raw) -> list[dict]:
@@ -194,6 +255,11 @@ def normalize_project(raw: dict | None, *, nested: bool = False) -> dict | None:
             row["lines"] = "both"
         elif str(cap.get("lines")) in ("1", "2"):
             row["lines"] = int(cap["lines"])
+        start, end = _window(cap.get("show"), cap.get("hide"))
+        if start > 0:
+            row["show"] = start
+        if end is not None:
+            row["hide"] = end
         captions.append(row)
 
     if len(used) != len(boxes):
@@ -316,6 +382,10 @@ def plan_versions(project: dict, count: int) -> list[dict]:
             "lines": line_lock,
             "look": dict(look),
         }
+        if "show" in cap:
+            row["show"] = cap["show"]
+        if "hide" in cap:
+            row["hide"] = cap["hide"]
         if audios:
             row["audio"] = dict(audios[n % len(audios)])
         out.append(row)
@@ -500,7 +570,7 @@ def burn_file(video_path: str, placement: dict, width: int, height: int, color=N
     color_args = output_color_args(color) if color is not None else []
     cmd = [
         "ffmpeg", "-y", "-i", video_path, "-i", png,
-        "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
+        "-filter_complex", overlay_graph(placement.get("show"), placement.get("hide")),
         "-map", "[v]", "-map", "0:a?",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "veryfast",
         "-c:a", "copy",
@@ -522,14 +592,16 @@ def text_poster_name(index: int) -> str:
     return f"look_text_v{int(index):02d}.jpg"
 
 
-def write_text_poster(video_path: str, out_path: str) -> None:
+def write_text_poster(video_path: str, out_path: str, at: float = 0.4) -> None:
     """One frame of the finished file, after the words are on it."""
     if os.path.exists(out_path):
         os.remove(out_path)
+    duration = _media_duration(video_path)
+    stamp = min(max(0.0, float(at)), max(0.0, duration - 0.05))
     subprocess.run(
         [
             "ffmpeg", "-y", "-v", "error",
-            "-ss", "0.4", "-i", video_path,
+            "-ss", f"{stamp:.3f}", "-i", video_path,
             "-frames:v", "1",
             "-vf", "scale=480:-2",
             "-q:v", "3",
@@ -632,6 +704,10 @@ def placement_record(placement: dict) -> dict:
         "style": look.get("style"),
         "background": look.get("background"),
     }
+    if placement.get("show") is not None:
+        record["show"] = placement["show"]
+    if placement.get("hide") is not None:
+        record["hide"] = placement["hide"]
     audio = placement.get("audio") if isinstance(placement.get("audio"), dict) else None
     if audio:
         record["audio"] = {
