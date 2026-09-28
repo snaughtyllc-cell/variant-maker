@@ -1251,7 +1251,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drive-topbar__crumb { color: var(--ink); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
 .drive-topbar__spacer { flex: 1; }
 .drive-topbar__status { align-items: center; border: 1px solid #dceaec; border-radius: 10px; color: #23393e; display: flex; flex: none; font-size: 13px; gap: 7px; height: 34px; padding: 0 13px; white-space: nowrap; }
-.drive-topbar__dot { background: var(--color-green); border-radius: 50%; flex: none; height: 7px; width: 7px; }
+.drive-topbar__dot { background: #e0a32e; border-radius: 50%; flex: none; height: 7px; width: 7px; }
+.drive-topbar__dot[data-ready="true"] { background: var(--color-green); }
 .drive-topbar__test { align-items: center; background: #fff; border: 1px solid #dceaec; border-radius: 10px; color: #23393e; cursor: pointer; display: inline-flex; flex: none; font-size: 13px; gap: 7px; height: 34px; padding: 0 13px; white-space: nowrap; }
 .drive-topbar__test:hover { border-color: #a2c8ce; }
 .drive-topbar__test .material-symbols-rounded { color: #566e73; font-size: 17px; }

@@ -11,7 +11,11 @@ from farm_fakes import FakeDrive
 from tests.server.fakes import FakeRunner
 from variant_maker.server import drive_config as dc
 from variant_maker.server.app import create_app
-from variant_maker.server.drive_oauth import OAuthTokenStore, build_authorization_url
+from variant_maker.server.drive_oauth import (
+    OAuthTokenStore,
+    build_authorization_url,
+    resolve_redirect_uri,
+)
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.workspace import Workspace
 
@@ -38,6 +42,33 @@ def test_oauth_token_store_roundtrip(tmp_path):
     assert oct(os.stat(path).st_mode)[-3:] == "600"
     store.clear()
     assert store.exists() is False
+
+
+def test_resolve_redirect_uri_ignores_live_pin_on_lab_host():
+    env = {
+        "VARIANT_DRIVE_OAUTH_REDIRECT_URI": (
+            "https://varyforge-studio-production.up.railway.app/api/drive/oauth/callback"
+        ),
+    }
+    assert resolve_redirect_uri(
+        env, request_base="https://varyforge-studio-lab.up.railway.app",
+    ) == "https://varyforge-studio-lab.up.railway.app/api/drive/oauth/callback"
+
+
+def test_resolve_redirect_uri_keeps_pin_on_matching_host():
+    pinned = "https://varyforge-studio-production.up.railway.app/api/drive/oauth/callback"
+    assert resolve_redirect_uri(
+        {"VARIANT_DRIVE_OAUTH_REDIRECT_URI": pinned},
+        request_base="https://varyforge-studio-production.up.railway.app",
+    ) == pinned
+
+
+def test_resolve_redirect_uri_keeps_pin_on_loopback_test_host():
+    pinned = "https://ui.example/api/drive/oauth/callback"
+    assert resolve_redirect_uri(
+        {"VARIANT_DRIVE_OAUTH_REDIRECT_URI": pinned},
+        request_base="http://testserver",
+    ) == pinned
 
 
 def test_build_authorization_url_includes_offline_and_scope():
@@ -157,6 +188,23 @@ def test_oauth_start_redirects_to_google(tmp_path):
     loc = resp.headers["location"]
     assert "accounts.google.com" in loc
     assert "test-client-id" in loc
+
+
+def test_oauth_start_on_lab_does_not_send_google_to_live(tmp_path):
+    client, _ = _oauth_app(tmp_path)
+    resp = client.get(
+        "/api/drive/oauth/start",
+        follow_redirects=False,
+        headers={
+            "x-forwarded-host": "varyforge-studio-lab.up.railway.app",
+            "x-forwarded-proto": "https",
+        },
+    )
+    loc = resp.headers["location"]
+    qs = parse_qs(urlparse(loc).query)
+    assert qs["redirect_uri"] == [
+        "https://varyforge-studio-lab.up.railway.app/api/drive/oauth/callback",
+    ]
 
 
 def test_oauth_start_503_when_client_not_configured(tmp_path):
