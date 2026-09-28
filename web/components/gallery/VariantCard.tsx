@@ -42,8 +42,8 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
 
   const topBadges = (
     <div className="gallery-tile__badges">
-      {variant.platform_result === "duplicate_reject" && (
-        <span className="gallery-tile__flag" title="Duplicate — flagged by the platform">
+      {(variant.platform_result === "duplicate_reject" || variant.platform_result === "flagged") && (
+        <span className="gallery-tile__flag" title="Flagged">
           ⚠
         </span>
       )}
