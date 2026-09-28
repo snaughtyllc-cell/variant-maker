@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hook-variants"
+version = "0.1.0"
+description = "Local CLI: one clip + one seed hook → 3–5 Edits/TikTok-native on-screen variants."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Varimo" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+hook-variants = "hook_variants.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hook_variants*"]
+
+[tool.setuptools.package-data]
+hook_variants = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: needs ffmpeg + bundled fonts",
+]
