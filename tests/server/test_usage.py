@@ -168,6 +168,35 @@ def test_period_fast_seconds_uses_real_work_and_skips_hq(tmp_path):
     assert seconds == 90
 
 
+def test_period_fast_seconds_includes_running_fast_job(tmp_path):
+    from types import SimpleNamespace
+
+    now = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    ws, done = _job(tmp_path, job_id="done1", delivered=2, requested=2)
+    done.telemetry = {"billed": {"real_work_s": 90}}
+    record_job(ws, done, now=now)
+    running = SimpleNamespace(
+        quality_mode="fast",
+        state="running",
+        created_utc=(now - timedelta(seconds=45)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        telemetry={"started_utc": (now - timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+    )
+    hq_live = SimpleNamespace(
+        quality_mode="hq",
+        state="running",
+        created_utc=(now - timedelta(seconds=120)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        telemetry={},
+    )
+    seconds = period_fast_seconds(
+        ws,
+        start=now - timedelta(days=1),
+        end=now + timedelta(hours=1),
+        jobs=[running, hq_live],
+        now=now,
+    )
+    assert seconds == 120
+
+
 def test_week_window_is_seven_days_inclusive(tmp_path):
     now = datetime(2026, 8, 28, 12, tzinfo=UTC)
     ws, edge = _job(tmp_path, job_id="edge", delivered=1)

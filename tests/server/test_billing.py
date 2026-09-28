@@ -5,6 +5,7 @@ from variant_maker.server.billing import (
     AGENCY_INCLUDED_FAST_HOURS,
     AGENCY_OVERAGE_USD_PER_HOUR,
     apply_stripe_event,
+    fast_hour_meter,
     get_plan,
     grant_paid_subscription,
     overage_snapshot,
@@ -49,6 +50,76 @@ def test_agency_hours_and_rate_are_env_overridable(monkeypatch):
     assert plan.overage_usd_per_hour == 0.80
     snap = overage_snapshot(plan, 11 * 3600)
     assert snap.overage_usd == 0.80
+
+
+def test_billing_meter_drains_while_a_fast_job_is_running(tmp_path):
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from variant_maker.server.billing import billing_status_payload
+    from variant_maker.server.jobs import Job, JobSource, VariantInfo
+    from variant_maker.server.tenants import BillingRecord
+    from variant_maker.server.usage import record_job
+    from variant_maker.server.workspace import Workspace
+
+    now = datetime(2026, 9, 10, 14, 0, tzinfo=UTC)
+    rec = BillingRecord(
+        email="ops@x.com",
+        plan="agency",
+        status="active",
+        period_start_utc="2026-09-01T00:00:00Z",
+        period_end_utc="2026-10-01T00:00:00Z",
+    )
+    ws = Workspace(str(tmp_path))
+    variants = [
+        VariantInfo(source_id="s1", index=1, filename="v01.mp4", status="ok", quality={"vmaf": 95.0}),
+    ]
+    finished = Job(
+        job_id="done1",
+        count=1,
+        created_utc="2026-09-10T12:00:00Z",
+        sources=[JobSource(source_id="s1", filename="a.mp4", requested=1, variants=variants)],
+        state="done",
+        quality_mode="fast",
+    )
+    finished.telemetry = {"billed": {"real_work_s": 3600}}
+    record_job(ws, finished, now=now - timedelta(hours=1))
+    running = SimpleNamespace(
+        quality_mode="fast",
+        state="running",
+        created_utc=(now - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        telemetry={},
+    )
+    payload = billing_status_payload(
+        rec=rec, workspace=ws, is_admin=False, jobs=[running], now=now,
+    )
+    assert payload["fast_seconds"] == 3600 + 1800
+    assert payload["usage"]["uncapped"] is False
+    assert payload["usage"]["tone"] == "included"
+    assert payload["usage"]["meter_line"] == "88.5 of 90h left"
+    assert payload["usage"]["hard_stop"] is False
+
+
+def test_fast_hour_meter_drains_to_zero_then_usage():
+    plan = get_plan("agency", environ={})
+    full = fast_hour_meter(plan, overage_snapshot(plan, 0))
+    assert full["uncapped"] is False
+    assert full["hard_stop"] is False
+    assert full["tone"] == "included"
+    assert full["remaining_pct"] == 100
+    assert full["meter_line"] == "90 of 90h left"
+    half = fast_hour_meter(plan, overage_snapshot(plan, 45 * 3600))
+    assert half["remaining_pct"] == 50
+    assert half["meter_line"] == "45 of 90h left"
+    floor = fast_hour_meter(plan, overage_snapshot(plan, 90 * 3600))
+    assert floor["remaining_pct"] == 0
+    assert floor["tone"] == "included"
+    assert floor["meter_line"] == "0 of 90h left"
+    over = fast_hour_meter(plan, overage_snapshot(plan, 91 * 3600))
+    assert over["tone"] == "usage"
+    assert over["remaining_pct"] == 0
+    assert over["meter_line"] == "Usage"
+    assert over["hard_stop"] is False
 
 
 def test_under_included_fast_hours_has_no_overage():
