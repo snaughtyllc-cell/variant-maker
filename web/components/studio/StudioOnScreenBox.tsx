@@ -123,6 +123,28 @@ function cueSeconds(value: unknown): number | undefined {
   return Math.round(Math.min(180, Math.max(0, number)) * 1000) / 1000;
 }
 
+export function clock(seconds: number) {
+  const whole = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(whole / 60);
+  const remain = whole % 60;
+  return `${minutes}:${String(remain).padStart(2, "0")}`;
+}
+
+export function trackWindow(show: number | undefined, hide: number | undefined, duration: number) {
+  const length = Math.max(0.5, duration);
+  const start = Math.min(length, Math.max(0, show ?? 0));
+  const end = hide === undefined ? length : Math.min(length, Math.max(start + 0.1, hide));
+  return { start, end };
+}
+
+export function cuesFromTrack(start: number, end: number, duration: number): { show?: number; hide?: number } {
+  const length = Math.max(0.5, duration);
+  const from = Math.min(length, Math.max(0, start));
+  const to = Math.min(length, Math.max(from + 0.1, end));
+  if (from <= 0.05 && to >= length - 0.05) return {};
+  return captionWindow(from <= 0.05 ? undefined : from, to >= length - 0.05 ? undefined : to);
+}
+
 export function captionWindow(show: unknown, hide: unknown): { show?: number; hide?: number } {
   const start = cueSeconds(show);
   let end = cueSeconds(hide);
@@ -382,13 +404,16 @@ export function StudioOnScreenBox({
   const [pickedPrints, setPickedPrints] = useState<string[]>([]);
   const [setupNote, setSetupNote] = useState("");
   const [playing, setPlaying] = useState("");
-  const [tool, setTool] = useState<"text" | "sound" | "setups">("text");
+  const [tool, setTool] = useState<"text" | "sound" | "ratio" | "setups">("text");
+  const [duration, setDuration] = useState(15);
   const [selectedSound, setSelectedSound] = useState("");
   const soundInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef("");
   const previewAudioRef = useRef<HTMLMediaElement | null>(null);
   const [sourceSize, setSourceSize] = useState<{ w: number; h: number } | null>(null);
   const [framePreset, setFramePreset] = useState<string | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const trackDrag = useRef<{ pointerId: number; mode: "start" | "end" | "move"; grab: number; show: number; hide: number } | null>(null);
   const clip = sources[Math.min(clipIndex, Math.max(0, sources.length - 1))];
   const draft = projects && clip ? (projects[clip.key] ?? emptyOnScreen()) : sharedDraft;
 
@@ -418,6 +443,7 @@ export function StudioOnScreenBox({
         if (cancel) return;
         setPoster(frame.poster);
         setSourceSize({ w: frame.width, h: frame.height });
+        setDuration(frame.duration > 0.2 ? frame.duration : 15);
       })
       .catch(() => {
         if (!cancel) {
@@ -643,6 +669,62 @@ export function StudioOnScreenBox({
       ...draft,
       captions: draft.captions.map((cap) => ({ ...cap, ...next })),
     });
+  }
+
+  function setWindow(index: number, start: number, end: number) {
+    const cues = cuesFromTrack(start, end, duration);
+    patchCaption(index, { show: cues.show, hide: cues.hide });
+  }
+
+  function onTrackPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const cap = draft.captions[0];
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!cap || !rect || rect.width <= 0) return;
+    const window = trackWindow(cap.show, cap.hide, duration);
+    const x = event.clientX;
+    const startX = rect.left + (window.start / duration) * rect.width;
+    const endX = rect.left + (window.end / duration) * rect.width;
+    const mode = Math.abs(x - startX) <= 16 ? "start" : Math.abs(x - endX) <= 16 ? "end" : x > startX && x < endX ? "move" : null;
+    if (!mode) return;
+    trackDrag.current = {
+      pointerId: event.pointerId,
+      mode,
+      grab: ((x - rect.left) / rect.width) * duration,
+      show: window.start,
+      hide: window.end,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function onTrackPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = trackDrag.current;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!drag || drag.pointerId !== event.pointerId || !rect || rect.width <= 0) return;
+    const seconds = ((event.clientX - rect.left) / rect.width) * duration;
+    if (drag.mode === "start") {
+      setWindow(0, Math.min(drag.hide - 0.2, Math.max(0, seconds)), drag.hide);
+      return;
+    }
+    if (drag.mode === "end") {
+      setWindow(0, drag.show, Math.max(drag.show + 0.2, Math.min(duration, seconds)));
+      return;
+    }
+    const span = drag.hide - drag.show;
+    let show = drag.show + (seconds - drag.grab);
+    let hide = show + span;
+    if (show < 0) {
+      show = 0;
+      hide = span;
+    }
+    if (hide > duration) {
+      hide = duration;
+      show = Math.max(0, duration - span);
+    }
+    setWindow(0, show, hide);
+  }
+
+  function onTrackPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (trackDrag.current?.pointerId === event.pointerId) trackDrag.current = null;
   }
 
   function setCue(index: number, key: "show" | "hide", raw: string) {
@@ -951,26 +1033,57 @@ export function StudioOnScreenBox({
                     </div>
                   </div>
                 </div>
-                <div className="studio-onscreen__frames" role="group" aria-label="Frame shape">
-                  <button
-                    type="button"
-                    className="studio-onscreen__clip"
-                    data-on={framePreset === null}
-                    onClick={() => setFramePreset(null)}
-                  >
-                    Source
-                  </button>
-                  {FRAME_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className="studio-onscreen__clip"
-                      data-on={framePreset === preset.id}
-                      onClick={() => setFramePreset(preset.id)}
-                    >
-                      {preset.id}
-                    </button>
-                  ))}
+                <div className="studio-onscreen__transport">
+                  <span className="material-symbols-rounded" aria-hidden="true">play_arrow</span>
+                  <span>0:00 / {clock(duration)}</span>
+                </div>
+                <div
+                  ref={trackRef}
+                  className="studio-onscreen__track"
+                  data-testid="caption-track"
+                  onPointerDown={onTrackPointerDown}
+                  onPointerMove={onTrackPointerMove}
+                  onPointerUp={onTrackPointerUp}
+                >
+                  {(() => {
+                    const cap = draft.captions[0];
+                    const span = trackWindow(cap?.show, cap?.hide, duration);
+                    const left = (span.start / duration) * 100;
+                    const width = Math.max(8, ((span.end - span.start) / duration) * 100);
+                    return (
+                      <div className="studio-onscreen__cue" style={{ left: `${left}%`, width: `${width}%` }}>
+                        {cap?.text || "Line"}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="studio-onscreen__track-times">
+                  <label className="studio-onscreen__start">
+                    <input
+                      type="number"
+                      min={0}
+                      max={180}
+                      step={0.1}
+                      inputMode="decimal"
+                      aria-label="Line 1 on from"
+                      placeholder="0"
+                      value={draft.captions[0]?.show ?? ""}
+                      onChange={(e) => setCue(0, "show", e.target.value)}
+                    />
+                  </label>
+                  <label className="studio-onscreen__start">
+                    <input
+                      type="number"
+                      min={0}
+                      max={180}
+                      step={0.1}
+                      inputMode="decimal"
+                      aria-label="Line 1 until"
+                      placeholder="end"
+                      value={draft.captions[0]?.hide ?? ""}
+                      onChange={(e) => setCue(0, "hide", e.target.value)}
+                    />
+                  </label>
                 </div>
                 {sources.length > 1 && (
                   <div className="studio-onscreen__clips" role="group" aria-label="Clip preview">
@@ -992,27 +1105,29 @@ export function StudioOnScreenBox({
                 {tool === "text" && (
                   <>
                     <div className="studio-onscreen__styles">
-                    <div className="studio-onscreen__looks" role="group" aria-label="Look">
+                    <div className="studio-onscreen__tiles" role="group" aria-label="Look">
                       {(
                         [
-                          ["classic", "Instagram sticker"],
-                          ["strong", "Strong"],
-                          ["caption-bar", "Snapchat bar"],
+                          ["classic", "Instagram sticker", "Sticker"],
+                          ["strong", "Strong", "Strong"],
+                          ["caption-bar", "Snapchat bar", "Snap"],
                         ] as const
-                      ).map(([style, label]) => (
+                      ).map(([style, name, label]) => (
                         <button
                           key={style}
                           type="button"
-                          className="studio-onscreen__look"
+                          className="studio-onscreen__tile"
+                          aria-label={name}
                           data-on={draft.look.style === style}
                           onClick={() => onChange({ ...draft, look: { ...draft.look, style } })}
                         >
-                          {label}
+                          <span className="studio-onscreen__tile-sample" data-look={style} aria-hidden="true">Aa</span>
+                          <span className="studio-onscreen__tile-name">{label}</span>
                         </button>
                       ))}
                     </div>
                     {draft.look.style !== "caption-bar" && (
-                      <div className="studio-onscreen__looks" role="group" aria-label="Background">
+                      <div className="studio-onscreen__tiles" role="group" aria-label="Background">
                         {(
                           [
                             ["solid", "Solid"],
@@ -1024,11 +1139,12 @@ export function StudioOnScreenBox({
                           <button
                             key={background}
                             type="button"
-                            className="studio-onscreen__look"
+                            className="studio-onscreen__tile"
                             data-on={draft.look.background === background}
                             onClick={() => onChange({ ...draft, look: { ...draft.look, background } })}
                           >
-                            {label}
+                            <span className="studio-onscreen__tile-sample" data-look={background} aria-hidden="true">Aa</span>
+                            <span className="studio-onscreen__tile-name">{label}</span>
                           </button>
                         ))}
                       </div>
@@ -1084,36 +1200,38 @@ export function StudioOnScreenBox({
                             style={{ fontSize: 16 }}
                             onChange={(e) => patchCaption(index, { text: e.target.value })}
                           />
-                          <div className="studio-onscreen__timing">
-                            <label className="studio-onscreen__start">
-                              On from
-                              <input
-                                type="number"
-                                min={0}
-                                max={180}
-                                step={0.1}
-                                inputMode="decimal"
-                                aria-label={`Line ${index + 1} on from`}
-                                placeholder="0"
-                                value={cap.show ?? ""}
-                                onChange={(e) => setCue(index, "show", e.target.value)}
-                              />
-                            </label>
-                            <label className="studio-onscreen__start">
-                              until
-                              <input
-                                type="number"
-                                min={0}
-                                max={180}
-                                step={0.1}
-                                inputMode="decimal"
-                                aria-label={`Line ${index + 1} until`}
-                                placeholder="end"
-                                value={cap.hide ?? ""}
-                                onChange={(e) => setCue(index, "hide", e.target.value)}
-                              />
-                            </label>
-                          </div>
+                          {index > 0 && (
+                            <div className="studio-onscreen__timing">
+                              <label className="studio-onscreen__start">
+                                On from
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={180}
+                                  step={0.1}
+                                  inputMode="decimal"
+                                  aria-label={`Line ${index + 1} on from`}
+                                  placeholder="0"
+                                  value={cap.show ?? ""}
+                                  onChange={(e) => setCue(index, "show", e.target.value)}
+                                />
+                              </label>
+                              <label className="studio-onscreen__start">
+                                until
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={180}
+                                  step={0.1}
+                                  inputMode="decimal"
+                                  aria-label={`Line ${index + 1} until`}
+                                  placeholder="end"
+                                  value={cap.hide ?? ""}
+                                  onChange={(e) => setCue(index, "hide", e.target.value)}
+                                />
+                              </label>
+                            </div>
+                          )}
                           <div className="studio-onscreen__slots" role="group" aria-label={`Colors for line ${index + 1}`}>
                             {draft.boxes.map((box) => {
                               const meta = BOX_COLORS.find((color) => color.id === box.id);
@@ -1166,6 +1284,29 @@ export function StudioOnScreenBox({
                       )}
                     </div>
                   </>
+                )}
+                {tool === "ratio" && (
+                  <div className="studio-onscreen__frames" role="group" aria-label="Frame shape">
+                    <button
+                      type="button"
+                      className="studio-onscreen__clip"
+                      data-on={framePreset === null}
+                      onClick={() => setFramePreset(null)}
+                    >
+                      Source
+                    </button>
+                    {FRAME_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className="studio-onscreen__clip"
+                        data-on={framePreset === preset.id}
+                        onClick={() => setFramePreset(preset.id)}
+                      >
+                        {preset.id}
+                      </button>
+                    ))}
+                  </div>
                 )}
                 {tool === "sound" && (
                   <>
@@ -1301,6 +1442,7 @@ export function StudioOnScreenBox({
                   [
                     ["text", "title", "Text"],
                     ["sound", "music_note", "Sound"],
+                    ["ratio", "aspect_ratio", "Ratio"],
                     ["setups", "bookmark", "Setups"],
                   ] as const
                 ).map(([id, icon, label]) => (

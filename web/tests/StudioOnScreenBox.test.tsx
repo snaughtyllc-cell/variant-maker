@@ -9,7 +9,10 @@ import {
   emptyOnScreen,
   frameAspect,
   printPlan,
+  clock,
+  cuesFromTrack,
   projectFromDraft,
+  trackWindow,
   rectFromPoints,
   seatStyle,
   textFitWarning,
@@ -194,6 +197,14 @@ describe("on-screen project", () => {
     expect(frameAspect(null).css).toBe("9 / 16");
   });
 
+  it("turns a timeline drag into the caption window", () => {
+    expect(trackWindow(undefined, undefined, 8)).toEqual({ start: 0, end: 8 });
+    expect(trackWindow(1, 5, 8)).toEqual({ start: 1, end: 5 });
+    expect(cuesFromTrack(0, 8, 8)).toEqual({});
+    expect(cuesFromTrack(1, 5, 8)).toEqual({ show: 1, hide: 5 });
+    expect(clock(65)).toBe("1:05");
+  });
+
   it("turns a drag into a rectangle", () => {
     const rect = rectFromPoints(0.4, 0.5, 0.1, 0.2);
     expect(rect.x).toBeCloseTo(0.1);
@@ -320,6 +331,7 @@ describe("phone box drawer", () => {
     const phone = screen.getByTestId("onscreen-phone");
     expect(phone.style.aspectRatio).toBe("1920 / 1080");
     expect(phone.textContent).not.toContain("Header");
+    fireEvent.click(screen.getByRole("tab", { name: "Ratio" }));
     fireEvent.click(screen.getByRole("button", { name: "9:16" }));
     expect(phone.style.aspectRatio).toBe("9 / 16");
     expect(phone.textContent).toContain("Header");
