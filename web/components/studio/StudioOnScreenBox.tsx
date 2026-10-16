@@ -829,6 +829,9 @@ export function StudioOnScreenBox({
           <Dialog.Overlay className="studio-onscreen__overlay" />
           <Dialog.Content className="studio-onscreen__sheet" aria-describedby={undefined}>
             <div className="studio-onscreen__sheet-head">
+              <Dialog.Close className="studio-onscreen__back" type="button" aria-label="Close">
+                <span className="material-symbols-rounded" aria-hidden="true">close</span>
+              </Dialog.Close>
               <Dialog.Title className="studio-onscreen__title">Edit</Dialog.Title>
               <Dialog.Close className="studio-onscreen__done" type="button">Done</Dialog.Close>
             </div>
@@ -1068,13 +1071,6 @@ export function StudioOnScreenBox({
                       </div>
                     )}
                     {fitWarning ? <p className="studio-onscreen__hint" role="status">{fitWarning}</p> : null}
-                    <p className="studio-onscreen__hint">
-                      {draft.chooseSeats
-                        ? "Tap the seats that look right on this clip. One seat keeps every variant there. Two or more take turns."
-                        : "Drag the words on the clip. The first variant matches this preview. The others keep that look and move inside the box."}
-                      {draft.captions[0]?.lines === "both" ? " This pack uses both a one-line and a two-line version." : ""}
-                      {" On from and until set when the line is on the video. Leave until empty and it stays to the end. The preview keeps the words so you can place them."}
-                    </p>
                     <div className="studio-onscreen__lines">
                       {draft.captions.map((cap, index) => (
                         <div key={cap.id} className="studio-onscreen__line" data-testid="studio-onscreen-line">
@@ -1173,9 +1169,7 @@ export function StudioOnScreenBox({
                 )}
                 {tool === "sound" && (
                   <>
-                    <p className="studio-onscreen__hint">
-                      Add up to 4 sounds you are allowed to use. A video works too — only its sound is kept. The pack takes turns. Variant 1 uses the one you play. Under the voice keeps the talking. Replace drops the original audio.
-                    </p>
+                    <p className="studio-onscreen__hint">Up to 4 sounds. A video keeps only its sound.</p>
                     <div className="studio-onscreen__looks" role="listbox" aria-label="Sounds">
                       {audios.map((audio) => (
                         <button
@@ -1237,15 +1231,13 @@ export function StudioOnScreenBox({
                         </div>
                       </div>
                     ) : (
-                      <p className="studio-onscreen__hint">Add a sound, or a video that already has the sound you want.</p>
+                      <p className="studio-onscreen__hint">Add a sound.</p>
                     )}
                   </>
                 )}
                 {tool === "setups" && (
                   <>
-                    <p className="studio-onscreen__hint">
-                      Save a winning box, words, seats, and sounds. Check up to 5 to print them on this clip.
-                    </p>
+                    <p className="studio-onscreen__hint">Save this edit. Check up to 5 to print.</p>
                     <div className="studio-onscreen__sound-row">
                       <input
                         className="studio-onscreen__name"

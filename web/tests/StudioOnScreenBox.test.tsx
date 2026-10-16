@@ -336,6 +336,9 @@ describe("phone box drawer", () => {
     const css = readFileSync(resolve(__dirname, "../app/globals.css"), "utf8");
     expect(css).toMatch(/\.studio-onscreen__panel > \* \{[^}]*flex:\s*0 0 auto/s);
     expect(css).toMatch(/\.studio-onscreen__styles \{[^}]*position:\s*sticky/s);
+    expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*height:\s*100dvh/s);
+    expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*width:\s*100%/s);
+    expect(css).not.toMatch(/\.studio-onscreen__sheet \{[^}]*width:\s*420px/s);
   });
 
   it("keeps text tools up and opens sound from the dock", () => {
