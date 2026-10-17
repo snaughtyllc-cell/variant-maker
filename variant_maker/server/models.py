@@ -506,6 +506,18 @@ class CaptionPreviewOut(BaseModel):
     captions: list[str] = []
 
 
+class UsageMeterOut(BaseModel):
+    uncapped: bool = False
+    hard_stop: bool = False
+    tone: Literal["included", "usage"] = "included"
+    remaining_pct: int = 0
+    meter_line: str | None = None
+    label: str | None = None
+    included_fast_hours: float | None = None
+    remaining_fast_seconds: float | None = None
+    overage_fast_seconds: float | None = None
+
+
 class AuthMeOut(BaseModel):
     auth_required: bool
     email: str | None = None
@@ -518,6 +530,7 @@ class AuthMeOut(BaseModel):
     is_admin: bool = False
     has_password: bool = False
     experience: Literal["solo", "agency"] = "agency"
+    usage: UsageMeterOut | None = None
 
 
 class PasswordLoginIn(BaseModel):

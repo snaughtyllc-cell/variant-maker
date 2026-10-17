@@ -153,4 +153,42 @@ describe("SideNav", () => {
     expect(screen.getByTitle("ops@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
   });
+
+  it("hides the Fast-hour bar for testers without a paid meter", () => {
+    render(<SideNav />);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("drains Agency Fast hours and flips to Usage after the included block", () => {
+    me.data = {
+      ...BASE,
+      usage: {
+        uncapped: false,
+        hard_stop: false,
+        tone: "included",
+        remaining_pct: 50,
+        meter_line: "45 of 90h left",
+      },
+    };
+    const { rerender } = render(<SideNav />);
+    const bar = screen.getByRole("progressbar", { name: "Fast hours remaining" });
+    expect(bar).toHaveAttribute("aria-valuenow", "50");
+    expect(screen.getByText("45 of 90h left")).toBeInTheDocument();
+    me.data = {
+      ...BASE,
+      usage: {
+        uncapped: false,
+        hard_stop: false,
+        tone: "usage",
+        remaining_pct: 0,
+        meter_line: "Usage",
+      },
+    };
+    rerender(<SideNav />);
+    expect(screen.getByRole("progressbar", { name: "Fast hour usage" })).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+    expect(screen.getByText("Usage")).toBeInTheDocument();
+  });
 });
