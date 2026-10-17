@@ -439,6 +439,12 @@ color after the pack needs more difference. Do not put on copy 1. Also
 ranked: framing vocabulary (hold / slide / settle, same keep); motion-only
 rebuild kernels. AQMTp stays parked. How-to page and Telegram: later.
 
+**Agency ideas (2026-09-13).** Capture:
+`docs/ops/agency-ideas-2026-09-13.md`. Thesis: one asset, many accounts.
+How-to next (Live) — no SHA/AAC/SEI. Then API/MCP handoff for OFM
+(plug into their AI + Repurpose/Buffer). HQ reconstruct-first **is**
+the upscaler; no Fast 720→1080. G-Lark and face-swap cut.
+
 **Product bar:** look as close to the original as possible; file as original
 as possible (SHA, AAC never copy, empty encoder, no SEI). Harder look only
 when uniqueness needs it.
