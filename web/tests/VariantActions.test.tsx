@@ -41,20 +41,19 @@ afterEach(() => {
 });
 
 describe("VariantActions customer actions", () => {
-  it("keeps Pass and Flag, without duplicate / manifest chrome", () => {
+  it("keeps Pass and Flag as real marks, without duplicate / manifest chrome", () => {
     render(<VariantActions sourceId="s1" variant={variant()} onRegenerate={() => {}} />);
-    expect(screen.getByText("Pass")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Flag$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Pass$/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^Flag$/ })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("link", { name: /Download/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Duplicate rejected/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Passed upload/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /View manifest/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/unlabeled = pass/i)).toBeInTheDocument();
-    expect(screen.getByText(/stuck|views aren.t moving/i)).toBeInTheDocument();
+    expect(screen.getByText(/mark pass when the post stays up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/unlabeled = pass/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("platform-result-badge")).not.toBeInTheDocument();
   });
 
-  it("does not show Flagged or Passed badges on an unlabeled copy", () => {
+  it("shows which mark is saved", () => {
     const { rerender } = render(
       <VariantActions
         sourceId="s1"
@@ -62,8 +61,8 @@ describe("VariantActions customer actions", () => {
         onRegenerate={() => {}}
       />,
     );
-    expect(screen.queryByTestId("platform-result-badge")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Passed upload/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Pass$/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("platform-result-badge")).toHaveTextContent(/passed/i);
     rerender(
       <VariantActions
         sourceId="s1"
@@ -71,12 +70,17 @@ describe("VariantActions customer actions", () => {
         onRegenerate={() => {}}
       />,
     );
-    expect(screen.getByTestId("platform-result-badge")).toHaveTextContent(/stuck/i);
+    expect(screen.getByRole("button", { name: /^Flag$/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("platform-result-badge")).toHaveTextContent(/flagged/i);
   });
 
-  it("saves flagged when the operator marks a stuck post", async () => {
+  it("saves passed and flagged", async () => {
     const onRegenerate = vi.fn();
     render(<VariantActions sourceId="s1" variant={variant()} onRegenerate={onRegenerate} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Pass$/ }));
+    await waitFor(() => {
+      expect(setPlatformResult).toHaveBeenCalledWith("s1", 1, "passed");
+    });
     fireEvent.click(screen.getByRole("button", { name: /^Flag$/ }));
     await waitFor(() => {
       expect(setPlatformResult).toHaveBeenCalledWith("s1", 1, "flagged");

@@ -42,7 +42,7 @@ describe("VariantCard platform badges", () => {
     expect(screen.queryByText("⚑")).not.toBeInTheDocument();
   });
 
-  it("does not show a flagged chip to customers", () => {
+  it("shows a flagged mark on the tile", () => {
     render(
       <VariantCard
         variant={variant({ platform_result: "flagged" })}
@@ -52,9 +52,7 @@ describe("VariantCard platform badges", () => {
         onToggle={() => {}}
       />,
     );
-    expect(screen.queryByTitle("Flagged")).not.toBeInTheDocument();
-    expect(screen.queryByText("⚑")).not.toBeInTheDocument();
-    expect(screen.queryByText("✓")).not.toBeInTheDocument();
+    expect(screen.getByTitle(/flagged/i)).toBeInTheDocument();
   });
 
   it("keeps a duplicate-reject mark", () => {
