@@ -206,3 +206,26 @@ def test_tune_clamps_start_into_bounds():
 
     autotune.tune(attempt, target=DEFAULT_TARGET, lo=1.2, hi=1.8, max_iters=1)
     assert seen == [1.2]
+
+
+def test_tune_preserves_copyid_heads():
+    """Fast reconstructs uniqueness from tune() — heads must not be stripped."""
+    heads = {
+        "audio": {"sim": 0.74, "available": True, "uniqueness": 0.26},
+        "visual": {"available": False, "sim": None},
+    }
+
+    def attempt(strength):
+        return {
+            "passed": True,
+            "uniqueness": 0.5,
+            "uniqueness_status": "ok",
+            "heads": heads,
+            "copyid_mode": "record",
+            "strength": strength,
+        }
+
+    out = autotune.tune(attempt, target=DEFAULT_TARGET, stop_on_clear=True, max_iters=1)
+    assert out["heads"]["audio"]["sim"] == 0.74
+    assert out["heads"]["visual"]["available"] is False
+    assert out["copyid_mode"] == "record"

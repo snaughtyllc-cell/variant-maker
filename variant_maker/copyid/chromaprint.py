@@ -82,6 +82,9 @@ def _fpcalc_via_ffmpeg(path: str, *, length: int = 120) -> list[int]:
     Slim Fast installs ``fpcalc`` (``libchromaprint-tools``) but its libav
     often cannot open the BtbN static-ffmpeg mp4s we actually render. Lab
     pack 3d4fae98ca77 scored audio ``available: false`` that way.
+
+    Write a temp wav (not stdin). Debian fpcalc still needs a real file after
+    our decode; piping ``ffmpeg | fpcalc -`` is not reliable on that image.
     """
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:

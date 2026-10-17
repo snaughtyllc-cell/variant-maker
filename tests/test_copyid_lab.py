@@ -58,3 +58,23 @@ def test_lab_sscd_identical_frames_high_sim():
         r = score_visual(a, b, backend, n_frames=4)
         assert r["available"] is True
         assert r["sim"] is not None and r["sim"] > 0.7
+
+
+def test_lab_calibrate_generic_reencode_vs_unrelated():
+    """Controls on lavfi clips — not the old talking-head look packs."""
+    _skip_unless_lab()
+    from variant_maker.copyid.calibrate import calibrate_paths
+
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, "src.mp4")
+        reenc = os.path.join(d, "reenc.mp4")
+        unrel = os.path.join(d, "unrel.mp4")
+        _clip(src, lavfi="testsrc=size=320x240:rate=8:duration=1", has_audio=True)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", src, "-c:v", "libx264", "-c:a", "aac", reenc],
+            check=True, capture_output=True,
+        )
+        _clip(unrel, lavfi="color=c=red:s=320x240:d=1", has_audio=True)
+        r = calibrate_paths(src, reenc, unrel)
+        assert r["ssim"]["available"] is True
+        assert r["ssim"]["reencode"] < r["ssim"]["unrelated"]
