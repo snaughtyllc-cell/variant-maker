@@ -1,0 +1,2150 @@
+From 883415a697548a40274ecb6761c872fe9912c54a Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Thu, 10 Sep 2026 13:22:09 +0000
+Subject: [PATCH] =?UTF-8?q?feat(studio):=20Agency=20paywall=20on=20Live=20?=
+ =?UTF-8?q?=E2=80=94=20$200,=2090=20Fast=20hours,=20no=20hard=20stop?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Copy the Lab Stripe checkout + auto-enroll path onto Live without merging
+repos. /pricing starts Agency Checkout; webhook invites the payer.
+Paid first login creates an Agency workspace (uncapped). Typical Fast
+20-pack copy is ~10 minutes / 540 packs. Do not put Fast COGS on the site.
+---
+ deploy/railway/studio.env.example      |  16 +
+ pyproject.toml                         |   1 +
+ tests/server/test_billing.py           | 152 +++++++++
+ tests/server/test_billing_api.py       | 158 +++++++++
+ tests/server/test_plans.py             |  10 +-
+ variant_maker/server/app.py            |  20 +-
+ variant_maker/server/auth_app.py       |   3 +
+ variant_maker/server/billing.py        | 448 +++++++++++++++++++++++++
+ variant_maker/server/billing_api.py    | 149 ++++++++
+ variant_maker/server/plans.py          |  18 +-
+ variant_maker/server/stripe_billing.py | 117 +++++++
+ variant_maker/server/tenants.py        | 152 ++++++++-
+ web/app/api/billing/webhook/route.ts   |  33 ++
+ web/app/globals.css                    |   1 +
+ web/app/login/page.tsx                 |  17 +-
+ web/app/pricing/page.tsx               |  25 ++
+ web/components/auth/AuthGate.tsx       |  12 +-
+ web/components/auth/LoginForm.tsx      |  24 +-
+ web/components/auth/PricingCard.tsx    | 151 +++++++++
+ web/lib/__tests__/api.test.ts          |  21 ++
+ web/lib/api.ts                         |  15 +
+ web/lib/studioDestinations.ts          |   9 +-
+ web/lib/types.ts                       |  36 ++
+ web/tests/AuthGate.test.tsx            |  27 ++
+ web/tests/LoginForm.test.tsx           |  11 +-
+ web/tests/PricingCard.test.tsx         |  67 ++++
+ 26 files changed, 1652 insertions(+), 41 deletions(-)
+ create mode 100644 tests/server/test_billing.py
+ create mode 100644 tests/server/test_billing_api.py
+ create mode 100644 variant_maker/server/billing.py
+ create mode 100644 variant_maker/server/billing_api.py
+ create mode 100644 variant_maker/server/stripe_billing.py
+ create mode 100644 web/app/api/billing/webhook/route.ts
+ create mode 100644 web/app/pricing/page.tsx
+ create mode 100644 web/components/auth/PricingCard.tsx
+ create mode 100644 web/tests/PricingCard.test.tsx
+
+diff --git a/deploy/railway/studio.env.example b/deploy/railway/studio.env.example
+index d5f7300..abc07fc 100644
+--- a/deploy/railway/studio.env.example
++++ b/deploy/railway/studio.env.example
+@@ -40,6 +40,22 @@ DATA_DIR=/data/vmdata
+ # Optional override; default is {PUBLIC_URL}/api/auth/google/callback
+ # VARIANT_AUTH_OAUTH_REDIRECT_URI=https://varyforge-studio-production.up.railway.app/api/auth/google/callback
+ 
++# --- Stripe paywall (Agency $200 → auto-invite, no paste) ---
++# Restricted key (rk_) preferred over sk_. Webhook URL:
++#   https://<studio>/api/billing/webhook
++# Events: checkout.session.completed, checkout.session.async_payment_succeeded,
++# customer.subscription.updated, customer.subscription.deleted
++# Dashboard: one Product "Agency" with a $200/month Price. Paste the price id.
++# Do not set automatic_tax until a Stripe Tax registration is active.
++# STRIPE_RESTRICTED_KEY=
++# STRIPE_WEBHOOK_SECRET=
++# STRIPE_PRICE_AGENCY=price_...
++# Optional: landing-site origins allowed to POST /api/billing/checkout (comma-separated).
++# VARIANT_BILLING_CHECKOUT_ORIGINS=https://varimo.io
++# Agency Fast included hours / overage sell rate (COGS stays $0.58/hr, not public).
++# VARIANT_PLAN_AGENCY_FAST_HOURS=90
++# VARIANT_PLAN_AGENCY_OVERAGE_USD=0.75
++
+ # --- Google Drive export (optional) ---
+ # VARIANT_DRIVE_OAUTH_CLIENT_ID=
+ # VARIANT_DRIVE_OAUTH_CLIENT_SECRET=
+diff --git a/pyproject.toml b/pyproject.toml
+index 76ae2d7..34d3199 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -19,6 +19,7 @@ server = [
+     "sse-starlette>=2.1",
+     "python-multipart>=0.0.9",
+     "httpx>=0.27",
++    "stripe>=12.5",
+ ]
+ serverless = ["boto3>=1.34"]
+ 
+diff --git a/tests/server/test_billing.py b/tests/server/test_billing.py
+new file mode 100644
+index 0000000..fd943de
+--- /dev/null
++++ b/tests/server/test_billing.py
+@@ -0,0 +1,152 @@
++"""Agency overage math + paid-grant invite (no Stripe SDK)."""
++from __future__ import annotations
++
++from variant_maker.server.billing import (
++    AGENCY_INCLUDED_FAST_HOURS,
++    AGENCY_OVERAGE_USD_PER_HOUR,
++    FAST_USD_PER_HOUR,
++    apply_stripe_event,
++    get_plan,
++    grant_paid_subscription,
++    overage_snapshot,
++    typical_fast20_throughput,
++)
++from variant_maker.server.tenants import TenantStore, provision_login
++
++
++def test_agency_includes_ninety_fast_hours_by_default():
++    """Product lock: $200 Agency includes 90 Fast hours, not the first-cut 40."""
++    assert AGENCY_INCLUDED_FAST_HOURS == 90
++    plan = get_plan("agency", environ={})
++    assert plan.included_fast_hours == 90
++    packs, copies = typical_fast20_throughput(90)
++    assert packs == 540
++    assert copies == 10800
++
++
++def test_agency_overage_is_worker_hours_not_per_pack():
++    plan = get_plan("agency")
++    assert plan.price_usd == 200
++    assert plan.included_fast_hours == AGENCY_INCLUDED_FAST_HOURS
++    assert plan.overage_usd_per_hour == AGENCY_OVERAGE_USD_PER_HOUR
++    assert plan.cogs_fast_usd_per_hour == FAST_USD_PER_HOUR
++    assert plan.overage_usd_per_hour > plan.cogs_fast_usd_per_hour
++    included = overage_snapshot(plan, AGENCY_INCLUDED_FAST_HOURS * 3600)
++    assert included.overage_fast_seconds == 0
++    assert included.overage_usd == 0
++    assert included.remaining_fast_seconds == 0
++    hour_over = overage_snapshot(plan, (AGENCY_INCLUDED_FAST_HOURS + 1) * 3600)
++    assert hour_over.overage_fast_seconds == 3600
++    assert hour_over.overage_usd == AGENCY_OVERAGE_USD_PER_HOUR
++
++
++def test_agency_hours_and_rate_are_env_overridable(monkeypatch):
++    plan = get_plan("agency", environ={
++        "VARIANT_PLAN_AGENCY_FAST_HOURS": "10",
++        "VARIANT_PLAN_AGENCY_OVERAGE_USD": "0.80",
++    })
++    assert plan.included_fast_hours == 10
++    assert plan.overage_usd_per_hour == 0.80
++    snap = overage_snapshot(plan, 11 * 3600)
++    assert snap.overage_usd == 0.80
++
++
++def test_under_included_fast_hours_has_no_overage():
++    snap = overage_snapshot(get_plan("agency"), 1000)
++    assert snap.overage_usd == 0
++    assert snap.remaining_fast_seconds == AGENCY_INCLUDED_FAST_HOURS * 3600 - 1000
++
++
++def test_paid_grant_invites_unknown_email(tmp_path):
++    store = TenantStore(str(tmp_path / "tenants.json"))
++    assert grant_paid_subscription(store, email="ops@X.com", plan="agency") == "invited"
++    inv = store.list_invites()
++    assert len(inv) == 1
++    assert inv[0].email == "ops@x.com"
++    assert inv[0].kind == "new_workspace"
++    bill = store.get_billing("ops@x.com")
++    assert bill is not None
++    assert bill.plan == "agency"
++    assert bill.status == "active"
++    assert bill.workspace_id is None
++
++
++def test_paid_grant_is_idempotent_and_does_not_duplicate_invite(tmp_path):
++    store = TenantStore(str(tmp_path / "tenants.json"))
++    grant_paid_subscription(
++        store, email="ops@x.com", stripe_checkout_session_id="cs_1",
++    )
++    grant_paid_subscription(
++        store, email="ops@x.com", stripe_checkout_session_id="cs_1",
++        stripe_subscription_id="sub_1",
++    )
++    assert len(store.list_invites()) == 1
++    bill = store.get_billing("ops@x.com")
++    assert bill is not None
++    assert bill.stripe_subscription_id == "sub_1"
++
++
++def test_first_sign_in_after_payment_creates_workspace_and_binds_billing(tmp_path):
++    store = TenantStore(str(tmp_path / "t.json"))
++    grant_paid_subscription(store, email="ops@x.com")
++    user = provision_login(
++        store, email="ops@x.com", name="Ops", admin_email="jeff@x.com",
++    )
++    assert user is not None and user.role == "owner"
++    bill = store.get_billing("ops@x.com")
++    assert bill is not None
++    assert bill.workspace_id == user.workspace_id
++    assert store.get_billing_for_workspace(user.workspace_id) is not None
++    ws = store.get_workspace(user.workspace_id)
++    assert ws is not None and ws.plan == "agency"
++
++
++def test_checkout_completed_webhook_invites(tmp_path):
++    store = TenantStore(str(tmp_path / "t.json"))
++    action = apply_stripe_event(store, {
++        "type": "checkout.session.completed",
++        "data": {
++            "object": {
++                "id": "cs_1",
++                "payment_status": "paid",
++                "customer": "cus_1",
++                "subscription": "sub_1",
++                "customer_details": {"email": "buyer@x.com"},
++                "metadata": {"plan": "agency"},
++            }
++        },
++    })
++    assert action == "invited"
++    assert store.get_billing("buyer@x.com").stripe_customer_id == "cus_1"
++
++
++def test_unpaid_checkout_does_not_invite(tmp_path):
++    store = TenantStore(str(tmp_path / "t.json"))
++    action = apply_stripe_event(store, {
++        "type": "checkout.session.completed",
++        "data": {
++            "object": {
++                "id": "cs_unpaid",
++                "payment_status": "unpaid",
++                "customer_email": "nope@x.com",
++            }
++        },
++    })
++    assert action == "unpaid"
++    assert store.list_invites() == []
++    assert store.get_billing("nope@x.com") is None
++
++
++def test_subscription_canceled_does_not_drop_the_login(tmp_path):
++    store = TenantStore(str(tmp_path / "t.json"))
++    grant_paid_subscription(
++        store, email="ops@x.com", stripe_subscription_id="sub_1",
++    )
++    provision_login(store, email="ops@x.com", name="Ops", admin_email="jeff@x.com")
++    action = apply_stripe_event(store, {
++        "type": "customer.subscription.deleted",
++        "data": {"object": {"id": "sub_1", "status": "canceled", "customer": "cus_1"}},
++    })
++    assert action == "canceled"
++    assert store.get_user("ops@x.com") is not None
++    assert store.get_billing("ops@x.com").status == "canceled"
+diff --git a/tests/server/test_billing_api.py b/tests/server/test_billing_api.py
+new file mode 100644
+index 0000000..aac5002
+--- /dev/null
++++ b/tests/server/test_billing_api.py
+@@ -0,0 +1,158 @@
++"""Stripe Checkout + webhook: pay → invite, no Jeff paste."""
++from __future__ import annotations
++
++import json
++
++from fastapi.testclient import TestClient
++
++from tests.server.fakes import FakeRunner
++from tests.server.test_auth_app import ADMIN, _password_login
++from variant_maker.server.app import create_app
++from variant_maker.server.billing import get_plan
++from variant_maker.server.jobs import JobStore
++from variant_maker.server.stripe_billing import checkout_session_params
++from variant_maker.server.workspace import Workspace
++
++
++class FakeStripeGateway:
++    def __init__(self) -> None:
++        self.sessions: list[dict] = []
++        self.valid_sig = "t=1,v1=valid"
++
++    def create_checkout_session(self, params: dict) -> dict:
++        assert "payment_method_types" not in params
++        assert "automatic_tax" not in params
++        self.sessions.append(params)
++        return {"id": "cs_test_1", "url": "https://checkout.stripe.com/c/pay/cs_test_1"}
++
++    def parse_webhook(self, payload: bytes, sig: str) -> dict:
++        if sig != self.valid_sig:
++            raise ValueError("bad signature")
++        return json.loads(payload.decode("utf-8"))
++
++
++def _billing_client(tmp_path, *, gateway=None, extra_env=None):
++    from variant_maker.server.drive_config import ENV_OAUTH_CLIENT_ID, ENV_OAUTH_CLIENT_SECRET
++    from variant_maker.server.tenants import ADMIN_EMAIL_ENV
++
++    env = {
++        ADMIN_EMAIL_ENV: ADMIN,
++        "VARIANT_AUTH_SECRET": "test-auth-secret",
++        ENV_OAUTH_CLIENT_ID: "test-client-id",
++        ENV_OAUTH_CLIENT_SECRET: "test-client-secret",
++        "STRIPE_PRICE_AGENCY": "price_agency_test",
++    }
++    if extra_env:
++        env.update(extra_env)
++    gw = gateway if gateway is not None else FakeStripeGateway()
++    app = create_app(
++        JobStore(Workspace(str(tmp_path)), FakeRunner({})),
++        hydrate=False,
++        auth_environ=env,
++        oauth_environ=env,
++        sa_json_path="",
++        stripe_gateway=gw,
++        billing_environ=env,
++    )
++    return TestClient(app), gw, env
++
++
++def test_checkout_params_omit_payment_method_types_and_tax():
++    plan = get_plan("agency")
++    params = checkout_session_params(
++        email="Ops@X.com",
++        plan=plan,
++        price_id="price_1",
++        success_url="https://studio.test/login?paid=1",
++        cancel_url="https://studio.test/pricing",
++    )
++    assert "payment_method_types" not in params
++    assert "automatic_tax" not in params
++    assert params["mode"] == "subscription"
++    assert params["customer_email"] == "ops@x.com"
++    assert params["metadata"]["plan"] == "agency"
++    assert params["integration_identifier"].startswith("varyforge_agency_")
++    assert params["line_items"] == [{"price": "price_1", "quantity": 1}]
++
++
++def test_plans_are_public_and_checkout_starts_session(tmp_path):
++    client, gw, _env = _billing_client(tmp_path)
++    plans = client.get("/api/billing/plans")
++    assert plans.status_code == 200
++    body = plans.json()
++    assert body["configured"] is True
++    assert body["plans"][0]["id"] == "agency"
++    assert body["plans"][0]["included_fast_hours"] == 90
++    assert body["plans"][0]["overage_usd_per_hour"] == 0.75
++    assert body["plans"][0]["typical_fast20_minutes"] == 10
++    assert body["plans"][0]["typical_fast20_packs"] == 540
++    assert body["plans"][0]["typical_fast20_copies"] == 10800
++    resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com", "plan": "agency"})
++    assert resp.status_code == 200
++    assert resp.json()["url"].startswith("https://checkout.stripe.com/")
++    assert gw.sessions[0]["customer_email"] == "buyer@x.com"
++    assert "payment_method_types" not in gw.sessions[0]
++
++
++def test_checkout_is_public_when_auth_is_on(tmp_path):
++    client, _gw, _env = _billing_client(tmp_path)
++    # No session cookie — still 200, not 401.
++    resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com"})
++    assert resp.status_code == 200
++
++
++def test_webhook_without_signature_does_not_invite(tmp_path):
++    client, _gw, _env = _billing_client(tmp_path)
++    event = {
++        "type": "checkout.session.completed",
++        "data": {"object": {
++            "id": "cs_1", "payment_status": "paid",
++            "customer_email": "buyer@x.com", "metadata": {"plan": "agency"},
++        }},
++    }
++    resp = client.post(
++        "/api/billing/webhook",
++        content=json.dumps(event),
++        headers={"content-type": "application/json"},
++    )
++    assert resp.status_code == 400
++    denied = _password_login(client, "buyer@x.com", "secret12")
++    assert denied.status_code == 401
++
++
++def test_paid_webhook_lets_them_set_a_password_without_jeff(tmp_path):
++    client, gw, _env = _billing_client(tmp_path)
++    event = {
++        "type": "checkout.session.completed",
++        "data": {"object": {
++            "id": "cs_1",
++            "payment_status": "paid",
++            "customer": "cus_1",
++            "subscription": "sub_1",
++            "customer_details": {"email": "buyer@x.com"},
++            "metadata": {"plan": "agency"},
++        }},
++    }
++    resp = client.post(
++        "/api/billing/webhook",
++        content=json.dumps(event),
++        headers={"stripe-signature": gw.valid_sig, "content-type": "application/json"},
++    )
++    assert resp.status_code == 200
++    assert resp.json()["action"] == "invited"
++    first = _password_login(client, "buyer@x.com", "secret12")
++    assert first.status_code == 200
++    assert first.json()["email"] == "buyer@x.com"
++    assert first.json()["role"] == "owner"
++    status = client.get("/api/billing/status")
++    assert status.status_code == 200
++    payload = status.json()
++    assert payload["status"] == "active"
++    assert payload["unlimited"] is False
++    assert payload["plan"]["id"] == "agency"
++
++
++def test_checkout_503_when_price_missing(tmp_path):
++    client, _gw, _env = _billing_client(tmp_path, extra_env={"STRIPE_PRICE_AGENCY": ""})
++    resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com"})
++    assert resp.status_code == 503
+diff --git a/tests/server/test_plans.py b/tests/server/test_plans.py
+index 57be109..9f6cd28 100644
+--- a/tests/server/test_plans.py
++++ b/tests/server/test_plans.py
+@@ -26,8 +26,8 @@ def test_ladder_matches_the_sell_sheet():
+     assert creator.included_variants == 96
+     assert (studio.included_packs, studio.extra_pack_price, studio.monthly) == (32, 3.0, 79)
+     assert studio.included_variants == 256
+-    assert (agency.included_packs, agency.extra_pack_price, agency.monthly) == (100, 2.5, 199)
+-    assert agency.included_variants == 800
++    assert agency.monthly == 200
++    assert agency.uncapped is True
+     assert get_plan("internal").uncapped is True
+ 
+ 
+@@ -55,11 +55,9 @@ def test_limit_copy_points_at_the_next_upgrade():
+         "Creator includes 12 packs. Extra packs are $3.50, or Studio is $79 for 32."
+     )
+     assert limit_message(get_plan("studio")) == (
+-        "Studio includes 32 packs. Extra packs are $3.00, or Agency is $199 for 100."
+-    )
+-    assert limit_message(get_plan("agency")) == (
+-        "Agency includes 100 packs. Extra packs are $2.50."
++        "Studio includes 32 packs. Extra packs are $3.00, or Agency is $200/month."
+     )
++    assert get_plan("agency").uncapped is True
+ 
+ 
+ def test_meter_line_hides_internal_and_counts_packs():
+diff --git a/variant_maker/server/app.py b/variant_maker/server/app.py
+index 260607c..151d019 100644
+--- a/variant_maker/server/app.py
++++ b/variant_maker/server/app.py
+@@ -23,6 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
+ from variant_maker.farm.ledger import Ledger
+ 
+ from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
++from .billing_api import register_billing_routes
+ from .caption_ai import parse_caption_prompts_field
+ from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
+ from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
+@@ -206,6 +207,7 @@ from .sessions import (
+     sign_view,
+ )
+ from .sheets import GoogleSheets, SheetsClient
++from .stripe_billing import gateway_from_env
+ from .tenant_runtime import TenantHub
+ from .tenants import (
+     TenantStore,
+@@ -530,6 +532,8 @@ def create_app(
+     instagram_fetch_profile: Callable[[str], dict[str, Any]] | None = None,
+     instagram_list_media: Callable[..., list] | None = None,
+     instagram_fetch_insights: Callable[..., dict] | None = None,
++    stripe_gateway: Any = None,
++    billing_environ: Mapping[str, str] | None = None,
+ ) -> FastAPI:
+     if store is None:
+         store = JobStore(Workspace("./.vmdata"), LocalRunner())
+@@ -1381,7 +1385,7 @@ def create_app(
+             if user is None:
+                 raise HTTPException(
+                     status_code=401,
+-                    detail="This email isn't invited. Ask the operator to add you.",
++                    detail="This email isn't invited. Subscribe at /pricing or ask the operator to add you.",
+                 )
+             tenants.set_password(user.email, hash_password(password))
+             user = tenants.get_user(user.email) or user
+@@ -2539,4 +2543,18 @@ def create_app(
+ 
+         threading.Thread(target=_poll_loop, name="workflow-poller", daemon=True).start()
+ 
++    billing_env: Mapping[str, str] = billing_environ if billing_environ is not None else auth_env
++    register_billing_routes(
++        app,
++        tenants=tenants,
++        auth_on=auth_on,
++        store=store,
++        billing_env=billing_env,
++        gateway=gateway_from_env(billing_env, injected=stripe_gateway),
++        studio_origin=_login_origin,
++        require_user=_require_user,
++        admin_email=admin_email,
++        is_admin=is_admin_email,
++    )
++
+     return app
+diff --git a/variant_maker/server/auth_app.py b/variant_maker/server/auth_app.py
+index e086505..82430c1 100644
+--- a/variant_maker/server/auth_app.py
++++ b/variant_maker/server/auth_app.py
+@@ -16,6 +16,9 @@ PUBLIC_API_PATHS = frozenset({
+     "/api/auth/password",
+     "/api/auth/google/start",
+     "/api/auth/google/callback",
++    "/api/billing/plans",
++    "/api/billing/checkout",
++    "/api/billing/webhook",
+     # Instagram returns here from instagram.com; browsers often omit SameSite=Lax cookies.
+     "/api/instagram/oauth/callback",
+ })
+diff --git a/variant_maker/server/billing.py b/variant_maker/server/billing.py
+new file mode 100644
+index 0000000..ec13259
+--- /dev/null
++++ b/variant_maker/server/billing.py
+@@ -0,0 +1,448 @@
++"""Paid plans, Fast overage math, and grant-after-payment.
++
++Stripe stays out of this module so sampler-style tests can run without the SDK.
++Checkout + webhook live in stripe_billing.py.
++"""
++from __future__ import annotations
++
++import json
++import os
++from collections.abc import Mapping
++from dataclasses import dataclass
++from datetime import UTC, datetime, timedelta
++from typing import Any
++
++from variant_maker.server.tenants import (
++    BillingRecord,
++    TenantStore,
++    normalize_email,
++)
++
++# Internal Fast COGS. Do not put this number on the marketing site.
++FAST_USD_PER_HOUR = 0.58
++
++AGENCY_PLAN_ID = "agency"
++AGENCY_PRICE_USD = 200
++AGENCY_INCLUDED_FAST_HOURS = 90
++AGENCY_OVERAGE_USD_PER_HOUR = 0.75
++AGENCY_PRICE_ENV = "STRIPE_PRICE_AGENCY"
++AGENCY_FAST_HOURS_ENV = "VARIANT_PLAN_AGENCY_FAST_HOURS"
++AGENCY_OVERAGE_ENV = "VARIANT_PLAN_AGENCY_OVERAGE_USD"
++PERIOD_DAYS = 30
++# Warm-worker talking-head Fast 20 — billed Fast time, not a SLA.
++TYPICAL_FAST20_MINUTES = 10.0
++TYPICAL_FAST20_COPIES_PER_PACK = 20
++
++ACTIVE_STATUSES = frozenset({"active", "trialing"})
++KNOWN_PLANS = frozenset({AGENCY_PLAN_ID})
++
++
++@dataclass(frozen=True)
++class Plan:
++    id: str
++    name: str
++    price_usd: int
++    included_fast_hours: float
++    overage_usd_per_hour: float
++    cogs_fast_usd_per_hour: float
++    stripe_price_env: str
++
++
++@dataclass(frozen=True)
++class OverageSnapshot:
++    plan_id: str
++    fast_seconds: float
++    included_fast_seconds: float
++    overage_fast_seconds: float
++    overage_usd: float
++    remaining_fast_seconds: float
++
++
++def _float_env(env: Mapping[str, str], key: str, default: float) -> float:
++    raw = (env.get(key) or "").strip()
++    if not raw:
++        return default
++    try:
++        return float(raw)
++    except ValueError:
++        return default
++
++
++def get_plan(plan_id: str | None = AGENCY_PLAN_ID, environ: Mapping[str, str] | None = None) -> Plan:
++    env = os.environ if environ is None else environ
++    kind = (plan_id or AGENCY_PLAN_ID).strip().lower() or AGENCY_PLAN_ID
++    if kind not in KNOWN_PLANS:
++        raise ValueError("unknown plan")
++    hours = _float_env(env, AGENCY_FAST_HOURS_ENV, AGENCY_INCLUDED_FAST_HOURS)
++    overage = _float_env(env, AGENCY_OVERAGE_ENV, AGENCY_OVERAGE_USD_PER_HOUR)
++    return Plan(
++        id=AGENCY_PLAN_ID,
++        name="Agency",
++        price_usd=AGENCY_PRICE_USD,
++        included_fast_hours=max(0.0, hours),
++        overage_usd_per_hour=max(0.0, overage),
++        cogs_fast_usd_per_hour=FAST_USD_PER_HOUR,
++        stripe_price_env=AGENCY_PRICE_ENV,
++    )
++
++
++def plan_catalog(environ: Mapping[str, str] | None = None) -> list[Plan]:
++    return [get_plan(AGENCY_PLAN_ID, environ)]
++
++
++def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str:
++    env = os.environ if environ is None else environ
++    return (env.get(plan.stripe_price_env) or "").strip()
++
++
++def period_fast_seconds(workspace: Any, *, start: datetime | None = None, end: datetime | None = None) -> float:
++    """Fast worker-seconds in [start, end). Live copy-ledger rows without Fast
++    telemetry count as 0 — overage stays recorded, Generate is not blocked.
++    """
++    path = getattr(workspace, "usage_path", None)
++    path = path() if callable(path) else path
++    if not path or not os.path.isfile(path):
++        return 0.0
++    when_end = end or datetime.now(UTC)
++    if when_end.tzinfo is None:
++        when_end = when_end.replace(tzinfo=UTC)
++    when_end = when_end.astimezone(UTC)
++    if start is None:
++        when_start = when_end - timedelta(days=30)
++    elif start.tzinfo is None:
++        when_start = start.replace(tzinfo=UTC)
++    else:
++        when_start = start.astimezone(UTC)
++    total = 0.0
++    try:
++        with open(path, encoding="utf-8") as f:
++            lines = f.readlines()
++    except OSError:
++        return 0.0
++    for line in lines:
++        line = line.strip()
++        if not line:
++            continue
++        try:
++            row = json.loads(line)
++        except json.JSONDecodeError:
++            continue
++        if not isinstance(row, dict):
++            continue
++        if str(row.get("quality_mode") or "").strip().lower() != "fast":
++            continue
++        ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
++        if ts is None or ts < when_start or ts >= when_end:
++            continue
++        billed = row.get("billed")
++        if isinstance(billed, dict) and billed.get("real_work_s") is not None:
++            try:
++                total += max(0.0, float(billed["real_work_s"]))
++                continue
++            except (TypeError, ValueError):
++                pass
++        submitted = _parse_utc(str(row.get("submitted_utc") or ""))
++        finished = _parse_utc(str(row.get("completed_utc") or row.get("utc") or ""))
++        if submitted is None or finished is None:
++            continue
++        total += max(0.0, (finished - submitted).total_seconds())
++    return total
++
++
++def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
++    """Typical talking-head Fast-20 packs / copies for an included-hour block.
++
++    Uses ~10 minutes of Fast time per 20-pack (warm worker, short talking-head).
++    90 hours → 540 packs / 10,800 copies. Heavier clips and cold start take
++    longer — typical, not a promise.
++    """
++    hours = max(0.0, float(included_fast_hours or 0.0))
++    raw_packs = (hours * 60.0) / TYPICAL_FAST20_MINUTES if TYPICAL_FAST20_MINUTES else 0.0
++    packs = round(raw_packs) if raw_packs else 0
++    return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
++
++
++def overage_snapshot(plan: Plan, fast_seconds: float) -> OverageSnapshot:
++    used = max(0.0, float(fast_seconds or 0.0))
++    included = max(0.0, float(plan.included_fast_hours) * 3600.0)
++    overage_s = max(0.0, used - included)
++    remaining = max(0.0, included - used)
++    overage_usd = round((overage_s / 3600.0) * float(plan.overage_usd_per_hour), 6)
++    return OverageSnapshot(
++        plan_id=plan.id,
++        fast_seconds=used,
++        included_fast_seconds=included,
++        overage_fast_seconds=overage_s,
++        overage_usd=overage_usd,
++        remaining_fast_seconds=remaining,
++    )
++
++
++def _parse_utc(value: str | None) -> datetime | None:
++    raw = (value or "").strip()
++    if not raw:
++        return None
++    if raw.endswith("Z"):
++        raw = raw[:-1] + "+00:00"
++    try:
++        dt = datetime.fromisoformat(raw)
++    except ValueError:
++        return None
++    if dt.tzinfo is None:
++        dt = dt.replace(tzinfo=UTC)
++    return dt.astimezone(UTC)
++
++
++def utc_now() -> str:
++    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def utc_from_unix(ts: Any) -> str | None:
++    try:
++        n = int(ts)
++    except (TypeError, ValueError):
++        return None
++    if n <= 0:
++        return None
++    return datetime.fromtimestamp(n, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def period_end_from_start(start_utc: str | None, *, days: int = PERIOD_DAYS) -> str:
++    start = _parse_utc(start_utc) or datetime.now(UTC)
++    return (start + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def session_email(session: Mapping[str, Any]) -> str:
++    details = session.get("customer_details") if isinstance(session.get("customer_details"), dict) else {}
++    meta = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
++    return normalize_email(
++        str(
++            session.get("customer_email")
++            or details.get("email")
++            or meta.get("email")
++            or session.get("client_reference_id")
++            or ""
++        )
++    )
++
++
++def session_plan(session: Mapping[str, Any]) -> str:
++    meta = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
++    sub_meta = {}
++    sub = session.get("subscription_details")
++    if isinstance(sub, dict) and isinstance(sub.get("metadata"), dict):
++        sub_meta = sub["metadata"]
++    kind = str(meta.get("plan") or sub_meta.get("plan") or AGENCY_PLAN_ID).strip().lower()
++    return kind if kind in KNOWN_PLANS else AGENCY_PLAN_ID
++
++
++def _session_paid(session: Mapping[str, Any]) -> bool:
++    status = str(session.get("payment_status") or "").strip().lower()
++    if not status:
++        return True
++    return status in {"paid", "no_payment_required"}
++
++
++def grant_paid_subscription(
++    store: TenantStore,
++    *,
++    email: str,
++    plan: str = AGENCY_PLAN_ID,
++    status: str = "active",
++    stripe_customer_id: str | None = None,
++    stripe_subscription_id: str | None = None,
++    stripe_checkout_session_id: str | None = None,
++    paid_utc: str | None = None,
++    period_start_utc: str | None = None,
++    period_end_utc: str | None = None,
++) -> str:
++    """Record a paid Agency seat and invite the email if they are not a user yet.
++
++    Does not create the workspace here — first sign-in still calls provision_login.
++    """
++    addr = normalize_email(email)
++    if not addr:
++        return "no_email"
++    kind = (plan or AGENCY_PLAN_ID).strip().lower()
++    if kind not in KNOWN_PLANS:
++        kind = AGENCY_PLAN_ID
++    paid = paid_utc or utc_now()
++    start = period_start_utc or paid
++    end = period_end_utc or period_end_from_start(start)
++    user = store.get_user(addr)
++    rec = BillingRecord(
++        email=addr,
++        plan=kind,
++        status=status,
++        stripe_customer_id=stripe_customer_id or None,
++        stripe_subscription_id=str(stripe_subscription_id) if stripe_subscription_id else None,
++        stripe_checkout_session_id=stripe_checkout_session_id or None,
++        workspace_id=user.workspace_id if user is not None else None,
++        paid_utc=paid,
++        period_start_utc=start,
++        period_end_utc=end,
++    )
++    prev = store.get_billing(addr)
++    if prev is not None:
++        rec = BillingRecord(
++            email=addr,
++            plan=kind,
++            status=status,
++            stripe_customer_id=stripe_customer_id or prev.stripe_customer_id,
++            stripe_subscription_id=(
++                str(stripe_subscription_id) if stripe_subscription_id else prev.stripe_subscription_id
++            ),
++            stripe_checkout_session_id=stripe_checkout_session_id or prev.stripe_checkout_session_id,
++            workspace_id=user.workspace_id if user is not None else prev.workspace_id,
++            paid_utc=paid or prev.paid_utc,
++            period_start_utc=start or prev.period_start_utc,
++            period_end_utc=end or prev.period_end_utc,
++        )
++    store.upsert_billing(rec)
++    if user is not None:
++        return "existing"
++    store.add_invite(email=addr, kind="new_workspace", workspace_id=None)
++    return "invited"
++
++
++def grant_from_checkout(store: TenantStore, session: Mapping[str, Any]) -> str:
++    if not _session_paid(session):
++        return "unpaid"
++    email = session_email(session)
++    if not email:
++        return "no_email"
++    sub = session.get("subscription")
++    sub_id = sub if isinstance(sub, str) else (sub.get("id") if isinstance(sub, dict) else None)
++    customer = session.get("customer")
++    customer_id = customer if isinstance(customer, str) else (
++        customer.get("id") if isinstance(customer, dict) else None
++    )
++    return grant_paid_subscription(
++        store,
++        email=email,
++        plan=session_plan(session),
++        status="active",
++        stripe_customer_id=str(customer_id) if customer_id else None,
++        stripe_subscription_id=str(sub_id) if sub_id else None,
++        stripe_checkout_session_id=str(session.get("id") or "") or None,
++        paid_utc=utc_from_unix(session.get("created")) or utc_now(),
++    )
++
++
++def apply_subscription(store: TenantStore, subscription: Mapping[str, Any]) -> str:
++    sub_id = str(subscription.get("id") or "") or None
++    meta = subscription.get("metadata") if isinstance(subscription.get("metadata"), dict) else {}
++    email = normalize_email(str(meta.get("email") or ""))
++    rec = store.get_billing_by_subscription(sub_id) if sub_id else None
++    if rec is None and email:
++        rec = store.get_billing(email)
++    if rec is None:
++        return "unknown"
++    stripe_status = str(subscription.get("status") or "").strip().lower()
++    if stripe_status in ACTIVE_STATUSES:
++        status = "active"
++    elif stripe_status in {"canceled", "unpaid", "incomplete_expired"}:
++        status = "canceled"
++    elif stripe_status == "past_due":
++        status = "past_due"
++    else:
++        status = rec.status
++    start = utc_from_unix(subscription.get("current_period_start")) or rec.period_start_utc
++    end = utc_from_unix(subscription.get("current_period_end")) or rec.period_end_utc
++    store.upsert_billing(BillingRecord(
++        email=rec.email,
++        plan=rec.plan,
++        status=status,
++        stripe_customer_id=str(subscription.get("customer") or rec.stripe_customer_id or "") or rec.stripe_customer_id,
++        stripe_subscription_id=sub_id or rec.stripe_subscription_id,
++        stripe_checkout_session_id=rec.stripe_checkout_session_id,
++        workspace_id=rec.workspace_id,
++        paid_utc=rec.paid_utc,
++        period_start_utc=start,
++        period_end_utc=end,
++    ))
++    return status
++
++
++def apply_stripe_event(store: TenantStore, event: Mapping[str, Any]) -> str:
++    etype = str(event.get("type") or "")
++    obj = event.get("data") if isinstance(event.get("data"), dict) else {}
++    payload = obj.get("object") if isinstance(obj, dict) else None
++    if not isinstance(payload, dict):
++        return "ignored"
++    if etype in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
++        return grant_from_checkout(store, payload)
++    if etype in {"customer.subscription.updated", "customer.subscription.deleted"}:
++        return apply_subscription(store, payload)
++    return "ignored"
++
++
++def plan_public_dict(plan: Plan) -> dict[str, Any]:
++    packs, copies = typical_fast20_throughput(plan.included_fast_hours)
++    return {
++        "id": plan.id,
++        "name": plan.name,
++        "price_usd": plan.price_usd,
++        "included_fast_hours": plan.included_fast_hours,
++        "overage_usd_per_hour": plan.overage_usd_per_hour,
++        "cogs_fast_usd_per_hour": plan.cogs_fast_usd_per_hour,
++        "typical_fast20_minutes": TYPICAL_FAST20_MINUTES,
++        "typical_fast20_packs": packs,
++        "typical_fast20_copies": copies,
++    }
++
++
++def billing_status_payload(
++    *,
++    rec: BillingRecord | None,
++    workspace: Any,
++    is_admin: bool,
++    environ: Mapping[str, str] | None = None,
++) -> dict[str, Any]:
++    """Usage readout. Never blocks Generate — overage is recorded, not a hard stop."""
++    if is_admin and (rec is None or rec.status not in ACTIVE_STATUSES):
++        return {
++            "plan": None,
++            "status": "internal",
++            "unlimited": True,
++            "fast_seconds": 0.0,
++            "included_fast_seconds": None,
++            "overage_fast_seconds": 0.0,
++            "overage_usd": 0.0,
++            "remaining_fast_seconds": None,
++            "period_start_utc": None,
++            "period_end_utc": None,
++            "collects_overage": False,
++        }
++    if rec is None or rec.status not in ACTIVE_STATUSES:
++        return {
++            "plan": rec.plan if rec is not None else None,
++            "status": rec.status if rec is not None else "invite",
++            "unlimited": True,
++            "fast_seconds": 0.0,
++            "included_fast_seconds": None,
++            "overage_fast_seconds": 0.0,
++            "overage_usd": 0.0,
++            "remaining_fast_seconds": None,
++            "period_start_utc": rec.period_start_utc if rec is not None else None,
++            "period_end_utc": rec.period_end_utc if rec is not None else None,
++            "collects_overage": False,
++        }
++    plan = get_plan(rec.plan, environ)
++    start = _parse_utc(rec.period_start_utc)
++    end = _parse_utc(rec.period_end_utc)
++    seconds = period_fast_seconds(workspace, start=start, end=end) if workspace is not None else 0.0
++    snap = overage_snapshot(plan, seconds)
++    return {
++        "plan": plan_public_dict(plan),
++        "status": rec.status,
++        "unlimited": False,
++        "fast_seconds": snap.fast_seconds,
++        "included_fast_seconds": snap.included_fast_seconds,
++        "overage_fast_seconds": snap.overage_fast_seconds,
++        "overage_usd": snap.overage_usd,
++        "remaining_fast_seconds": snap.remaining_fast_seconds,
++        "period_start_utc": rec.period_start_utc,
++        "period_end_utc": rec.period_end_utc,
++        "collects_overage": True,
++    }
+diff --git a/variant_maker/server/billing_api.py b/variant_maker/server/billing_api.py
+new file mode 100644
+index 0000000..d14e172
+--- /dev/null
++++ b/variant_maker/server/billing_api.py
+@@ -0,0 +1,149 @@
++"""HTTP routes for public Checkout, Stripe webhooks, and signed-in usage."""
++from __future__ import annotations
++
++from collections.abc import Callable, Mapping
++from typing import Any
++from urllib.parse import quote
++
++from fastapi import FastAPI, HTTPException, Request
++from fastapi.responses import JSONResponse
++from pydantic import BaseModel
++from starlette.middleware.cors import CORSMiddleware
++
++from variant_maker.server.billing import (
++    AGENCY_PLAN_ID,
++    apply_stripe_event,
++    billing_status_payload,
++    get_plan,
++    plan_catalog,
++    plan_public_dict,
++    stripe_price_id,
++)
++from variant_maker.server.stripe_billing import (
++    StripeGateway,
++    checkout_origins,
++    checkout_session_params,
++)
++from variant_maker.server.tenants import TenantStore, normalize_email
++
++
++class CheckoutIn(BaseModel):
++    email: str
++    plan: str = AGENCY_PLAN_ID
++
++
++class CheckoutOut(BaseModel):
++    url: str
++    session_id: str
++
++
++def _email_ok(email: str) -> bool:
++    addr = normalize_email(email)
++    return bool(addr) and "@" in addr and "." in addr.split("@")[-1]
++
++
++def register_billing_routes(
++    app: FastAPI,
++    *,
++    tenants: TenantStore | None,
++    auth_on: bool,
++    store: Any,
++    billing_env: Mapping[str, str],
++    gateway: StripeGateway | None,
++    studio_origin: Callable[[Request], str],
++    require_user: Callable[[Request], Any],
++    admin_email: str | None,
++    is_admin: Callable[[str, str | None], bool],
++) -> None:
++    origins = checkout_origins(billing_env)
++    if origins:
++        app.add_middleware(
++            CORSMiddleware,
++            allow_origins=origins,
++            allow_methods=["GET", "POST", "OPTIONS"],
++            allow_headers=["Content-Type"],
++        )
++
++    @app.get("/api/billing/plans")
++    def billing_plans() -> dict[str, Any]:
++        price = stripe_price_id(get_plan(AGENCY_PLAN_ID, billing_env), billing_env)
++        configured = bool(auth_on and tenants is not None and gateway is not None and price)
++        return {
++            "configured": configured,
++            "plans": [plan_public_dict(p) for p in plan_catalog(billing_env)],
++        }
++
++    @app.post("/api/billing/checkout", response_model=CheckoutOut)
++    def billing_checkout(request: Request, body: CheckoutIn) -> CheckoutOut:
++        if not auth_on or tenants is None:
++            raise HTTPException(status_code=503, detail="Studio login is off — billing needs VARIANT_AUTH_ADMIN_EMAIL.")
++        if gateway is None:
++            raise HTTPException(
++                status_code=503,
++                detail="Billing isn't connected. Set STRIPE_RESTRICTED_KEY (or STRIPE_SECRET_KEY) and STRIPE_PRICE_AGENCY.",
++            )
++        email = normalize_email(body.email)
++        if not _email_ok(email):
++            raise HTTPException(status_code=400, detail="email is required")
++        try:
++            plan = get_plan(body.plan, billing_env)
++        except ValueError as exc:
++            raise HTTPException(status_code=400, detail=str(exc)) from exc
++        price_id = stripe_price_id(plan, billing_env)
++        if not price_id:
++            raise HTTPException(
++                status_code=503,
++                detail=f"Set {plan.stripe_price_env} to the Stripe Price id for {plan.name}.",
++            )
++        origin = studio_origin(request).rstrip("/")
++        success = (
++            f"{origin}/login?paid=1&email={quote(email, safe='')}&session_id={{CHECKOUT_SESSION_ID}}"
++        )
++        cancel = f"{origin}/pricing"
++        params = checkout_session_params(
++            email=email,
++            plan=plan,
++            price_id=price_id,
++            success_url=success,
++            cancel_url=cancel,
++        )
++        try:
++            session = gateway.create_checkout_session(params)
++        except Exception as exc:
++            raise HTTPException(status_code=502, detail="Stripe Checkout failed.") from exc
++        url = str(session.get("url") or "")
++        if not url:
++            raise HTTPException(status_code=502, detail="Stripe Checkout failed.")
++        return CheckoutOut(url=url, session_id=str(session.get("id") or ""))
++
++    @app.post("/api/billing/webhook")
++    async def billing_webhook(request: Request) -> JSONResponse:
++        if not auth_on or tenants is None:
++            raise HTTPException(status_code=503, detail="auth is off")
++        if gateway is None:
++            raise HTTPException(status_code=503, detail="billing isn't connected")
++        payload = await request.body()
++        sig = request.headers.get("stripe-signature") or ""
++        try:
++            event = gateway.parse_webhook(payload, sig)
++        except Exception as exc:
++            raise HTTPException(status_code=400, detail="invalid signature") from exc
++        if not isinstance(event, dict):
++            raise HTTPException(status_code=400, detail="invalid event")
++        action = apply_stripe_event(tenants, event)
++        return JSONResponse({"received": True, "action": action})
++
++    @app.get("/api/billing/status")
++    def billing_status(request: Request) -> dict[str, Any]:
++        user = require_user(request)
++        assert tenants is not None
++        rec = tenants.get_billing(user.email)
++        if rec is None:
++            rec = tenants.get_billing_for_workspace(user.workspace_id)
++        ws = getattr(store, "_ws", None)
++        return billing_status_payload(
++            rec=rec,
++            workspace=ws,
++            is_admin=is_admin(user.email, admin_email),
++            environ=billing_env,
++        )
+diff --git a/variant_maker/server/plans.py b/variant_maker/server/plans.py
+index 2ed10d3..bf9b1ff 100644
+--- a/variant_maker/server/plans.py
++++ b/variant_maker/server/plans.py
+@@ -19,7 +19,7 @@ PLAN_IDS: tuple[PlanId, ...] = ("payg", "creator", "studio", "agency", "internal
+ _UPGRADE: dict[str, tuple[str, int, int]] = {
+     "payg": ("Creator", 35, 12),
+     "creator": ("Studio", 79, 32),
+-    "studio": ("Agency", 199, 100),
++    "studio": ("Agency", 200, 0),
+ }
+ 
+ 
+@@ -46,7 +46,7 @@ PLANS: dict[str, Plan] = {
+     "payg": Plan("payg", "Pay as you go", 0, 0, 5.0, "solo"),
+     "creator": Plan("creator", "Creator", 35, 12, 3.5, "solo"),
+     "studio": Plan("studio", "Studio", 79, 32, 3.0, "agency"),
+-    "agency": Plan("agency", "Agency", 199, 100, 2.5, "agency"),
++    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=True),
+     "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True),
+ }
+ 
+@@ -99,16 +99,26 @@ def limit_message(plan: Plan) -> str:
+     if plan.included_packs == 0:
+         if nxt:
+             name, price, packs = nxt
++            if packs:
++                return (
++                    f"{plan.label} has no included packs. Extra packs are {extra}, "
++                    f"or {name} is ${price} for {packs}."
++                )
+             return (
+                 f"{plan.label} has no included packs. Extra packs are {extra}, "
+-                f"or {name} is ${price} for {packs}."
++                f"or {name} is ${price}/month."
+             )
+         return f"{plan.label} has no included packs. Extra packs are {extra}."
+     if nxt:
+         name, price, packs = nxt
++        if packs:
++            return (
++                f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
++                f"or {name} is ${price} for {packs}."
++            )
+         return (
+             f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
+-            f"or {name} is ${price} for {packs}."
++            f"or {name} is ${price}/month."
+         )
+     return (
+         f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}."
+diff --git a/variant_maker/server/stripe_billing.py b/variant_maker/server/stripe_billing.py
+new file mode 100644
+index 0000000..14202a8
+--- /dev/null
++++ b/variant_maker/server/stripe_billing.py
+@@ -0,0 +1,117 @@
++"""Stripe Checkout + webhook verification. Tests inject a fake gateway."""
++from __future__ import annotations
++
++import secrets
++import string
++from collections.abc import Mapping
++from typing import Any, Protocol
++
++from variant_maker.server.billing import Plan
++from variant_maker.server.tenants import normalize_email
++
++RESTRICTED_KEY_ENV = "STRIPE_RESTRICTED_KEY"
++SECRET_KEY_ENV = "STRIPE_SECRET_KEY"
++WEBHOOK_SECRET_ENV = "STRIPE_WEBHOOK_SECRET"
++CHECKOUT_ORIGINS_ENV = "VARIANT_BILLING_CHECKOUT_ORIGINS"
++
++
++class StripeGateway(Protocol):
++    def create_checkout_session(self, params: dict[str, Any]) -> dict[str, Any]: ...
++    def parse_webhook(self, payload: bytes, sig: str) -> dict[str, Any]: ...
++
++
++def stripe_api_key(environ: Mapping[str, str]) -> str:
++    return (environ.get(RESTRICTED_KEY_ENV) or environ.get(SECRET_KEY_ENV) or "").strip()
++
++
++def webhook_secret(environ: Mapping[str, str]) -> str:
++    return (environ.get(WEBHOOK_SECRET_ENV) or "").strip()
++
++
++def checkout_origins(environ: Mapping[str, str]) -> list[str]:
++    raw = environ.get(CHECKOUT_ORIGINS_ENV) or ""
++    return [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
++
++
++def _integration_suffix() -> str:
++    alphabet = string.ascii_lowercase
++    return "".join(secrets.choice(alphabet) for _ in range(8))
++
++
++def checkout_session_params(
++    *,
++    email: str,
++    plan: Plan,
++    price_id: str,
++    success_url: str,
++    cancel_url: str,
++) -> dict[str, Any]:
++    """Hosted Checkout for the Agency subscription. Dynamic payment methods — do not
++    pass payment_method_types. automatic_tax stays off until a Stripe Tax registration
++    is active (otherwise Stripe collects $0 tax while looking enabled).
++    """
++    addr = normalize_email(email)
++    suffix = _integration_suffix()
++    return {
++        "mode": "subscription",
++        "line_items": [{"price": price_id, "quantity": 1}],
++        "success_url": success_url,
++        "cancel_url": cancel_url,
++        "customer_email": addr,
++        "client_reference_id": addr,
++        "metadata": {"plan": plan.id, "email": addr},
++        "subscription_data": {"metadata": {"plan": plan.id, "email": addr}},
++        "integration_identifier": f"varyforge_{plan.id}_{suffix}",
++    }
++
++
++class LiveStripeGateway:
++    def __init__(self, *, api_key: str, webhook_secret_value: str) -> None:
++        from stripe import StripeClient, Webhook
++
++        if not api_key:
++            raise ValueError("missing Stripe API key")
++        self._client = StripeClient(api_key)
++        self._webhook_secret = webhook_secret_value
++        self._Webhook = Webhook
++
++    def create_checkout_session(self, params: dict[str, Any]) -> dict[str, Any]:
++        session = self._client.v1.checkout.sessions.create(params)
++        url = _obj_get(session, "url")
++        sid = _obj_get(session, "id")
++        if not url:
++            raise RuntimeError("Stripe Checkout did not return a URL")
++        return {"id": str(sid or ""), "url": str(url)}
++
++    def parse_webhook(self, payload: bytes, sig: str) -> dict[str, Any]:
++        if not self._webhook_secret:
++            raise ValueError("missing STRIPE_WEBHOOK_SECRET")
++        event = self._Webhook.construct_event(payload, sig, self._webhook_secret)
++        if hasattr(event, "to_dict_recursive"):
++            return event.to_dict_recursive()
++        if hasattr(event, "to_dict"):
++            return event.to_dict()
++        return dict(event)
++
++
++def _obj_get(obj: Any, key: str) -> Any:
++    if obj is None:
++        return None
++    if isinstance(obj, dict):
++        return obj.get(key)
++    return getattr(obj, key, None)
++
++
++def gateway_from_env(
++    environ: Mapping[str, str],
++    injected: StripeGateway | None = None,
++) -> StripeGateway | None:
++    if injected is not None:
++        return injected
++    key = stripe_api_key(environ)
++    if not key:
++        return None
++    try:
++        return LiveStripeGateway(api_key=key, webhook_secret_value=webhook_secret(environ))
++    except ImportError:
++        return None
+diff --git a/variant_maker/server/tenants.py b/variant_maker/server/tenants.py
+index 0fd2ef2..a6252c8 100644
+--- a/variant_maker/server/tenants.py
++++ b/variant_maker/server/tenants.py
+@@ -107,6 +107,24 @@ class Invite:
+     created_utc: str
+ 
+ 
++BillingStatus = Literal["active", "canceled", "unpaid", "past_due"]
++
++
++@dataclass
++class BillingRecord:
++    """One paid seat, keyed by the checkout email. Workspace fills in on first sign-in."""
++    email: str
++    plan: str
++    status: BillingStatus
++    stripe_customer_id: str | None = None
++    stripe_subscription_id: str | None = None
++    stripe_checkout_session_id: str | None = None
++    workspace_id: str | None = None
++    paid_utc: str | None = None
++    period_start_utc: str | None = None
++    period_end_utc: str | None = None
++
++
+ def _parse_user(raw: object, key: str = "") -> UserInfo | None:
+     if not isinstance(raw, dict):
+         return None
+@@ -153,6 +171,32 @@ def _now() -> str:
+     return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+ 
+ 
++def _parse_billing(raw: object, key: str = "") -> BillingRecord | None:
++    if not isinstance(raw, dict):
++        return None
++    email = normalize_email(str(raw.get("email") or key or ""))
++    if not email:
++        return None
++    status = raw.get("status") if raw.get("status") in ("active", "canceled", "unpaid", "past_due") else "active"
++    plan = str(raw.get("plan") or "agency").strip().lower() or "agency"
++    return BillingRecord(
++        email=email,
++        plan=plan,
++        status=status,
++        stripe_customer_id=str(raw.get("stripe_customer_id") or "") or None,
++        stripe_subscription_id=str(raw.get("stripe_subscription_id") or "") or None,
++        stripe_checkout_session_id=str(raw.get("stripe_checkout_session_id") or "") or None,
++        workspace_id=str(raw.get("workspace_id") or "") or None,
++        paid_utc=str(raw.get("paid_utc") or "") or None,
++        period_start_utc=str(raw.get("period_start_utc") or "") or None,
++        period_end_utc=str(raw.get("period_end_utc") or "") or None,
++    )
++
++
++def _billing_payload(rec: BillingRecord) -> dict:
++    return asdict(rec)
++
++
+ def _new_id(prefix: str) -> str:
+     return f"{prefix}_{uuid.uuid4().hex[:10]}"
+ 
+@@ -165,7 +209,7 @@ class TenantStore:
+         self._lock = threading.Lock()
+ 
+     def _empty(self) -> dict:
+-        return {"workspaces": {}, "users": {}, "invites": []}
++        return {"workspaces": {}, "users": {}, "invites": [], "billing": {}}
+ 
+     def _load(self) -> dict:
+         if not os.path.isfile(self._path):
+@@ -180,7 +224,8 @@ class TenantStore:
+         workspaces = raw.get("workspaces") if isinstance(raw.get("workspaces"), dict) else {}
+         users = raw.get("users") if isinstance(raw.get("users"), dict) else {}
+         invites = raw.get("invites") if isinstance(raw.get("invites"), list) else []
+-        return {"workspaces": workspaces, "users": users, "invites": invites}
++        billing = raw.get("billing") if isinstance(raw.get("billing"), dict) else {}
++        return {"workspaces": workspaces, "users": users, "invites": invites, "billing": billing}
+ 
+     def _save(self, data: dict) -> None:
+         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+@@ -402,6 +447,57 @@ class TenantStore:
+             self._save(data)
+         return _parse_workspace(raw, workspace_id)
+ 
++    def get_billing(self, email: str) -> BillingRecord | None:
++        key = normalize_email(email)
++        with self._lock:
++            raw = self._load()["billing"].get(key)
++        return _parse_billing(raw, key)
++
++    def get_billing_by_subscription(self, subscription_id: str | None) -> BillingRecord | None:
++        sub = (subscription_id or "").strip()
++        if not sub:
++            return None
++        with self._lock:
++            items = list(self._load()["billing"].values())
++        for raw in items:
++            rec = _parse_billing(raw)
++            if rec is not None and rec.stripe_subscription_id == sub:
++                return rec
++        return None
++
++    def get_billing_for_workspace(self, workspace_id: str | None) -> BillingRecord | None:
++        ws_id = (workspace_id or "").strip()
++        if not ws_id:
++            return None
++        with self._lock:
++            items = list(self._load()["billing"].values())
++        for raw in items:
++            rec = _parse_billing(raw)
++            if rec is not None and rec.workspace_id == ws_id:
++                return rec
++        return None
++
++    def upsert_billing(self, rec: BillingRecord) -> BillingRecord:
++        key = normalize_email(rec.email)
++        stored = BillingRecord(
++            email=key,
++            plan=rec.plan,
++            status=rec.status,
++            stripe_customer_id=rec.stripe_customer_id,
++            stripe_subscription_id=rec.stripe_subscription_id,
++            stripe_checkout_session_id=rec.stripe_checkout_session_id,
++            workspace_id=rec.workspace_id,
++            paid_utc=rec.paid_utc,
++            period_start_utc=rec.period_start_utc,
++            period_end_utc=rec.period_end_utc,
++        )
++        with self._lock:
++            data = self._load()
++            data.setdefault("billing", {})
++            data["billing"][key] = _billing_payload(stored)
++            self._save(data)
++        return stored
++
+     def set_workspace_plan(self, workspace_id: str, plan: PlanId | str) -> WorkspaceInfo | None:
+         plan_id = parse_plan(plan)
+         if plan_id is None:
+@@ -458,6 +554,7 @@ def provision_login(
+     addr = normalize_email(email)
+     existing = store.get_user(addr)
+     if existing is not None and existing.workspace_id:
++        _bind_billing_workspace(store, addr, existing.workspace_id)
+         if name and name != existing.name:
+             return store.upsert_user(UserInfo(
+                 email=existing.email, name=name,
+@@ -469,9 +566,11 @@ def provision_login(
+         ws = store.create_workspace(name=name or addr.split("@")[0] or "Studio")
+         if data_dir:
+             migrate_legacy_data(data_dir, ws.id)
+-        return store.upsert_user(UserInfo(
++        user = store.upsert_user(UserInfo(
+             email=addr, name=name or addr, workspace_id=ws.id, role="owner",
+         ))
++        _bind_billing_workspace(store, addr, user.workspace_id)
++        return user
+ 
+     pending = next((i for i in store.list_invites() if i.email == addr), None)
+     if pending is None:
+@@ -489,15 +588,46 @@ def provision_login(
+         ws_id = invite.workspace_id
+         if not ws_id or store.get_workspace(ws_id) is None:
+             return None
+-        return store.upsert_user(UserInfo(
++        user = store.upsert_user(UserInfo(
+             email=addr, name=name or addr, workspace_id=ws_id, role="member",
+         ))
+-    # A new studio invite is a creator account: Studio / Gallery / Drive only.
+-    # Site admin flips the workspace to agency in Admin when they need Team.
+-    ws = store.create_workspace(
+-        name=name or addr.split("@")[0] or "Studio",
+-        experience="solo",
+-    )
+-    return store.upsert_user(UserInfo(
++        _bind_billing_workspace(store, addr, user.workspace_id)
++        return user
++    rec = store.get_billing(addr)
++    paid_agency = rec is not None and rec.status in ("active", "trialing") and rec.plan == "agency"
++    if paid_agency:
++        ws = store.create_workspace(
++            name=name or addr.split("@")[0] or "Studio",
++            experience="agency",
++            plan="agency",
++        )
++    else:
++        # A new studio invite is a creator account: Studio / Gallery / Drive only.
++        # Site admin flips the workspace to agency in Admin when they need Team.
++        ws = store.create_workspace(
++            name=name or addr.split("@")[0] or "Studio",
++            experience="solo",
++        )
++    user = store.upsert_user(UserInfo(
+         email=addr, name=name or addr, workspace_id=ws.id, role="owner",
+     ))
++    _bind_billing_workspace(store, addr, user.workspace_id)
++    return user
++
++
++def _bind_billing_workspace(store: TenantStore, email: str, workspace_id: str) -> None:
++    rec = store.get_billing(email)
++    if rec is None or rec.workspace_id == workspace_id:
++        return
++    store.upsert_billing(BillingRecord(
++        email=rec.email,
++        plan=rec.plan,
++        status=rec.status,
++        stripe_customer_id=rec.stripe_customer_id,
++        stripe_subscription_id=rec.stripe_subscription_id,
++        stripe_checkout_session_id=rec.stripe_checkout_session_id,
++        workspace_id=workspace_id,
++        paid_utc=rec.paid_utc,
++        period_start_utc=rec.period_start_utc,
++        period_end_utc=rec.period_end_utc,
++    ))
+diff --git a/web/app/api/billing/webhook/route.ts b/web/app/api/billing/webhook/route.ts
+new file mode 100644
+index 0000000..e49cb7f
+--- /dev/null
++++ b/web/app/api/billing/webhook/route.ts
+@@ -0,0 +1,33 @@
++import { NextRequest } from "next/server";
++
++const UPSTREAM = process.env.API_PROXY_TARGET || "http://127.0.0.1:8000";
++
++export const dynamic = "force-dynamic";
++export const runtime = "nodejs";
++
++/** Proxy Stripe webhooks with the raw body + Stripe-Signature header. */
++export async function POST(req: NextRequest) {
++  const incoming = new URL(req.url);
++  const body = await req.text();
++  let res: Response;
++  try {
++    res = await fetch(`${UPSTREAM}/api/billing/webhook`, {
++      method: "POST",
++      redirect: "manual",
++      headers: {
++        "content-type": req.headers.get("content-type") ?? "application/json",
++        "stripe-signature": req.headers.get("stripe-signature") ?? "",
++        host: incoming.host,
++        "x-forwarded-proto": incoming.protocol.replace(":", ""),
++        "x-forwarded-host": incoming.host,
++      },
++      body,
++    });
++  } catch {
++    return new Response("upstream unavailable", { status: 502 });
++  }
++  const headers = new Headers();
++  const contentType = res.headers.get("content-type");
++  if (contentType) headers.set("Content-Type", contentType);
++  return new Response(await res.text(), { status: res.status, headers });
++}
+diff --git a/web/app/globals.css b/web/app/globals.css
+index 9de8a41..904d4a6 100644
+--- a/web/app/globals.css
++++ b/web/app/globals.css
+@@ -1349,6 +1349,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
+ /* Login intentionally has its own restrained dark media-state. */
+ .login-page { align-items: center; background: #172124; display: flex; justify-content: center; min-height: 100dvh; padding: 24px; }
+ .login-card { background: #fbfdfd; border: 1px solid #d2e4e7; border-radius: 18px; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24); max-width: 410px; padding: 32px 28px; width: 100%; }
++.pricing-card { max-width: 460px; }
+ .login-brand { align-items: center; color: var(--ink); display: flex; font-size: 26px; margin-bottom: 22px; }
+ .login-card h1 { color: var(--ink); font-size: 24px; letter-spacing: -0.04em; margin: 0 0 8px; }
+ .login-card p, .login-card label { color: var(--color-muted); }
+diff --git a/web/app/login/page.tsx b/web/app/login/page.tsx
+index 9b2686f..bbdf349 100644
+--- a/web/app/login/page.tsx
++++ b/web/app/login/page.tsx
+@@ -1,20 +1,27 @@
+ import { LoginForm } from "@/components/auth/LoginForm";
+ import { VarimoWordmark } from "@/components/brand/VarimoWordmark";
+ 
++function first(raw: string | string[] | undefined): string {
++  if (Array.isArray(raw)) return raw[0] ?? "";
++  return raw ?? "";
++}
++
+ export default async function LoginPage({
+   searchParams,
+ }: {
+-  searchParams: Promise<{ error?: string | string[] }>;
++  searchParams: Promise<{ error?: string | string[]; paid?: string | string[]; email?: string | string[] }>;
+ }) {
+-  const raw = (await searchParams).error;
+-  const error = Array.isArray(raw) ? raw[0] : raw;
++  const params = await searchParams;
++  const error = first(params.error) || null;
++  const paid = first(params.paid) === "1" || first(params.paid) === "true";
++  const email = first(params.email);
+ 
+   return (
+     <main className="login-page">
+       <div className="login-card">
+         <div className="login-brand"><VarimoWordmark /></div>
+-        <h1>Sign in</h1>
+-        <LoginForm oauthError={error ?? null} />
++        <h1>{paid ? "You're in" : "Sign in"}</h1>
++        <LoginForm oauthError={error} paid={paid} emailPrefill={email} />
+       </div>
+     </main>
+   );
+diff --git a/web/app/pricing/page.tsx b/web/app/pricing/page.tsx
+new file mode 100644
+index 0000000..2546eda
+--- /dev/null
++++ b/web/app/pricing/page.tsx
+@@ -0,0 +1,25 @@
++import { PricingCard } from "@/components/auth/PricingCard";
++import { VarimoWordmark } from "@/components/brand/VarimoWordmark";
++
++function first(raw: string | string[] | undefined): string {
++  if (Array.isArray(raw)) return raw[0] ?? "";
++  return raw ?? "";
++}
++
++export default async function PricingPage({
++  searchParams,
++}: {
++  searchParams: Promise<{ email?: string | string[] }>;
++}) {
++  const email = first((await searchParams).email);
++
++  return (
++    <main className="login-page">
++      <div className="login-card pricing-card">
++        <div className="login-brand"><VarimoWordmark /></div>
++        <h1>Agency</h1>
++        <PricingCard emailPrefill={email} />
++      </div>
++    </main>
++  );
++}
+diff --git a/web/components/auth/AuthGate.tsx b/web/components/auth/AuthGate.tsx
+index 8c657b1..87ea9cf 100644
+--- a/web/components/auth/AuthGate.tsx
++++ b/web/components/auth/AuthGate.tsx
+@@ -10,31 +10,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
+   const pathname = usePathname();
+   const router = useRouter();
+   const { data, isLoading } = useAuthMe();
+-  const isLogin = pathname === "/login";
++  const isPublic = pathname === "/login" || pathname === "/pricing";
+   const needsLogin = Boolean(data?.auth_required && !data.email);
+   const loggedIn = Boolean(data?.email);
+ 
+   useEffect(() => {
+     if (!data) return;
+-    if (needsLogin && !isLogin) {
++    if (needsLogin && !isPublic) {
+       router.replace("/login");
+-    } else if (loggedIn && isLogin) {
++    } else if (loggedIn && pathname === "/login") {
+       router.replace("/");
+     }
+-  }, [data, needsLogin, isLogin, loggedIn, router]);
++  }, [data, needsLogin, isPublic, loggedIn, pathname, router]);
+ 
+   if (isLoading && !data) {
+     return <div className="vf-boot" />;
+   }
+ 
+-  if (needsLogin && !isLogin) {
++  if (needsLogin && !isPublic) {
+     return <div className="vf-boot" />;
+   }
+ 
+   return (
+     <>
+       <LabBanner />
+-      {isLogin ? (
++      {isPublic ? (
+         children
+       ) : (
+         <div className="vf-shell">
+diff --git a/web/components/auth/LoginForm.tsx b/web/components/auth/LoginForm.tsx
+index fc806eb..69fcab0 100644
+--- a/web/components/auth/LoginForm.tsx
++++ b/web/components/auth/LoginForm.tsx
+@@ -15,15 +15,25 @@ const fieldStyle: CSSProperties = {
+   outline: "none",
+ };
+ 
+-export function LoginForm({ oauthError }: { oauthError?: string | null }) {
+-  const [email, setEmail] = useState("");
++export function LoginForm({
++  oauthError,
++  paid = false,
++  emailPrefill = "",
++}: {
++  oauthError?: string | null;
++  paid?: boolean;
++  emailPrefill?: string;
++}) {
++  const [email, setEmail] = useState(emailPrefill);
+   const [password, setPassword] = useState("");
+   const [error, setError] = useState<string | null>(null);
+   const [busy, setBusy] = useState(false);
+ 
+   const oauthMessage =
+     oauthError === "not_invited"
+-      ? "This email isn't invited. Ask the operator to add you."
++      ? paid
++        ? "Payment is still landing. Wait a few seconds and sign in with the email you paid with."
++        : "This email isn't on the platform yet. Subscribe on the pricing page, or ask the operator to add you."
+       : oauthError === "oauth"
+         ? "Google sign-in didn't complete. Try again."
+         : null;
+@@ -46,8 +56,12 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
+   return (
+     <>
+       <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 22px" }}>
+-        Studio is invite-only. Use the invited email and a password, or continue with
+-        Google. First password sign-in sets that password.
++        {paid
++          ? "Payment received. Sign in with the email you used at checkout. First password sign-in creates your studio."
++          : "Use the email from checkout or an invite. First password sign-in sets that password."}{" "}
++        <Link href="/pricing" style={{ color: "var(--color-text)", fontWeight: 600 }}>
++          Agency pricing
++        </Link>
+       </p>
+       {message && (
+         <div
+diff --git a/web/components/auth/PricingCard.tsx b/web/components/auth/PricingCard.tsx
+new file mode 100644
+index 0000000..ce8a243
+--- /dev/null
++++ b/web/components/auth/PricingCard.tsx
+@@ -0,0 +1,151 @@
++"use client";
++import { FormEvent, useEffect, useState, type CSSProperties } from "react";
++import Link from "next/link";
++import { listBillingPlans, startBillingCheckout } from "@/lib/api";
++import type { BillingPlan } from "@/lib/types";
++
++const fieldStyle: CSSProperties = {
++  width: "100%",
++  boxSizing: "border-box",
++  background: "#f3f8f9",
++  border: "1px solid #c9dde0",
++  borderRadius: 10,
++  padding: "11px 12px",
++  fontSize: 14,
++  color: "var(--color-text)",
++  outline: "none",
++};
++
++export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
++  const [email, setEmail] = useState(emailPrefill);
++  const [plan, setPlan] = useState<BillingPlan | null>(null);
++  const [configured, setConfigured] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  useEffect(() => {
++    let cancelled = false;
++    listBillingPlans()
++      .then((out) => {
++        if (cancelled) return;
++        setConfigured(out.configured);
++        setPlan(out.plans[0] ?? null);
++      })
++      .catch(() => {
++        if (!cancelled) setError("Could not load pricing.");
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, []);
++
++  async function onSubmit(e: FormEvent) {
++    e.preventDefault();
++    if (busy) return;
++    setBusy(true);
++    setError(null);
++    try {
++      const out = await startBillingCheckout(email, plan?.id || "agency");
++      window.location.assign(out.url);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Checkout failed");
++      setBusy(false);
++    }
++  }
++
++  const hours = plan?.included_fast_hours ?? 90;
++  const overage = plan?.overage_usd_per_hour ?? 0.75;
++  const price = plan?.price_usd ?? 200;
++  const packMinutes = plan?.typical_fast20_minutes ?? 10;
++  const packs = plan?.typical_fast20_packs ?? 540;
++  const copies = plan?.typical_fast20_copies ?? 10800;
++  const copiesLabel = copies.toLocaleString("en-US");
++
++  return (
++    <>
++      <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 12px" }}>
++        ${price}/month Agency. {hours} Fast worker-hours included each period, then{" "}
++        ${overage.toFixed(2)}/hr. Not a hard stop — you keep generating, and extra Fast
++        time is usage, not a fake unlimited cap.
++      </p>
++      <p style={{ fontSize: 13, color: "var(--color-text)", lineHeight: 1.5, margin: "0 0 18px" }}>
++        A typical talking-head Fast 20-pack uses about {packMinutes} minutes of Fast
++        time. {hours} hours is on the order of {packs} packs — about {copiesLabel} copies —
++        in a 30-day period. Heavier clips and a cold worker take longer. Typical, not a
++        promise.
++      </p>
++      {!configured && (
++        <div
++          role="status"
++          style={{
++            fontSize: 13,
++            color: "#8e6119",
++            background: "#fff8eb",
++            border: "1px solid #efdfbd",
++            borderRadius: 10,
++            padding: "10px 12px",
++            marginBottom: 16,
++            lineHeight: 1.45,
++          }}
++        >
++          Checkout is not connected on this Studio yet. You can still sign in with an invite.
++        </div>
++      )}
++      {error && (
++        <div
++          role="alert"
++          style={{
++            fontSize: 13,
++            color: "#8e6119",
++            background: "#fff8eb",
++            border: "1px solid #efdfbd",
++            borderRadius: 10,
++            padding: "10px 12px",
++            marginBottom: 16,
++            lineHeight: 1.45,
++          }}
++        >
++          {error}
++        </div>
++      )}
++      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
++        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>
++          Work email
++          <input
++            type="email"
++            autoComplete="email"
++            required
++            value={email}
++            onChange={(e) => setEmail(e.target.value)}
++            aria-label="Work email"
++            style={{ ...fieldStyle, marginTop: 6 }}
++          />
++        </label>
++        <button
++          type="submit"
++          disabled={busy || !configured}
++          style={{
++            marginTop: 6,
++            fontSize: 14,
++            fontWeight: 700,
++            color: "#fff",
++            background: "#172124",
++            border: "none",
++            padding: "12px 16px",
++            borderRadius: 10,
++            cursor: busy ? "wait" : !configured ? "not-allowed" : "pointer",
++          }}
++        >
++          {busy ? "Redirecting to checkout…" : `Subscribe — $${price}/month`}
++        </button>
++      </form>
++      <p style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.5, margin: "16px 0 0" }}>
++        After Stripe confirms payment you land on sign-in with this email. First password
++        creates your studio — nobody has to paste you in.{" "}
++        <Link href="/login" style={{ color: "var(--color-text)", fontWeight: 600 }}>
++          Already paid? Sign in
++        </Link>
++      </p>
++    </>
++  );
++}
+diff --git a/web/lib/__tests__/api.test.ts b/web/lib/__tests__/api.test.ts
+index bac0909..5e18f3b 100644
+--- a/web/lib/__tests__/api.test.ts
++++ b/web/lib/__tests__/api.test.ts
+@@ -646,6 +646,27 @@ describe("auth API", () => {
+     });
+   });
+ 
++  it("listBillingPlans GETs /api/billing/plans", async () => {
++    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ configured: true, plans: [] }), { status: 200 }),
++    );
++    await api.listBillingPlans();
++    expect(fetchMock.mock.calls[0][0]).toBe("/api/billing/plans");
++  });
++
++  it("startBillingCheckout POSTs email and plan", async () => {
++    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/cs_1", session_id: "cs_1" }), { status: 200 }),
++    );
++    await api.startBillingCheckout("buyer@x.com", "agency");
++    const [url, init] = fetchMock.mock.calls[0];
++    expect(url).toBe("/api/billing/checkout");
++    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
++      email: "buyer@x.com",
++      plan: "agency",
++    });
++  });
++
+   it("setStudioPassword POSTs /api/auth/password/set", async () => {
+     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+     await api.setStudioPassword("secret12");
+diff --git a/web/lib/api.ts b/web/lib/api.ts
+index f5ed8bc..0de9b9f 100644
+--- a/web/lib/api.ts
++++ b/web/lib/api.ts
+@@ -17,6 +17,9 @@ import {
+   ExportVariantRef,
+   Invite,
+   InviteKind,
++  BillingCheckout,
++  BillingPlans,
++  BillingStatus,
+   SplitExportDest,
+   SplitExportResult,
+   InstagramAnalytics,
+@@ -747,6 +750,18 @@ export function passwordLogin(email: string, password: string): Promise<AuthMe>
+   }).then(json<AuthMe>);
+ }
+ 
++export const listBillingPlans = () => fetch("/api/billing/plans").then(json<BillingPlans>);
++
++export function startBillingCheckout(email: string, plan = "agency"): Promise<BillingCheckout> {
++  return fetch("/api/billing/checkout", {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ email, plan }),
++  }).then(json<BillingCheckout>);
++}
++
++export const getBillingStatus = () => fetch("/api/billing/status").then(json<BillingStatus>);
++
+ export async function setStudioPassword(password: string): Promise<void> {
+   const res = await fetch("/api/auth/password/set", {
+     method: "POST",
+diff --git a/web/lib/studioDestinations.ts b/web/lib/studioDestinations.ts
+index dbd7218..f96a31c 100644
+--- a/web/lib/studioDestinations.ts
++++ b/web/lib/studioDestinations.ts
+@@ -95,7 +95,14 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
+     label: "Login",
+     audience: "everyone",
+     tab: "none",
+-    summary: "Invite-only email + password or Google. No app tabs on this page.",
++    summary: "Email + password or Google after a paid checkout or an invite. No app tabs on this page.",
++  },
++  {
++    href: "/pricing",
++    label: "Pricing",
++    audience: "everyone",
++    tab: "none",
++    summary: "Agency subscription checkout. Stripe paywall; webhook invites the payer. No app tabs.",
+   },
+ ] as const;
+ 
+diff --git a/web/lib/types.ts b/web/lib/types.ts
+index 2dd7c9e..04babfe 100644
+--- a/web/lib/types.ts
++++ b/web/lib/types.ts
+@@ -307,6 +307,42 @@ export interface Workflow {
+ export type AuthRole = "owner" | "member";
+ export type InviteKind = "join" | "new_workspace";
+ 
++export interface BillingPlan {
++  id: string;
++  name: string;
++  price_usd: number;
++  included_fast_hours: number;
++  overage_usd_per_hour: number;
++  cogs_fast_usd_per_hour: number;
++  typical_fast20_minutes?: number;
++  typical_fast20_packs?: number;
++  typical_fast20_copies?: number;
++}
++
++export interface BillingPlans {
++  configured: boolean;
++  plans: BillingPlan[];
++}
++
++export interface BillingCheckout {
++  url: string;
++  session_id: string;
++}
++
++export interface BillingStatus {
++  plan: BillingPlan | null;
++  status: string;
++  unlimited: boolean;
++  fast_seconds: number;
++  included_fast_seconds: number | null;
++  overage_fast_seconds: number;
++  overage_usd: number;
++  remaining_fast_seconds: number | null;
++  period_start_utc: string | null;
++  period_end_utc: string | null;
++  collects_overage: boolean;
++}
++
+ export type WorkspacePlan = "payg" | "creator" | "studio" | "agency" | "internal";
+ 
+ export interface UsageMeter {
+diff --git a/web/tests/AuthGate.test.tsx b/web/tests/AuthGate.test.tsx
+index 61bb70d..c7897bd 100644
+--- a/web/tests/AuthGate.test.tsx
++++ b/web/tests/AuthGate.test.tsx
+@@ -129,6 +129,33 @@ describe("AuthGate", () => {
+     expect(nav.replace).not.toHaveBeenCalled();
+   });
+ 
++  it("keeps /pricing public without the studio shell", () => {
++    nav.pathname = "/pricing";
++    me.isLoading = false;
++    me.data = NEED_LOGIN;
++    render(
++      <AuthGate>
++        <div>Pricing</div>
++      </AuthGate>,
++    );
++    expect(screen.getByText("Pricing")).toBeInTheDocument();
++    expect(screen.queryByText("TopNav")).not.toBeInTheDocument();
++    expect(nav.replace).not.toHaveBeenCalled();
++  });
++
++  it("does not send a logged-in user away from /pricing", () => {
++    nav.pathname = "/pricing";
++    me.isLoading = false;
++    me.data = LOGGED_IN;
++    render(
++      <AuthGate>
++        <div>Pricing</div>
++      </AuthGate>,
++    );
++    expect(screen.getByText("Pricing")).toBeInTheDocument();
++    expect(nav.replace).not.toHaveBeenCalled();
++  });
++
+   it("shows the studio when logged in", () => {
+     me.isLoading = false;
+     me.data = LOGGED_IN;
+diff --git a/web/tests/LoginForm.test.tsx b/web/tests/LoginForm.test.tsx
+index 87bc6cd..54bd473 100644
+--- a/web/tests/LoginForm.test.tsx
++++ b/web/tests/LoginForm.test.tsx
+@@ -34,7 +34,8 @@ describe("LoginForm", () => {
+       "href",
+       "/api/auth/google/start",
+     );
+-    expect(screen.getByText(/invite-only/i)).toBeInTheDocument();
++    expect(screen.getByText(/checkout or an invite/i)).toBeInTheDocument();
++    expect(screen.getByRole("link", { name: "Agency pricing" })).toHaveAttribute("href", "/pricing");
+   });
+ 
+   it("posts email and password then goes home", async () => {
+@@ -55,6 +56,12 @@ describe("LoginForm", () => {
+ 
+   it("shows a Google oauth error from the URL", () => {
+     render(<LoginForm oauthError="not_invited" />);
+-    expect(screen.getByRole("alert")).toHaveTextContent(/isn't invited/i);
++    expect(screen.getByRole("alert")).toHaveTextContent(/isn't on the platform yet/i);
++  });
++
++  it("prefills email and explains first sign-in after payment", () => {
++    render(<LoginForm paid emailPrefill="buyer@x.com" />);
++    expect(screen.getByLabelText("Email")).toHaveValue("buyer@x.com");
++    expect(screen.getByText(/Payment received/i)).toBeInTheDocument();
+   });
+ });
+diff --git a/web/tests/PricingCard.test.tsx b/web/tests/PricingCard.test.tsx
+new file mode 100644
+index 0000000..662044b
+--- /dev/null
++++ b/web/tests/PricingCard.test.tsx
+@@ -0,0 +1,67 @@
++import { fireEvent, render, screen, waitFor } from "@testing-library/react";
++import { describe, expect, it, vi, beforeEach } from "vitest";
++
++vi.mock("@/lib/api", () => ({
++  listBillingPlans: vi.fn(),
++  startBillingCheckout: vi.fn(),
++}));
++
++import { listBillingPlans, startBillingCheckout } from "@/lib/api";
++import { PricingCard } from "@/components/auth/PricingCard";
++
++describe("PricingCard", () => {
++  beforeEach(() => {
++    vi.mocked(listBillingPlans).mockReset();
++    vi.mocked(startBillingCheckout).mockReset();
++    vi.mocked(listBillingPlans).mockResolvedValue({
++      configured: true,
++      plans: [{
++        id: "agency",
++        name: "Agency",
++        price_usd: 200,
++        included_fast_hours: 90,
++        typical_fast20_minutes: 10,
++        typical_fast20_packs: 540,
++        typical_fast20_copies: 10800,
++        overage_usd_per_hour: 0.75,
++        cogs_fast_usd_per_hour: 0.58,
++      }],
++    });
++    vi.mocked(startBillingCheckout).mockResolvedValue({
++      url: "https://checkout.stripe.com/c/pay/cs_1",
++      session_id: "cs_1",
++    });
++  });
++
++  it("explains included Fast hours then overage, not fake unlimited", async () => {
++    render(<PricingCard />);
++    await waitFor(() => {
++      expect(screen.getByText(/90 Fast worker-hours/i)).toBeInTheDocument();
++    });
++    expect(screen.getByText(/\$0\.75\/hr/i)).toBeInTheDocument();
++    expect(screen.getByText(/not a hard stop/i)).toBeInTheDocument();
++    expect(screen.getByText(/10 minutes/i)).toBeInTheDocument();
++    expect(screen.getByText(/540 packs/i)).toBeInTheDocument();
++    expect(screen.getByText(/10,800 copies/i)).toBeInTheDocument();
++    expect(screen.queryByText(/we pay about/i)).not.toBeInTheDocument();
++    expect(screen.getByRole("button", { name: /Subscribe — \$200\/month/i })).toBeEnabled();
++  });
++
++  it("starts Stripe Checkout with the work email", async () => {
++    const assign = vi.fn();
++    vi.stubGlobal("location", { assign });
++    render(<PricingCard />);
++    await waitFor(() => {
++      expect(screen.getByRole("button", { name: /Subscribe/i })).toBeEnabled();
++    });
++    fireEvent.change(screen.getByLabelText("Work email"), { target: { value: "buyer@x.com" } });
++    fireEvent.click(screen.getByRole("button", { name: /Subscribe/i }));
++    await waitFor(() => {
++      expect(startBillingCheckout).toHaveBeenCalledWith("buyer@x.com", "agency");
++    });
++    await waitFor(() => {
++      expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_1");
++    });
++    vi.unstubAllGlobals();
++  });
++});
+-- 
+2.43.0
+

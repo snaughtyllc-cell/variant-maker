@@ -24,7 +24,26 @@ class VariantRecord:
     output_sha256: str | None = None
     duration_s: float | None = None
     status: str = "ok"
-    platform_result: str | None = None  # None | "pass" | "fail" — the detector bridge
+    # None | "passed" | "duplicate_reject" | "unknown" — the detector bridge
+    platform_result: str | None = None
+    # Live permalink the VA pasted after posting (not a Drive file id).
+    post_url: str | None = None
+    uniqueness: float | None = None
+    uniqueness_status: str | None = None  # ok|below_target|below_floor|unknown
+    uniqueness_metric: str | None = None
+    uniqueness_target: float | None = None
+    preset_used: str | None = None
+    strength_final: float | None = None
+    escalated: bool = False
+    look_status: str | None = None
+    look_mae: float | None = None
+    look_mae_max: float | None = None
+    look_src: str | None = None
+    look_var: str | None = None
+    look_frames: list = field(default_factory=list)
+    look_artifact_sha256: str | None = None
+    look_approved_sha256: str | None = None
+    look_review_t: float | None = None
 
 
 @dataclass
