@@ -26,8 +26,9 @@ export async function captureVideoFrame(
   video.setAttribute("webkit-playsinline", "");
   video.setAttribute("aria-hidden", "true");
   video.tabIndex = -1;
+  // A 2px video makes Chrome hand back a half-decoded frame (green and red stripes).
   video.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+    "position:fixed;left:0;top:0;width:320px;height:320px;opacity:0.01;pointer-events:none;z-index:-1";
 
   return new Promise<VideoFrame>((resolve, reject) => {
     let settled = false;
@@ -83,16 +84,19 @@ export async function captureVideoFrame(
       "loadeddata",
       () => {
         const t = previewTime(video.duration);
-        const onFrame = () => snap();
-        video.addEventListener("seeked", onFrame, { once: true });
-        const rvfc = (
-          video as HTMLVideoElement & {
-            requestVideoFrameCallback?: (cb: () => void) => void;
+        const paint = () => {
+          const rvfc = (
+            video as HTMLVideoElement & {
+              requestVideoFrameCallback?: (cb: () => void) => void;
+            }
+          ).requestVideoFrameCallback;
+          if (typeof rvfc === "function") {
+            rvfc.call(video, () => snap());
+            return;
           }
-        ).requestVideoFrameCallback;
-        if (typeof rvfc === "function") {
-          rvfc.call(video, onFrame);
-        }
+          requestAnimationFrame(() => requestAnimationFrame(() => snap()));
+        };
+        video.addEventListener("seeked", paint, { once: true });
         try {
           if (Math.abs(video.currentTime - t) < 0.02) {
             video.currentTime = t === 0 ? 0.01 : 0;

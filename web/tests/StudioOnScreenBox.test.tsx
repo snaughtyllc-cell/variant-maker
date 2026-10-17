@@ -461,6 +461,8 @@ describe("one editing screen", () => {
     expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*height:\s*100dvh/s);
     expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*width:\s*100%/s);
     expect(css).toMatch(/@media \(min-width: 900px\)[\s\S]*\.studio-onscreen__body \{[^}]*grid-template-areas:\s*"stage side" "timeline side"/);
+    expect(css).toMatch(/\.studio-onscreen__screen \{[^}]*position:\s*relative/s);
+    expect(css).not.toMatch(/\.studio-onscreen__screen \{[^}]*transform:/s);
     expect(css).toMatch(/font-family:\s*"Onscreen Inter"/);
     expect(css).toMatch(/font-family:\s*"Onscreen Noto"/);
   });

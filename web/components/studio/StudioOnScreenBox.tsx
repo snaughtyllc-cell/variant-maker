@@ -454,37 +454,69 @@ type LaneDrag = {
 
 type Sheet = "sound" | "setups" | "ratio" | "fit" | null;
 
+function whenFramePaints(video: HTMLVideoElement): Promise<void> {
+  return new Promise((resolve) => {
+    const rvfc = video.requestVideoFrameCallback?.bind(video);
+    if (rvfc) {
+      rvfc(() => resolve());
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 async function filmstrip(url: string, duration: number, count: number): Promise<string[]> {
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
   video.preload = "auto";
+  video.setAttribute("playsinline", "");
+  // Off-screen and tiny videos decode into green and red stripes. Keep a real size.
+  video.style.cssText =
+    "position:fixed;left:0;top:0;width:180px;height:320px;opacity:0.01;pointer-events:none;z-index:-1";
+  document.body.appendChild(video);
   video.src = url;
-  await new Promise<void>((resolve, reject) => {
-    video.onloadeddata = () => resolve();
-    video.onerror = () => reject(new Error("no frames"));
-    window.setTimeout(() => reject(new Error("slow")), 5000);
-  });
-  const canvas = document.createElement("canvas");
-  const scale = 72 / Math.max(1, video.videoHeight);
-  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-  canvas.height = 72;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return [];
-  const out: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const at = Math.min(duration - 0.05, ((i + 0.5) / count) * duration);
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-      video.currentTime = Math.max(0, at);
-      window.setTimeout(resolve, 1200);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () => reject(new Error("no frames"));
+      window.setTimeout(() => reject(new Error("slow")), 8000);
     });
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    out.push(canvas.toDataURL("image/jpeg", 0.6));
+    if (!video.videoWidth || !video.videoHeight) return [];
+    const canvas = document.createElement("canvas");
+    const scale = 72 / video.videoHeight;
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = 72;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return [];
+    const out: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const at = Math.min(Math.max(0, duration - 0.05), ((i + 0.5) / count) * duration);
+      const ready = await new Promise<boolean>((resolve) => {
+        const timer = window.setTimeout(() => resolve(false), 1500);
+        video.onseeked = () => {
+          void whenFramePaints(video).then(() => {
+            window.clearTimeout(timer);
+            resolve(video.readyState >= 2 && video.videoWidth > 0);
+          });
+        };
+        try {
+          video.currentTime = at;
+        } catch {
+          window.clearTimeout(timer);
+          resolve(false);
+        }
+      });
+      if (!ready) continue;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      out.push(canvas.toDataURL("image/jpeg", 0.6));
+    }
+    return out;
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    video.remove();
   }
-  video.removeAttribute("src");
-  video.load();
-  return out;
 }
 
 export function StudioOnScreenBox({

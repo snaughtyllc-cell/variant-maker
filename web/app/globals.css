@@ -1649,8 +1649,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-onscreen__body { display: flex; flex: 1; flex-direction: column; min-height: 0; position: relative; }
 
 /* The video is the screen. */
-.studio-onscreen__stage { container-type: size; flex: 1; min-height: 160px; position: relative; width: 100%; }
-.studio-onscreen__screen { aspect-ratio: 9 / 16; background: #111; border-radius: 10px; container-type: inline-size; height: min(100cqh, calc(100cqw * var(--frame-h, 16) / var(--frame-w, 9))); left: 50%; max-width: 100%; overflow: hidden; position: absolute; top: 50%; touch-action: none; transform: translate(-50%, -50%); width: min(100cqw, calc(100cqh * var(--frame-w, 9) / var(--frame-h, 16))); }
+.studio-onscreen__stage { align-items: center; container-type: size; display: flex; flex: 1; justify-content: center; min-height: 160px; position: relative; width: 100%; }
+.studio-onscreen__screen { aspect-ratio: 9 / 16; background: #111; border-radius: 10px; container-type: inline-size; height: min(100cqh, calc(100cqw * var(--frame-h, 16) / var(--frame-w, 9))); max-width: 100%; overflow: hidden; position: relative; touch-action: none; width: min(100cqw, calc(100cqh * var(--frame-w, 9) / var(--frame-h, 16))); }
 @font-face { font-family: "Onscreen Inter"; src: url("/fonts/Inter-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "Onscreen Noto"; src: url("/fonts/NotoSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 .studio-onscreen__poster { background: #111; height: 100%; inset: 0; object-fit: contain; pointer-events: none; position: absolute; width: 100%; }
