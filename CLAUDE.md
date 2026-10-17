@@ -25,6 +25,10 @@ Studio UI redesigns must start from `docs/ops/studio-ia.md` and
 specs (Studio / Gallery / variant panel / Diagnostics). Live tabs also
 include Analytics, Drops, Workflows, Drive, Team, and Admin.
 
+Frontend partner (and their AI) must follow `docs/ops/partner-frontend.md`:
+Lab `tier1` feature branches only, no Lab↔Live merge, no engine/uniqueness
+edits unless Jeff asked.
+
 ## Scope guards (do not drift)
 - **NOT a detector.** A local "would-the-platform-catch-this" predictor is a *later* project.
   For now the real platform is the oracle; we test variants on it and label them. The only
