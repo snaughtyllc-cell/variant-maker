@@ -187,18 +187,48 @@ def studio_origin_from_redirect_uri(redirect_uri: str, fallback: str) -> str:
     return fallback.rstrip("/")
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "testserver", "0.0.0.0"})
+
+
+def _url_origin(url: str) -> str:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}".lower()
+
+
+def _host_is_loopback(netloc: str) -> bool:
+    host = netloc.split("@")[-1].split(":")[0].lower()
+    return host in _LOOPBACK_HOSTS or host.endswith(".localhost")
+
+
 def resolve_redirect_uri(
     environ: Mapping[str, str],
     *,
     request_base: str | None = None,
     explicit: str | None = None,
 ) -> str:
-    """Prefer explicit / env override; else `{request_base}/api/drive/oauth/callback`."""
-    if explicit:
-        return explicit.rstrip("/")
-    env_uri = environ.get("VARIANT_DRIVE_OAUTH_REDIRECT_URI")
-    if env_uri:
-        return env_uri.rstrip("/")
+    """Prefer explicit / env override; else `{request_base}/api/drive/oauth/callback`.
+
+    A Live pin on Lab (`VARIANT_DRIVE_OAUTH_REDIRECT_URI` pointing at production)
+    would send Google back to Live. If the incoming public host differs, use that
+    host. Loopback / TestClient hosts still honor the pin so unit tests keep a
+    stable callback.
+    """
+    pinned = (explicit or environ.get("VARIANT_DRIVE_OAUTH_REDIRECT_URI") or "").rstrip("/")
+    if pinned:
+        if request_base:
+            req_origin = _url_origin(request_base)
+            pin_origin = _url_origin(pinned)
+            req_host = urlparse(request_base).netloc
+            if (
+                req_origin
+                and pin_origin
+                and req_origin != pin_origin
+                and not _host_is_loopback(req_host)
+            ):
+                return f"{request_base.rstrip('/')}/api/drive/oauth/callback"
+        return pinned
     if request_base:
         return f"{request_base.rstrip('/')}/api/drive/oauth/callback"
     return "http://127.0.0.1:8000/api/drive/oauth/callback"

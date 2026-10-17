@@ -119,7 +119,13 @@ Google Cloud → Web OAuth client → authorized redirect URIs:
 ```
 https://varyforge-studio-production.up.railway.app/api/drive/oauth/callback
 https://varyforge-studio-production.up.railway.app/api/auth/google/callback
+https://varyforge-studio-lab.up.railway.app/api/drive/oauth/callback
+https://varyforge-studio-lab.up.railway.app/api/auth/google/callback
 ```
+
+Lab is a separate Railway volume. Live Drive tokens do not copy over.
+Do not pin `VARIANT_DRIVE_OAUTH_REDIRECT_URI` to production on the Lab
+service — Connect Google on Lab must return to the Lab callback.
 
 Set `VARIANT_DRIVE_OAUTH_*` on Railway (see `deploy/railway/studio.env.example`).
 Studio → Settings → Drive → Connect Google.
