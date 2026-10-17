@@ -104,7 +104,7 @@ describe("on-screen project", () => {
 
   it("lets add sound pick a video", () => {
     render(<Harness />);
-    fireEvent.click(screen.getByRole("tab", { name: "Sound" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sound" }));
     const input = screen.getByLabelText("Add a sound", { selector: "input", hidden: true });
     expect(input.getAttribute("accept")).toContain("video");
   });
@@ -241,66 +241,185 @@ function Harness() {
   );
 }
 
-describe("phone box drawer", () => {
+function lineDraft(extra?: Partial<OnScreenProject["captions"][number]>): OnScreenProject {
+  const draft = emptyOnScreen();
+  draft.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.3, w: 0.7, h: 0.2 }];
+  draft.captions = [{ id: "1", text: "hello there", box_ids: ["cyan"], ...extra }];
+  return draft;
+}
+
+function Live({ start, sources }: { start: OnScreenProject; sources?: { key: string; name: string; src?: string; width?: number; height?: number }[] }) {
+  const [draft, setDraft] = useState<OnScreenProject>(start);
+  const built = projectFromDraft(draft);
+  return (
+    <>
+      <StudioOnScreenBox enabled onEnabledChange={() => undefined} draft={draft} onChange={setDraft} sources={sources} />
+      <output data-testid="built">{JSON.stringify(typeof built === "string" ? built : built)}</output>
+    </>
+  );
+}
+
+function built() {
+  return JSON.parse(screen.getByTestId("built").textContent || "null");
+}
+
+function words(index = 0) {
+  return screen.getByTestId("onscreen-phone").querySelector(`[data-role='text'][data-line='${index}']`) as HTMLElement | null;
+}
+
+function tap(node: Element) {
+  fireEvent.pointerDown(node, { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+  fireEvent.pointerUp(node, { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+}
+
+function type(text: string) {
+  const box = screen.getByRole("textbox", { name: /On-screen line/ });
+  box.textContent = text;
+  fireEvent.input(box);
+}
+
+function rulerWidth(width: number) {
+  const ruler = screen.getByTestId("clip-scrubber");
+  ruler.getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, right: width, bottom: 40, width, height: 40, toJSON() { return {}; },
+  });
+}
+
+describe("one editing screen", () => {
+  it("adds a line on the video and types it there, with no second form", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /Tap to add text/ }));
+    type("sale");
+    expect(document.querySelector("textarea")).toBeNull();
+    expect(words()?.textContent).toBe("sale");
+    expect(screen.getAllByTestId("caption-track")).toHaveLength(1);
+  });
+
   it("keeps a different line on each source", () => {
     render(<MultiHarness />);
-    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "first" } });
+    fireEvent.click(screen.getByRole("button", { name: /Tap to add text/ }));
+    type("first");
     fireEvent.click(screen.getByRole("button", { name: "two.mp4" }));
-    expect(screen.getByLabelText("On-screen line 1")).toHaveProperty("value", "");
-    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "second" } });
+    expect(words()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Tap to add text/ }));
+    type("second");
     fireEvent.click(screen.getByRole("button", { name: "one.mp4" }));
-    expect(screen.getByLabelText("On-screen line 1")).toHaveProperty("value", "first");
+    expect(words()?.textContent).toBe("first");
   });
 
-  it("turns on bottom left as a seat", () => {
-    function SeatHarness() {
-      const [draft, setDraft] = useState<OnScreenProject>(() => {
-        const next = emptyOnScreen();
-        next.captions[0].text = "here";
-        next.captions[0].box_ids = ["cyan"];
-        next.boxes = [{ id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.3 }];
-        return next;
-      });
-      const built = projectFromDraft(draft);
-      return (
-        <>
-          <StudioOnScreenBox enabled onEnabledChange={() => undefined} draft={draft} onChange={setDraft} />
-          <output data-testid="seats">{typeof built === "string" ? "" : (built.boxes[0].seats || []).join(",")}</output>
-        </>
-      );
+  it("taps the words to pick them, and taps again to type", () => {
+    render(<Live start={lineDraft()} />);
+    expect(screen.queryByRole("button", { name: "Snapchat bar" })).toBeNull();
+    tap(words()!);
+    expect(words()?.dataset.active).toBe("true");
+    expect(screen.getByRole("button", { name: "Snapchat bar" })).toBeTruthy();
+    tap(words()!);
+    expect(screen.getByRole("textbox", { name: "On-screen line 1" })).toBeTruthy();
+  });
+
+  it("drops a line that was left empty", () => {
+    render(<Live start={lineDraft()} />);
+    tap(words()!);
+    tap(words()!);
+    type("");
+    fireEvent.blur(screen.getByRole("textbox", { name: "On-screen line 1" }));
+    expect(words()).toBeNull();
+    expect(screen.queryAllByTestId("caption-track")).toHaveLength(0);
+  });
+
+  it("shows the seven looks on the video when a line is picked", () => {
+    render(<Live start={lineDraft()} />);
+    tap(words()!);
+    for (const name of ["Instagram sticker", "Strong", "Snapchat bar", "Solid", "See-through", "No shadow", "Shadow"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
     }
-    render(<SeatHarness />);
+    expect(words()?.className).toContain("studio-onscreen__type--solid");
+    fireEvent.click(screen.getByRole("button", { name: "Snapchat bar" }));
+    expect(words()?.className).toContain("studio-onscreen__type--bar");
+    fireEvent.click(screen.getByRole("button", { name: "Shadow" }));
+    expect(words()?.className).toContain("studio-onscreen__type--none");
+    expect(built().look).toEqual({ style: "classic", background: "none", color: "#FFFFFF" });
+    fireEvent.click(screen.getByRole("button", { name: "Strong" }));
+    expect(words()?.dataset.style).toBe("strong");
+  });
+
+  it("trims the line's clip from either end and moves the whole clip", () => {
+    render(<Live start={lineDraft()} />);
+    rulerWidth(150);
+    const cue = screen.getByLabelText(/Line 1 on screen/);
+    const start = cue.querySelector("[data-trim='start']")!;
+    fireEvent.pointerDown(start, { pointerId: 2, clientX: 0 });
+    fireEvent.pointerMove(cue, { pointerId: 2, clientX: 30 });
+    fireEvent.pointerUp(cue, { pointerId: 2, clientX: 30 });
+    expect(built().captions[0].show).toBe(3);
+    expect(built().captions[0].hide).toBeUndefined();
+    const end = screen.getByLabelText(/Line 1 on screen/).querySelector("[data-trim='end']")!;
+    fireEvent.pointerDown(end, { pointerId: 3, clientX: 150 });
+    fireEvent.pointerMove(screen.getByLabelText(/Line 1 on screen/), { pointerId: 3, clientX: 100 });
+    fireEvent.pointerUp(screen.getByLabelText(/Line 1 on screen/), { pointerId: 3, clientX: 100 });
+    expect(built().captions[0]).toMatchObject({ show: 3, hide: 10 });
+    const body = screen.getByLabelText(/Line 1 on screen/);
+    fireEvent.pointerDown(body, { pointerId: 4, clientX: 60 });
+    fireEvent.pointerMove(body, { pointerId: 4, clientX: 80 });
+    fireEvent.pointerUp(body, { pointerId: 4, clientX: 80 });
+    expect(built().captions[0]).toMatchObject({ show: 5, hide: 12 });
+  });
+
+  it("drags a clip back to full length to keep the line on the whole video", () => {
+    render(<Live start={lineDraft({ show: 3 })} />);
+    rulerWidth(150);
+    const start = screen.getByLabelText(/Line 1 on screen/).querySelector("[data-trim='start']")!;
+    fireEvent.pointerDown(start, { pointerId: 5, clientX: 30 });
+    fireEvent.pointerMove(screen.getByLabelText(/Line 1 on screen/), { pointerId: 5, clientX: -20 });
+    fireEvent.pointerUp(screen.getByLabelText(/Line 1 on screen/), { pointerId: 5, clientX: -20 });
+    expect(built().captions[0].show).toBeUndefined();
+    expect(built().captions[0].hide).toBeUndefined();
+  });
+
+  it("shows a timed line only while the playhead is inside its clip", () => {
+    render(<Live start={lineDraft({ show: 4, hide: 8 })} />);
+    rulerWidth(150);
+    expect(words()).toBeNull();
+    const ruler = screen.getByTestId("clip-scrubber");
+    fireEvent.pointerDown(ruler, { pointerId: 6, clientX: 60 });
+    fireEvent.pointerUp(ruler, { pointerId: 6, clientX: 60 });
+    expect(words()?.textContent).toBe("hello there");
+    fireEvent.pointerDown(ruler, { pointerId: 7, clientX: 120 });
+    fireEvent.pointerUp(ruler, { pointerId: 7, clientX: 120 });
+    expect(words()).toBeNull();
+  });
+
+  it("keeps size, line count, and seats one step away", () => {
+    render(<Live start={lineDraft()} />);
+    expect(screen.queryByRole("button", { name: "Choose seats" })).toBeNull();
+    tap(words()!);
+    fireEvent.change(screen.getByLabelText("Text size"), { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("button", { name: /Fit/ }));
+    fireEvent.click(screen.getByRole("button", { name: "1 line" }));
     fireEvent.click(screen.getByRole("button", { name: "Choose seats" }));
     fireEvent.click(screen.getByRole("button", { name: "Bottom left" }));
-    expect(screen.getByTestId("seats").textContent).toBe("bl");
+    expect(built().captions[0]).toMatchObject({ size: 0.9, lines: 1 });
+    expect(built().boxes[0].seats).toEqual(["bl"]);
+    expect(words()?.getAttribute("data-lines")).toBe("1");
   });
 
-  it("draws a colored box when you drag on the phone", () => {
-    render(<Harness />);
-    const phone = screen.getByTestId("onscreen-phone");
-    phone.getBoundingClientRect = () => ({
-      x: 0, y: 0, left: 0, top: 0, right: 180, bottom: 320, width: 180, height: 320, toJSON() { return {}; },
-    });
-    fireEvent.pointerDown(phone, { button: 0, pointerId: 1, clientX: 20, clientY: 80 });
-    fireEvent.pointerMove(phone, { pointerId: 1, clientX: 120, clientY: 180 });
-    fireEvent.pointerUp(phone, { pointerId: 1, clientX: 120, clientY: 180 });
-    expect(screen.getByRole("button", { name: "Cyan, this line" })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("On-screen line 1"), { target: { value: "sale" } });
-    expect(phone.querySelector("[data-role='text']")?.textContent).toBe("sale");
-    fireEvent.click(screen.getByRole("button", { name: "1 line" }));
-    fireEvent.click(screen.getByRole("button", { name: "Smaller" }));
-    const sticker = phone.querySelector("[data-role='text']");
-    expect(sticker?.getAttribute("data-lines")).toBe("1");
-    expect(screen.getByText("90%")).toBeTruthy();
+  it("opens sound, setups, and frame as tools instead of leaving them under the video", () => {
+    render(<Live start={lineDraft()} />);
+    expect(screen.queryByRole("button", { name: "Add a sound" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Sound" }));
+    expect(screen.getByRole("button", { name: "Add a sound" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close tool" }));
+    expect(screen.queryByRole("button", { name: "Add a sound" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Setups" }));
+    expect(screen.getByLabelText("Setup name")).toBeTruthy();
   });
 
   it("shows the clip still under the Reel safe edges", () => {
-    const draft = emptyOnScreen();
     render(
       <StudioOnScreenBox
         enabled
         onEnabledChange={() => undefined}
-        draft={draft}
+        draft={emptyOnScreen()}
         onChange={() => undefined}
         sources={[{ key: "a", name: "gym.mp4", src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" }]}
       />,
@@ -331,65 +450,18 @@ describe("phone box drawer", () => {
     const phone = screen.getByTestId("onscreen-phone");
     expect(phone.style.aspectRatio).toBe("1920 / 1080");
     expect(phone.textContent).not.toContain("Header");
-    fireEvent.click(screen.getByRole("tab", { name: "Ratio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ratio" }));
     fireEvent.click(screen.getByRole("button", { name: "9:16" }));
     expect(phone.style.aspectRatio).toBe("9 / 16");
     expect(phone.textContent).toContain("Header");
   });
 
-  it("keeps Snapchat, shadow, and caption timing on the text tool", () => {
-    render(<Harness />);
-    expect(screen.getByRole("button", { name: "Instagram sticker" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Snapchat bar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "No shadow" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Shadow" })).toBeTruthy();
-    expect(screen.getByLabelText("Line 1 on from")).toBeTruthy();
-    expect(screen.getByLabelText("Line 1 until")).toBeTruthy();
+  it("is full screen on a phone and splits into preview, panel, and timeline on desktop", () => {
     const css = readFileSync(resolve(__dirname, "../app/globals.css"), "utf8");
-    expect(css).toMatch(/\.studio-onscreen__panel > \* \{[^}]*flex:\s*0 0 auto/s);
-    expect(css).toMatch(/\.studio-onscreen__styles \{[^}]*position:\s*sticky/s);
     expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*height:\s*100dvh/s);
     expect(css).toMatch(/\.studio-onscreen__sheet \{[^}]*width:\s*100%/s);
-    expect(css).not.toMatch(/\.studio-onscreen__sheet \{[^}]*width:\s*420px/s);
-  });
-
-  it("keeps text tools up and opens sound from the dock", () => {
-    render(<Harness />);
-    expect(screen.getByLabelText("On-screen line 1")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Add a sound" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Sound" }));
-    expect(screen.queryByLabelText("On-screen line 1")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add a sound" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
-    expect(screen.getByLabelText("On-screen line 1")).toBeTruthy();
-  });
-
-  it("shows the typed line on the phone and keeps a box on one line", () => {
-    const draft = emptyOnScreen();
-    draft.boxes = [
-      { id: "cyan", color: "#14b8c4", x: 0.1, y: 0.2, w: 0.5, h: 0.2 },
-      { id: "amber", color: "#e39b12", x: 0.1, y: 0.55, w: 0.5, h: 0.2 },
-    ];
-    draft.captions = [
-      { id: "1", text: "hello there", box_ids: ["cyan"] },
-      { id: "2", text: "second line", box_ids: [] },
-    ];
-    render(
-      <StudioOnScreenBox
-        enabled
-        onEnabledChange={() => undefined}
-        draft={draft}
-        onChange={() => undefined}
-      />,
-    );
-    const phone = screen.getByTestId("onscreen-phone");
-    const sticker = phone.querySelector("[data-role='text']");
-    expect(sticker?.textContent).toBe("hello there");
-    expect(sticker?.className).toContain("studio-onscreen__type--solid");
-    const line1 = screen.getByRole("group", { name: "Colors for line 1" });
-    const line2 = screen.getByRole("group", { name: "Colors for line 2" });
-    expect(line1.querySelector("[aria-label='Cyan, this line']")).toBeTruthy();
-    expect(line2.querySelector("[aria-label='Cyan, this line']")).toBeNull();
-    expect(line2.querySelector("[aria-label='Add Amber']")).toBeTruthy();
+    expect(css).toMatch(/@media \(min-width: 900px\)[\s\S]*\.studio-onscreen__body \{[^}]*grid-template-areas:\s*"stage side" "timeline side"/);
+    expect(css).toMatch(/font-family:\s*"Onscreen Inter"/);
+    expect(css).toMatch(/font-family:\s*"Onscreen Noto"/);
   });
 });
