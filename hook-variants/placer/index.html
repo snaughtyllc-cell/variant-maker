@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>On-screen hook placer</title>
+    <link rel="stylesheet" href="/static/placer.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <h1>On-screen hook placer</h1>
+        <p class="lede">
+          Preview a hook on a still. Mid is allowed here. Save
+          <code>placement.json</code> and render from the CLI.
+        </p>
+      </header>
+
+      <div class="layout">
+        <section class="panel" aria-label="Hook settings">
+          <label class="field">
+            <span>Seed text</span>
+            <input
+              id="seed"
+              type="text"
+              maxlength="400"
+              placeholder="Your on-screen hook"
+              autocomplete="off"
+              spellcheck="true"
+            />
+          </label>
+
+          <div class="field">
+            <span id="style-label">Style</span>
+            <div class="chips" id="styles" role="radiogroup" aria-labelledby="style-label"></div>
+          </div>
+
+          <div class="field">
+            <span id="slot-label">Slot</span>
+            <div class="chips" id="slots" role="radiogroup" aria-labelledby="slot-label"></div>
+          </div>
+
+          <div class="row-actions">
+            <button type="button" class="primary" id="add">Add version</button>
+            <p class="hint-inline" id="add-hint">Up to 5 versions</p>
+          </div>
+
+          <section class="versions-block" aria-label="Versions">
+            <h2>Versions</h2>
+            <ul class="versions" id="versions"></ul>
+            <p class="empty-list" id="versions-empty">No versions yet.</p>
+          </section>
+
+          <div class="save-row">
+            <button type="button" class="primary" id="save">Save placement.json</button>
+            <button type="button" class="ghost" id="download">Download placement.json</button>
+          </div>
+          <p class="status" id="status" role="status"></p>
+        </section>
+
+        <section class="preview-wrap" aria-label="Still preview">
+          <div class="frame" id="frame">
+            <img id="still" alt="" hidden />
+            <p class="frame-empty" id="frame-empty">No stills in this folder</p>
+            <div class="overlay" id="overlay" data-slot="top" data-style="tiktok-classic-box"></div>
+          </div>
+          <p class="still-meta" id="still-meta"></p>
+        </section>
+      </div>
+
+      <footer class="footer">
+        <p class="copy-hint">
+          Copy-paste:
+          <code id="cli-hint">hook-variants clip.mp4 --text "…" --from-placement placement.json</code>
+        </p>
+      </footer>
+    </main>
+    <script src="/static/placer.js"></script>
+  </body>
+</html>
