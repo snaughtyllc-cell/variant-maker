@@ -61,6 +61,19 @@ def test_lab_fast_ci_recycles_lab_endpoint_only():
     assert "api.runpod.io/v2/serverless/j0b1q4iuunzhnq" not in lab
 
 
+def test_lab_fast_ci_pin_uses_lab_github_environment_not_production():
+    """Repo-level secrets.RUNPOD_API_KEY is empty; Lab Studio env may have it.
+
+    The pin job must use GitHub Environment "VaryForge Studio / lab" so that
+    environment-scoped keys are visible. Never bind production (live Fast).
+    """
+    lab = (ROOT / ".github/workflows/build-variant-fast-lab.yml").read_text()
+    assert 'environment: "VaryForge Studio / lab"' in lab
+    assert "VaryForge Studio / production" not in lab
+    assert "pin-lab:" in lab
+    assert "needs: build-and-push" in lab
+
+
 def test_live_lane_template_is_live_not_lab():
     raw = json.loads((ROOT / "deploy/varimo-lane.live.json").read_text(encoding="utf-8"))
     assert raw["lane"] == "live"
